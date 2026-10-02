@@ -12,7 +12,7 @@ use crate::{
     ComponentKind, ComponentKinds, EntityCommand, EntityEvent, EntityMapConverterMut,
     EntityMessage, EntityMessageReceiver, EntityMessageType, GlobalEntity, GlobalEntitySpawner,
     GlobalWorldManagerType, HostEntity, HostEntityGenerator, HostType,
-    LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, ShortMessageIndex,
+    LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, ShortMessageIndex, Tick,
     WorldMutType,
 };
 
@@ -152,7 +152,7 @@ impl HostWorldManager {
         global_world_manager: &dyn GlobalWorldManagerType,
         local_entity_map: &LocalEntityMap,
         world: &mut W,
-        incoming_messages: Vec<(MessageIndex, EntityMessage<HostEntity>)>,
+        incoming_messages: Vec<(MessageIndex, Tick, EntityMessage<HostEntity>)>,
     ) -> Vec<EntityEvent> {
         let incoming_messages = EntityMessageReceiver::host_take_incoming_events(
             &mut self.host_engine,
@@ -344,12 +344,17 @@ impl HostWorldManager {
 
         // Filter out MigrateResponse messages - they should not be processed by RemoteEngine
         // MigrateResponse is a client-only message that the server tracks for delivery but doesn't process
-        let filtered_messages: Vec<(MessageIndex, EntityMessage<HostEntity>)> = delivered_messages
-            .into_iter()
-            .filter(|(_, msg)| !matches!(msg, EntityMessage::MigrateResponse(_, _, _)))
-            .collect();
+        // Delivery confirmations carry no parse tick (acks are indexed by packet,
+        // not tick); the tick is discarded unobserved by the match below, so 0
+        // is a marker of absence, not a claim about authorship.
+        let filtered_messages: Vec<(MessageIndex, Tick, EntityMessage<HostEntity>)> =
+            delivered_messages
+                .into_iter()
+                .filter(|(_, msg)| !matches!(msg, EntityMessage::MigrateResponse(_, _, _)))
+                .map(|(id, msg)| (id, 0, msg))
+                .collect();
 
-        for message in EntityMessageReceiver::remote_take_incoming_messages(
+        for (_, message) in EntityMessageReceiver::remote_take_incoming_messages(
             &mut self.delivered_engine,
             filtered_messages,
         ) {
@@ -427,10 +432,10 @@ impl HostWorldManager {
         _global_world_manager: &dyn GlobalWorldManagerType,
         local_entity_map: &LocalEntityMap,
         _world: &mut W,
-        incoming_messages: Vec<EntityMessage<HostEntity>>,
+        incoming_messages: Vec<(Tick, EntityMessage<HostEntity>)>,
     ) {
         // execute the action and emit an event
-        for message in incoming_messages {
+        for (tick, message) in incoming_messages {
             match message {
                 // These variants are sent server→client for remote-owned entities, routed through
                 // RemoteWorldManager, not HostWorldManager. A HostWorldManager processes messages
@@ -445,7 +450,7 @@ impl HostWorldManager {
                         local_entity_map.global_entity_from_host(&host_entity)
                     {
                         self.incoming_events
-                            .push(EntityEvent::Despawn(*global_entity));
+                            .push(EntityEvent::Despawn(tick, *global_entity));
                     }
                 }
                 EntityMessage::InsertComponent(_, _) => {
@@ -1417,12 +1422,12 @@ mod tests {
             &fx.gwm,
             &map,
             &mut world,
-            vec![(1, EntityMessage::Despawn(host_entity))],
+            vec![(1, 1, EntityMessage::Despawn(host_entity))],
         );
 
         assert_eq!(events.len(), 1, "expected exactly one despawn event");
         assert!(
-            matches!(&events[0], EntityEvent::Despawn(e) if *e == global_entity),
+            matches!(&events[0], EntityEvent::Despawn(_, e) if *e == global_entity),
             "the despawn did not name the global entity",
         );
     }
@@ -1449,6 +1454,7 @@ mod tests {
             &map,
             &mut world,
             vec![(
+                1,
                 1,
                 EntityMessage::MigrateResponse(0, host_entity, new_remote),
             )],
@@ -1486,7 +1492,7 @@ mod tests {
             &fx.gwm,
             &map,
             &mut world,
-            vec![(1, EntityMessage::ReleaseAuthority(0, host_entity))],
+            vec![(1, 1, EntityMessage::ReleaseAuthority(0, host_entity))],
         );
 
         assert_eq!(
@@ -1520,7 +1526,7 @@ mod tests {
                     &fx.gwm,
                     &map,
                     &mut world,
-                    vec![(1, EntityMessage::Noop)],
+                    vec![(1, 1, EntityMessage::Noop)],
                 )
                 .is_empty(),
             "a noop produced an event",
@@ -1533,7 +1539,7 @@ mod tests {
                 &fx.gwm,
                 &map,
                 &mut world,
-                vec![(2, EntityMessage::Despawn(host_entity))],
+                vec![(2, 2, EntityMessage::Despawn(host_entity))],
             )
             .is_empty());
         assert!(

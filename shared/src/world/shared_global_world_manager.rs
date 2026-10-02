@@ -1,7 +1,8 @@
 use std::hash::Hash;
 
 use crate::{
-    EntityAndGlobalEntityConverter, EntityEvent, GlobalEntity, GlobalWorldManagerType, WorldMutType,
+    EntityAndGlobalEntityConverter, EntityEvent, GlobalEntity, GlobalWorldManagerType, Tick,
+    WorldMutType,
 };
 
 /// Shared helpers for world-manager implementations that operate on the global entity registry.
@@ -9,11 +10,15 @@ pub struct SharedGlobalWorldManager;
 
 impl SharedGlobalWorldManager {
     /// Removes all components from and despawns each entity in `entities`, returning one [`EntityEvent`] per removed component and per despawn.
+    ///
+    /// This synthesizes teardown events with no wire message behind them; `tick`
+    /// must be the caller's current tick (the tick at which the mirror ceases).
     pub fn despawn_all_entities<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         world: &mut W,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
         entities: Vec<GlobalEntity>,
+        tick: Tick,
     ) -> Vec<EntityEvent> {
         let mut output = Vec::new();
 
@@ -28,7 +33,7 @@ impl SharedGlobalWorldManager {
                     if let Some(component) =
                         world.remove_component_of_kind(&world_entity, &component_kind)
                     {
-                        output.push(EntityEvent::RemoveComponent(global_entity, component));
+                        output.push(EntityEvent::RemoveComponent(tick, global_entity, component));
                     } else {
                         panic!("Global World Manager must not have an accurate component list");
                     }
@@ -36,7 +41,7 @@ impl SharedGlobalWorldManager {
             }
 
             // Generate despawn event
-            output.push(EntityEvent::Despawn(global_entity));
+            output.push(EntityEvent::Despawn(tick, global_entity));
 
             // Despawn entity
             world.despawn_entity(&world_entity);

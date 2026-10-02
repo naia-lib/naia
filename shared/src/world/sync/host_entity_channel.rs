@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use crate::{
     world::sync::{auth_channel::AuthChannel, ordered_ids::OrderedIds},
     ComponentKind, EntityCommand, EntityMessage, EntityMessageType, HostEntity, HostType,
-    MessageIndex,
+    MessageIndex, Tick,
 };
 
 /// Outbound state machine for a single host-owned entity, tracking its component set and authority sub-channel.
@@ -11,8 +11,8 @@ pub struct HostEntityChannel {
     component_channels: HashSet<ComponentKind>,
     auth_channel: AuthChannel,
 
-    buffered_messages: OrderedIds<EntityMessage<()>>,
-    incoming_messages: Vec<EntityMessage<()>>,
+    buffered_messages: OrderedIds<(Tick, EntityMessage<()>)>,
+    incoming_messages: Vec<(Tick, EntityMessage<()>)>,
     outgoing_commands: Vec<EntityCommand>,
 
     /// Reserved auth-channel command to be emitted as `subcommand_id=0`
@@ -91,14 +91,14 @@ impl HostEntityChannel {
     pub(crate) fn drain_incoming_messages_into(
         &mut self,
         entity: HostEntity,
-        outgoing_events: &mut Vec<EntityMessage<HostEntity>>,
+        outgoing_events: &mut Vec<(Tick, EntityMessage<HostEntity>)>,
     ) {
         // Drain the entity channel and append the messages to the outgoing events
         let mut received_messages = Vec::new();
-        for rmsg in std::mem::take(&mut self.incoming_messages) {
+        for (tick, rmsg) in std::mem::take(&mut self.incoming_messages) {
             // info!("EntityChannelSender::drain_incoming_messages_into(entity={:?}, msgType={:?})", entity, rmsg.get_type());
 
-            received_messages.push(rmsg.with_entity(entity));
+            received_messages.push((tick, rmsg.with_entity(entity)));
         }
         outgoing_events.append(&mut received_messages);
     }
@@ -113,23 +113,24 @@ impl HostEntityChannel {
         outgoing_commands.append(&mut self.outgoing_commands);
     }
 
-    pub(crate) fn receive_message(&mut self, id: MessageIndex, msg: EntityMessage<()>) {
-        self.buffered_messages.push_back(id, msg);
+    pub(crate) fn receive_message(&mut self, id: MessageIndex, tick: Tick, msg: EntityMessage<()>) {
+        self.buffered_messages.push_back(id, (tick, msg));
         self.process_messages();
     }
 
     fn process_messages(&mut self) {
-        while let Some((_id, msg)) = self.buffered_messages.peek_front() {
+        while let Some((_id, (_, msg))) = self.buffered_messages.peek_front() {
             match msg.get_type() {
                 EntityMessageType::RequestAuthority
                 | EntityMessageType::ReleaseAuthority
                 | EntityMessageType::EnableDelegationResponse
                 | EntityMessageType::MigrateResponse => {
-                    let (id, msg) = self.buffered_messages.pop_front().unwrap();
+                    let (id, (tick, msg)) = self.buffered_messages.pop_front().unwrap();
 
                     // info!("EntityChannelSender::process_messages(id={}, msgType={:?})", id, msg.get_type());
 
-                    self.auth_channel.receiver_receive_message(None, id, msg);
+                    self.auth_channel
+                        .receiver_receive_message(None, id, tick, msg);
                     self.auth_channel
                         .receiver_drain_messages_into(&mut self.incoming_messages);
                 }

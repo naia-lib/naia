@@ -42,7 +42,7 @@ fn remote_engine() -> RemoteEngine<RemoteEntity> {
 fn taking_incoming_events_hands_them_over() {
     let entity = RemoteEntity::new(1);
     let mut engine = remote_engine();
-    engine.receive_message(1, EntityMessage::Spawn(entity));
+    engine.receive_message(1, 1, EntityMessage::Spawn(entity));
 
     let first = engine.take_incoming_events();
     let second = engine.take_incoming_events();
@@ -81,7 +81,7 @@ fn a_remote_engine_reports_only_the_entities_it_tracks() {
 
     assert!(!engine.has_entity(&entity), "a fresh engine tracks nothing");
 
-    engine.receive_message(1, EntityMessage::Spawn(entity));
+    engine.receive_message(1, 1, EntityMessage::Spawn(entity));
 
     assert!(engine.has_entity(&entity));
     assert!(
@@ -103,7 +103,7 @@ fn the_in_scope_view_of_a_remote_engine_follows_the_registry() {
         "a fresh engine has nothing in scope",
     );
 
-    engine.receive_message(1, EntityMessage::Spawn(entity));
+    engine.receive_message(1, 1, EntityMessage::Spawn(entity));
 
     assert!(InScopeEntities::has_entity(&engine, &entity));
     assert!(
@@ -119,7 +119,7 @@ fn the_in_scope_view_of_a_remote_engine_follows_the_registry() {
 fn the_channel_lookup_finds_only_tracked_entities() {
     let entity = RemoteEntity::new(1);
     let mut engine = remote_engine();
-    engine.receive_message(1, EntityMessage::Spawn(entity));
+    engine.receive_message(1, 1, EntityMessage::Spawn(entity));
 
     assert!(
         engine.get_entity_channel_mut(&entity).is_some(),
@@ -139,7 +139,7 @@ fn the_channel_lookup_finds_only_tracked_entities() {
 fn the_mutable_world_view_is_the_engines_own_registry() {
     let entity = RemoteEntity::new(1);
     let mut engine = remote_engine();
-    engine.receive_message(1, EntityMessage::Spawn(entity));
+    engine.receive_message(1, 1, EntityMessage::Spawn(entity));
 
     engine.get_world_mut().remove(&entity);
 
@@ -158,7 +158,7 @@ fn flushing_a_channel_moves_its_ready_messages_up_to_the_engine() {
     let mut engine = remote_engine();
 
     // Parks behind the spawn barrier: the channel is still Despawned.
-    engine.receive_message(3, EntityMessage::Despawn(entity));
+    engine.receive_message(3, 3, EntityMessage::Despawn(entity));
     assert!(
         engine.take_incoming_events().is_empty(),
         "fixture: the despawn should still be buffered",
@@ -198,7 +198,7 @@ fn flushing_an_unknown_entity_is_a_no_op() {
 fn a_noop_message_is_dropped_without_creating_a_channel() {
     let mut engine = remote_engine();
 
-    engine.receive_message(1, EntityMessage::Noop);
+    engine.receive_message(1, 1, EntityMessage::Noop);
 
     assert!(engine.take_incoming_events().is_empty());
     assert!(
@@ -260,7 +260,7 @@ fn an_entity_command_for_an_unknown_entity_is_rejected() {
 fn a_local_despawn_command_drops_the_entity_channel() {
     let entity = RemoteEntity::new(1);
     let mut engine = remote_engine();
-    engine.receive_message(1, EntityMessage::Spawn(entity));
+    engine.receive_message(1, 1, EntityMessage::Spawn(entity));
 
     engine.send_entity_command(entity, EntityCommand::Despawn(GlobalEntity::from_u64(1)));
 
@@ -281,7 +281,7 @@ fn the_component_command_arms_maintain_the_channels_kind_registry() {
     let entity = RemoteEntity::new(1);
     let global_entity = GlobalEntity::from_u64(1);
     let mut engine = remote_engine();
-    engine.receive_message(1, EntityMessage::Spawn(entity));
+    engine.receive_message(1, 1, EntityMessage::Spawn(entity));
 
     engine.send_entity_command(
         entity,
@@ -320,7 +320,7 @@ fn the_component_command_arms_maintain_the_channels_kind_registry() {
 fn an_auth_shaped_command_falls_through_send_entity_command() {
     let entity = RemoteEntity::new(1);
     let mut engine = remote_engine();
-    engine.receive_message(1, EntityMessage::Spawn(entity));
+    engine.receive_message(1, 1, EntityMessage::Spawn(entity));
 
     engine.send_entity_command(
         entity,
@@ -603,11 +603,11 @@ fn a_received_host_despawn_drops_the_channel_and_surfaces_the_event() {
     spawn_on_host(&mut engine, &map, 1);
     let host_entity = HostEntity::new(1);
 
-    engine.receive_message(1, EntityMessage::Despawn(host_entity));
+    engine.receive_message(1, 1, EntityMessage::Despawn(host_entity));
 
     assert_eq!(
         engine.take_incoming_events(),
-        vec![EntityMessage::Despawn(host_entity)],
+        vec![(1, EntityMessage::Despawn(host_entity))],
         "the despawn was not surfaced",
     );
     assert!(
@@ -622,7 +622,7 @@ fn a_received_host_despawn_drops_the_channel_and_surfaces_the_event() {
 fn a_received_despawn_for_an_unknown_host_entity_is_discarded() {
     let (mut engine, _map) = host_engine(&[1]);
 
-    engine.receive_message(1, EntityMessage::Despawn(HostEntity::new(1)));
+    engine.receive_message(1, 1, EntityMessage::Despawn(HostEntity::new(1)));
 
     assert!(engine.take_incoming_events().is_empty());
 }
@@ -634,7 +634,7 @@ fn a_received_despawn_for_an_unknown_host_entity_is_discarded() {
 fn the_host_refuses_a_received_spawn() {
     let (mut engine, _map) = host_engine(&[1]);
 
-    engine.receive_message(1, EntityMessage::Spawn(HostEntity::new(1)));
+    engine.receive_message(1, 1, EntityMessage::Spawn(HostEntity::new(1)));
 }
 
 #[test]
@@ -643,6 +643,7 @@ fn the_host_refuses_a_received_component_insert() {
     let (mut engine, _map) = host_engine(&[1]);
 
     engine.receive_message(
+        1,
         1,
         EntityMessage::InsertComponent(HostEntity::new(1), component_kind::<Alpha>()),
     );
@@ -654,7 +655,7 @@ fn the_host_refuses_a_received_component_insert() {
 fn a_received_host_noop_is_dropped() {
     let (mut engine, _map) = host_engine(&[1]);
 
-    engine.receive_message(1, EntityMessage::Noop);
+    engine.receive_message(1, 1, EntityMessage::Noop);
 
     assert!(engine.take_incoming_events().is_empty());
 }
@@ -665,7 +666,7 @@ fn a_received_host_noop_is_dropped() {
 fn a_received_message_for_an_unknown_host_entity_is_discarded() {
     let (mut engine, _map) = host_engine(&[1]);
 
-    engine.receive_message(1, EntityMessage::ReleaseAuthority(0, HostEntity::new(1)));
+    engine.receive_message(1, 1, EntityMessage::ReleaseAuthority(0, HostEntity::new(1)));
 
     assert!(engine.take_incoming_events().is_empty());
 }
@@ -675,7 +676,7 @@ fn a_received_message_for_an_unknown_host_entity_is_discarded() {
 fn the_host_takes_hand_over_their_buffers() {
     let (mut engine, map) = host_engine(&[1]);
     spawn_on_host(&mut engine, &map, 1);
-    engine.receive_message(1, EntityMessage::Despawn(HostEntity::new(1)));
+    engine.receive_message(1, 1, EntityMessage::Despawn(HostEntity::new(1)));
 
     assert!(!engine.take_incoming_events().is_empty());
     assert!(

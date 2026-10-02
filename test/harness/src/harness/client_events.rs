@@ -45,14 +45,14 @@ impl ClientEvents {
         mut tick_events: TickEvents,
     ) -> Self {
         let mut spawns = Vec::new();
-        for entity in world_events.read::<naia_client::SpawnEntityEvent>() {
+        for (_, entity) in world_events.read::<naia_client::SpawnEntityEvent>() {
             if let Some(entity_key) = register_client_entity_event(scenario, &client_key, &entity) {
                 spawns.push(entity_key);
             }
         }
 
         let mut despawns = Vec::new();
-        for entity in world_events.read::<naia_client::DespawnEntityEvent>() {
+        for (_, entity) in world_events.read::<naia_client::DespawnEntityEvent>() {
             // Entity is already removed from the world at this point, so look up
             // the EntityKey directly from the registry rather than via has_entity check.
             if let Some(entity_key) = scenario
@@ -101,7 +101,7 @@ impl ClientEvents {
         let mut inserts = HashMap::new();
         for (component_kind, entities) in world_events.take_inserts().unwrap_or_default() {
             let mut entity_keys = Vec::new();
-            for entity in entities {
+            for (_, entity) in entities {
                 if let Some(entity_key) =
                     register_client_entity_event(scenario, &client_key, &entity)
                 {
@@ -117,7 +117,7 @@ impl ClientEvents {
         let mut removes = HashMap::new();
         for (component_kind, entity_data) in world_events.take_removes().unwrap_or_default() {
             let mut entity_keys = Vec::new();
-            for (entity, component) in entity_data {
+            for (_, entity, component) in entity_data {
                 // For removes that arrive with a despawn, the entity is already gone from the
                 // world by the time we process events. Fall back to a registry-only lookup
                 // (same pattern as DespawnEntityEvent handling above).

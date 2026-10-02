@@ -181,7 +181,14 @@ pub struct LocalWorldManager {
     paused_entities: HashSet<GlobalEntity>,
 
     // TODO: this is kind of specific to the receiver, put it somewhere else?
-    incoming_components: HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>>,
+    // A Vec, not a map: one receive window can hold several ticks' inserts
+    // for one entity+component, and every one must survive with its own tick.
+    incoming_components: Vec<(Tick, OwnedLocalEntity, ComponentKind, Box<dyn Replicate>)>,
+    /// Parse tick per buffered entity message, keyed by message id. Attached
+    /// at parse time (`receiver_buffer_message`) and consumed when the
+    /// message leaves the receiver, so existence events keep their authored
+    /// tick across reorder/filter stages.
+    incoming_message_ticks: HashMap<MessageIndex, Tick>,
 
     // TODO: this is kind of specific to the updater, put it somewhere else?
     incoming_updates: Vec<(Tick, OwnedLocalEntity, PendingComponentUpdate)>,
@@ -208,7 +215,8 @@ impl LocalWorldManager {
 
             paused_entities: HashSet::new(),
 
-            incoming_components: HashMap::new(),
+            incoming_components: Vec::new(),
+            incoming_message_ticks: HashMap::new(),
             incoming_updates: Vec::new(),
         }
     }
@@ -776,10 +784,13 @@ impl LocalWorldManager {
         self.remote.entity_waitlist_mut()
     }
 
-    /// Buffers an incoming entity message at the given sequence `id` for ordered delivery.
+    /// Buffers an incoming entity message at the given sequence `id` for
+    /// ordered delivery, recording the parse `tick` so the eventual existence
+    /// event carries its authored tick.
     pub fn receiver_buffer_message(
         &mut self,
         id: MessageIndex,
+        tick: Tick,
         msg: EntityMessage<OwnedLocalEntity>,
     ) {
         // if msg.get_type() != EntityMessageType::Noop {
@@ -791,17 +802,19 @@ impl LocalWorldManager {
         //     );
         // }
 
+        self.incoming_message_ticks.insert(id, tick);
         self.receiver.buffer_message(id, msg);
     }
 
     pub(crate) fn insert_received_component(
         &mut self,
+        tick: Tick,
         local_entity: &OwnedLocalEntity,
         component_kind: &ComponentKind,
         component: Box<dyn Replicate>,
     ) {
         self.incoming_components
-            .insert((*local_entity, *component_kind), component);
+            .push((tick, *local_entity, *component_kind, component));
     }
 
     pub(crate) fn insert_received_update(
@@ -910,6 +923,12 @@ impl LocalWorldManager {
         let mut incoming_remote_messages = Vec::new();
 
         for (id, incoming_message) in incoming_messages {
+            // Every buffered message recorded its parse tick; a missing entry
+            // is a programming error, never a guessable default.
+            let tick = self
+                .incoming_message_ticks
+                .remove(&id)
+                .expect("a buffered entity message must carry its parse tick");
             if incoming_message.get_type() == EntityMessageType::Noop {
                 continue; // skip noop messages
             }
@@ -938,7 +957,11 @@ impl LocalWorldManager {
                     } else {
                         HostEntity::new(host_entity)
                     };
-                    incoming_host_messages.push((id, incoming_message.with_entity(host_entity)));
+                    incoming_host_messages.push((
+                        id,
+                        tick,
+                        incoming_message.with_entity(host_entity),
+                    ));
                 }
                 OwnedLocalEntity::Remote { .. } => {
                     // Remote entity message
@@ -955,8 +978,11 @@ impl LocalWorldManager {
                             client_routed_remote_spawn_increment();
                         }
                     }
-                    incoming_remote_messages
-                        .push((id, incoming_message.with_entity(remote_entity)));
+                    incoming_remote_messages.push((
+                        id,
+                        tick,
+                        incoming_message.with_entity(remote_entity),
+                    ));
                 }
             }
         }

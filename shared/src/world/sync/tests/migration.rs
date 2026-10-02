@@ -55,9 +55,9 @@ fn remote_entity_channel_extract_inserted_component_kinds() {
     let comp2 = component_kind::<TestComponent2>();
 
     // Simulate spawn and component inserts
-    channel.receive_message(1, EntityMessage::<()>::Spawn(()));
-    channel.receive_message(2, EntityMessage::<()>::InsertComponent((), comp1));
-    channel.receive_message(3, EntityMessage::<()>::InsertComponent((), comp2));
+    channel.receive_message(1, 1, EntityMessage::<()>::Spawn(()));
+    channel.receive_message(2, 2, EntityMessage::<()>::InsertComponent((), comp1));
+    channel.receive_message(3, 3, EntityMessage::<()>::InsertComponent((), comp2));
 
     // Extract component kinds
     let kinds = channel.extract_inserted_component_kinds();
@@ -238,15 +238,18 @@ fn remote_component_channel_force_drain_buffers() {
     channel.accept_message(
         crate::world::sync::remote_entity_channel::EntityChannelState::Despawned,
         1,
+        1,
         EntityMessage::<()>::InsertComponent((), comp),
     );
     channel.accept_message(
         crate::world::sync::remote_entity_channel::EntityChannelState::Despawned,
         3,
+        3,
         EntityMessage::<()>::RemoveComponent((), comp),
     );
     channel.accept_message(
         crate::world::sync::remote_entity_channel::EntityChannelState::Despawned,
+        2,
         2,
         EntityMessage::<()>::InsertComponent((), comp),
     );
@@ -336,10 +339,10 @@ fn remote_entity_channel_force_drain_all_buffers() {
     let comp2 = component_kind::<TestComponent2>();
 
     // Add some buffered operations
-    channel.receive_message(1, EntityMessage::<()>::Spawn(()));
-    channel.receive_message(2, EntityMessage::<()>::InsertComponent((), comp1));
-    channel.receive_message(4, EntityMessage::<()>::RemoveComponent((), comp1));
-    channel.receive_message(3, EntityMessage::<()>::InsertComponent((), comp2));
+    channel.receive_message(1, 1, EntityMessage::<()>::Spawn(()));
+    channel.receive_message(2, 2, EntityMessage::<()>::InsertComponent((), comp1));
+    channel.receive_message(4, 4, EntityMessage::<()>::RemoveComponent((), comp1));
+    channel.receive_message(3, 3, EntityMessage::<()>::InsertComponent((), comp2));
 
     // Force-drain all buffers
     channel.force_drain_all_buffers();
@@ -383,9 +386,9 @@ fn force_drain_resolves_all_buffers() {
     let comp = component_kind::<TestComponent1>();
 
     // Setup: spawn + buffer some out-of-order operations
-    channel.receive_message(1, EntityMessage::<()>::Spawn(()));
-    channel.receive_message(4, EntityMessage::<()>::RemoveComponent((), comp));
-    channel.receive_message(3, EntityMessage::<()>::InsertComponent((), comp));
+    channel.receive_message(1, 1, EntityMessage::<()>::Spawn(()));
+    channel.receive_message(4, 4, EntityMessage::<()>::RemoveComponent((), comp));
+    channel.receive_message(3, 3, EntityMessage::<()>::InsertComponent((), comp));
 
     // Before drain: messages are processed immediately by receive_message
     let events_before = channel.take_incoming_events();
@@ -409,8 +412,8 @@ fn force_drain_preserves_component_state() {
     let comp = component_kind::<TestComponent1>();
 
     // Setup with buffered operations
-    channel.receive_message(1, EntityMessage::<()>::Spawn(()));
-    channel.receive_message(2, EntityMessage::<()>::InsertComponent((), comp));
+    channel.receive_message(1, 1, EntityMessage::<()>::Spawn(()));
+    channel.receive_message(2, 2, EntityMessage::<()>::InsertComponent((), comp));
 
     // Force drain
     channel.force_drain_all_buffers();
@@ -553,10 +556,10 @@ fn a_configured_channel_expects_the_subcommand_id_after_migrate_response() {
     let entity = RemoteEntity::new(1);
     let mut channel = RemoteEntityChannel::new_delegated(HostType::Client);
 
-    channel.receive_message(1, EntityMessage::Spawn(()));
+    channel.receive_message(1, 1, EntityMessage::Spawn(()));
     // subcommand_id 1: the slot right after the MigrateResponse that migration
     // consumed as 0.
-    channel.receive_message(2, EntityMessage::ReleaseAuthority(1, ()));
+    channel.receive_message(2, 2, EntityMessage::ReleaseAuthority(1, ()));
 
     let mut events = Vec::new();
     channel.drain_incoming_messages_into(entity, &mut events);
@@ -564,7 +567,7 @@ fn a_configured_channel_expects_the_subcommand_id_after_migrate_response() {
     assert!(
         events
             .iter()
-            .any(|msg| matches!(msg, EntityMessage::ReleaseAuthority(_, _))),
+            .any(|msg| matches!(msg.1, EntityMessage::ReleaseAuthority(_, _))),
         "the auth message after the migration was never delivered, so the \
          receiver was still waiting on subcommand 0: {events:?}",
     );
@@ -584,8 +587,8 @@ fn spawn_discards_auth_messages_buffered_from_a_previous_lifetime() {
     let mut channel = RemoteEntityChannel::new_delegated(HostType::Client);
 
     // Arrives while the channel is still Despawned, so it is buffered.
-    channel.receive_message(1, EntityMessage::ReleaseAuthority(1, ()));
-    channel.receive_message(5, EntityMessage::Spawn(()));
+    channel.receive_message(1, 1, EntityMessage::ReleaseAuthority(1, ()));
+    channel.receive_message(5, 5, EntityMessage::Spawn(()));
 
     let mut events = Vec::new();
     channel.drain_incoming_messages_into(entity, &mut events);
@@ -593,7 +596,7 @@ fn spawn_discards_auth_messages_buffered_from_a_previous_lifetime() {
     assert!(
         !events
             .iter()
-            .any(|msg| matches!(msg, EntityMessage::ReleaseAuthority(_, _))),
+            .any(|msg| matches!(msg.1, EntityMessage::ReleaseAuthority(_, _))),
         "a pre-spawn authority command survived the spawn barrier: {events:?}",
     );
 }

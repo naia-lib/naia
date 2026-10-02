@@ -82,7 +82,7 @@ use std::{
 use crate::{
     sequence_less_than, world::sync::remote_component_channel::RemoteComponentChannel,
     ComponentKind, EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageType, HostType,
-    MessageIndex,
+    MessageIndex, Tick,
 };
 
 cfg_if! {
@@ -109,8 +109,8 @@ pub struct RemoteEntityChannel {
     component_channels: HashMap<ComponentKind, RemoteComponentChannel>,
     auth_channel: AuthChannel,
 
-    buffered_messages: OrderedIds<EntityMessage<()>>,
-    incoming_messages: Vec<EntityMessage<()>>,
+    buffered_messages: OrderedIds<(Tick, EntityMessage<()>)>,
+    incoming_messages: Vec<(Tick, EntityMessage<()>)>,
     outgoing_commands: Vec<EntityCommand>,
 }
 
@@ -164,7 +164,7 @@ impl RemoteEntityChannel {
         self.auth_channel.is_delegated()
     }
 
-    pub(crate) fn receive_message(&mut self, id: MessageIndex, msg: EntityMessage<()>) {
+    pub(crate) fn receive_message(&mut self, id: MessageIndex, tick: Tick, msg: EntityMessage<()>) {
         if let Some(last_epoch_id) = self.last_epoch_id {
             if last_epoch_id == id {
                 panic!("EntityChannel received a message with the same id as the last epoch id. This should not happen. Message: {:?}", msg);
@@ -176,7 +176,7 @@ impl RemoteEntityChannel {
             }
         }
 
-        self.buffered_messages.push_back(id, msg);
+        self.buffered_messages.push_back(id, (tick, msg));
 
         self.process_messages();
     }
@@ -191,12 +191,12 @@ impl RemoteEntityChannel {
     pub(crate) fn drain_incoming_messages_into<E: Copy + Hash + Eq>(
         &mut self,
         entity: E,
-        outgoing_events: &mut Vec<EntityMessage<E>>,
+        outgoing_events: &mut Vec<(Tick, EntityMessage<E>)>,
     ) {
         // Drain the entity channel and append the messages to the outgoing events
         let mut received_messages = Vec::new();
-        for rmsg in std::mem::take(&mut self.incoming_messages) {
-            received_messages.push(rmsg.with_entity(entity));
+        for (tick, rmsg) in std::mem::take(&mut self.incoming_messages) {
+            received_messages.push((tick, rmsg.with_entity(entity)));
         }
         outgoing_events.append(&mut received_messages);
     }
@@ -213,7 +213,7 @@ impl RemoteEntityChannel {
     }
 
     fn process_messages(&mut self) {
-        while let Some((id, msg)) = self.buffered_messages.peek_front() {
+        while let Some((id, (_, msg))) = self.buffered_messages.peek_front() {
             let id = *id;
 
             match msg.get_type() {
@@ -267,14 +267,14 @@ impl RemoteEntityChannel {
                     self.buffered_messages.pop_front_until_and_excluding(id);
 
                     // Pop the SpawnWithComponents message itself
-                    let (_, msg) = self.buffered_messages.pop_front().unwrap();
+                    let (_, (tick, msg)) = self.buffered_messages.pop_front().unwrap();
                     let kinds = match msg {
                         EntityMessage::SpawnWithComponents((), kinds) => kinds,
                         _ => unreachable!(),
                     };
 
-                    // Emit synthetic Spawn event
-                    self.incoming_messages.push(EntityMessage::Spawn(()));
+                    // Emit synthetic Spawn event, stamped with the bundle's own tick
+                    self.incoming_messages.push((tick, EntityMessage::Spawn(())));
 
                     // Process any pre-buffered component channels (out-of-order arrivals)
                     for (component_kind, component_channel) in self.component_channels.iter_mut() {
@@ -289,7 +289,7 @@ impl RemoteEntityChannel {
                             .entry(*kind)
                             .or_insert_with(RemoteComponentChannel::new);
                         component_channel.set_inserted(true, id);
-                        self.incoming_messages.push(EntityMessage::InsertComponent((), *kind));
+                        self.incoming_messages.push((tick, EntityMessage::InsertComponent((), *kind)));
                     }
 
                     // Drain auth channel
@@ -315,23 +315,23 @@ impl RemoteEntityChannel {
                 }
                 EntityMessageType::InsertComponent | EntityMessageType::RemoveComponent => {
 
-                    let (id, msg) = self.buffered_messages.pop_front().unwrap();
+                    let (id, (tick, msg)) = self.buffered_messages.pop_front().unwrap();
                     let component_kind = msg.component_kind().unwrap();
                     let component_channel = self.component_channels
                         .entry(component_kind)
                         .or_insert_with(RemoteComponentChannel::new);
 
-                    component_channel.accept_message(self.state, id, msg);
+                    component_channel.accept_message(self.state, id, tick, msg);
                     component_channel.drain_messages_into(&component_kind, &mut self.incoming_messages);
                 }
                 EntityMessageType::Publish | EntityMessageType::Unpublish |
                 EntityMessageType::EnableDelegation | EntityMessageType::DisableDelegation |
                 EntityMessageType::ReleaseAuthority | // NOTE: This should be possible because a client might want to release authority right after enabling delegation
                 EntityMessageType::SetAuthority => {
-                    let (id, msg) = self.buffered_messages.pop_front().unwrap();
+                    let (id, (tick, msg)) = self.buffered_messages.pop_front().unwrap();
                     // info!("EntityChannelReceiver::process_messages(id={}, msgType={:?})", id, msg.get_type());
 
-                    self.auth_channel.receiver_receive_message(Some(self.state), id, msg);
+                    self.auth_channel.receiver_receive_message(Some(self.state), id, tick, msg);
                     // Only drain auth messages when entity is Spawned (spawn barrier contract)
                     if self.state == EntityChannelState::Spawned {
                         self.auth_channel.receiver_drain_messages_into(&mut self.incoming_messages);
@@ -349,8 +349,8 @@ impl RemoteEntityChannel {
     }
 
     fn pop_front_into_outgoing(&mut self) {
-        let (_, msg) = self.buffered_messages.pop_front().unwrap();
-        self.incoming_messages.push(msg);
+        let (_, (tick, msg)) = self.buffered_messages.pop_front().unwrap();
+        self.incoming_messages.push((tick, msg));
     }
 
     #[allow(dead_code)] // used in migration unit tests
@@ -385,10 +385,10 @@ impl RemoteEntityChannel {
         let head = self
             .buffered_messages
             .peek_front()
-            .map(|(id, msg)| (*id, msg.get_type()));
+            .map(|(id, (_, msg))| (*id, msg.get_type()));
         let spawn_id = self
             .buffered_messages
-            .find_by_predicate(|msg| msg.get_type() == EntityMessageType::Spawn)
+            .find_by_predicate(|(_, msg)| msg.get_type() == EntityMessageType::Spawn)
             .map(|(id, _)| id);
         (state, last_epoch_id, buffered_len, head, spawn_id)
     }
@@ -403,8 +403,8 @@ impl RemoteEntityChannel {
 
     pub(crate) fn force_drain_all_buffers(&mut self) {
         // Force-drain entity-level buffered messages
-        while let Some((_, msg)) = self.buffered_messages.pop_front() {
-            self.incoming_messages.push(msg);
+        while let Some((_, (tick, msg))) = self.buffered_messages.pop_front() {
+            self.incoming_messages.push((tick, msg));
         }
 
         // Force-drain all component channels
@@ -460,7 +460,7 @@ impl RemoteEntityChannel {
     }
 
     #[allow(dead_code)] // used in bulletproof migration unit tests
-    pub(crate) fn take_incoming_events(&mut self) -> Vec<EntityMessage<()>> {
+    pub(crate) fn take_incoming_events(&mut self) -> Vec<(Tick, EntityMessage<()>)> {
         std::mem::take(&mut self.incoming_messages)
     }
 }

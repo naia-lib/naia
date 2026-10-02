@@ -5,7 +5,7 @@ use log::warn;
 use crate::{
     world::sync::{config::EngineConfig, HostEntityChannel},
     EntityCommand, EntityMessage, EntityMessageType, HostEntity, HostType,
-    LocalEntityAndGlobalEntityConverter, MessageIndex,
+    LocalEntityAndGlobalEntityConverter, MessageIndex, Tick,
 };
 
 pub struct HostEngine {
@@ -13,7 +13,7 @@ pub struct HostEngine {
     pub config: EngineConfig,
     entity_channels: HashMap<HostEntity, HostEntityChannel>,
 
-    incoming_events: Vec<EntityMessage<HostEntity>>,
+    incoming_events: Vec<(Tick, EntityMessage<HostEntity>)>,
     outgoing_commands: Vec<EntityCommand>,
 }
 
@@ -29,7 +29,7 @@ impl HostEngine {
         }
     }
 
-    pub(crate) fn take_incoming_events(&mut self) -> Vec<EntityMessage<HostEntity>> {
+    pub(crate) fn take_incoming_events(&mut self) -> Vec<(Tick, EntityMessage<HostEntity>)> {
         std::mem::take(&mut self.incoming_events)
     }
 
@@ -41,7 +41,12 @@ impl HostEngine {
         &self.entity_channels
     }
 
-    pub fn receive_message(&mut self, id: MessageIndex, msg: EntityMessage<HostEntity>) {
+    pub fn receive_message(
+        &mut self,
+        id: MessageIndex,
+        tick: Tick,
+        msg: EntityMessage<HostEntity>,
+    ) {
         match msg.get_type() {
             EntityMessageType::Spawn
             | EntityMessageType::SpawnWithComponents
@@ -57,7 +62,7 @@ impl HostEngine {
                 // Despawn is terminal — no per-entity channel ordering needed; push directly.
                 let host_entity = msg.entity().unwrap();
                 if self.entity_channels.remove(&host_entity).is_some() {
-                    self.incoming_events.push(msg);
+                    self.incoming_events.push((tick, msg));
                 } else {
                     warn!(
                         "host_engine: Despawn for unknown entity {:?}, discarding",
@@ -84,7 +89,7 @@ impl HostEngine {
             return;
         };
 
-        entity_channel.receive_message(id, msg.strip_entity());
+        entity_channel.receive_message(id, tick, msg.strip_entity());
         entity_channel.drain_incoming_messages_into(host_entity, &mut self.incoming_events);
     }
 

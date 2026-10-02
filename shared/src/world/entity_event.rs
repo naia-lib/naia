@@ -3,15 +3,21 @@ use crate::{
 };
 
 /// ECS-level event produced by the replication system when the remote world state changes.
+///
+/// Existence events (`Spawn`, `Despawn`, `InsertComponent`, `RemoveComponent`)
+/// carry the server tick that authored them, in first position like
+/// `UpdateComponent`, so a receive window holding several ticks' worth of
+/// events can be replayed in exact order. They are never coalesced: two
+/// ticks' inserts for one entity arrive as two events.
 pub enum EntityEvent {
-    /// A new entity was spawned by the remote.
-    Spawn(GlobalEntity),
-    /// An existing entity was despawned by the remote.
-    Despawn(GlobalEntity),
-    /// A component was added to an entity.
-    InsertComponent(GlobalEntity, ComponentKind),
-    /// A component was removed from an entity; carries the last known component value.
-    RemoveComponent(GlobalEntity, Box<dyn Replicate>),
+    /// A new entity was spawned by the remote at the given tick.
+    Spawn(Tick, GlobalEntity),
+    /// An existing entity was despawned by the remote at the given tick.
+    Despawn(Tick, GlobalEntity),
+    /// A component was added to an entity at the given tick.
+    InsertComponent(Tick, GlobalEntity, ComponentKind),
+    /// A component was removed from an entity at the given tick; carries the last known component value.
+    RemoveComponent(Tick, GlobalEntity, Box<dyn Replicate>),
     /// A component on an entity was updated at the given tick.
     UpdateComponent(Tick, GlobalEntity, ComponentKind),
 
@@ -40,10 +46,10 @@ impl EntityEvent {
     /// Returns the [`EntityMessageType`] discriminant for this event, or `None` for `UpdateComponent` (which has no wire type).
     pub fn to_type(&self) -> Option<EntityMessageType> {
         match self {
-            Self::Spawn(_) => Some(EntityMessageType::Spawn),
-            Self::Despawn(_) => Some(EntityMessageType::Despawn),
-            Self::InsertComponent(_, _) => Some(EntityMessageType::InsertComponent),
-            Self::RemoveComponent(_, _) => Some(EntityMessageType::RemoveComponent),
+            Self::Spawn(_, _) => Some(EntityMessageType::Spawn),
+            Self::Despawn(_, _) => Some(EntityMessageType::Despawn),
+            Self::InsertComponent(_, _, _) => Some(EntityMessageType::InsertComponent),
+            Self::RemoveComponent(_, _, _) => Some(EntityMessageType::RemoveComponent),
             Self::Publish(_) => Some(EntityMessageType::Publish),
             Self::Unpublish(_) => Some(EntityMessageType::Unpublish),
             Self::EnableDelegation(_) => Some(EntityMessageType::EnableDelegation),
@@ -60,10 +66,10 @@ impl EntityEvent {
     /// Returns the [`GlobalEntity`] this event refers to.
     pub fn entity(&self) -> GlobalEntity {
         match self {
-            Self::Spawn(entity) => *entity,
-            Self::Despawn(entity) => *entity,
-            Self::InsertComponent(entity, _) => *entity,
-            Self::RemoveComponent(entity, _) => *entity,
+            Self::Spawn(_, entity) => *entity,
+            Self::Despawn(_, entity) => *entity,
+            Self::InsertComponent(_, entity, _) => *entity,
+            Self::RemoveComponent(_, entity, _) => *entity,
             Self::UpdateComponent(_, entity, _) => *entity,
             Self::Publish(entity) => *entity,
             Self::Unpublish(entity) => *entity,
@@ -111,22 +117,22 @@ mod entity_event_tests {
     fn one_of_each() -> Vec<(EntityEvent, Option<EntityMessageType>, u64)> {
         vec![
             (
-                EntityEvent::Spawn(entity(1)),
+                EntityEvent::Spawn(11, entity(1)),
                 Some(EntityMessageType::Spawn),
                 1,
             ),
             (
-                EntityEvent::Despawn(entity(2)),
+                EntityEvent::Despawn(12, entity(2)),
                 Some(EntityMessageType::Despawn),
                 2,
             ),
             (
-                EntityEvent::InsertComponent(entity(3), ComponentKind::of::<Ghost>()),
+                EntityEvent::InsertComponent(13, entity(3), ComponentKind::of::<Ghost>()),
                 Some(EntityMessageType::InsertComponent),
                 3,
             ),
             (
-                EntityEvent::RemoveComponent(entity(4), Box::new(Ghost::new_complete(7))),
+                EntityEvent::RemoveComponent(14, entity(4), Box::new(Ghost::new_complete(7))),
                 Some(EntityMessageType::RemoveComponent),
                 4,
             ),
@@ -216,7 +222,7 @@ mod entity_event_tests {
     #[test]
     fn the_log_line_names_the_message_type_and_the_entity() {
         assert_eq!(
-            EntityEvent::Spawn(entity(1)).log(),
+            EntityEvent::Spawn(11, entity(1)).log(),
             "Spawn GlobalEntity(1)".to_string()
         );
         assert_eq!(

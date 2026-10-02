@@ -3,7 +3,7 @@ use std::{fmt::Debug, hash::Hash};
 use crate::{
     messages::channels::receivers::reliable_receiver::ReliableReceiver,
     world::sync::{HostEngine, RemoteEngine},
-    EntityMessage, HostEntity, MessageIndex,
+    EntityMessage, HostEntity, MessageIndex, Tick,
 };
 
 /// Stateless helper that routes incoming entity messages into per-entity ordered queues.
@@ -25,10 +25,10 @@ impl EntityMessageReceiver {
     /// into each entity's `EntityChannelReceiver`
     pub fn remote_take_incoming_messages<E: Copy + Hash + Eq + Debug>(
         remote_engine: &mut RemoteEngine<E>,
-        incoming_messages: Vec<(MessageIndex, EntityMessage<E>)>,
-    ) -> Vec<EntityMessage<E>> {
-        for (message_index, message) in incoming_messages {
-            remote_engine.receive_message(message_index, message);
+        incoming_messages: Vec<(MessageIndex, Tick, EntityMessage<E>)>,
+    ) -> Vec<(Tick, EntityMessage<E>)> {
+        for (message_index, tick, message) in incoming_messages {
+            remote_engine.receive_message(message_index, tick, message);
         }
         remote_engine.take_incoming_events()
     }
@@ -37,10 +37,10 @@ impl EntityMessageReceiver {
     // TODO: refactor this to use a generic type for the engine
     pub fn host_take_incoming_events(
         host_engine: &mut HostEngine,
-        incoming_messages: Vec<(MessageIndex, EntityMessage<HostEntity>)>,
-    ) -> Vec<EntityMessage<HostEntity>> {
-        for (message_index, message) in incoming_messages {
-            host_engine.receive_message(message_index, message);
+        incoming_messages: Vec<(MessageIndex, Tick, EntityMessage<HostEntity>)>,
+    ) -> Vec<(Tick, EntityMessage<HostEntity>)> {
+        for (message_index, tick, message) in incoming_messages {
+            host_engine.receive_message(message_index, tick, message);
         }
         host_engine.take_incoming_events()
     }

@@ -10,7 +10,7 @@ use naia_shared::{
 
 use crate::NaiaClientError;
 
-type RemovesMap<E> = HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>>;
+type RemovesMap<E> = HashMap<ComponentKind, Vec<(Tick, E, Box<dyn Replicate>)>>;
 
 /// All events produced in one frame: connections, entity lifecycle, component changes, messages, and errors.
 pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
@@ -20,14 +20,14 @@ pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
     errors: Vec<NaiaClientError>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
     requests: HashMap<ChannelKind, HashMap<MessageKind, Vec<(GlobalResponseId, MessageContainer)>>>,
-    spawns: Vec<E>,
-    despawns: Vec<E>,
+    spawns: Vec<(Tick, E)>,
+    despawns: Vec<(Tick, E)>,
     publishes: Vec<E>,
     unpublishes: Vec<E>,
     auth_grants: Vec<E>,
     auth_denies: Vec<E>,
     auth_resets: Vec<E>,
-    inserts: HashMap<ComponentKind, Vec<E>>,
+    inserts: HashMap<ComponentKind, Vec<(Tick, E)>>,
     removes: RemovesMap<E>,
     updates: HashMap<ComponentKind, Vec<(Tick, E)>>,
     empty: bool,
@@ -107,7 +107,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         !self.inserts.is_empty()
     }
     /// Takes all queued component-insert events; prefer `read::<InsertComponentEvent<C>>()` in application code.
-    pub fn take_inserts(&mut self) -> Option<HashMap<ComponentKind, Vec<E>>> {
+    pub fn take_inserts(&mut self) -> Option<HashMap<ComponentKind, Vec<(Tick, E)>>> {
         if self.inserts.is_empty() {
             None
         } else {
@@ -207,13 +207,13 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_spawn(&mut self, world_entity: E) {
-        self.spawns.push(world_entity);
+    pub(crate) fn push_spawn(&mut self, tick: Tick, world_entity: E) {
+        self.spawns.push((tick, world_entity));
         self.empty = false;
     }
 
-    pub(crate) fn push_despawn(&mut self, world_entity: E) {
-        self.despawns.push(world_entity);
+    pub(crate) fn push_despawn(&mut self, tick: Tick, world_entity: E) {
+        self.despawns.push((tick, world_entity));
         self.empty = false;
     }
 
@@ -242,12 +242,17 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_insert(&mut self, world_entity: E, component_kind: ComponentKind) {
+    pub(crate) fn push_insert(
+        &mut self,
+        tick: Tick,
+        world_entity: E,
+        component_kind: ComponentKind,
+    ) {
         self.inserts
             .entry(component_kind)
             .or_insert_with(|| Vec::new());
         let list = self.inserts.get_mut(&component_kind).unwrap();
-        list.push(world_entity);
+        list.push((tick, world_entity));
         self.empty = false;
     }
 
@@ -263,11 +268,16 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_remove(&mut self, world_entity: E, component: Box<dyn Replicate>) {
+    pub(crate) fn push_remove(
+        &mut self,
+        tick: Tick,
+        world_entity: E,
+        component: Box<dyn Replicate>,
+    ) {
         let component_kind: ComponentKind = component.kind();
         self.removes.entry(component_kind).or_default();
         let list = self.removes.get_mut(&component_kind).unwrap();
-        list.push((world_entity, component));
+        list.push((tick, world_entity, component));
         self.empty = false;
     }
 
@@ -466,10 +476,10 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, Q: Request> WorldEvent<E>
     }
 }
 
-/// Fires when the server spawns a new replicated entity on this client; yields the world entity `E`.
+/// Fires when the server spawns a new replicated entity on this client; yields `(Tick, E)`.
 pub struct SpawnEntityEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for SpawnEntityEvent {
-    type Iter = IntoIter<E>;
+    type Iter = IntoIter<(Tick, E)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.spawns);
@@ -481,10 +491,10 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for SpawnEntityEvent {
     }
 }
 
-/// Fires when the server despawns a previously replicated entity; yields the world entity `E`.
+/// Fires when the server despawns a previously replicated entity; yields `(Tick, E)`.
 pub struct DespawnEntityEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for DespawnEntityEvent {
-    type Iter = IntoIter<E>;
+    type Iter = IntoIter<(Tick, E)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.despawns);
@@ -571,12 +581,12 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for EntityAuthDeniedEvent 
     }
 }
 
-/// Fires when component `C` is inserted on a replicated entity; yields the world entity `E`.
+/// Fires when component `C` is inserted on a replicated entity; yields `(Tick, E)`.
 pub struct InsertComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }
 impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> WorldEvent<E> for InsertComponentEvent<C> {
-    type Iter = IntoIter<E>;
+    type Iter = IntoIter<(Tick, E)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let component_kind: ComponentKind = ComponentKind::of::<C>();
@@ -615,22 +625,22 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> WorldEvent<E> for UpdateCo
     }
 }
 
-/// Fires when component `C` is removed from a replicated entity; yields `(E, C)` with the last value of the component.
+/// Fires when component `C` is removed from a replicated entity; yields `(Tick, E, C)` with the last value of the component.
 pub struct RemoveComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }
 impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> WorldEvent<E> for RemoveComponentEvent<C> {
-    type Iter = IntoIter<(E, C)>;
+    type Iter = IntoIter<(Tick, E, C)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let component_kind: ComponentKind = ComponentKind::of::<C>();
         if let Some(boxed_list) = events.removes.remove(&component_kind) {
-            let mut output_list: Vec<(E, C)> = Vec::new();
+            let mut output_list: Vec<(Tick, E, C)> = Vec::new();
 
-            for (entity, boxed_component) in boxed_list {
+            for (tick, entity, boxed_component) in boxed_list {
                 let boxed_any = boxed_component.to_boxed_any();
                 let component = boxed_any.downcast::<C>().unwrap();
-                output_list.push((entity, *component));
+                output_list.push((tick, entity, *component));
             }
 
             return IntoIterator::into_iter(output_list);

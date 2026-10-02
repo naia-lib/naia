@@ -187,7 +187,7 @@ fn force_draining_releases_messages_the_spawn_barrier_was_holding() {
     let mut channel = RemoteEntityChannel::new(HostType::Client);
 
     // The channel is still Despawned, so this parks in the entity-level buffer.
-    channel.receive_message(3, EntityMessage::Despawn(()));
+    channel.receive_message(3, 3, EntityMessage::Despawn(()));
     let mut before = Vec::new();
     channel.drain_incoming_messages_into(entity, &mut before);
     assert!(
@@ -214,7 +214,7 @@ fn the_migration_release_delivers_messages_that_raced_the_migration() {
     let mut channel = RemoteEntityChannel::new_delegated(HostType::Client);
 
     // Arrives before the migration upgrade flips the channel to Spawned.
-    channel.receive_message(1, EntityMessage::ReleaseAuthority(1, ()));
+    channel.receive_message(1, 1, EntityMessage::ReleaseAuthority(1, ()));
     let mut before = Vec::new();
     channel.drain_incoming_messages_into(entity, &mut before);
     assert!(
@@ -230,7 +230,7 @@ fn the_migration_release_delivers_messages_that_raced_the_migration() {
     assert!(
         after
             .iter()
-            .any(|msg| matches!(msg, EntityMessage::ReleaseAuthority(_, _))),
+            .any(|msg| matches!(msg.1, EntityMessage::ReleaseAuthority(_, _))),
         "the message that raced the migration was never released: {after:?}",
     );
 }
@@ -249,6 +249,7 @@ fn a_coalesced_spawn_spawns_an_unspawned_channel() {
 
     channel.receive_message(
         1,
+        1,
         EntityMessage::SpawnWithComponents((), vec![component_kind::<Alpha>()]),
     );
 
@@ -258,7 +259,7 @@ fn a_coalesced_spawn_spawns_an_unspawned_channel() {
     assert!(
         events
             .iter()
-            .any(|msg| matches!(msg, EntityMessage::Spawn(_))),
+            .any(|msg| matches!(msg.1, EntityMessage::Spawn(_))),
         "the coalesced spawn never spawned the channel: {events:?}",
     );
     assert!(
@@ -276,6 +277,7 @@ fn a_repeated_coalesced_spawn_is_not_applied_twice() {
 
     channel.receive_message(
         1,
+        1,
         EntityMessage::SpawnWithComponents((), vec![component_kind::<Alpha>()]),
     );
     let mut first = Vec::new();
@@ -283,6 +285,7 @@ fn a_repeated_coalesced_spawn_is_not_applied_twice() {
     assert!(!first.is_empty(), "fixture: the first spawn did not apply");
 
     channel.receive_message(
+        2,
         2,
         EntityMessage::SpawnWithComponents((), vec![component_kind::<Alpha>()]),
     );
@@ -292,7 +295,7 @@ fn a_repeated_coalesced_spawn_is_not_applied_twice() {
     assert!(
         !second
             .iter()
-            .any(|msg| matches!(msg, EntityMessage::Spawn(_))),
+            .any(|msg| matches!(msg.1, EntityMessage::Spawn(_))),
         "an already-spawned channel spawned a second time: {second:?}",
     );
 }

@@ -194,7 +194,7 @@ pub fn translate_world_events<T: Send + Sync + 'static>(world: &mut World) {
                     .unwrap();
 
                 let mut spawned_entities = Vec::new();
-                for entity in events.read::<naia_events::SpawnEntityEvent>() {
+                for (_, entity) in events.read::<naia_events::SpawnEntityEvent>() {
                     spawned_entities.push(entity);
                     event_writer.write(bevy_events::SpawnEntityEvent::<T>::new(entity));
                 }
@@ -215,7 +215,7 @@ pub fn translate_world_events<T: Send + Sync + 'static>(world: &mut World) {
                 let mut event_writer = world
                     .get_resource_mut::<Messages<bevy_events::DespawnEntityEvent<T>>>()
                     .unwrap();
-                for entity in events.read::<naia_events::DespawnEntityEvent>() {
+                for (_, entity) in events.read::<naia_events::DespawnEntityEvent>() {
                     event_writer.write(bevy_events::DespawnEntityEvent::<T>::new(entity));
                 }
             }
