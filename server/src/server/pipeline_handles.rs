@@ -247,7 +247,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     }
 
     /// MISSION_TICK_FLOOR Lever 3 — PREPARE half. Build the self-contained
-    /// per-user [`SendPlan`] at the freeze point (captures the frozen
+    /// per-user [`naia_shared::SendPlan`] at the freeze point (captures the frozen
     /// `DiffMask`s + clears the live per-user masks). On the active path the
     /// cyberlith pipeline calls this on MAIN inside the park window; the send
     /// worker later transmits the plan via [`Self::transmit_send_job`].
@@ -259,7 +259,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     }
 
     /// MISSION_TICK_FLOOR Lever 3 — TRANSMIT half. Serialize + send a previously
-    /// prepared [`SendPlan`], reading zero live per-user diff state. Called by
+    /// prepared [`naia_shared::SendPlan`], reading zero live per-user diff state. Called by
     /// the active send worker (lagged) and by the synchronous oracle.
     pub fn transmit_send_job<W: WorldRefType<E> + Sync>(
         &mut self,
@@ -296,9 +296,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
 
     /// MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20) — recompute the cross-thread
     /// `needed_entities` set from every connection's in-flight value-reading
-    /// commands. Call AFTER [`apply_pending_scope_changes`] and BEFORE the
+    /// commands. Call AFTER [`Self::apply_pending_scope_changes`] and BEFORE the
     /// Sim-side `SnapshotWorld` build that reads
-    /// [`crate::SendStateView::needed_snapshot_entries`]. See
+    /// `SendStateView::needed_snapshot_entries`. See
     /// [`SendState::refresh_needed_entities`].
     pub fn refresh_needed_entities(&mut self) {
         self.state.refresh_needed_entities();
@@ -318,7 +318,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// `UserEnteredRoom`, `UserLeftRoom`, `ScopeToggled`) from
     /// `scope_change_queue` and fan them out to user connections.
     ///
-    /// Companion to [`apply_pending_send_preamble`] (which only drains
+    /// Companion to [`Self::apply_pending_send_preamble`] (which only drains
     /// `RoomChange` variants). Together the two methods restore the
     /// full body of the legacy `InternalWorldServer::run_send_preamble` for
     /// pipeline-mode callers that hold a `SendHandle` directly.
@@ -356,7 +356,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// — both drain the same `shared.pending_world_hooks` queue, so a Sim
     /// system may call whichever handle it has in hand. The Send-side
     /// per-connection work for the same configure call drains separately
-    /// inside [`apply_pending_send_preamble`]. Idempotent.
+    /// inside [`Self::apply_pending_send_preamble`]. Idempotent.
     pub fn apply_pending_world_hooks<W: naia_shared::WorldMutType<E>>(&self, world: &mut W)
     where
         E: 'static,
@@ -374,7 +374,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     // are unchanged.
     // ====================================================================
 
-    /// Pipeline-mode `is_listening`. Forwards to [`SendState::is_listening`]
+    /// Pipeline-mode `is_listening`. Forwards to `SendState::is_listening`
     /// (`send_io.is_loaded()`). Used by the host-sync drain's "skip while
     /// not listening" guard, mirroring `InternalWorldServer::is_listening`.
     pub fn is_listening(&self) -> bool {
@@ -443,7 +443,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
 
     /// MISSION_USER_ONLY_SEES_SIM Phase B.3 (2026-05-19) — convenience
     /// wrapper that resolves `user_key → SocketAddr` via the supplied
-    /// `CoordHandle` and forwards to [`send_message_to_address`].
+    /// `CoordHandle` and forwards to [`Self::send_message_to_address`].
     ///
     /// Cyberlith pattern (no separate `sim_handle.user_address` step):
     /// ```ignore
@@ -466,7 +466,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// the same address resolution). The only behavioral difference is
     /// the `bool` return shape (vs. legacy's `Result<(), NaiaServerError>`),
     /// chosen for consistency with the sibling
-    /// [`send_message_to_address`] entry point.
+    /// [`Self::send_message_to_address`] entry point.
     pub fn send_message_to_user<C: naia_shared::Channel, M: naia_shared::Message>(
         &mut self,
         sim_handle: &crate::pipeline_actors::CoordHandle<E>,
@@ -504,7 +504,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// Mark all currently-pending scope checks as handled.
     ///
     /// Mirrors `InternalWorldServer::mark_scope_checks_pending_handled()`. Call
-    /// after every batch returned by [`scope_checks_pending`].
+    /// after every batch returned by [`Self::scope_checks_pending`].
     pub fn mark_scope_checks_pending_handled(&mut self) {
         self.state.scope_checks_cache.mark_pending_handled();
     }
@@ -565,7 +565,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
 
     /// Set a per-user explicit scope bit for `world_entity`.
     ///
-    /// Convenience wrapper over [`user_scope_set_global_entity`]: looks up
+    /// Convenience wrapper over [`Self::user_scope_set_global_entity`]: looks up
     /// `world_entity → GlobalEntity` via the shared
     /// [`naia_shared::EntityAndGlobalEntityConverter`] (no scope mutation
     /// performed if the entity is not registered) and forwards to the

@@ -24,7 +24,7 @@ pub(crate) enum EntityMutTarget<'s, E: Copy + Eq + Hash + Send + Sync + 'static>
 
 /// Scoped mutable handle for a server-owned entity.
 ///
-/// Obtained from [`Server::entity_mut`] / [`crate::WorldServer::entity_mut`].
+/// Obtained from [`crate::Server::entity_mut`] / [`crate::WorldServer::entity_mut`].
 /// Borrows the server for the duration of the handle, so only one `EntityMut`
 /// can be live at a time.
 ///

@@ -38,12 +38,12 @@ use naia_server::pipeline_actors::CoordHandle;
 use naia_server::{RecvHandle, SendHandle};
 
 /// Drain `Messages<HostSyncEvent>` against the three pipeline handles
-/// — pipeline-mode equivalent of [`crate::systems::world_to_host_sync`].
+/// — pipeline-mode equivalent of `systems::world_to_host_sync`.
 ///
 /// Mirrors the byte-for-byte semantics of `world_to_host_sync` (auth
 /// gating, insert / remove / despawn dispatch, error tolerance for
 /// missing components on insert) but routes through
-/// [`run_with_world_server`] instead of `ResMut<ServerImpl>`.
+/// [`naia_server::pipeline_actors::run_with_world_server`] instead of `ResMut<ServerImpl>`.
 ///
 /// Calling pattern (cyberlith Sim main schedule). Under
 /// `Topology::WorldProxied(DriveShape::Pipelined(_))` the
@@ -66,7 +66,7 @@ use naia_server::{RecvHandle, SendHandle};
 /// ```
 ///
 /// Returns the three handles re-split so the caller can restore them onto the
-/// pipeline. Matches [`run_with_world_server`]'s take-then-return convention.
+/// pipeline. Matches [`naia_server::pipeline_actors::run_with_world_server`]'s take-then-return convention.
 ///
 /// If no `HostSyncEvent`s are pending the function returns the handles
 /// unchanged without rebuilding `WorldServer` (zero-cost no-op path).

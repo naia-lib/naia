@@ -184,9 +184,9 @@ impl HostEntityChannel {
     ///
     /// The reserved command will be enqueued (and consume
     /// `subcommand_id=0`) on the next of:
-    ///   - any [`send_command`] call (the reserved command goes ahead
+    ///   - any [`Self::send_command`] call (the reserved command goes ahead
     ///     of the new command, which then takes `subcommand_id=1`),
-    ///   - any drain via [`extract_outgoing_commands`] or
+    ///   - any drain via [`Self::extract_outgoing_commands`] or
     ///     `drain_outgoing_messages_into`.
     ///
     /// Constraints:

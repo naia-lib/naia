@@ -45,8 +45,8 @@ pub struct CoordHandle<E: Copy + Eq + Hash + Send + Sync> {
     /// Single-threaded — no internal locking.
     pub state: CoordinatorState<E>,
     /// Cross-thread shared init + atomic cells. Cloneable `Arc` — the
-    /// same allocation is also referenced by [`crate::RecvHandle::state.shared`]
-    /// and [`crate::SendHandle::state.shared`].
+    /// same allocation is also referenced by `RecvHandle::state.shared`
+    /// and `SendHandle::state.shared`.
     pub shared: Arc<ServerShared<E>>,
 }
 
@@ -556,7 +556,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             .entity_authority_status(&global_entity)
     }
 
-    /// Returns the [`ReplicationConfig`] for `world_entity`, or `None` if it is
+    /// Returns the [`ReplicationConfig`](crate::ReplicationConfig) for `world_entity`, or `None` if it is
     /// not registered. Coord-only read (mirrors
     /// `InternalWorldServer::entity_replication_config`, reads only `shared`);
     /// returns `None` for an unknown entity rather than panicking (the safe
@@ -617,7 +617,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     ///
     /// Mutates Coord-side `global_world_manager` state immediately and
     /// DEFERS all Send-side state-machine work to the next
-    /// [`SendHandle::apply_pending_send_preamble`] (via a
+    /// [`crate::SendHandle::apply_pending_send_preamble`] (via a
     /// `ScopeChange::ConfigureReplication` payload) and all World-side
     /// component-hook registration to
     /// [`CoordHandle::apply_pending_world_hooks`] (or its `SendHandle`

@@ -4,7 +4,7 @@
 /// the server-side [`EntityOwner`] but uses only the variants observable from
 /// the client's perspective.
 ///
-/// [`EntityOwner`]: naia_server::EntityOwner
+/// [`EntityOwner`]: crate::EntityOwner
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum EntityOwner {
     /// Originated on the server and replicated to this client.

@@ -70,7 +70,7 @@ impl WorldData {
         }
     }
 
-    /// Like [`add_systems`], but registers every per-Replicate
+    /// Like [`crate::ComponentAccess::add_systems`], but registers every per-Replicate
     /// `on_component_added` / `on_component_removed` system in
     /// `schedule` instead of `Update`. Used by `Plugin::sim_integration`
     /// when the host bevy app's gameplay schedule is e.g. `SimMain`
@@ -153,7 +153,7 @@ impl WorldData {
 
     /// Whether `component_kind` is a Replicated Resource kind (its
     /// carrier entity-component aliases `Res<R>` and must never be
-    /// despawned — see [`WorldData::resource_kinds`]).
+    /// despawned — see `WorldData::resource_kinds`).
     pub fn is_resource_kind(&self, component_kind: &ComponentKind) -> bool {
         self.resource_kinds.contains(component_kind)
     }

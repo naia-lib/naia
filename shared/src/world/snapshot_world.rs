@@ -72,10 +72,10 @@ pub struct SendPlan {
 ///
 /// The caller MUST:
 /// - [`insert_component`](Self::insert_component) every `(entity, kind)`
-///   pair yielded by [`crate::SendStateView::required_snapshot_entries`]
+///   pair yielded by `SendStateView::required_snapshot_entries`
 ///   (added in commit 3), AND
 /// - [`mark_live`](Self::mark_live) every entity yielded by
-///   [`crate::SendStateView::live_entities`].
+///   `SendStateView::live_entities`.
 ///
 /// Missing entries cause `send_all_packets` to panic on
 /// `world.component_of_kind(...).expect(...)` (matching today's behavior

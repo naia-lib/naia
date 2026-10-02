@@ -143,7 +143,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
     }
 
     /// MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20) — the **trimmed** counterpart
-    /// to [`live_entities`]: only entities the next `send_all_packets` could
+    /// to [`Self::live_entities`]: only entities the next `send_all_packets` could
     /// read this tick.
     ///
     /// = `needed_entities` (in-flight value-reading commands, set send-side by
