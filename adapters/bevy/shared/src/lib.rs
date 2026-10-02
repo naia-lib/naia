@@ -177,7 +177,9 @@ pub use replicated_resource::ReplicatedResource;
 pub use snapshot_reader_registry::SnapshotReaderRegistry;
 pub use world_op_command::WorldOpCommand;
 
-pub use change_detection::{on_despawn, on_host_owned_added, HostSyncEvent};
+pub use change_detection::{
+    on_component_added, on_component_removed, on_despawn, on_host_owned_added, HostSyncEvent,
+};
 pub use component_access::{AppTag, ComponentAccess, ComponentAccessor};
 pub use components::{HostOwned, HostOwnedMap};
 /// Re-export of `naia_shared::TestClock` for bevy-app integration

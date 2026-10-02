@@ -88,10 +88,10 @@
 pub use naia_bevy_shared::{
     wire_schema_count, wire_schema_field, wire_schema_label, ComponentKind,
     EntityAndGlobalEntityConverter, EntityAuthStatus, HandleTickEvents, HandleWorldEvents,
-    HostOwned, HostSyncEvent, HostSyncOwnedAddedTracking, IdentityToken, Instant, ProcessPackets,
-    Random, ReceivePackets, ReplicaDynRefWrapper, ReplicaRefWrapper, Replicate, ReplicateBundle,
-    ReplicatedComponent, ReplicatedResource, Response, ResponseSendKey, SendPackets,
-    SnapshotReaderRegistry, SnapshotWorld, Tick, TranslateWorldEvents, WireSchema,
+    HostOwned, HostSyncChangeTracking, HostSyncEvent, HostSyncOwnedAddedTracking, IdentityToken,
+    Instant, ProcessPackets, Random, ReceivePackets, ReplicaDynRefWrapper, ReplicaRefWrapper,
+    Replicate, ReplicateBundle, ReplicatedComponent, ReplicatedResource, Response, ResponseSendKey,
+    SendPackets, SnapshotReaderRegistry, SnapshotWorld, Tick, TranslateWorldEvents, WireSchema,
     WireSchemaContext, WorldMutType, WorldOpCommand, WorldProxy, WorldProxyMut, WorldRef,
     WorldRefType, WorldToHostSync, WorldUpdate, SCHEMA_NATIVE_ENDIAN, SCHEMA_ORDERED,
     SCHEMA_TAG_ARRAY, SCHEMA_TAG_BACKREF, SCHEMA_TAG_BOOL, SCHEMA_TAG_BYTES, SCHEMA_TAG_CHAR,
@@ -180,7 +180,7 @@ pub use protocol_ext::ProtocolServerExt;
 // `Server::pipeline_*` static helpers — there is no longer a `PipelinedServer`
 // Bevy resource or per-handle `Res` wrappers.
 pub use naia_server::pipeline_actors::TickCtx;
-pub use plugin_full::{EventReceiverRes, PipelineConfig};
+pub use plugin_full::{pipelined_propagate_panics, EventReceiverRes, PipelineConfig};
 pub use server::{PendingScopeAuthorityOps, PipelineScopeAuthorityOp, Server};
 pub use server_entity_converter::ServerEntityConverter;
 pub use snapshot_builder::{build_snapshot, build_snapshot_full};
