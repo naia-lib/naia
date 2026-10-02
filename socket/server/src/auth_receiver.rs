@@ -13,8 +13,9 @@ pub struct AuthReceiver {
 }
 
 impl AuthReceiver {
-    /// Creates a new AuthReceiver
+    /// Creates a new `AuthReceiver`
     #[allow(clippy::type_complexity)]
+    #[must_use]
     pub fn new(
         channel_receiver: Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
     ) -> Self {
@@ -25,6 +26,15 @@ impl AuthReceiver {
     }
 
     /// Receives an Auth message from the Server Socket
+    ///
+    /// # Panics
+    ///
+    /// Panics if the stored payload slot is empty after storing a payload
+    /// (unreachable: the slot is filled immediately above).
+    // `Err` is currently unreachable, but the drain loop in `main_server`
+    // branches on it so a persistently-failing auth channel cannot trap it;
+    // keep the signature fallible.
+    #[allow(clippy::unnecessary_wraps)]
     pub fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, NaiaServerSocketError> {
         match self.channel_receiver.try_recv() {
             Ok(result) => match result {

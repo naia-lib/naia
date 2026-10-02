@@ -34,6 +34,12 @@ impl Socket {
     ///
     /// Dropping both returned halves releases the bound ports: the last
     /// handle drop ends the background tasks, which own the sockets.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal shutdown set yields fewer than three waits
+    /// (unreachable: it is built with `shutdown_set(3)`).
+    #[must_use]
     pub fn listen(
         server_addrs: &ServerAddrs,
         config: &SocketConfig,
@@ -65,6 +71,12 @@ impl Socket {
     /// See [`listen`](Self::listen) for `expected_protocol_id`. Here the
     /// fingerprint comparison happens strictly before the credential is
     /// base64-decoded or handed to the application.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal shutdown set yields fewer than three waits
+    /// (unreachable: it is built with `shutdown_set(3)`).
+    #[must_use]
     pub fn listen_with_auth(
         server_addrs: &ServerAddrs,
         config: &SocketConfig,
@@ -111,6 +123,7 @@ impl Socket {
     /// both ports are free or `timeout` elapses. Returns true iff the
     /// ports were observed free, so a caller can rebind deterministically
     /// without sleeping (naia-lib/naia#92).
+    #[must_use]
     pub fn close(
         handles: (PacketSender, PacketReceiver),
         server_addrs: &ServerAddrs,
@@ -124,6 +137,7 @@ impl Socket {
     /// result. Same contract as [`close`](Self::close) across all four
     /// handles: every handle holds the shutdown signal, so all four must
     /// go before the detached tasks end.
+    #[must_use]
     pub fn close_with_auth(
         handles: (AuthSender, AuthReceiver, PacketSender, PacketReceiver),
         server_addrs: &ServerAddrs,
@@ -159,8 +173,7 @@ impl Socket {
                 to_session_all_auth_receiver,
                 expected_protocol_id,
                 session_shutdown,
-            )
-            .await;
+            );
 
             // A closed channel means the owning Socket was dropped: end this
             // task instead of panicking (this runs on a shared executor).
@@ -177,7 +190,7 @@ impl Socket {
                 let receive = async_socket.receive().fuse();
                 pin_mut!(receive);
                 select! {
-                    _ = shutdown => return,
+                    () = shutdown => return,
                     out_message = receive => {
                         if from_client_sender.send(out_message).await.is_err() {
                             return;
@@ -210,7 +223,7 @@ impl Socket {
             let recv = sender_receiver.recv().fuse();
             pin_mut!(recv);
             let async_sender = select! {
-                _ = shutdown => return,
+                () = shutdown => return,
                 result = recv => {
                     let Ok(async_sender) = result else {
                         return;
@@ -223,7 +236,7 @@ impl Socket {
                 let recv = to_client_receiver.recv().fuse();
                 pin_mut!(recv);
                 select! {
-                    _ = shutdown => return,
+                    () = shutdown => return,
                     result = recv => {
                         let Ok(msg) = result else {
                             return;

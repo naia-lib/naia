@@ -23,8 +23,8 @@ pub struct Socket {
 }
 
 impl Socket {
-    /// Returns a new ServerSocket, listening at the given socket address
-    pub async fn listen(
+    /// Returns a new `ServerSocket`, listening at the given socket address
+    pub fn listen(
         server_addrs: ServerAddrs,
         config: SocketConfig,
         from_client_auth_sender: Option<ClientAuthSender>,
@@ -37,8 +37,7 @@ impl Socket {
         let rtc_server = RtcServer::new(
             server_addrs.webrtc_listen_addr,
             url_to_socket_addr(&parse_server_url(&server_addrs.public_webrtc_url)),
-        )
-        .await;
+        );
 
         let socket = Socket {
             rtc_server,
@@ -126,7 +125,7 @@ struct RtcServer {
 }
 
 impl RtcServer {
-    pub async fn new(listen_addr: SocketAddr, public_address: SocketAddr) -> RtcServer {
+    pub fn new(listen_addr: SocketAddr, public_address: SocketAddr) -> RtcServer {
         let inner = InnerRtcServer::new(SmolRuntime, listen_addr, public_address)
             .expect("could not start RTC server");
 
