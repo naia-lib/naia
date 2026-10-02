@@ -3761,6 +3761,7 @@ mod client_disconnect_tests {
     }
 
     /// A bare keep-alive, the way the server's heartbeat task emits it.
+    #[cfg(feature = "test_time")]
     fn heartbeat_packet() -> Vec<u8> {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::Heartbeat, 0, 0, 0).ser(&mut writer);
@@ -3834,11 +3835,13 @@ mod client_disconnect_tests {
 
     /// A sender that keeps every payload, so keep-alive tests can inspect
     /// what the client actually emitted while silent.
+    #[cfg(feature = "test_time")]
     #[derive(Clone)]
     struct CapturingSender {
         sent: Arc<std::sync::Mutex<Vec<Vec<u8>>>>,
     }
 
+    #[cfg(feature = "test_time")]
     impl PacketSender for CapturingSender {
         fn send(&self, payload: &[u8]) -> Result<(), SendError> {
             self.sent.lock().unwrap().push(payload.to_vec());
@@ -3939,12 +3942,14 @@ mod client_disconnect_tests {
     /// A receiver that delivers exactly one undecodable packet, then
     /// silence: the peer is alive (bytes arrive) but says nothing the
     /// handshake can use. Proves heard traffic re-arms the give-up timer.
+    #[cfg(feature = "test_time")]
     #[derive(Clone)]
     struct OnceReceiver {
         packet: Vec<u8>,
         live: bool,
     }
 
+    #[cfg(feature = "test_time")]
     impl PacketReceiver for OnceReceiver {
         fn receive(&mut self) -> Result<Option<&[u8]>, RecvError> {
             if self.live {
@@ -4009,9 +4014,11 @@ mod client_disconnect_tests {
 
     /// A sender whose transport never learned the peer address: the dial
     /// target never resolved to a socket address.
+    #[cfg(feature = "test_time")]
     #[derive(Clone)]
     struct FindingSender;
 
+    #[cfg(feature = "test_time")]
     impl PacketSender for FindingSender {
         fn send(&self, _payload: &[u8]) -> Result<(), SendError> {
             Ok(())
