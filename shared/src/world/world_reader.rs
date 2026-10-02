@@ -539,7 +539,7 @@ mod world_reader_tests {
                 self.end_updates();
             }
             true.ser(&mut self.writer);
-            IndexedMessageWriter::write_message_index(&mut self.writer, &self.last_index, &index);
+            IndexedMessageWriter::write_message_index(&mut self.writer, self.last_index, index);
             self.last_index = Some(index);
             kind.ser(&mut self.writer);
             self
@@ -636,7 +636,7 @@ mod world_reader_tests {
             let mut reader = BitReader::new(bytes);
             let kinds = std::mem::take(&mut self.kinds);
             let result =
-                WorldReader::read_world_events(&mut self.manager, &kinds, &tick, &mut reader);
+                WorldReader::read_world_events(&mut self.manager, &kinds, tick, &mut reader);
             self.kinds = kinds;
             result?;
             u32::de(&mut reader)
@@ -661,7 +661,7 @@ mod world_reader_tests {
             let mut component_kinds = HashSet::new();
             component_kinds.insert(ComponentKind::of::<Ghost>());
             self.manager
-                .insert_remote_entity(&global(id), remote_entity, component_kinds);
+                .insert_remote_entity(global(id), remote_entity, component_kinds);
             world.spawn_at(id);
             world.insert_boxed_component(
                 &id,
@@ -1399,7 +1399,7 @@ mod world_reader_tests {
             // byte can read as a valid "stop" bit) or it may error. What it may
             // never do is panic or hang, and if it parses it must not have
             // invented a message out of the padding.
-            let _ = WorldReader::read_world_events(&mut fx.manager, &kinds, &0, &mut reader);
+            let _ = WorldReader::read_world_events(&mut fx.manager, &kinds, 0, &mut reader);
             fx.kinds = kinds;
         }
     }
@@ -1409,7 +1409,7 @@ mod world_reader_tests {
         let mut fx = Fixture::client();
         let mut reader = BitReader::new(&[]);
         let kinds = std::mem::take(&mut fx.kinds);
-        let result = WorldReader::read_world_events(&mut fx.manager, &kinds, &0, &mut reader);
+        let result = WorldReader::read_world_events(&mut fx.manager, &kinds, 0, &mut reader);
         fx.kinds = kinds;
         assert!(
             result.is_err(),

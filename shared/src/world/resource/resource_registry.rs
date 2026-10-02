@@ -175,8 +175,8 @@ mod tests {
         r.insert_raw(tya(), e).unwrap();
 
         assert_eq!(r.entity_for_raw(&tya()), Some(e));
-        assert_eq!(r.type_for(&e), Some(tya()));
-        assert!(r.is_resource_entity(&e));
+        assert_eq!(r.type_for(e), Some(tya()));
+        assert!(r.is_resource_entity(e));
         assert_eq!(r.len(), 1);
     }
 
@@ -202,10 +202,10 @@ mod tests {
         let mut r = ResourceRegistry::new();
         let e = ge(4);
         r.insert_raw(tya(), e).unwrap();
-        let ty = r.remove_by_entity(&e);
+        let ty = r.remove_by_entity(e);
         assert_eq!(ty, Some(tya()));
         assert!(r.is_empty());
-        assert!(!r.is_resource_entity(&e));
+        assert!(!r.is_resource_entity(e));
     }
 
     #[test]
@@ -216,7 +216,7 @@ mod tests {
 
         assert_eq!(r.entity_for_raw(&tya()), Some(ge(1)));
         assert_eq!(r.entity_for_raw(&tyb()), Some(ge(2)));
-        r.remove_by_entity(&ge(1));
+        r.remove_by_entity(ge(1));
         assert_eq!(r.entity_for_raw(&tya()), None);
         assert_eq!(r.entity_for_raw(&tyb()), Some(ge(2)));
     }

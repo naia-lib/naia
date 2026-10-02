@@ -281,31 +281,6 @@ impl EntityMessage<RemoteEntity> {
     }
 }
 
-#[cfg(test)]
-mod to_event_tests {
-    use super::*;
-    use crate::{BigMapKey, GlobalEntity, HostType};
-
-    fn publish(remote_id: u32) -> EntityMessage<RemoteEntity> {
-        EntityMessage::Publish(0, RemoteEntity::new(remote_id))
-    }
-
-    #[test]
-    fn remote_to_event_resolves_a_known_mapping() {
-        let mut map = LocalEntityMap::new(HostType::Server);
-        let global = GlobalEntity::from_u64(7);
-        map.insert_with_remote_entity(global, RemoteEntity::new(7));
-        assert!(matches!(publish(7).to_event(&map), Some(EntityEvent::Publish(g)) if g == global));
-    }
-
-    #[test]
-    fn remote_to_event_returns_none_for_a_stale_mapping() {
-        // Follow-up to LV-03a/LV-08a: churn removed the mapping after the
-        // message was queued. Must fail closed, never abort the worker.
-        let map = LocalEntityMap::new(HostType::Server);
-        assert!(publish(4).to_event(&map).is_none());
-    }
-}
 //
 impl EntityMessage<HostEntity> {
     /// Converts this host-entity message into an `EntityEvent`, or `None` if the entity is not found in the map.
@@ -350,5 +325,31 @@ impl EntityMessage<HostEntity> {
             | EntityMessage::RemoveComponent(_, _) => panic!("Handled elsewhere"),
             EntityMessage::Noop => panic!("Cannot convert Noop message to an event"),
         })
+    }
+}
+
+#[cfg(test)]
+mod to_event_tests {
+    use super::*;
+    use crate::{BigMapKey, GlobalEntity, HostType};
+
+    fn publish(remote_id: u32) -> EntityMessage<RemoteEntity> {
+        EntityMessage::Publish(0, RemoteEntity::new(remote_id))
+    }
+
+    #[test]
+    fn remote_to_event_resolves_a_known_mapping() {
+        let mut map = LocalEntityMap::new(HostType::Server);
+        let global = GlobalEntity::from_u64(7);
+        map.insert_with_remote_entity(global, RemoteEntity::new(7));
+        assert!(matches!(publish(7).to_event(&map), Some(EntityEvent::Publish(g)) if g == global));
+    }
+
+    #[test]
+    fn remote_to_event_returns_none_for_a_stale_mapping() {
+        // Follow-up to LV-03a/LV-08a: churn removed the mapping after the
+        // message was queued. Must fail closed, never abort the worker.
+        let map = LocalEntityMap::new(HostType::Server);
+        assert!(publish(4).to_event(&map).is_none());
     }
 }

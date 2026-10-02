@@ -769,7 +769,7 @@ mod base_connection_tests {
                 &channel_kinds,
                 &message_kinds,
                 &component_kinds,
-                &0,
+                0,
                 false,
                 &mut reader,
             )
@@ -800,7 +800,7 @@ mod base_connection_tests {
                     &ChannelKinds::new(),
                     &MessageKinds::new(),
                     &ComponentKinds::new(),
-                    &0,
+                    0,
                     true,
                     &mut BitReader::new(&bytes),
                 )
@@ -882,7 +882,7 @@ mod base_connection_tests {
             );
         }
         // A reliable sender only offers collected messages to a packet.
-        sender.collect_messages(&naia_socket_shared::Instant::now(), &200.0);
+        sender.collect_messages(&naia_socket_shared::Instant::now(), 200.0);
 
         let world = TestWorld::new();
         let spawner = TestSpawner::default();
@@ -913,7 +913,7 @@ mod base_connection_tests {
             &channel_kinds,
             &messages,
             &component_kinds,
-            &0,
+            0,
             false,
             &mut BitReader::new(&bytes),
         )

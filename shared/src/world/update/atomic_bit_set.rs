@@ -329,7 +329,7 @@ mod tests {
     fn clear_returns_was_dirty() {
         let m = AtomicBitSet::new(128);
         assert!(!m.clear());
-        m.set_bit(70);
+        assert!(m.set_bit(70));
         assert!(m.clear());
         assert!(m.is_clear());
     }
@@ -338,7 +338,7 @@ mod tests {
     fn snapshot_round_trips_through_diff_mask() {
         let m = AtomicBitSet::new(256);
         for &bit in &[0u32, 7, 8, 63, 64, 127, 128, 255] {
-            m.set_bit(bit);
+            let _ = m.set_bit(bit);
         }
         let snap = m.snapshot();
         assert_eq!(snap.byte_number(), 32);
@@ -377,8 +377,8 @@ mod tests {
     #[test]
     fn drain_words_returns_per_word_values_and_zeroes() {
         let m = AtomicBitSet::new(128);
-        m.set_bit(3);
-        m.set_bit(70);
+        assert!(m.set_bit(3));
+        assert!(!m.set_bit(70));
         let drained = m.drain_words();
         assert_eq!(drained.len(), 2);
         assert_eq!(drained[0], 1u64 << 3);
@@ -390,7 +390,7 @@ mod tests {
     fn full_256_bits_supported() {
         let m = AtomicBitSet::new(256);
         for i in 0..256u32 {
-            m.set_bit(i);
+            let _ = m.set_bit(i);
         }
         assert_eq!(m.byte_number(), 32);
         for i in 0..32 {
@@ -424,7 +424,7 @@ mod tests {
     #[test]
     fn set_all_on_already_dirty_mask_reports_not_clear() {
         let m = AtomicBitSet::new(16);
-        m.set_bit(3);
+        assert!(m.set_bit(3));
         assert!(!m.set_all(), "mask was already dirty");
         assert_eq!(m.byte(0), 0xFF);
         assert_eq!(m.byte(1), 0xFF);

@@ -334,7 +334,7 @@ mod tests {
 
     impl InScopeEntities<RemoteEntity> for Scope {
         fn has_entity(&self, entity: RemoteEntity) -> bool {
-            self.0.contains(entity)
+            self.0.contains(&entity)
         }
     }
 
@@ -353,7 +353,7 @@ mod tests {
 
         waitlist.queue(&scope, &dependencies(entity_a), &mut store_a, "a");
         scope.0.insert(entity_a);
-        waitlist.spawn_entity(&scope, &entity_a);
+        waitlist.spawn_entity(&scope, entity_a);
         waitlist.queue(&scope, &dependencies(entity_b), &mut store_b, "b");
 
         // Channel B polls first. It must not consume A's global ready marker;
@@ -383,7 +383,7 @@ mod tests {
 
         waitlist.queue(&scope, &dependencies(entity_a), &mut store_a, "a");
         scope.0.insert(entity_a);
-        waitlist.spawn_entity(&scope, &entity_a);
+        waitlist.spawn_entity(&scope, entity_a);
 
         // Queue B after A becomes ready but before A's store is polled. B must
         // receive a distinct handle and must not inherit A's ready marker.
@@ -402,7 +402,7 @@ mod tests {
         );
 
         scope.0.insert(entity_b);
-        waitlist.spawn_entity(&scope, &entity_b);
+        waitlist.spawn_entity(&scope, entity_b);
         assert_eq!(
             waitlist.collect_ready_items(&Instant::now(), &mut store_b),
             Some(vec!["b"]),
@@ -452,7 +452,7 @@ mod tests {
             None,
         );
         scope.0.insert(later_entity);
-        waitlist.spawn_entity(&scope, &later_entity);
+        waitlist.spawn_entity(&scope, later_entity);
         assert_eq!(
             waitlist.collect_ready_items(&Instant::now(), &mut later_store),
             Some(vec!["later"]),

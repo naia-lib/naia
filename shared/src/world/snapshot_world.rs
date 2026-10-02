@@ -547,12 +547,12 @@ mod tests {
 
         assert!(snap.has_component::<TestPosition>(&e));
         assert!(!snap.has_component::<TestVelocity>(&e));
-        assert!(snap.has_component_of_kind(&e, &ComponentKind::of::<TestPosition>()));
-        assert!(!snap.has_component_of_kind(&e, &ComponentKind::of::<TestVelocity>()));
+        assert!(snap.has_component_of_kind(&e, ComponentKind::of::<TestPosition>()));
+        assert!(!snap.has_component_of_kind(&e, ComponentKind::of::<TestVelocity>()));
 
         let absent: E = 99;
         assert!(!snap.has_component::<TestPosition>(&absent));
-        assert!(!snap.has_component_of_kind(&absent, &ComponentKind::of::<TestPosition>()));
+        assert!(!snap.has_component_of_kind(&absent, ComponentKind::of::<TestPosition>()));
     }
 
     #[test]
@@ -586,7 +586,7 @@ mod tests {
         );
 
         let dyn_ref = snap
-            .component_of_kind(&e, &ComponentKind::of::<TestVelocity>())
+            .component_of_kind(&e, ComponentKind::of::<TestVelocity>())
             .expect("present");
         // Verify we can downcast back via Replicate::to_any.
         let any = dyn_ref.to_any();
@@ -657,7 +657,7 @@ mod tests {
             Box::new(TestVelocity { dx: 2 }),
         );
 
-        snap.remove_component(e, &ComponentKind::of::<TestPosition>());
+        snap.remove_component(e, ComponentKind::of::<TestPosition>());
 
         assert!(snap.has_entity(&e), "entity stays live");
         assert!(!snap.has_component::<TestPosition>(&e));

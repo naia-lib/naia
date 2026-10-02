@@ -48,6 +48,19 @@ pub struct RemoteWorldManager {
     // outgoing messages
 }
 
+/// Arguments shared by the component-insert path (`process_insert` /
+/// `finish_insert`), bundled so neither function grows past the
+/// argument-count limit as the pipeline evolves.
+struct InsertParams<'w, 'c, E, W> {
+    tick: Tick,
+    world: &'w mut W,
+    converter: &'c dyn LocalEntityAndGlobalEntityConverter,
+    entity: RemoteEntity,
+    world_entity: &'w E,
+    component: Box<dyn Replicate>,
+    component_kind: ComponentKind,
+}
+
 impl RemoteWorldManager {
     /// Creates a `RemoteWorldManager` for the given `host_type` side of a connection.
     #[must_use]
@@ -400,15 +413,15 @@ impl RemoteWorldManager {
                             .unwrap();
                         let world_entity = spawner.global_entity_to_entity(global_entity).unwrap();
 
-                        self.process_insert(
+                        self.process_insert(InsertParams {
                             tick,
                             world,
-                            local_entity_map,
-                            remote_entity,
-                            &world_entity,
+                            converter: local_entity_map,
+                            entity: remote_entity,
+                            world_entity: &world_entity,
                             component,
                             component_kind,
-                        );
+                        });
                     } else {
                         // entity may have despawned on disconnect or something similar?
                         warn!("received InsertComponent message for nonexistant entity");
@@ -455,14 +468,17 @@ impl RemoteWorldManager {
 
     fn process_insert<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
-        tick: Tick,
-        world: &mut W,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
-        entity: RemoteEntity,
-        world_entity: &E,
-        component: Box<dyn Replicate>,
-        component_kind: ComponentKind,
+        params: InsertParams<'_, '_, E, W>,
     ) {
+        let InsertParams {
+            tick,
+            world,
+            converter,
+            entity,
+            world_entity,
+            component,
+            component_kind,
+        } = params;
         if let Some(remote_entity_set) = component.relations_waiting() {
             self.waitlist.waitlist_queue_entity(
                 &self.remote_engine,
@@ -473,7 +489,7 @@ impl RemoteWorldManager {
                 &remote_entity_set,
             );
         } else {
-            self.finish_insert(
+            self.finish_insert(InsertParams {
                 tick,
                 world,
                 converter,
@@ -481,20 +497,23 @@ impl RemoteWorldManager {
                 world_entity,
                 component,
                 component_kind,
-            );
+            });
         }
     }
 
     fn finish_insert<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
-        tick: Tick,
-        world: &mut W,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
-        entity: RemoteEntity,
-        world_entity: &E,
-        component: Box<dyn Replicate>,
-        component_kind: ComponentKind,
+        params: InsertParams<'_, '_, E, W>,
     ) {
+        let InsertParams {
+            tick,
+            world,
+            converter,
+            entity,
+            world_entity,
+            component,
+            component_kind,
+        } = params;
         // let name = component.name();
         // info!(
         //     "Remote World Manager: finish inserting component {:?} for entity {:?}",
@@ -558,15 +577,15 @@ impl RemoteWorldManager {
             let Ok(world_entity) = world_converter.global_entity_to_entity(global_entity) else {
                 continue;
             };
-            self.finish_insert(
+            self.finish_insert(InsertParams {
                 tick,
                 world,
-                local_converter,
+                converter: local_converter,
                 entity,
-                &world_entity,
+                world_entity: &world_entity,
                 component,
                 component_kind,
-            );
+            });
         }
     }
 
@@ -880,9 +899,9 @@ mod remote_world_manager_tests {
             );
             let global = *self
                 .map
-                .global_entity_from_remote(&entity)
+                .global_entity_from_remote(entity)
                 .expect("the spawn must have mapped the entity");
-            self.gwm.declare_kinds(&global, vec![ghost()]);
+            self.gwm.declare_kinds(global, vec![ghost()]);
             global
         }
     }
@@ -903,7 +922,7 @@ mod remote_world_manager_tests {
 
         let global = *fixture
             .map
-            .global_entity_from_remote(&remote(1))
+            .global_entity_from_remote(remote(1))
             .expect("a spawned entity must be mapped");
         assert_eq!(
             summarize(&events),
@@ -962,13 +981,13 @@ mod remote_world_manager_tests {
         let setup = fixture.deliver(vec![(5, EntityMessage::Spawn(remote(1)))]);
         let global_1 = *fixture
             .map
-            .global_entity_from_remote(&remote(1))
+            .global_entity_from_remote(remote(1))
             .expect("entity 1 must be mapped after its spawn");
         assert!(
             matches!(&setup[0], EntityEvent::Spawn(5, entity) if *entity == global_1),
             "setup spawn must already carry its tick",
         );
-        fixture.gwm.declare_kinds(&global_1, vec![ghost()]);
+        fixture.gwm.declare_kinds(global_1, vec![ghost()]);
 
         let component = remote_component(&fixture.kinds, &Ghost::new_complete(7));
         let mut components = vec![(10, remote(1).copy_to_owned(), ghost(), component)];
@@ -983,7 +1002,7 @@ mod remote_world_manager_tests {
 
         let global_2 = *fixture
             .map
-            .global_entity_from_remote(&remote(2))
+            .global_entity_from_remote(remote(2))
             .expect("entity 2 must be mapped after its spawn");
         assert_eq!(events.len(), 3, "no existence event may be dropped");
         assert!(
@@ -1079,7 +1098,7 @@ mod remote_world_manager_tests {
             ],
         );
         assert!(
-            !fixture.map.contains_remote_entity(&remote(1)),
+            !fixture.map.contains_remote_entity(remote(1)),
             "the mapping must be dropped once the despawn is done with it",
         );
     }
@@ -1097,7 +1116,7 @@ mod remote_world_manager_tests {
             "firing removals here would double-remove records world_server \
              has already cleaned up",
         );
-        assert!(!fixture.map.contains_remote_entity(&remote(1)));
+        assert!(!fixture.map.contains_remote_entity(remote(1)));
     }
 
     #[test]
@@ -1151,26 +1170,26 @@ mod remote_world_manager_tests {
         assert!(
             !fixture.manager.is_component_updatable(
                 converter_map.entity_converter(),
-                &global,
-                &ghost(),
+                global,
+                ghost(),
             ),
             "an entity this peer has no authority over is not updatable",
         );
 
-        fixture.manager.register_authed_entity(&remote(1));
+        fixture.manager.register_authed_entity(remote(1));
         assert!(
             fixture.manager.is_component_updatable(
                 converter_map.entity_converter(),
-                &global,
-                &ghost(),
+                global,
+                ghost(),
             ),
             "an authed entity's own component is updatable",
         );
         assert!(
             !fixture.manager.is_component_updatable(
                 converter_map.entity_converter(),
-                &global,
-                &ComponentKind::of::<Wraith>(),
+                global,
+                ComponentKind::of::<Wraith>(),
             ),
             "a component the channel does not carry is not updatable",
         );
@@ -1179,16 +1198,16 @@ mod remote_world_manager_tests {
         assert!(
             !fixture
                 .manager
-                .is_component_updatable(unmapped.entity_converter(), &global, &ghost()),
+                .is_component_updatable(unmapped.entity_converter(), global, ghost()),
             "an entity with no remote address cannot be checked at all",
         );
 
-        fixture.manager.deregister_authed_entity(&remote(1));
+        fixture.manager.deregister_authed_entity(remote(1));
         assert!(
             !fixture.manager.is_component_updatable(
                 converter_map.entity_converter(),
-                &global,
-                &ghost(),
+                global,
+                ghost(),
             ),
             "authority handed back must close the gate again",
         );
@@ -1203,12 +1222,12 @@ mod remote_world_manager_tests {
 
         // The server has no authed set at all, so registering is a no-op
         // rather than an error.
-        fixture.manager.register_authed_entity(&remote(1));
+        fixture.manager.register_authed_entity(remote(1));
 
         assert!(
             !fixture
                 .manager
-                .is_component_updatable(map.entity_converter(), &global, &ghost()),
+                .is_component_updatable(map.entity_converter(), global, ghost()),
             "only a client holds delegated authority over a remote entity",
         );
     }
@@ -1274,13 +1293,13 @@ mod remote_world_manager_tests {
         }
         fn host_entity_to_global_entity(
             &self,
-            _: &crate::HostEntity,
+            _: crate::HostEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             Err(EntityDoesNotExistError)
         }
         fn static_host_entity_to_global_entity(
             &self,
-            _: &crate::HostEntity,
+            _: crate::HostEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             Err(EntityDoesNotExistError)
         }
@@ -1291,7 +1310,7 @@ mod remote_world_manager_tests {
             Ok(GlobalEntity::from_u64(99))
         }
         fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity {
-            *entity
+            entity
         }
     }
 
@@ -1394,7 +1413,7 @@ mod remote_world_manager_tests {
         );
 
         let events = fixture.deliver(vec![(1, EntityMessage::Spawn(remote(2)))]);
-        let spawned = *fixture.map.global_entity_from_remote(&remote(2)).unwrap();
+        let spawned = *fixture.map.global_entity_from_remote(remote(2)).unwrap();
         assert_eq!(
             summarize(&events),
             vec![(Some(EntityMessageType::Spawn), spawned)]
@@ -1403,7 +1422,7 @@ mod remote_world_manager_tests {
         // The connection tells the manager about the spawn separately: the
         // Spawn arm maps the entity, `spawn_entity` is what releases whatever
         // was waiting on it.
-        fixture.manager.spawn_entity(&remote(2));
+        fixture.manager.spawn_entity(remote(2));
         let events = fixture.deliver(Vec::new());
         assert_eq!(
             summarize(&events),
@@ -1451,7 +1470,7 @@ mod remote_world_manager_tests {
         );
 
         fixture.deliver(vec![(1, EntityMessage::Spawn(remote(2)))]);
-        fixture.manager.spawn_entity(&remote(2));
+        fixture.manager.spawn_entity(remote(2));
         let events = fixture.deliver(Vec::new());
         assert_eq!(
             summarize(&events),
@@ -1474,7 +1493,7 @@ mod remote_world_manager_tests {
         );
 
         let global = fixture.spawn_with_ghost(remote(1));
-        fixture.manager.spawn_entity(&remote(1));
+        fixture.manager.spawn_entity(remote(1));
         let events = fixture.deliver_updates(Vec::new());
         assert_eq!(
             summarize(&events),
@@ -1490,22 +1509,22 @@ mod remote_world_manager_tests {
         let mut fixture = Fixture::new(HostType::Client);
         fixture.spawn_with_ghost(remote(1));
 
-        assert!(fixture.manager.has_entity_channel(&remote(1)));
-        assert!(!fixture.manager.has_entity_channel(&remote(2)));
-        assert!(fixture.manager.get_entity_channel_mut(&remote(1)).is_some());
-        assert!(fixture.manager.get_entity_channel_mut(&remote(2)).is_none());
+        assert!(fixture.manager.has_entity_channel(remote(1)));
+        assert!(!fixture.manager.has_entity_channel(remote(2)));
+        assert!(fixture.manager.get_entity_channel_mut(remote(1)).is_some());
+        assert!(fixture.manager.get_entity_channel_mut(remote(2)).is_none());
         assert_eq!(
-            fixture.manager.extract_component_kinds(&remote(1)),
+            fixture.manager.extract_component_kinds(remote(1)),
             HashSet::from([ghost()]),
         );
 
-        let channel = fixture.manager.remove_entity_channel(&remote(1));
+        let channel = fixture.manager.remove_entity_channel(remote(1));
         assert!(
-            !fixture.manager.has_entity_channel(&remote(1)),
+            !fixture.manager.has_entity_channel(remote(1)),
             "a channel lifted out for migration must not still be findable",
         );
         fixture.manager.insert_entity_channel(remote(1), channel);
-        assert!(fixture.manager.has_entity_channel(&remote(1)));
+        assert!(fixture.manager.has_entity_channel(remote(1)));
     }
 
     /// A migration takes a channel over mid-stream, and whatever the spawn
@@ -1525,9 +1544,9 @@ mod remote_world_manager_tests {
         // channel's buffer rather than being processed.
         let events = fixture.deliver(vec![(1, EntityMessage::Despawn(remote(1)))]);
         assert!(summarize(&events).is_empty());
-        assert!(fixture.manager.has_entity_channel(&remote(1)));
+        assert!(fixture.manager.has_entity_channel(remote(1)));
 
-        fixture.manager.force_drain_entity_buffers(&remote(1));
+        fixture.manager.force_drain_entity_buffers(remote(1));
         let events = fixture.deliver(Vec::new());
         assert!(
             summarize(&events).is_empty(),

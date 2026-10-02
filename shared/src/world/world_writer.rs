@@ -1679,7 +1679,7 @@ mod delegated_send_guard_tests {
         // reach either the guard or serialization.
         if register_mapping {
             local_world_manager.host_init_entity(
-                &global_entity,
+                global_entity,
                 vec![ComponentKind::of::<Ghost>()],
                 &kinds,
                 false,
@@ -1699,7 +1699,7 @@ mod delegated_send_guard_tests {
             &kinds,
             &Instant::now(),
             &mut writer,
-            &0,
+            0,
             &world,
             &gwm,
             None,
@@ -1891,7 +1891,7 @@ mod delegated_send_guard_tests {
         }
         fn has_component_of_kind(&self, _: &u64, kind: ComponentKind) -> bool {
             // `Wraith` is the one kind this world has already lost.
-            *kind != ComponentKind::of::<Wraith>()
+            kind != ComponentKind::of::<Wraith>()
         }
         fn component<'a, R: ReplicatedComponent>(
             &'a self,
@@ -1904,7 +1904,7 @@ mod delegated_send_guard_tests {
             _: &u64,
             kind: ComponentKind,
         ) -> Option<ReplicaDynRefWrapper<'a>> {
-            (*kind == ComponentKind::of::<Ghost>())
+            (kind == ComponentKind::of::<Ghost>())
                 .then(|| ReplicaDynRefWrapper::new(GhostDynRef { inner: &self.ghost }))
         }
     }
@@ -1959,7 +1959,7 @@ mod delegated_send_guard_tests {
                 planned_kinds.push(ComponentKind::of::<Wraith>());
             }
             local_world_manager.host_init_entity(
-                &global_entity,
+                global_entity,
                 planned_kinds.clone(),
                 &kinds,
                 false,
@@ -1983,7 +1983,7 @@ mod delegated_send_guard_tests {
             &kinds,
             &Instant::now(),
             &mut writer,
-            &0,
+            0,
             &MixedWorld {
                 ghost: Ghost::new_complete(7),
             },
@@ -2078,9 +2078,9 @@ mod delegated_send_guard_tests {
     ) -> (GlobalDiffHandler, GlobalEntityIndex) {
         let mut gdh = GlobalDiffHandler::new();
         gdh.set_protocol_kind_count(component_kinds.kind_count());
-        let entity_idx = gdh.alloc_entity(*global_entity);
+        let entity_idx = gdh.alloc_entity(global_entity);
         for kind in [ComponentKind::of::<Ghost>(), ComponentKind::of::<Wraith>()] {
-            gdh.register_component(component_kinds, gwm, global_entity, &kind, 1);
+            gdh.register_component(component_kinds, gwm, global_entity, kind, 1);
         }
         (gdh, entity_idx)
     }
@@ -2116,17 +2116,17 @@ mod delegated_send_guard_tests {
         let mut local_world_manager = LocalWorldManager::new(&None, HostType::Server, 0, &gwm);
 
         let global_entity = GlobalEntity::from_u64(1);
-        let (gdh, entity_idx) = server_diff_handler(&kinds, &gwm, &global_entity);
+        let (gdh, entity_idx) = server_diff_handler(&kinds, &gwm, global_entity);
 
-        let ghost_bit = kinds.net_id_of(&ComponentKind::of::<Ghost>()).unwrap();
-        let wraith_bit = kinds.net_id_of(&ComponentKind::of::<Wraith>()).unwrap();
+        let ghost_bit = kinds.net_id_of(ComponentKind::of::<Ghost>()).unwrap();
+        let wraith_bit = kinds.net_id_of(ComponentKind::of::<Wraith>()).unwrap();
 
         let mut planned_kinds = vec![(ComponentKind::of::<Ghost>(), ghost_bit, DiffMask::new(1))];
         if with_absent_kind {
             planned_kinds.push((ComponentKind::of::<Wraith>(), wraith_bit, DiffMask::new(1)));
         }
         local_world_manager.host_init_entity(
-            &global_entity,
+            global_entity,
             planned_kinds.iter().map(|(kind, _, _)| *kind).collect(),
             &kinds,
             false,
@@ -2142,7 +2142,7 @@ mod delegated_send_guard_tests {
             &kinds,
             &Instant::now(),
             &mut writer,
-            &0,
+            0,
             &MixedWorld {
                 ghost: Ghost::new_complete(7),
             },
@@ -2238,11 +2238,11 @@ mod delegated_send_guard_tests {
         let mut local_world_manager = LocalWorldManager::new(&None, HostType::Server, 0, &gwm);
 
         let global_entity = GlobalEntity::from_u64(1);
-        let (gdh, entity_idx) = server_diff_handler(&kinds, &gwm, &global_entity);
-        let ghost_bit = kinds.net_id_of(&ComponentKind::of::<Ghost>()).unwrap();
+        let (gdh, entity_idx) = server_diff_handler(&kinds, &gwm, global_entity);
+        let ghost_bit = kinds.net_id_of(ComponentKind::of::<Ghost>()).unwrap();
 
         local_world_manager.host_init_entity(
-            &global_entity,
+            global_entity,
             vec![ComponentKind::of::<Ghost>()],
             &kinds,
             false,
@@ -2262,7 +2262,7 @@ mod delegated_send_guard_tests {
             &kinds,
             &Instant::now(),
             &mut writer,
-            &0,
+            0,
             &MixedWorld {
                 ghost: Ghost::new_complete(7),
             },
@@ -2332,7 +2332,7 @@ mod delegated_send_guard_tests {
         kinds.add_component::<Wraith>();
         kinds.add_component::<Haunt>();
         assert!(
-            kinds.is_user_dependent(&ComponentKind::of::<Haunt>()),
+            kinds.is_user_dependent(ComponentKind::of::<Haunt>()),
             "Haunt must register as user-dependent or this exercises PATH A",
         );
 
@@ -2352,14 +2352,14 @@ mod delegated_send_guard_tests {
         gdh.set_protocol_kind_count(kinds.kind_count());
         let entity_idx = gdh.alloc_entity(global_entity);
         let haunt_kind = ComponentKind::of::<Haunt>();
-        gdh.register_component(&kinds, &gwm, &global_entity, &haunt_kind, 1);
+        gdh.register_component(&kinds, &gwm, global_entity, haunt_kind, 1);
         assert_eq!(
-            gdh.is_component_user_dependent(entity_idx, kinds.net_id_of(&haunt_kind).unwrap()),
+            gdh.is_component_user_dependent(entity_idx, kinds.net_id_of(haunt_kind).unwrap()),
             Some(true),
             "the diff handler must agree Haunt is user-dependent",
         );
 
-        local_world_manager.host_init_entity(&global_entity, vec![haunt_kind], &kinds, false);
+        local_world_manager.host_init_entity(global_entity, vec![haunt_kind], &kinds, false);
 
         let mut snapshot_map: SnapshotMap = HashMap::new();
         snapshot_map.insert(
@@ -2373,7 +2373,7 @@ mod delegated_send_guard_tests {
             1u64,
             vec![(
                 haunt_kind,
-                kinds.net_id_of(&haunt_kind).unwrap(),
+                kinds.net_id_of(haunt_kind).unwrap(),
                 DiffMask::new(1),
             )],
         )];
@@ -2385,7 +2385,7 @@ mod delegated_send_guard_tests {
             &kinds,
             &Instant::now(),
             &mut writer,
-            &0,
+            0,
             &MixedWorld {
                 ghost: Ghost::new_complete(7),
             },
@@ -2460,7 +2460,7 @@ mod delegated_send_guard_tests {
 
         let global_entity = GlobalEntity::from_u64(1);
         local_world_manager.host_init_entity(
-            &global_entity,
+            global_entity,
             vec![ComponentKind::of::<Ghost>()],
             &kinds,
             false,
@@ -2479,7 +2479,7 @@ mod delegated_send_guard_tests {
             &kinds,
             &Instant::now(),
             &mut writer,
-            &0,
+            0,
             &LiveWorld {
                 ghost: Ghost::new_complete(7),
             },
@@ -2557,7 +2557,7 @@ mod delegated_send_guard_tests {
             &self,
             global_entity: GlobalEntity,
         ) -> Result<u64, EntityDoesNotExistError> {
-            if *global_entity == self.global_entity {
+            if global_entity == self.global_entity {
                 Ok(1)
             } else {
                 Err(EntityDoesNotExistError)
@@ -2597,7 +2597,7 @@ mod delegated_send_guard_tests {
         let global_entity = GlobalEntity::from_u64(1);
         if host_track {
             local_world_manager.host_init_entity(
-                &global_entity,
+                global_entity,
                 vec![ComponentKind::of::<Ghost>()],
                 &kinds,
                 false,
@@ -2606,7 +2606,7 @@ mod delegated_send_guard_tests {
 
         // `record_command_written` scans the sent-packet list, so the packet
         // must be opened first -- `write_commands` does this before each command.
-        local_world_manager.insert_sent_command_packet(&0, Instant::now());
+        local_world_manager.insert_sent_command_packet(0, Instant::now());
 
         let converter = OneEntityConverter { global_entity };
         let mut next_send_commands: VecDeque<(CommandId, EntityCommand)> =
@@ -2621,7 +2621,7 @@ mod delegated_send_guard_tests {
             &converter,
             &gwm,
             &mut local_world_manager,
-            &0,
+            0,
             &mut writer,
             &mut last_written_id,
             true,
@@ -2723,12 +2723,12 @@ mod delegated_send_guard_tests {
         let mut local_world_manager = LocalWorldManager::new(&None, HostType::Server, 0, &gwm);
         let global_entity = GlobalEntity::from_u64(1);
         local_world_manager.host_init_entity(
-            &global_entity,
+            global_entity,
             vec![ComponentKind::of::<Ghost>()],
             &kinds,
             false,
         );
-        local_world_manager.insert_sent_command_packet(&0, Instant::now());
+        local_world_manager.insert_sent_command_packet(0, Instant::now());
 
         let converter = OneEntityConverter { global_entity };
         let world = LiveWorld {
@@ -2746,7 +2746,7 @@ mod delegated_send_guard_tests {
             &kinds,
             &Instant::now(),
             &mut writer,
-            &0,
+            0,
             &world,
             &converter,
             &gwm,
@@ -2900,7 +2900,7 @@ mod delegated_send_guard_tests {
         let mut local_world_manager = LocalWorldManager::new(&None, HostType::Server, 0, &gwm);
         let global_entity = GlobalEntity::from_u64(1);
         local_world_manager.host_init_entity(
-            &global_entity,
+            global_entity,
             vec![ComponentKind::of::<Ghost>()],
             &kinds,
             false,
@@ -2931,7 +2931,7 @@ mod delegated_send_guard_tests {
             &kinds,
             &Instant::now(),
             &mut writer,
-            &0,
+            0,
             &world,
             &converter,
             &gwm,
@@ -2985,7 +2985,7 @@ mod delegated_send_guard_tests {
         let global_entity = GlobalEntity::from_u64(1);
         if host_track {
             local_world_manager.host_init_entity(
-                &global_entity,
+                global_entity,
                 vec![ComponentKind::of::<Ghost>()],
                 &kinds,
                 false,
@@ -2994,12 +2994,12 @@ mod delegated_send_guard_tests {
             // The client-side commands address the entity as a *remote* one,
             // so they need the opposite half of the entity map populated.
             local_world_manager.insert_remote_entity(
-                &global_entity,
+                global_entity,
                 the_remote_entity(),
                 HashSet::from([ComponentKind::of::<Ghost>()]),
             );
         }
-        local_world_manager.insert_sent_command_packet(&0, Instant::now());
+        local_world_manager.insert_sent_command_packet(0, Instant::now());
 
         let converter = OneEntityConverter { global_entity };
         let world = LiveWorld {
@@ -3017,7 +3017,7 @@ mod delegated_send_guard_tests {
             &converter,
             &gwm,
             &mut local_world_manager,
-            &0,
+            0,
             &mut writer,
             &mut last_written_id,
             true,

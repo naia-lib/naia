@@ -539,7 +539,7 @@ mod entity_converter_tests {
             }))
         }
         fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity {
-            *entity
+            entity
         }
     }
 
@@ -578,7 +578,7 @@ mod entity_converter_tests {
 
         for (owned, expected) in cases {
             assert_eq!(
-                Signposts.owned_entity_to_global_entity(&owned),
+                Signposts.owned_entity_to_global_entity(owned),
                 Ok(global(expected)),
                 "{owned:?} must not be resolved by another form's lookup",
             );
@@ -591,22 +591,22 @@ mod entity_converter_tests {
     fn the_fake_converter_answers_everything_with_entity_zero() {
         let entity = global(123);
         assert_eq!(
-            FakeEntityConverter.global_entity_to_host_entity(&entity),
+            FakeEntityConverter.global_entity_to_host_entity(entity),
             Ok(HostEntity::new(0)),
         );
         assert_eq!(
-            FakeEntityConverter.global_entity_to_remote_entity(&entity),
+            FakeEntityConverter.global_entity_to_remote_entity(entity),
             Ok(RemoteEntity::new(0)),
         );
         assert_eq!(
-            FakeEntityConverter.global_entity_to_owned_entity(&entity),
+            FakeEntityConverter.global_entity_to_owned_entity(entity),
             Ok(OwnedLocalEntity::Host {
                 id: 0,
                 is_static: false,
             }),
         );
         assert_eq!(
-            FakeEntityConverter.get_or_reserve_entity(&entity),
+            FakeEntityConverter.get_or_reserve_entity(entity),
             Ok(OwnedLocalEntity::Host {
                 id: 0,
                 is_static: false,
@@ -615,15 +615,15 @@ mod entity_converter_tests {
              not read back as itself",
         );
         assert_eq!(
-            FakeEntityConverter.host_entity_to_global_entity(&HostEntity::new(9)),
+            FakeEntityConverter.host_entity_to_global_entity(HostEntity::new(9)),
             Ok(global(0)),
         );
         assert_eq!(
-            FakeEntityConverter.static_host_entity_to_global_entity(&HostEntity::new(9)),
+            FakeEntityConverter.static_host_entity_to_global_entity(HostEntity::new(9)),
             Ok(global(0)),
         );
         assert_eq!(
-            FakeEntityConverter.remote_entity_to_global_entity(&RemoteEntity::new(9)),
+            FakeEntityConverter.remote_entity_to_global_entity(RemoteEntity::new(9)),
             Ok(global(0)),
         );
     }
@@ -634,7 +634,7 @@ mod entity_converter_tests {
             id: 3,
             is_static: true,
         };
-        assert_eq!(FakeEntityConverter.apply_entity_redirect(&entity), entity);
+        assert_eq!(FakeEntityConverter.apply_entity_redirect(entity), entity);
     }
 
     // -- the map-backed converters -----------------------------------------
@@ -661,34 +661,34 @@ mod entity_converter_tests {
     /// Every answer the populated map gives, so a wrapper can be held to it.
     fn assert_answers_like_the_map(converter: &dyn LocalEntityAndGlobalEntityConverter) {
         assert_eq!(
-            converter.global_entity_to_host_entity(&global(1)),
+            converter.global_entity_to_host_entity(global(1)),
             Ok(HostEntity::new(11)),
         );
         assert_eq!(
-            converter.global_entity_to_remote_entity(&global(3)),
+            converter.global_entity_to_remote_entity(global(3)),
             Ok(RemoteEntity::new(33)),
         );
         assert_eq!(
-            converter.global_entity_to_owned_entity(&global(1)),
+            converter.global_entity_to_owned_entity(global(1)),
             Ok(OwnedLocalEntity::Host {
                 id: 11,
                 is_static: false,
             }),
         );
         assert_eq!(
-            converter.host_entity_to_global_entity(&HostEntity::new(11)),
+            converter.host_entity_to_global_entity(HostEntity::new(11)),
             Ok(global(1)),
         );
         assert_eq!(
-            converter.static_host_entity_to_global_entity(&HostEntity::new(22)),
+            converter.static_host_entity_to_global_entity(HostEntity::new(22)),
             Ok(global(2)),
         );
         assert_eq!(
-            converter.remote_entity_to_global_entity(&RemoteEntity::new(33)),
+            converter.remote_entity_to_global_entity(RemoteEntity::new(33)),
             Ok(global(3)),
         );
         assert_eq!(
-            converter.apply_entity_redirect(&OwnedLocalEntity::Remote {
+            converter.apply_entity_redirect(OwnedLocalEntity::Remote {
                 id: 33,
                 is_static: false,
             }),
@@ -699,7 +699,7 @@ mod entity_converter_tests {
             "a migrated entity must be looked up under its new address",
         );
         assert_eq!(
-            converter.global_entity_to_host_entity(&global(99)),
+            converter.global_entity_to_host_entity(global(99)),
             Err(EntityDoesNotExistError),
         );
     }
@@ -732,18 +732,18 @@ mod entity_converter_tests {
     fn an_entity_the_user_may_not_see_is_refused_rather_than_reserved() {
         let kinds = ComponentKinds::new();
         let gwm = TestGwm::new(&kinds);
-        gwm.deny_relation(&global(5));
+        gwm.deny_relation(global(5));
 
         let mut map = LocalEntityMap::new(HostType::Server);
         let mut generator = HostEntityGenerator::new(1);
         let mut converter = EntityConverterMut::new(&gwm, &mut map, &mut generator);
 
         assert_eq!(
-            converter.get_or_reserve_entity(&global(5)),
+            converter.get_or_reserve_entity(global(5)),
             Err(EntityDoesNotExistError),
         );
         assert!(
-            !map.contains_global_entity(&global(5)),
+            !map.contains_global_entity(global(5)),
             "a refused entity must not be left holding a reservation",
         );
     }
@@ -759,7 +759,7 @@ mod entity_converter_tests {
         let owned = {
             let mut converter = EntityConverterMut::new(&gwm, &mut map, &mut generator);
             converter
-                .get_or_reserve_entity(&global(3))
+                .get_or_reserve_entity(global(3))
                 .expect("the entity is mapped")
         };
         assert_eq!(
@@ -784,7 +784,7 @@ mod entity_converter_tests {
         let first = {
             let mut converter = EntityConverterMut::new(&gwm, &mut map, &mut generator);
             converter
-                .get_or_reserve_entity(&global(5))
+                .get_or_reserve_entity(global(5))
                 .expect("an unmapped entity is reserved, not refused")
         };
         let OwnedLocalEntity::Host { id, is_static } = first else {
@@ -792,7 +792,7 @@ mod entity_converter_tests {
         };
         assert!(!is_static, "a reserved address is not a static one");
         assert_eq!(
-            map.global_entity_from_host(&HostEntity::new(id)),
+            map.global_entity_from_host(HostEntity::new(id)),
             Some(&global(5)),
             "the reservation must be recorded in the map, not just returned",
         );
@@ -800,7 +800,7 @@ mod entity_converter_tests {
         let second = {
             let mut converter = EntityConverterMut::new(&gwm, &mut map, &mut generator);
             converter
-                .get_or_reserve_entity(&global(5))
+                .get_or_reserve_entity(global(5))
                 .expect("the entity is mapped now")
         };
         assert_eq!(
@@ -815,7 +815,7 @@ mod entity_converter_tests {
     fn the_guard_owning_converter_reserves_under_the_same_rules() {
         let kinds = ComponentKinds::new();
         let gwm = TestGwm::new(&kinds);
-        gwm.deny_relation(&global(5));
+        gwm.deny_relation(global(5));
 
         let shared = Arc::new(RwLock::new(LocalEntityMap::new(HostType::Server)));
         let mut generator = HostEntityGenerator::new(1);
@@ -824,12 +824,12 @@ mod entity_converter_tests {
             let mut converter =
                 EntityMapConverterMut::new(&gwm, shared.write().unwrap(), &mut generator);
             assert_eq!(
-                converter.get_or_reserve_entity(&global(5)),
+                converter.get_or_reserve_entity(global(5)),
                 Err(EntityDoesNotExistError),
             );
         }
         assert!(
-            !shared.read().unwrap().contains_global_entity(&global(5)),
+            !shared.read().unwrap().contains_global_entity(global(5)),
             "a refused entity must not be left holding a reservation",
         );
 
@@ -837,7 +837,7 @@ mod entity_converter_tests {
             let mut converter =
                 EntityMapConverterMut::new(&gwm, shared.write().unwrap(), &mut generator);
             converter
-                .get_or_reserve_entity(&global(6))
+                .get_or_reserve_entity(global(6))
                 .expect("an entity the user may see is reserved, not refused")
         };
         let OwnedLocalEntity::Host { id, .. } = reserved else {
@@ -847,7 +847,7 @@ mod entity_converter_tests {
             shared
                 .read()
                 .unwrap()
-                .global_entity_from_host(&HostEntity::new(id)),
+                .global_entity_from_host(HostEntity::new(id)),
             Some(&global(6)),
             "the reservation must be recorded in the shared map",
         );

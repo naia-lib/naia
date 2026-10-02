@@ -876,7 +876,7 @@ mod protocol_tests {
             protocol.component_kinds.all_names(),
             vec!["Ghost".to_string()]
         );
-        assert!(protocol.resource_kinds.is_resource(&kind));
+        assert!(protocol.resource_kinds.is_resource(kind));
         assert_eq!(protocol.resource_kinds.kind_for::<Ghost>(), Some(kind));
     }
 

@@ -279,7 +279,7 @@ mod tests {
         }
 
         let now = Instant::now();
-        sender.collect_messages(&now, &RTT_MILLIS);
+        sender.collect_messages(&now, RTT_MILLIS);
         let out = sender.take_next_messages();
 
         assert_eq!(
@@ -301,7 +301,7 @@ mod tests {
         }
 
         let t0 = Instant::now();
-        sender.collect_messages(&t0, &RTT_MILLIS);
+        sender.collect_messages(&t0, RTT_MILLIS);
         let first = sender.take_next_messages();
         assert_eq!(indices(&first), vec![0, 1, 2, 3, 4]);
 
@@ -310,7 +310,7 @@ mod tests {
 
         // 50ms later — less than the 100ms resend window.
         let t1 = at(&t0, 50);
-        sender.collect_messages(&t1, &RTT_MILLIS);
+        sender.collect_messages(&t1, RTT_MILLIS);
         let second = sender.take_next_messages();
         assert_eq!(
             indices(&second),
@@ -327,13 +327,13 @@ mod tests {
         }
 
         let t0 = Instant::now();
-        sender.collect_messages(&t0, &RTT_MILLIS);
+        sender.collect_messages(&t0, RTT_MILLIS);
         let _ = sender.take_next_messages();
         sender.mark_written(&[0, 1, 2]);
 
         // Past the resend window — all unacked messages must reappear, in order.
         let t1 = at(&t0, 200);
-        sender.collect_messages(&t1, &RTT_MILLIS);
+        sender.collect_messages(&t1, RTT_MILLIS);
         let retransmit = sender.take_next_messages();
         assert_eq!(indices(&retransmit), vec![0, 1, 2]);
     }
@@ -346,15 +346,15 @@ mod tests {
         }
 
         let t0 = Instant::now();
-        sender.collect_messages(&t0, &RTT_MILLIS);
+        sender.collect_messages(&t0, RTT_MILLIS);
         let _ = sender.take_next_messages();
         sender.mark_written(&[0, 1, 2, 3]);
 
         // Ack index 1; it must drop out of the retransmit set.
-        sender.deliver_message(&1);
+        sender.deliver_message(1);
 
         let t1 = at(&t0, 200);
-        sender.collect_messages(&t1, &RTT_MILLIS);
+        sender.collect_messages(&t1, RTT_MILLIS);
         let retransmit = sender.take_next_messages();
         assert_eq!(
             indices(&retransmit),
@@ -404,12 +404,12 @@ mod tests {
         // Now the uncapped reproduction, step for step: write a leading block so
         // it is no longer due, then collect again to force a gap.
         let base = Instant::now();
-        sender.collect_messages(&base, &RTT_MILLIS);
+        sender.collect_messages(&base, RTT_MILLIS);
         let block: Vec<u16> = (1..(DEPTH as u16)).collect();
         sender.mark_written(&block);
         sender.take_next_messages();
 
-        sender.collect_messages(&base, &RTT_MILLIS);
+        sender.collect_messages(&base, RTT_MILLIS);
         let collected = indices(&sender.take_next_messages());
 
         // The gap exists, but is bounded by the cap and so stays encodable.
@@ -435,7 +435,7 @@ mod tests {
         use naia_serde::BitWriter;
 
         let mut writer = BitWriter::new();
-        IndexedMessageWriter::write_message_index(&mut writer, &Some(0), &33_001);
+        IndexedMessageWriter::write_message_index(&mut writer, Some(0), 33_001);
     }
 
     /// The cap is per-channel occupancy, not a lifetime budget: acknowledging
@@ -450,7 +450,7 @@ mod tests {
         }
         assert!(!sender.send_message(99), "full");
 
-        sender.deliver_message(&0);
+        sender.deliver_message(0);
         assert!(sender.send_message(100), "space freed by the ack");
     }
 }

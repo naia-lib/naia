@@ -148,7 +148,7 @@ mod tests {
     #[test]
     fn unregistered_kind_is_not_resource() {
         let rk = ResourceKinds::new();
-        assert!(!rk.is_resource(&kind_from("a")));
+        assert!(!rk.is_resource(kind_from("a")));
         assert_eq!(rk.len(), 0);
     }
 
@@ -163,8 +163,8 @@ mod tests {
         rk.kinds.insert(k);
         rk.type_ids.insert(TypeId::of::<u8>());
 
-        assert!(rk.is_resource(&k));
-        assert!(!rk.is_resource(&kind_from("b")));
+        assert!(rk.is_resource(k));
+        assert!(!rk.is_resource(kind_from("b")));
         assert_eq!(rk.len(), 1);
     }
 }

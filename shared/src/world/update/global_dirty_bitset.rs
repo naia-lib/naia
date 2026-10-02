@@ -244,7 +244,7 @@ impl FrozenGlobalDirty {
     pub fn dirty_words(&self, entity_idx: GlobalEntityIndex) -> &[u64] {
         self.component_words
             .get(&(entity_idx.as_usize() as u32))
-            .map_or(&[], |v| v.as_slice())
+            .map_or(self.zero_words.as_slice(), |v| v.as_slice())
     }
 
     /// Mirror of [`GlobalDirtyBitset::dirty_entity_words`] (plain `u64`).

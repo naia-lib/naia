@@ -435,7 +435,7 @@ mod remote_world_waitlist_tests {
 
     impl InScopeEntities<RemoteEntity> for Scope {
         fn has_entity(&self, entity: RemoteEntity) -> bool {
-            self.0.contains(entity)
+            self.0.contains(&entity)
         }
     }
 
@@ -458,7 +458,7 @@ mod remote_world_waitlist_tests {
         }
 
         fn forget(&mut self, entity: RemoteEntity) {
-            self.remote_to_global.remove(entity);
+            self.remote_to_global.remove(&entity);
         }
     }
 
@@ -475,7 +475,7 @@ mod remote_world_waitlist_tests {
         ) -> Result<RemoteEntity, EntityDoesNotExistError> {
             self.remote_to_global
                 .iter()
-                .find(|(_, mapped)| *mapped == global_entity)
+                .find(|(_, mapped)| **mapped == global_entity)
                 .map(|(remote, _)| *remote)
                 .ok_or(EntityDoesNotExistError)
         }
@@ -503,12 +503,12 @@ mod remote_world_waitlist_tests {
             remote_entity: RemoteEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             self.remote_to_global
-                .get(remote_entity)
+                .get(&remote_entity)
                 .copied()
                 .ok_or(EntityDoesNotExistError)
         }
         fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity {
-            *entity
+            entity
         }
     }
 
@@ -551,10 +551,10 @@ mod remote_world_waitlist_tests {
 
         waitlist.waitlist_queue_entity(
             &scope,
-            &target,
+            target,
             1,
             crate::world::test_world::remote_component(&kinds(), &Ghost::new_complete(5)),
-            &ghost(),
+            ghost(),
             &HashSet::from([dependency]),
         );
 
@@ -566,7 +566,7 @@ mod remote_world_waitlist_tests {
         );
 
         scope.0.insert(dependency);
-        waitlist.spawn_entity(&scope, &dependency);
+        waitlist.spawn_entity(&scope, dependency);
 
         let released = waitlist.entities_to_insert(&Instant::now(), &map);
         assert_eq!(released.len(), 1, "the spawn must release it");
@@ -596,20 +596,20 @@ mod remote_world_waitlist_tests {
 
         waitlist.waitlist_queue_entity(
             &scope,
-            &target,
+            target,
             1,
             crate::world::test_world::remote_component(&kinds(), &Ghost::new_complete(5)),
-            &ghost(),
+            ghost(),
             &HashSet::from([dependency]),
         );
 
         assert!(
-            waitlist.process_remove(&target, &ghost()),
+            waitlist.process_remove(target, ghost()),
             "the remove must report that it cancelled something",
         );
 
         scope.0.insert(dependency);
-        waitlist.spawn_entity(&scope, &dependency);
+        waitlist.spawn_entity(&scope, dependency);
         assert!(
             waitlist
                 .entities_to_insert(&Instant::now(), &map)
@@ -621,7 +621,7 @@ mod remote_world_waitlist_tests {
     #[test]
     fn removing_a_component_nothing_is_waiting_for_reports_nothing() {
         let mut waitlist = RemoteWorldWaitlist::new();
-        assert!(!waitlist.process_remove(&remote(1), &ghost()));
+        assert!(!waitlist.process_remove(remote(1), ghost()));
     }
 
     // -- updates waiting on their own target entity -------------------------
@@ -679,7 +679,7 @@ mod remote_world_waitlist_tests {
         let map = Map::with(&[entity]);
         let mut world = world_holding_ghost(1);
         scope.0.insert(entity);
-        waitlist.spawn_entity(&scope, &entity);
+        waitlist.spawn_entity(&scope, entity);
 
         let flushed = waitlist.process_self_waitlist_updates(
             &map,
@@ -720,7 +720,7 @@ mod remote_world_waitlist_tests {
         let map = Map::with(&[entity]);
         let mut world = world_holding_ghost(1);
         scope.0.insert(entity);
-        waitlist.spawn_entity(&scope, &entity);
+        waitlist.spawn_entity(&scope, entity);
 
         let flushed = waitlist.process_self_waitlist_updates(
             &map,
@@ -759,10 +759,10 @@ mod remote_world_waitlist_tests {
         );
 
         scope.0.insert(entity);
-        waitlist.spawn_entity(&scope, &entity);
+        waitlist.spawn_entity(&scope, entity);
 
         let mut map = Map::with(&[entity]);
-        map.forget(&entity);
+        map.forget(entity);
 
         assert!(
             waitlist
@@ -870,7 +870,7 @@ mod remote_world_waitlist_tests {
             Ok(GlobalEntity::from_u64(99))
         }
         fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity {
-            *entity
+            entity
         }
     }
 
@@ -958,7 +958,7 @@ mod remote_world_waitlist_tests {
         );
 
         scope.0.insert(referenced);
-        waitlist.spawn_entity(&scope, &referenced);
+        waitlist.spawn_entity(&scope, referenced);
 
         let flushed = waitlist.process_waitlist_updates(
             &Map::with(&[subject, referenced]),

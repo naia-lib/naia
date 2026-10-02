@@ -448,7 +448,7 @@ mod wire_cache_tests {
         let mut gdh = make_gdh(4);
         let idx_a = gdh.alloc_entity(ge_a);
         gdh.set_wire_cache(idx_a, 0, 0x01, make_update(8));
-        gdh.free_entity(&ge_a);
+        gdh.free_entity(ge_a);
         let idx_b = gdh.alloc_entity(ge_b);
         // The free-list may recycle idx_a for ge_b (depends on LIFO order).
         // Either way, the slot must be clear — no stale A data.

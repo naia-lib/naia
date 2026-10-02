@@ -111,7 +111,7 @@ impl TestGwm {
     ) {
         let mut gdh = self.diff_handler.write().unwrap();
         if gdh.kind_bit(kind).is_none() {
-            gdh.alloc_entity(*entity);
+            gdh.alloc_entity(entity);
         }
         gdh.register_component(kinds, self, entity, kind, 1);
     }
@@ -119,13 +119,13 @@ impl TestGwm {
     /// Makes `entity_can_relate_to_user` refuse `entity`, which is how a user
     /// that may not see an entity presents itself to the send-side converters.
     pub fn deny_relation(&self, entity: GlobalEntity) {
-        self.unrelatable.write().unwrap().insert(*entity);
+        self.unrelatable.write().unwrap().insert(entity);
     }
 
     /// Declares the component kinds `component_kinds` should report for
     /// `entity`, which is what the authority-grant path iterates over.
     pub fn declare_kinds(&self, entity: GlobalEntity, kinds: Vec<ComponentKind>) {
-        self.declared_kinds.write().unwrap().insert(*entity, kinds);
+        self.declared_kinds.write().unwrap().insert(entity, kinds);
     }
 }
 
@@ -137,10 +137,10 @@ impl InScopeEntities<GlobalEntity> for TestGwm {
 
 impl GlobalWorldManagerType for TestGwm {
     fn component_kinds(&self, entity: GlobalEntity) -> Option<Vec<ComponentKind>> {
-        self.declared_kinds.read().unwrap().get(entity).cloned()
+        self.declared_kinds.read().unwrap().get(&entity).cloned()
     }
     fn entity_can_relate_to_user(&self, entity: GlobalEntity, _: &u64) -> bool {
-        !self.unrelatable.read().unwrap().contains(entity)
+        !self.unrelatable.read().unwrap().contains(&entity)
     }
     fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>> {
         Arc::new(RwLock::new(TestMutChannel {

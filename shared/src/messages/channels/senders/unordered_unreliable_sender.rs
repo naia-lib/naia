@@ -406,8 +406,8 @@ mod unordered_unreliable_sender_tests {
         let mut sender = UnorderedUnreliableSender::new();
         sender.send_message(tagged(1, 4));
 
-        sender.collect_messages(&Instant::now(), &200.0);
-        sender.notify_message_delivered(&7);
+        sender.collect_messages(&Instant::now(), 200.0);
+        sender.notify_message_delivered(7);
 
         assert_eq!(
             drain(&mut sender),
@@ -448,7 +448,7 @@ mod unordered_unreliable_sender_tests {
     fn processing_a_response_is_a_programming_error() {
         let mut sender = UnorderedUnreliableSender::new();
         sender.process_incoming_response(
-            &LocalRequestId::from(0),
+            LocalRequestId::from(0),
             crate::ConnectionRequestNonce::from_wire(0),
         );
     }

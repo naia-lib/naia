@@ -814,13 +814,13 @@ mod user_diff_handler_tests {
         let (idx, kind_bit) = {
             let mut gdh = fx.gwm.diff_handler.write().unwrap();
             let idx = gdh
-                .entity_to_global_idx(&entity)
+                .entity_to_global_idx(entity)
                 .unwrap_or_else(|| gdh.alloc_entity(entity));
-            gdh.register_component(&fx.kinds, &fx.gwm, &entity, kind, 1);
+            gdh.register_component(&fx.kinds, &fx.gwm, entity, kind, 1);
             let kind_bit = gdh.kind_bit(kind).expect("kind_bit must resolve");
             (idx, kind_bit)
         };
-        udh.register_component(&fx.addr, &entity, kind);
+        udh.register_component(&fx.addr, entity, kind);
         (idx, kind_bit)
     }
 
@@ -831,7 +831,7 @@ mod user_diff_handler_tests {
             .diff_handler
             .read()
             .unwrap()
-            .receiver(&fx.addr, &entity, kind)
+            .receiver(&fx.addr, entity, kind)
             .expect("receiver must exist after registration")
             .mutate(0);
     }
@@ -846,18 +846,18 @@ mod user_diff_handler_tests {
         let (idx, kind_bit) = {
             let mut gdh = fx.gwm.diff_handler.write().unwrap();
             let idx = gdh.alloc_entity(entity);
-            gdh.register_component(&fx.kinds, &fx.gwm, &entity, &fx.kind, 1);
-            let kind_bit = gdh.kind_bit(&fx.kind).expect("kind_bit must resolve");
+            gdh.register_component(&fx.kinds, &fx.gwm, entity, fx.kind, 1);
+            let kind_bit = gdh.kind_bit(fx.kind).expect("kind_bit must resolve");
             (idx, kind_bit)
         };
-        udh.register_component(&fx.addr, &entity, &fx.kind);
+        udh.register_component(&fx.addr, entity, fx.kind);
 
         let receiver = fx
             .gwm
             .diff_handler
             .read()
             .unwrap()
-            .receiver(&fx.addr, &entity, &fx.kind)
+            .receiver(&fx.addr, entity, fx.kind)
             .expect("receiver must exist after registration");
         receiver.mutate(0);
 
@@ -877,7 +877,7 @@ mod user_diff_handler_tests {
 
         let (idx, kind_bit) = register_and_dirty(&fx, &mut udh, entity);
 
-        udh.deregister_component(&entity, &fx.kind);
+        udh.deregister_component(entity, fx.kind);
 
         assert!(
             !fx.gwm.global_dirty.is_component_dirty(idx, kind_bit),
@@ -895,11 +895,11 @@ mod user_diff_handler_tests {
         let (idx_a, kind_bit) = register_and_dirty(&fx, &mut udh, entity_a);
 
         // Despawn A while it is still dirty, exactly as the server does.
-        udh.deregister_component(&entity_a, &fx.kind);
+        udh.deregister_component(entity_a, fx.kind);
         {
             let mut gdh = fx.gwm.diff_handler.write().unwrap();
-            gdh.deregister_component(&entity_a, &fx.kind);
-            gdh.free_entity(&entity_a);
+            gdh.deregister_component(entity_a, fx.kind);
+            gdh.free_entity(entity_a);
         }
 
         // B takes over A's index.
@@ -936,7 +936,7 @@ mod user_diff_handler_tests {
         for raw in 1u64..=3 {
             let entity = GlobalEntity::from_u64(raw);
             for kind in [fx.kind, fx.kind2] {
-                let (idx, kind_bit) = register(fx, udh, entity, &kind);
+                let (idx, kind_bit) = register(fx, udh, entity, kind);
                 grid.push((entity, kind, idx, kind_bit));
             }
         }
@@ -975,9 +975,9 @@ mod user_diff_handler_tests {
             .unwrap();
 
         for (entity, kind, _, _) in &grid {
-            udh.mark_receiver_delivered(entity, kind);
+            udh.mark_receiver_delivered(*entity, *kind);
         }
-        dirty(&fx, target_entity, &target_kind);
+        dirty(&fx, target_entity, target_kind);
 
         for (entity, kind, idx, bit) in &grid {
             let is_target = *idx == target_idx && *bit == target_bit;
@@ -994,12 +994,12 @@ mod user_diff_handler_tests {
                 !is_target,
             );
             assert_eq!(
-                udh.is_receiver_dirty_and_delivered(entity, kind),
+                udh.is_receiver_dirty_and_delivered(*entity, *kind),
                 is_target,
                 "the cold path must agree with the fast path at ({idx:?}, {bit})",
             );
             assert_eq!(
-                udh.diff_mask_is_clear(entity, kind),
+                udh.diff_mask_is_clear(*entity, *kind),
                 !is_target,
                 "the cold path must agree with the fast path at ({idx:?}, {bit})",
             );
@@ -1014,12 +1014,12 @@ mod user_diff_handler_tests {
 
         // Dirty every pair, so each receiver has a mask worth comparing.
         for (entity, kind, _, _) in &grid {
-            dirty(&fx, *entity, kind);
+            dirty(&fx, *entity, *kind);
         }
         for (entity, kind, idx, bit) in &grid {
             assert_eq!(
                 udh.diff_mask_snapshot_fast(*idx, *bit),
-                Some(udh.diff_mask_snapshot(entity, kind)),
+                Some(udh.diff_mask_snapshot(*entity, *kind)),
                 "fast and cold snapshots must resolve to the same receiver at \
                  ({idx:?}, {bit})",
             );
@@ -1046,7 +1046,7 @@ mod user_diff_handler_tests {
         let grid = register_grid(&fx, &mut udh);
 
         for (entity, kind, _, _) in &grid {
-            dirty(&fx, *entity, kind);
+            dirty(&fx, *entity, *kind);
         }
         let (_, _, target_idx, target_bit) = *grid
             .iter()
@@ -1072,19 +1072,19 @@ mod user_diff_handler_tests {
         let grid = register_grid(&fx, &mut udh);
 
         for (entity, kind, _, _) in &grid {
-            assert!(udh.has_component(entity, kind));
+            assert!(udh.has_component(*entity, *kind));
         }
         let (entity, kind, _, _) = grid[0];
-        udh.deregister_component(&entity, &kind);
-        assert!(!udh.has_component(&entity, &kind));
+        udh.deregister_component(entity, kind);
+        assert!(!udh.has_component(entity, kind));
         for (other_entity, other_kind, _, _) in &grid[1..] {
             assert!(
-                udh.has_component(other_entity, other_kind),
+                udh.has_component(*other_entity, *other_kind),
                 "deregistering one pair must not disturb the others",
             );
         }
         // Deregistering again is a no-op rather than a panic.
-        udh.deregister_component(&entity, &kind);
+        udh.deregister_component(entity, kind);
     }
 
     #[test]
@@ -1092,12 +1092,12 @@ mod user_diff_handler_tests {
         let fx = fixture();
         let udh = UserDiffHandler::new(&fx.gwm);
         let entity = GlobalEntity::from_u64(9);
-        assert!(!udh.has_component(&entity, &fx.kind));
-        assert!(udh.diff_mask_is_clear(&entity, &fx.kind));
-        assert!(!udh.is_receiver_dirty_and_delivered(&entity, &fx.kind));
+        assert!(!udh.has_component(entity, fx.kind));
+        assert!(udh.diff_mask_is_clear(entity, fx.kind));
+        assert!(!udh.is_receiver_dirty_and_delivered(entity, fx.kind));
         // Neither of these has a receiver to reach; both must simply return.
-        udh.mark_receiver_fully_dirty(&entity, &fx.kind);
-        udh.mark_receiver_delivered(&entity, &fx.kind);
+        udh.mark_receiver_fully_dirty(entity, fx.kind);
+        udh.mark_receiver_delivered(entity, fx.kind);
     }
 
     #[test]
@@ -1110,7 +1110,7 @@ mod user_diff_handler_tests {
             .max_by_key(|(_, _, idx, bit)| (idx.as_usize(), *bit))
             .unwrap();
 
-        udh.mark_receiver_fully_dirty(&target_entity, &target_kind);
+        udh.mark_receiver_fully_dirty(target_entity, target_kind);
 
         for (_, _, idx, bit) in &grid {
             let is_target = *idx == target_idx && *bit == target_bit;
@@ -1129,8 +1129,8 @@ mod user_diff_handler_tests {
         let fx = client_fixture();
         let mut udh = UserDiffHandler::new(&fx.gwm);
         let entity = GlobalEntity::from_u64(1);
-        let (_, ghost_bit) = register(&fx, &mut udh, entity, &fx.kind);
-        let (_, phantom_bit) = register(&fx, &mut udh, entity, &fx.kind2);
+        let (_, ghost_bit) = register(&fx, &mut udh, entity, fx.kind);
+        let (_, phantom_bit) = register(&fx, &mut udh, entity, fx.kind2);
 
         // Anti-vacuity: the bit-decode loop below is only interesting if the
         // two kinds sit at different bit positions, one of them nonzero.
@@ -1142,7 +1142,7 @@ mod user_diff_handler_tests {
             "nothing has been mutated yet",
         );
 
-        dirty(&fx, entity, &fx.kind2);
+        dirty(&fx, entity, fx.kind2);
 
         let candidates = udh.dirty_receiver_candidates();
         let kinds = candidates
@@ -1165,11 +1165,11 @@ mod user_diff_handler_tests {
         let fx = client_fixture();
         let mut udh = UserDiffHandler::new(&fx.gwm);
         let entity = GlobalEntity::from_u64(1);
-        register(&fx, &mut udh, entity, &fx.kind);
-        register(&fx, &mut udh, entity, &fx.kind2);
+        register(&fx, &mut udh, entity, fx.kind);
+        register(&fx, &mut udh, entity, fx.kind2);
 
-        dirty(&fx, entity, &fx.kind);
-        dirty(&fx, entity, &fx.kind2);
+        dirty(&fx, entity, fx.kind);
+        dirty(&fx, entity, fx.kind2);
 
         let candidates = udh.dirty_receiver_candidates();
         let kinds = candidates.get(&entity).expect("entity must be a candidate");
@@ -1186,8 +1186,8 @@ mod user_diff_handler_tests {
         let fx = fixture();
         let mut udh = UserDiffHandler::new(&fx.gwm);
         let entity = GlobalEntity::from_u64(1);
-        register(&fx, &mut udh, entity, &fx.kind);
-        dirty(&fx, entity, &fx.kind);
+        register(&fx, &mut udh, entity, fx.kind);
+        dirty(&fx, entity, fx.kind);
         assert!(
             udh.dirty_receiver_candidates().is_empty(),
             "the server drives candidate selection from GlobalDirtyBitset, so this \

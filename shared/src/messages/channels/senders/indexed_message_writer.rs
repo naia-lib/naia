@@ -131,7 +131,7 @@ mod tests {
         let mut writer = BitWriter::new();
         let mut last = None;
         for id in [1u16, 2, 3, 7, 100, 101, 200] {
-            IndexedMessageWriter::write_message_index(&mut writer, &last, &id);
+            IndexedMessageWriter::write_message_index(&mut writer, last, id);
             last = Some(id);
         }
     }
@@ -142,7 +142,7 @@ mod tests {
         let mut writer = BitWriter::new();
         let mut last = None;
         for id in [42u16, 42, 42] {
-            IndexedMessageWriter::write_message_index(&mut writer, &last, &id);
+            IndexedMessageWriter::write_message_index(&mut writer, last, id);
             last = Some(id);
         }
     }
@@ -156,7 +156,7 @@ mod tests {
         let mut writer = BitWriter::new();
         let mut last = None;
         for id in [10u16, 5u16] {
-            IndexedMessageWriter::write_message_index(&mut writer, &last, &id);
+            IndexedMessageWriter::write_message_index(&mut writer, last, id);
             last = Some(id);
         }
     }
