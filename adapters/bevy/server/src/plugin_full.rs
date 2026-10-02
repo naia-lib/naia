@@ -236,6 +236,6 @@ fn pipelined_send(world: &mut World) {
 
 /// Bevy system that surfaces any worker panic onto the main thread. Installed in
 /// the change-detection schedule (or `Update`).
-fn pipelined_propagate_panics(world: &mut World) {
+pub fn pipelined_propagate_panics(world: &mut World) {
     crate::Server::pipeline_propagate_panics(world);
 }
