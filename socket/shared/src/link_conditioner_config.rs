@@ -1,4 +1,4 @@
-/// Contains configuration required to initialize a LinkConditioner
+/// Contains configuration required to initialize a `LinkConditioner`
 #[derive(Clone)]
 pub struct LinkConditionerConfig {
     /// Delay to receive incoming messages in milliseconds
@@ -13,7 +13,8 @@ pub struct LinkConditionerConfig {
 }
 
 impl LinkConditionerConfig {
-    /// Creates a new LinkConditionerConfig
+    /// Creates a new `LinkConditionerConfig`
+    #[must_use]
     pub fn new(incoming_latency: u32, incoming_jitter: u32, incoming_loss: f32) -> Self {
         Self {
             incoming_latency,
@@ -22,6 +23,7 @@ impl LinkConditionerConfig {
         }
     }
 
+    #[must_use]
     pub fn perfect_condition() -> Self {
         Self {
             incoming_latency: 1,
@@ -30,8 +32,9 @@ impl LinkConditionerConfig {
         }
     }
 
-    /// Creates a new LinkConditioner that simulates a connection which is in a
+    /// Creates a new `LinkConditioner` that simulates a connection which is in a
     /// very good condition
+    #[must_use]
     pub fn very_good_condition() -> Self {
         Self {
             incoming_latency: 12,
@@ -40,8 +43,9 @@ impl LinkConditionerConfig {
         }
     }
 
-    /// Creates a new LinkConditioner that simulates a connection which is in a
+    /// Creates a new `LinkConditioner` that simulates a connection which is in a
     /// good condition
+    #[must_use]
     pub fn good_condition() -> Self {
         Self {
             incoming_latency: 40,
@@ -50,8 +54,9 @@ impl LinkConditionerConfig {
         }
     }
 
-    /// Creates a new LinkConditioner that simulates a connection which is in an
+    /// Creates a new `LinkConditioner` that simulates a connection which is in an
     /// average condition
+    #[must_use]
     pub fn average_condition() -> Self {
         Self {
             incoming_latency: 100,
@@ -60,8 +65,9 @@ impl LinkConditionerConfig {
         }
     }
 
-    /// Creates a new LinkConditioner that simulates a connection which is in an
+    /// Creates a new `LinkConditioner` that simulates a connection which is in an
     /// poor condition
+    #[must_use]
     pub fn poor_condition() -> Self {
         Self {
             incoming_latency: 200,
@@ -70,8 +76,9 @@ impl LinkConditionerConfig {
         }
     }
 
-    /// Creates a new LinkConditioner that simulates a connection which is in an
+    /// Creates a new `LinkConditioner` that simulates a connection which is in an
     /// very poor condition
+    #[must_use]
     pub fn very_poor_condition() -> Self {
         Self {
             incoming_latency: 300,

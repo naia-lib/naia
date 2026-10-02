@@ -14,7 +14,8 @@ pub struct SocketConfig {
 }
 
 impl SocketConfig {
-    /// Creates a new SocketConfig
+    /// Creates a new `SocketConfig`
+    #[must_use]
     pub fn new(
         link_condition: Option<LinkConditionerConfig>,
         rtc_endpoint_path: Option<String>,

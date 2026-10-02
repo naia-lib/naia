@@ -61,6 +61,7 @@ pub const PROTOCOL_MISMATCH_STATUS: u16 = 409;
 /// This is not authentication. The fingerprint is public compatibility
 /// metadata: knowing it grants nothing, and a peer that supplies the right one
 /// still has to authenticate normally.
+#[must_use]
 pub fn stamp_protocol_id_header(
     auth_headers_opt: Option<Vec<(String, String)>>,
     protocol_id: &str,
