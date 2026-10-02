@@ -15,7 +15,10 @@ pub struct GlobalEntityRecord {
 
 impl GlobalEntityRecord {
     pub fn new(owner: EntityOwner) -> Self {
-        assert!(owner != EntityOwner::Local, "Should not insert Local entity in this record");
+        assert!(
+            owner != EntityOwner::Local,
+            "Should not insert Local entity in this record"
+        );
 
         // Host-owned entities always start public, client-owned entities always start private
         let replication_config = if owner.is_server() {

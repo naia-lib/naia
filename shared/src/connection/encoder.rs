@@ -150,6 +150,7 @@ cfg_if! {
 
         impl Encoder {
             /// Creates a no-op encoder (compression mode is ignored in this build variant).
+            #[must_use]
             pub fn new(_: CompressionMode) -> Self {
                 Self {
                     result: Vec::new(),

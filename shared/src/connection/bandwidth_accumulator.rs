@@ -28,7 +28,7 @@ impl BandwidthAccumulator {
     pub(crate) fn new(config: &BandwidthConfig) -> Self {
         Self {
             budget_bytes: 0.0,
-            target_bytes_per_sec: config.target_bytes_per_sec as f64,
+            target_bytes_per_sec: f64::from(config.target_bytes_per_sec),
             last_accumulate: None,
             sent_this_tick: false,
             bytes_sent_this_tick: 0,
@@ -66,7 +66,7 @@ impl BandwidthAccumulator {
     /// always go (overshoot permitted so the bucket can go negative by up to
     /// one packet per tick).
     pub(crate) fn can_spend(&self, estimated_bytes: u32) -> bool {
-        if self.budget_bytes >= estimated_bytes as f64 {
+        if self.budget_bytes >= f64::from(estimated_bytes) {
             return true;
         }
         // One-packet overshoot: iff budget is currently positive and we haven't
@@ -79,11 +79,11 @@ impl BandwidthAccumulator {
 
     /// Subtract the actual bytes serialized from the budget.
     pub(crate) fn spend(&mut self, actual_bytes: u32) {
-        self.budget_bytes -= actual_bytes as f64;
+        self.budget_bytes -= f64::from(actual_bytes);
         self.sent_this_tick = true;
         self.bytes_sent_this_tick = self
             .bytes_sent_this_tick
-            .saturating_add(actual_bytes as u64);
+            .saturating_add(u64::from(actual_bytes));
     }
 
     /// Current remaining budget (may be negative when overshoot occurred).

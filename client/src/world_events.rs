@@ -321,9 +321,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         world_entity: E,
         component_kind: ComponentKind,
     ) {
-        self.inserts
-            .entry(component_kind)
-            .or_default();
+        self.inserts.entry(component_kind).or_default();
         let list = self.inserts.get_mut(&component_kind).unwrap();
         list.push((tick, world_entity));
         self.lifecycle.push(LifecycleOrder {

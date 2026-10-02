@@ -18,6 +18,7 @@ pub struct ConnectionVisibilityBitset {
 impl ConnectionVisibilityBitset {
     /// Pre-allocates storage. `capacity` must equal `max_replicated_entities + 1`
     /// (matching `GlobalDirtyBitset::new(capacity, ...)`; slot 0 is the INVALID sentinel).
+    #[must_use]
     pub fn new(capacity: usize) -> Self {
         let words = capacity.div_ceil(64).max(1);
         Self {
@@ -45,6 +46,7 @@ impl ConnectionVisibilityBitset {
     }
 
     /// Returns `true` iff entity `idx` is currently visible.
+    #[must_use]
     pub fn is_set(&self, idx: GlobalEntityIndex) -> bool {
         let i = idx.as_usize();
         if i == 0 || i >= self.capacity {
@@ -72,7 +74,7 @@ impl ConnectionVisibilityBitset {
             })
     }
 
-    /// MISSION_TICK_FLOOR Lever 3: [`Self::intersect_dirty`] against a frozen
+    /// `MISSION_TICK_FLOOR` Lever 3: [`Self::intersect_dirty`] against a frozen
     /// (plain-`u64`) dirty snapshot instead of the live bitset, for the active
     /// send worker transmitting a lagged job concurrently with the gameplay
     /// thread mutating the live `global_dirty`. Word-for-word identical AND;

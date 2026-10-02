@@ -12,6 +12,7 @@ pub struct Timer {
 
 impl Timer {
     /// Creates a new Timer with a given Duration
+    #[must_use]
     pub fn new(duration: Duration) -> Self {
         Self {
             last: Instant::now(),
@@ -27,6 +28,7 @@ impl Timer {
 
     /// Gets whether or not the Timer is "Ringing" (i.e. the given Duration has
     /// elapsed since the last "reset")
+    #[must_use]
     pub fn ringing(&self) -> bool {
         let now = Instant::now();
         // Handle case where time might go backwards (shouldn't happen, but be safe)

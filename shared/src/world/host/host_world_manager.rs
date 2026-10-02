@@ -65,6 +65,7 @@ pub struct HostWorldManager {
 
 impl HostWorldManager {
     /// Creates a `HostWorldManager` for the given `host_type` side and `user_key`.
+    #[must_use]
     pub fn new(host_type: HostType, user_key: u64) -> Self {
         Self {
             entity_generator: HostEntityGenerator::new(user_key),
@@ -126,7 +127,7 @@ impl HostWorldManager {
         host_channel
             .component_kinds()
             .iter()
-            .all(|k| delivered.map(|set| set.contains(k)).unwrap_or(false))
+            .all(|k| delivered.is_some_and(|set| set.contains(k)))
     }
 
     /// L3 send-state seam variant: build the converter holding a write guard on
@@ -366,8 +367,7 @@ impl HostWorldManager {
                     self.on_delivered_despawn_entity(local_entity_map, host_entity);
                 }
                 EntityMessage::InsertComponent(host_entity, component_kind) => {
-                    let Some(global_entity) =
-                        local_entity_map.global_entity_from_host(host_entity)
+                    let Some(global_entity) = local_entity_map.global_entity_from_host(host_entity)
                     else {
                         return;
                     };
@@ -378,8 +378,7 @@ impl HostWorldManager {
                     );
                 }
                 EntityMessage::RemoveComponent(host_entity, component_kind) => {
-                    let Some(global_entity) =
-                        local_entity_map.global_entity_from_host(host_entity)
+                    let Some(global_entity) = local_entity_map.global_entity_from_host(host_entity)
                     else {
                         return;
                     };
@@ -414,7 +413,7 @@ impl HostWorldManager {
                 .copied()
                 .filter(
                     |ge| match local_entity_map.global_entity_to_host_entity(*ge) {
-                    Ok(host_entity) => self.host_entity_fully_delivered(host_entity, *ge),
+                        Ok(host_entity) => self.host_entity_fully_delivered(host_entity, *ge),
                         // No host mapping → entity is gone; stop tracking it.
                         Err(_) => true,
                     },

@@ -381,11 +381,7 @@ impl WorldMutType<TestEntity> for TestWorld {
         }
     }
 
-    fn component_disable_delegation(
-        &mut self,
-        entity: &TestEntity,
-        component_kind: ComponentKind,
-    ) {
+    fn component_disable_delegation(&mut self, entity: &TestEntity, component_kind: ComponentKind) {
         if let Some(mut component) = self.dyn_mut_of_kind(entity, component_kind) {
             component.disable_delegation();
         }

@@ -312,9 +312,7 @@ async fn read_session_request<R: AsyncRead + Unpin>(
         let byte = match byte {
             Ok(byte) => byte,
             Err(err) => {
-                warn!(
-                    "Error reading WebRTC session request from {remote_addr}: {err}"
-                );
+                warn!("Error reading WebRTC session request from {remote_addr}: {err}");
                 return None;
             }
         };
@@ -322,9 +320,7 @@ async fn read_session_request<R: AsyncRead + Unpin>(
         if !headers_been_read {
             header_bytes_read += 1;
             if header_bytes_read > MAX_HEADER_BYTES {
-                warn!(
-                    "Over-long headers in WebRTC session request from {remote_addr}"
-                );
+                warn!("Over-long headers in WebRTC session request from {remote_addr}");
                 return None;
             }
         }
@@ -354,9 +350,7 @@ async fn read_session_request<R: AsyncRead + Unpin>(
             // Header lines come straight off the wire pre-auth; non-UTF-8 is a
             // malformed request, not a server fault.
             let Ok(mut str) = String::from_utf8(line.clone()) else {
-                warn!(
-                    "Non-UTF-8 header line in WebRTC session request from {remote_addr}"
-                );
+                warn!("Non-UTF-8 header line in WebRTC session request from {remote_addr}");
                 return None;
             };
             line.clear();
@@ -407,9 +401,7 @@ async fn read_session_request<R: AsyncRead + Unpin>(
             }
         } else {
             if line.len() >= MAX_REQUEST_LINE_BYTES {
-                warn!(
-                    "Over-long header line in WebRTC session request from {remote_addr}"
-                );
+                warn!("Over-long header line in WebRTC session request from {remote_addr}");
                 return None;
             }
             line.push(byte);
@@ -494,9 +486,7 @@ async fn serve(
     if success
         && !fingerprint_is_acceptable(protocol_id.as_deref(), &expected_protocol_id, is_options)
     {
-        warn!(
-            "Refusing WebRTC session request from {remote_addr}: protocol fingerprint mismatch"
-        );
+        warn!("Refusing WebRTC session request from {remote_addr}: protocol fingerprint mismatch");
         success = false;
         fingerprint_mismatch = true;
     }
@@ -639,9 +629,7 @@ async fn serve(
                         }
                     }
                     Err(err) => {
-                        warn!(
-                            "Invalid WebRTC session request from {remote_addr}. Error: {err}"
-                        );
+                        warn!("Invalid WebRTC session request from {remote_addr}. Error: {err}");
                     }
                 }
             } else {

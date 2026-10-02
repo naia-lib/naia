@@ -344,12 +344,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn mirror_entities(&mut self, new_entity: &Entity, old_entity: &Entity) {
         for component_kind in WorldMutType::<Entity>::component_kinds(self, old_entity) {
-            WorldMutType::<Entity>::mirror_components(
-                self,
-                new_entity,
-                old_entity,
-                component_kind,
-            );
+            WorldMutType::<Entity>::mirror_components(self, new_entity, old_entity, component_kind);
         }
     }
 

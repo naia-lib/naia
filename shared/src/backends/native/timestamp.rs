@@ -5,6 +5,7 @@ pub struct Timestamp;
 
 impl Timestamp {
     /// Returns seconds since the Unix epoch as a `u64`.
+    #[must_use]
     pub fn now() -> u64 {
         SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)

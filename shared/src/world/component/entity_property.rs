@@ -121,10 +121,9 @@ impl EntityRelation {
         if let Some(global_entity) = inner_global_entity {
             if let Ok(world_entity) = converter.global_entity_to_entity(global_entity) {
                 return Some(world_entity);
-            } else {
-                warn!("Could not find World Entity from Global Entity `{:?}`, in order to get the EntityRelation value!", global_entity);
-                return None;
             }
+            warn!("Could not find World Entity from Global Entity `{:?}`, in order to get the EntityRelation value!", global_entity);
+            return None;
         }
         warn!("Could not get EntityRelation value, because EntityRelation has no GlobalEntity!");
         None
@@ -312,6 +311,7 @@ pub struct EntityProperty {
 impl EntityProperty {
     /// Creates an `EntityProperty` initialized for use inside a `Message` (no mutator).
     // Should only be used by Messages
+    #[must_use]
     pub fn new_for_message() -> Self {
         Self {
             inner: EntityRelation::HostCreated(HostCreatedRelation::new()),
@@ -320,6 +320,7 @@ impl EntityProperty {
 
     /// Creates an `EntityProperty` initialized for use inside a `Component` at the given property index.
     // Should only be used by Components
+    #[must_use]
     pub fn new_for_component(mutator_index: u8) -> Self {
         Self {
             inner: EntityRelation::HostCreated(HostCreatedRelation::with_mutator(mutator_index)),
@@ -495,15 +496,14 @@ impl EntityProperty {
                     let owned_entity = inner.remote_entity.copy_to_owned();
                     let redirected_entity = converter.apply_entity_redirect(owned_entity);
 
-                    match redirected_entity.convert_to_global(converter) {
-                        Ok(global_entity) => Some(global_entity),
-                        Err(_) => {
-                            warn!(
-                                "Dropping stale waiting EntityProperty! Could not convert RemoteEntity to GlobalEntity! Original: {:?}, Redirected: {:?}",
-                                owned_entity, redirected_entity
-                            );
-                            return false;
-                        }
+                    if let Ok(global_entity) = redirected_entity.convert_to_global(converter) {
+                        Some(global_entity)
+                    } else {
+                        warn!(
+                            "Dropping stale waiting EntityProperty! Could not convert RemoteEntity to GlobalEntity! Original: {:?}, Redirected: {:?}",
+                            owned_entity, redirected_entity
+                        );
+                        return false;
                     }
                 };
 
@@ -732,6 +732,7 @@ impl EntityProperty {
     }
 
     /// Returns the raw `GlobalEntity` stored in this property, or `None`.
+    #[must_use]
     pub fn get_inner(&self) -> Option<GlobalEntity> {
         self.inner.get_global_entity()
     }
@@ -756,6 +757,7 @@ impl EntityProperty {
     }
 
     /// Returns the `RemoteEntity` this property is still waiting to resolve, or `None` if already resolved.
+    #[must_use]
     pub fn waiting_remote_entity(&self) -> Option<RemoteEntity> {
         self.inner.waiting_remote_entity()
     }
@@ -1029,7 +1031,7 @@ struct DelegatedRelation {
 }
 
 impl DelegatedRelation {
-    /// Create a new DelegatedRelation
+    /// Create a new `DelegatedRelation`
     pub fn new(
         global_entity: Option<GlobalEntity>,
         auth_accessor: &EntityAuthAccessor,
@@ -1102,9 +1104,10 @@ impl DelegatedRelation {
     }
 
     pub fn bit_length(&self, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) -> u32 {
-        if !self.can_write() {
-            panic!("Must have Authority over Entity before performing this operation.");
-        }
+        assert!(
+            self.can_write(),
+            "Must have Authority over Entity before performing this operation."
+        );
         let mut bit_counter = BitCounter::new(0, 0, u32::MAX);
         self.write(&mut bit_counter, converter);
         bit_counter.bits_needed()
@@ -1115,9 +1118,10 @@ impl DelegatedRelation {
         writer: &mut dyn BitWrite,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     ) {
-        if !self.can_write() {
-            panic!("Must have Authority over Entity before performing this operation.");
-        }
+        assert!(
+            self.can_write(),
+            "Must have Authority over Entity before performing this operation."
+        );
 
         let Some(global_entity) = &self.global_entity else {
             false.ser(writer);
@@ -1155,9 +1159,10 @@ impl DelegatedRelation {
     }
 
     fn mutate(&mut self) {
-        if !self.can_mutate() {
-            panic!("Must request authority to mutate a Delegated EntityProperty.");
-        }
+        assert!(
+            self.can_mutate(),
+            "Must request authority to mutate a Delegated EntityProperty."
+        );
         let _success = self.mutator.mutate(self.index);
     }
 

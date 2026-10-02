@@ -104,7 +104,10 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
     /// Panics if called on a static entity — static entities are immutable
     /// after construction.
     pub fn remove_component<R: ReplicatedComponent>(&mut self) -> Option<R> {
-        assert!(!self.client.entity_is_static(&self.entity), "Cannot remove_component on a static entity");
+        assert!(
+            !self.client.entity_is_static(&self.entity),
+            "Cannot remove_component on a static entity"
+        );
         self.client
             .remove_component::<R, W>(&mut self.world, &self.entity)
     }

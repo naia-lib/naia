@@ -65,11 +65,13 @@ impl ProtocolId {
     pub const HEX_LEN: usize = Self::BYTE_LEN * 2;
 
     /// Build an id from the raw sixteen bytes.
+    #[must_use]
     pub const fn from_bytes(bytes: [u8; 16]) -> Self {
         Self(bytes)
     }
 
     /// The raw sixteen bytes, in wire order.
+    #[must_use]
     pub const fn bytes(&self) -> [u8; 16] {
         self.0
     }
@@ -78,11 +80,13 @@ impl ProtocolId {
     ///
     /// Primarily for tests that need two ids which differ in a controlled way;
     /// real ids come from `Protocol::protocol_id()`.
+    #[must_use]
     pub const fn new(value: u128) -> Self {
         Self(value.to_le_bytes())
     }
 
     /// The raw value as a `u128`, little-endian.
+    #[must_use]
     pub const fn value(&self) -> u128 {
         u128::from_le_bytes(self.0)
     }
@@ -91,10 +95,11 @@ impl ProtocolId {
     ///
     /// This is the form carried on auth envelopes: fixed width, so a wrong
     /// length is rejected before the value is even parsed.
+    #[must_use]
     pub fn to_hex(&self) -> String {
         let mut out = String::with_capacity(Self::HEX_LEN);
         for byte in &self.0 {
-            out.push_str(&format!("{:02x}", byte));
+            out.push_str(&format!("{byte:02x}"));
         }
         out
     }
@@ -106,6 +111,7 @@ impl ProtocolId {
     /// on the auth path must treat `None` exactly as they treat a mismatch —
     /// a lenient "missing" case would let any peer skip the check by omitting
     /// the value.
+    #[must_use]
     pub fn from_hex(text: &str) -> Option<Self> {
         if text.len() != Self::HEX_LEN {
             return None;

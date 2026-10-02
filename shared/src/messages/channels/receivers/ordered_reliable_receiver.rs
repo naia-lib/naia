@@ -109,12 +109,11 @@ impl ReceiverArranger for OrderedArranger {
                         }
 
                         break;
-                    } else {
-                        panic!(
-                            "Buffer should not have received message in slot {:?} !",
-                            old_message_index
-                        );
                     }
+                    panic!(
+                        "Buffer should not have received message in slot {:?} !",
+                        old_message_index
+                    );
                 }
             } else {
                 let next_message_index = self.messages_received.wrapping_add(current_index as u16);
@@ -131,11 +130,10 @@ impl ReceiverArranger for OrderedArranger {
                     }
 
                     break;
-                } else {
-                    self.buffer
-                        .push_back((next_message_index, MessageSlot::NotReceived));
-                    // keep filling up buffer
                 }
+                self.buffer
+                    .push_back((next_message_index, MessageSlot::NotReceived));
+                // keep filling up buffer
             }
 
             current_index += 1;

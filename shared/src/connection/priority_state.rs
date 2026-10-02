@@ -12,7 +12,7 @@ use crate::world::entity::global_entity::GlobalEntity;
 /// `naia-shared` without leaking the server's world-entity type. Implementations
 /// translate to their internal entity representation as needed.
 ///
-/// See PRIORITY_ACCUMULATOR_PLAN.md III.7 — the canonical accumulator rules.
+/// See `PRIORITY_ACCUMULATOR_PLAN.md` III.7 — the canonical accumulator rules.
 pub trait OutgoingPriorityHook {
     /// Advance the per-user accumulator for `entity` by its effective gain
     /// (`global.gain × user.gain`, defaults 1.0) and return the new accumulated
@@ -37,6 +37,7 @@ pub struct GlobalPriorityState<E: Copy + Eq + Hash> {
 
 impl<E: Copy + Eq + Hash> GlobalPriorityState<E> {
     /// Creates an empty `GlobalPriorityState`.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             entries: HashMap::new(),
@@ -86,6 +87,7 @@ pub struct UserPriorityState<E: Copy + Eq + Hash> {
 
 impl<E: Copy + Eq + Hash> UserPriorityState<E> {
     /// Creates an empty `UserPriorityState`.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             entries: HashMap::new(),
@@ -122,8 +124,8 @@ impl<E: Copy + Eq + Hash> UserPriorityState<E> {
     /// Adds `gain` to the entity's accumulator (lazy-creating the entry) and
     /// returns the new accumulated value.
     ///
-    /// This is the canonical "accumulator += effective_gain per tick" rule
-    /// from PRIORITY_ACCUMULATOR_PLAN.md III.7.1.
+    /// This is the canonical "accumulator += `effective_gain` per tick" rule
+    /// from `PRIORITY_ACCUMULATOR_PLAN.md` III.7.1.
     pub fn advance(&mut self, entity: E, gain: f32) -> f32 {
         let entry = self.entries.entry(entity).or_default();
         entry.accumulated += gain;
@@ -132,10 +134,7 @@ impl<E: Copy + Eq + Hash> UserPriorityState<E> {
 
     /// Read accumulator without advancing.
     pub fn accumulated(&self, entity: &E) -> f32 {
-        self.entries
-            .get(entity)
-            .map(|d| d.accumulated)
-            .unwrap_or(0.0)
+        self.entries.get(entity).map_or(0.0, |d| d.accumulated)
     }
 
     /// task #13 (naia-server pipelined coord→send priority publish): merge this
@@ -143,7 +142,7 @@ impl<E: Copy + Eq + Hash> UserPriorityState<E> {
     /// preserving `target`'s accumulators, then clear self.
     ///
     /// For each staged entity:
-    /// - if its gain was EXPLICITLY written this tick (`gain_dirty` — set_gain or
+    /// - if its gain was EXPLICITLY written this tick (`gain_dirty` — `set_gain` or
     ///   reset, NOT a boost-only touch), copy `gain_override` to `target` (this
     ///   replays both an explicit set AND a `reset()`-to-default);
     /// - always ADD the staged boost delta (`accumulated`) to `target`'s live
@@ -153,7 +152,7 @@ impl<E: Copy + Eq + Hash> UserPriorityState<E> {
     /// API does by writing the live map directly between `receive` and `send` —
     /// byte-identical by construction (the accumulator advance/reset stays
     /// entirely send-side; eviction parity holds because the staging never
-    /// persists across ticks). See MISSION_PIPELINE_API_BOUNDARY task #13.
+    /// persists across ticks). See `MISSION_PIPELINE_API_BOUNDARY` task #13.
     pub fn drain_merge_into(&mut self, target: &mut UserPriorityState<E>) {
         for (entity, data) in self.entries.drain() {
             let t = target.entries.entry(entity).or_default();
@@ -165,6 +164,7 @@ impl<E: Copy + Eq + Hash> UserPriorityState<E> {
     }
 
     /// `true` if this layer has no entries (used to skip empty staging drains).
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }

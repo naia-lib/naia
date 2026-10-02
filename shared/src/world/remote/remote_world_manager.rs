@@ -50,6 +50,7 @@ pub struct RemoteWorldManager {
 
 impl RemoteWorldManager {
     /// Creates a `RemoteWorldManager` for the given `host_type` side of a connection.
+    #[must_use]
     pub fn new(host_type: HostType) -> Self {
         let delegated_world_opt = if host_type == HostType::Client {
             Some(HashSet::new())
@@ -87,6 +88,7 @@ impl RemoteWorldManager {
     }
 
     /// Returns a shared reference to the entity waitlist.
+    #[must_use]
     pub fn entity_waitlist(&self) -> &RemoteEntityWaitlist {
         self.waitlist.entity_waitlist()
     }
@@ -181,8 +183,7 @@ impl RemoteWorldManager {
         // was processed. In that case, the command is no longer relevant - silently skip.
         let Ok(remote_entity) = converter.global_entity_to_remote_entity(global_entity) else {
             warn!(
-                "send_entity_command: entity {:?} no longer exists (likely out of scope), skipping",
-                global_entity
+                "send_entity_command: entity {global_entity:?} no longer exists (likely out of scope), skipping"
             );
             return;
         };
@@ -200,15 +201,14 @@ impl RemoteWorldManager {
         // was processed. In that case, the command is no longer relevant - silently skip.
         let Ok(remote_entity) = converter.global_entity_to_remote_entity(global_entity) else {
             warn!(
-                "send_auth_command: entity {:?} no longer exists (likely out of scope), skipping",
-                global_entity
+                "send_auth_command: entity {global_entity:?} no longer exists (likely out of scope), skipping"
             );
             return;
         };
         self.remote_engine.send_auth_command(remote_entity, command);
     }
 
-    /// Update authority status in RemoteEntityChannel (used after migration)
+    /// Update authority status in `RemoteEntityChannel` (used after migration)
     pub(crate) fn receive_set_auth_status(
         &mut self,
         remote_entity: RemoteEntity,
@@ -232,11 +232,7 @@ impl RemoteWorldManager {
     /// This forwards to `RemoteWorldWaitlist::despawn_entity`, which forwards
     /// to a stub with an empty body, so the whole call is observably a no-op
     /// and no test can distinguish it from one. Triaged, not missing coverage.
-    pub fn despawn_entity(
-        &mut self,
-        _local_entity_map: &mut LocalEntityMap,
-        entity: RemoteEntity,
-    ) {
+    pub fn despawn_entity(&mut self, _local_entity_map: &mut LocalEntityMap, entity: RemoteEntity) {
         self.waitlist.despawn_entity(entity);
     }
 
@@ -722,6 +718,7 @@ impl RemoteWorldManager {
     }
 
     /// Returns the current authority status for `entity`'s remote channel, if one exists.
+    #[must_use]
     pub fn get_entity_auth_status(&self, entity: RemoteEntity) -> Option<EntityAuthStatus> {
         self.remote_engine.get_entity_auth_status(&entity)
     }

@@ -392,19 +392,19 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
             return;
         };
         let accessor = global_world_manager.get_entity_auth_accessor(global_entity);
-        let mutator_opt =
-            if global_world_manager.entity_needs_mutator_for_delegation(global_entity) {
-                let diff_mask_size = component.diff_mask_size();
-                let mutator = global_world_manager.register_component(
-                    component_kinds,
-                    global_entity,
-                    component_kind,
-                    diff_mask_size,
-                );
-                Some(mutator)
-            } else {
-                None
-            };
+        let mutator_opt = if global_world_manager.entity_needs_mutator_for_delegation(global_entity)
+        {
+            let diff_mask_size = component.diff_mask_size();
+            let mutator = global_world_manager.register_component(
+                component_kinds,
+                global_entity,
+                component_kind,
+                diff_mask_size,
+            );
+            Some(mutator)
+        } else {
+            None
+        };
         component.enable_delegation(&accessor, mutator_opt.as_ref());
     }
 

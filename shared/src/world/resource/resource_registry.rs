@@ -39,12 +39,13 @@ impl std::error::Error for ResourceAlreadyExists {}
 
 impl ResourceRegistry {
     /// Creates an empty `ResourceRegistry`.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Insert a (TypeId, GlobalEntity) pair. Fails with
-    /// `ResourceAlreadyExists` if the TypeId is already registered (the
+    /// Insert a (`TypeId`, `GlobalEntity`) pair. Fails with
+    /// `ResourceAlreadyExists` if the `TypeId` is already registered (the
     /// `commands.replicate_resource` API surface treats this as an error
     /// per D14/risk-register).
     pub fn insert<R: 'static>(
@@ -60,8 +61,8 @@ impl ResourceRegistry {
         Ok(())
     }
 
-    /// Receiver-side variant: insert by raw TypeId (the receiver derives
-    /// the TypeId from the incoming `ComponentKind` via the
+    /// Receiver-side variant: insert by raw `TypeId` (the receiver derives
+    /// the `TypeId` from the incoming `ComponentKind` via the
     /// `ResourceKinds` registration). Idempotent if the same pair is
     /// already present (e.g. spawn-after-spawn replay), returns error
     /// otherwise.
@@ -98,31 +99,37 @@ impl ResourceRegistry {
     }
 
     /// O(1): "where is the hidden entity for resource `R`?"
+    #[must_use]
     pub fn entity_for<R: 'static>(&self) -> Option<GlobalEntity> {
         self.by_type.get(&TypeId::of::<R>()).copied()
     }
 
     /// O(1) raw-TypeId variant.
+    #[must_use]
     pub fn entity_for_raw(&self, type_id: &TypeId) -> Option<GlobalEntity> {
         self.by_type.get(type_id).copied()
     }
 
     /// O(1): "is this entity a resource entity, and if so which type?"
+    #[must_use]
     pub fn type_for(&self, entity: GlobalEntity) -> Option<TypeId> {
         self.by_entity.get(&entity).copied()
     }
 
     /// O(1): "is this entity a resource entity?"
+    #[must_use]
     pub fn is_resource_entity(&self, entity: GlobalEntity) -> bool {
         self.by_entity.contains_key(&entity)
     }
 
     /// Returns the number of registered resources.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.by_type.len()
     }
 
     /// Returns `true` if no resources have been registered.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.by_type.is_empty()
     }

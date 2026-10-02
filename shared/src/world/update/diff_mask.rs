@@ -7,14 +7,16 @@ pub struct DiffMask {
 }
 
 impl DiffMask {
-    /// Create a new DiffMask with a given number of bytes
+    /// Create a new `DiffMask` with a given number of bytes
+    #[must_use]
     pub fn new(bytes: u8) -> DiffMask {
         DiffMask {
             mask: vec![0; bytes as usize],
         }
     }
 
-    /// Gets the bit at the specified position within the DiffMask
+    /// Gets the bit at the specified position within the `DiffMask`
+    #[must_use]
     pub fn bit(&self, index: u8) -> Option<bool> {
         if let Some(byte) = self.mask.get((index / 8) as usize) {
             let adjusted_index = index % 8;
@@ -24,7 +26,7 @@ impl DiffMask {
         None
     }
 
-    /// Sets the bit at the specified position within the DiffMask
+    /// Sets the bit at the specified position within the `DiffMask`
     pub fn set_bit(&mut self, index: u8, value: bool) {
         if let Some(byte) = self.mask.get_mut((index / 8) as usize) {
             let adjusted_index = index % 8;
@@ -37,15 +39,16 @@ impl DiffMask {
         }
     }
 
-    /// Clears the whole DiffMask
+    /// Clears the whole `DiffMask`
     pub fn clear(&mut self) {
         let size = self.mask.len();
         self.mask = vec![0; size];
     }
 
-    /// Returns whether any bit has been set in the DiffMask
+    /// Returns whether any bit has been set in the `DiffMask`
+    #[must_use]
     pub fn is_clear(&self) -> bool {
-        for byte in self.mask.iter() {
+        for byte in &self.mask {
             if *byte != 0 {
                 return false;
             }
@@ -53,17 +56,19 @@ impl DiffMask {
         true
     }
 
-    /// Get the number of bytes required to represent the DiffMask
+    /// Get the number of bytes required to represent the `DiffMask`
+    #[must_use]
     pub fn byte_number(&self) -> u8 {
         self.mask.len() as u8
     }
 
-    /// Gets a byte at the specified index in the DiffMask
+    /// Gets a byte at the specified index in the `DiffMask`
+    #[must_use]
     pub fn byte(&self, index: usize) -> u8 {
         self.mask[index]
     }
 
-    /// Performs a NAND operation on the DiffMask, with another DiffMask
+    /// Performs a NAND operation on the `DiffMask`, with another `DiffMask`
     pub fn nand(&mut self, other: &DiffMask) {
         // NOTE: this is not actually a NAND operation, but a "AND NOT" operation
 
@@ -80,7 +85,7 @@ impl DiffMask {
         }
     }
 
-    /// Performs an OR operation on the DiffMask, with another DiffMask
+    /// Performs an OR operation on the `DiffMask`, with another `DiffMask`
     pub fn or(&mut self, other: &DiffMask) {
         //if other diff mask has different capacity, do nothing
         if other.byte_number() != self.byte_number() {
@@ -95,20 +100,21 @@ impl DiffMask {
         }
     }
 
-    /// Packs the mask into a u64 for use as a HashMap key in the cached update store.
+    /// Packs the mask into a u64 for use as a `HashMap` key in the cached update store.
     /// Returns None for masks > 8 bytes (unreachable for all current registered components).
+    #[must_use]
     pub fn as_key(&self) -> Option<u64> {
         if self.mask.len() > 8 {
             return None;
         }
         let mut key = 0u64;
         for (i, &byte) in self.mask.iter().enumerate() {
-            key |= (byte as u64) << (i * 8);
+            key |= u64::from(byte) << (i * 8);
         }
         Some(key)
     }
 
-    /// Copies the DiffMask into another DiffMask
+    /// Copies the `DiffMask` into another `DiffMask`
     pub fn copy_contents(&mut self, other: &DiffMask) {
         //if other diff mask has different capacity, do nothing
         if other.byte_number() != self.byte_number() {
@@ -136,7 +142,7 @@ impl fmt::Display for DiffMask {
                 }
             }
         }
-        write!(f, "{}", out_string)
+        write!(f, "{out_string}")
     }
 }
 

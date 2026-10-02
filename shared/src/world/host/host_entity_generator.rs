@@ -34,13 +34,14 @@ pub struct HostEntityGenerator {
 
 impl HostEntityGenerator {
     /// Creates a generator bound to `user_key` with fresh entity and static-entity ID pools.
+    #[must_use]
     pub fn new(user_key: u64) -> Self {
         Self {
             user_key,
-            generator: KeyGenerator::new(Duration::from_secs(60)),
-            static_generator: KeyGenerator::new(Duration::from_secs(60)),
+            generator: KeyGenerator::new(Duration::from_mins(1)),
+            static_generator: KeyGenerator::new(Duration::from_mins(1)),
             reserved_host_entities: HashMap::new(),
-            reserved_host_entity_ttl: Duration::from_secs(60),
+            reserved_host_entity_ttl: Duration::from_mins(1),
             reserved_host_entities_ttls: VecDeque::new(),
         }
     }
@@ -55,9 +56,10 @@ impl HostEntityGenerator {
     ) -> HostEntity {
         self.process_reserved_entity_timeouts();
 
-        if self.reserved_host_entities.contains_key(&global_entity) {
-            panic!("Global Entity has already reserved Local Entity!");
-        }
+        assert!(
+            !self.reserved_host_entities.contains_key(&global_entity),
+            "Global Entity has already reserved Local Entity!"
+        );
         let host_entity = self.generate_host_entity();
         entity_map.insert_with_host_entity(global_entity, host_entity);
         self.reserved_host_entities
@@ -164,6 +166,7 @@ impl HostEntityGenerator {
     // Misc
 
     /// Returns the user key this generator was created for.
+    #[must_use]
     pub fn get_user_key(&self) -> &u64 {
         &self.user_key
     }

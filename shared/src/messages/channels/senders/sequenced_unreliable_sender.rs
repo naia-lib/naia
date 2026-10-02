@@ -19,7 +19,7 @@ use crate::{
 };
 
 pub struct SequencedUnreliableSender {
-    /// Buffer of the next messages to send along with their MessageKind
+    /// Buffer of the next messages to send along with their `MessageKind`
     outgoing_messages: VecDeque<(MessageIndex, MessageContainer)>,
     /// Next message id to use (not yet used in the buffer)
     next_send_message_index: MessageIndex,

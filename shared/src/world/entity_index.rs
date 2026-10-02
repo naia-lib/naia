@@ -11,7 +11,7 @@
 ///
 /// **Wire-format independent.** This index never crosses the wire; it's
 /// purely an in-memory shortcut so dirty queues and (Stage B) bit-vec
-/// membership tests can use Vec-indexed operations instead of HashMap
+/// membership tests can use Vec-indexed operations instead of `HashMap`
 /// probes.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct LocalEntityIndex(pub u32);

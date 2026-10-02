@@ -38,7 +38,7 @@ impl<T> SequenceList<T> {
         }
     }
 
-    pub fn get_mut_scan_from_back<'a>(&'a mut self, id: u16) -> Option<&'a mut T> {
+    pub fn get_mut_scan_from_back(&mut self, id: u16) -> Option<&mut T> {
         let mut index = self.list.len();
 
         loop {
@@ -77,9 +77,7 @@ impl<T> SequenceList<T> {
             index -= 1;
 
             let (old_id, _) = self.list.get(index).unwrap();
-            if *old_id == id {
-                panic!("duplicates are not allowed");
-            }
+            assert!(*old_id != id, "duplicates are not allowed");
             if sequence_less_than(*old_id, id) {
                 self.list.insert(index + 1, (id, item));
                 return;

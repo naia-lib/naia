@@ -216,11 +216,7 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         unimplemented!()
     }
 
-    fn component_unpublish(
-        &mut self,
-        _world_entity: &EmptyEntity,
-        _component_kind: ComponentKind,
-    ) {
+    fn component_unpublish(&mut self, _world_entity: &EmptyEntity, _component_kind: ComponentKind) {
         unimplemented!()
     }
 

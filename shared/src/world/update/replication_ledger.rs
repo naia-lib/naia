@@ -8,7 +8,7 @@ use crate::world::update::user_diff_handler::UserDiffHandler;
 use crate::{ComponentKind, DiffMask, GlobalEntity, GlobalEntityIndex, GlobalWorldManagerType};
 
 /// Per-user replication diff-state, lifted out of the `&mut`-owned send
-/// connection into an `Arc`-shareable, lock-free structure (MISSION_TICK_FLOOR
+/// connection into an `Arc`-shareable, lock-free structure (`MISSION_TICK_FLOOR`
 /// Lever 3 / L3 send-state seam).
 ///
 /// Wraps the per-user [`UserDiffHandler`] (the `MutReceiver` container holding
@@ -128,11 +128,7 @@ impl ReplicationLedger {
         self.read().clear_diff_mask_fast(entity_idx, kind_bit);
     }
 
-    pub fn diff_mask_is_clear(
-        &self,
-        entity: GlobalEntity,
-        component_kind: ComponentKind,
-    ) -> bool {
+    pub fn diff_mask_is_clear(&self, entity: GlobalEntity, component_kind: ComponentKind) -> bool {
         self.read().diff_mask_is_clear(entity, component_kind)
     }
 

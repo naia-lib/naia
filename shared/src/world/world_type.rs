@@ -15,9 +15,9 @@ use crate::{
     ComponentKinds, EntityAndGlobalEntityConverter, GlobalWorldManagerType, ReplicatedComponent,
 };
 
-/// Structures that implement the WorldMutType trait will be able to be loaded
+/// Structures that implement the `WorldMutType` trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep
-/// the WorldMutType in-sync with it's own Entities/Components
+/// the `WorldMutType` in-sync with it's own Entities/Components
 pub trait WorldRefType<E> {
     // Entities
     /// check whether entity exists
@@ -43,9 +43,9 @@ pub trait WorldRefType<E> {
     ) -> Option<ReplicaDynRefWrapper<'a>>;
 }
 
-/// Structures that implement the WorldMutType trait will be able to be loaded
+/// Structures that implement the `WorldMutType` trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep
-/// the WorldMutType in-sync with it's own Entities/Components
+/// the `WorldMutType` in-sync with it's own Entities/Components
 pub trait WorldMutType<E>: WorldRefType<E> {
     // Entities
     /// spawn an entity

@@ -3,7 +3,7 @@
 /// 0 is reserved as the invalid sentinel (`INVALID`). Valid indices start at 1.
 /// Shared across all connections — the same entity has the same index for every user.
 /// Never appears on the wire; purely an in-memory shortcut for O(1) array access
-/// instead of HashMap probe.
+/// instead of `HashMap` probe.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct GlobalEntityIndex(pub u32);
 
@@ -12,11 +12,13 @@ impl GlobalEntityIndex {
     pub const INVALID: Self = Self(0);
 
     /// Returns `true` if this index is not the `INVALID` sentinel.
+    #[must_use]
     pub fn is_valid(self) -> bool {
         self.0 != 0
     }
 
     /// Converts this index to a `usize` for use as an array slot.
+    #[must_use]
     pub fn as_usize(self) -> usize {
         self.0 as usize
     }

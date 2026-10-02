@@ -100,9 +100,8 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
                 (start_message_index, end_message_index, full_message),
             );
             return;
-        } else {
-            trace!("Received message {:?}!", full_message.name());
         }
+        trace!("Received message {:?}!", full_message.name());
 
         let incoming_messages =
             self.arranger
@@ -132,7 +131,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
                 local_world_manager,
                 received_message_id,
                 received_message,
-            )
+            );
         }
     }
 
@@ -158,10 +157,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
                     // Malformed request/response from remote — discard and continue rather
                     // than crashing the connection. This can arise from a buggy peer or
                     // deliberate fuzzing; the connection stays up.
-                    warn!(
-                        "Discarding malformed request/response message ({}); dropping packet.",
-                        e
-                    );
+                    warn!("Discarding malformed request/response message ({e}); dropping packet.");
                     return;
                 }
             };

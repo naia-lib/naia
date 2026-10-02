@@ -165,9 +165,7 @@ impl Connection {
             )?;
         }
         if packets_read > 0 {
-            debug!(
-                "[CLIENT_CONN] read_buffered_packets: Read {packets_read} packets"
-            );
+            debug!("[CLIENT_CONN] read_buffered_packets: Read {packets_read} packets");
         }
 
         Ok(())

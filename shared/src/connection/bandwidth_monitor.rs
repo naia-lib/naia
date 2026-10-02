@@ -10,6 +10,7 @@ pub struct BandwidthMonitor {
 
 impl BandwidthMonitor {
     /// Creates a monitor with the given measurement window duration.
+    #[must_use]
     pub fn new(bandwidth_measure_duration: Duration) -> Self {
         Self {
             time_queue: ExpiringTimeQueue::new(bandwidth_measure_duration),
@@ -35,8 +36,9 @@ impl BandwidthMonitor {
     /// Returns the current bandwidth in kbps.
     /// This is a pure read-only query - call `tick()` during the update phase
     /// to ensure expired packets are cleared.
+    #[must_use]
     pub fn bandwidth(&self) -> f32 {
-        self.total_bytes as f32 * self.to_kbps_factor
+        f32::from(self.total_bytes) * self.to_kbps_factor
     }
 
     fn clear_expired_packets(&mut self) {

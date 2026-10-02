@@ -69,10 +69,10 @@ impl WorldReader {
         Ok(())
     }
 
-    /// Read the bits corresponding to the EntityMessage and adds the [`EntityMessage`]
+    /// Read the bits corresponding to the `EntityMessage` and adds the [`EntityMessage`]
     /// to an internal buffer.
     ///
-    /// We can use a UnorderedReliableReceiver buffer because the messages have already been
+    /// We can use a `UnorderedReliableReceiver` buffer because the messages have already been
     /// ordered by the client's jitter buffer
     fn read_message(
         world_manager: &mut LocalWorldManager,

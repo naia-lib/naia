@@ -96,6 +96,7 @@ impl LocalEntityAndGlobalEntityConverter for LocalEntityMap {
 
 impl LocalEntityMap {
     /// Creates an empty map for the given `host_type` side of a connection.
+    #[must_use]
     pub fn new(host_type: HostType) -> Self {
         Self {
             host_type,
@@ -107,6 +108,7 @@ impl LocalEntityMap {
     }
 
     /// Returns whether this map belongs to a server or client side.
+    #[must_use]
     pub fn host_type(&self) -> HostType {
         self.host_type
     }
@@ -117,15 +119,17 @@ impl LocalEntityMap {
         global_entity: GlobalEntity,
         host_entity: HostEntity,
     ) {
-        if self.global_to_local.contains_key(&global_entity) {
-            panic!(
-                "Cannot overwrite inserted global entity: {:?}",
-                global_entity
-            );
-        }
-        if self.host_to_global.contains_key(&host_entity) {
-            panic!("Cannot overwrite inserted host entity {:?}", host_entity);
-        }
+        assert!(
+            !self.global_to_local.contains_key(&global_entity),
+            "Cannot overwrite inserted global entity: {:?}",
+            global_entity
+        );
+
+        assert!(
+            !self.host_to_global.contains_key(&host_entity),
+            "Cannot overwrite inserted host entity {:?}",
+            host_entity
+        );
 
         self.global_to_local.insert(
             global_entity,
@@ -141,18 +145,17 @@ impl LocalEntityMap {
         global_entity: GlobalEntity,
         host_entity: HostEntity,
     ) {
-        if self.global_to_local.contains_key(&global_entity) {
-            panic!(
-                "Cannot overwrite inserted global entity: {:?}",
-                global_entity
-            );
-        }
-        if self.host_to_global.contains_key(&host_entity) {
-            panic!(
-                "Cannot overwrite inserted static host entity {:?}",
-                host_entity
-            );
-        }
+        assert!(
+            !self.global_to_local.contains_key(&global_entity),
+            "Cannot overwrite inserted global entity: {:?}",
+            global_entity
+        );
+
+        assert!(
+            !self.host_to_global.contains_key(&host_entity),
+            "Cannot overwrite inserted static host entity {:?}",
+            host_entity
+        );
 
         self.global_to_local.insert(
             global_entity,
@@ -168,18 +171,17 @@ impl LocalEntityMap {
         global_entity: GlobalEntity,
         remote_entity: RemoteEntity,
     ) {
-        if self.global_to_local.contains_key(&global_entity) {
-            panic!(
-                "Cannot overwrite inserted global entity: {:?}",
-                global_entity
-            );
-        }
-        if self.remote_to_global.contains_key(&remote_entity) {
-            panic!(
-                "Cannot overwrite inserted remote entity {:?}",
-                remote_entity
-            );
-        }
+        assert!(
+            !self.global_to_local.contains_key(&global_entity),
+            "Cannot overwrite inserted global entity: {:?}",
+            global_entity
+        );
+
+        assert!(
+            !self.remote_to_global.contains_key(&remote_entity),
+            "Cannot overwrite inserted remote entity {:?}",
+            remote_entity
+        );
 
         self.global_to_local.insert(
             global_entity,
@@ -189,11 +191,13 @@ impl LocalEntityMap {
     }
 
     /// Returns the [`GlobalEntity`] mapped from `remote_entity`, if one exists.
+    #[must_use]
     pub fn global_entity_from_remote(&self, remote_entity: RemoteEntity) -> Option<&GlobalEntity> {
         self.remote_to_global.get(&remote_entity)
     }
 
     /// Returns the [`GlobalEntity`] mapped from `host_entity`, if one exists.
+    #[must_use]
     pub fn global_entity_from_host(&self, host_entity: HostEntity) -> Option<&GlobalEntity> {
         self.host_to_global.get(&host_entity)
     }
@@ -219,17 +223,14 @@ impl LocalEntityMap {
     pub(crate) fn remove_by_remote_entity(&mut self, remote_entity: RemoteEntity) -> GlobalEntity {
         let global_entity = self.remote_to_global.remove(&remote_entity);
         let Some(global_entity) = global_entity else {
-            panic!(
-                "Attempting to remove remote entity which does not exist: {:?}",
-                remote_entity
-            );
+            panic!("Attempting to remove remote entity which does not exist: {remote_entity:?}");
         };
         self.remove_by_global_entity(global_entity);
         global_entity
     }
 
     /// Remove remote mapping if it exists (idempotent, used during migration cleanup)
-    /// This ensures that after migration, global_entity_to_remote_entity() will fail
+    /// This ensures that after migration, `global_entity_to_remote_entity()` will fail
     pub(crate) fn remove_remote_mapping_if_exists(&mut self, remote_entity: RemoteEntity) {
         // Remove from remote_to_global map - this is the key that global_entity_to_remote_entity uses
         // via remote_entity_to_global_entity lookup, but more importantly, we need to ensure
@@ -242,16 +243,19 @@ impl LocalEntityMap {
     }
 
     /// Returns `true` if `global_entity` is currently registered in the map.
+    #[must_use]
     pub fn contains_global_entity(&self, global_entity: GlobalEntity) -> bool {
         self.global_to_local.contains_key(&global_entity)
     }
 
     /// Returns `true` if `host_entity` is currently registered in the map.
+    #[must_use]
     pub fn contains_host_entity(&self, host_entity: HostEntity) -> bool {
         self.host_to_global.contains_key(&host_entity)
     }
 
     /// Returns `true` if `remote_entity` is currently registered in the map.
+    #[must_use]
     pub fn contains_remote_entity(&self, remote_entity: RemoteEntity) -> bool {
         self.remote_to_global.contains_key(&remote_entity)
     }
@@ -276,6 +280,7 @@ impl LocalEntityMap {
     // }
 
     /// Returns `self` as a read-only [`LocalEntityAndGlobalEntityConverter`] reference.
+    #[must_use]
     pub fn entity_converter(&self) -> &dyn LocalEntityAndGlobalEntityConverter {
         self
     }
@@ -293,8 +298,7 @@ impl LocalEntityMap {
     pub(crate) fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity {
         self.entity_redirects
             .get(&entity)
-            .map(|(new_entity, _)| *new_entity)
-            .unwrap_or(entity)
+            .map_or(entity, |(new_entity, _)| *new_entity)
     }
 
     pub(crate) fn cleanup_old_redirects(&mut self, now: &Instant, ttl_seconds: u64) {

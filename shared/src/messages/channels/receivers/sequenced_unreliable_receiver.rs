@@ -53,9 +53,8 @@ impl SequencedUnreliableReceiver {
                 (message_index, message),
             );
             return;
-        } else {
-            trace!("Received message {:?}!", message.name());
         }
+        trace!("Received message {:?}!", message.name());
 
         self.arrange_message(message_index, message);
     }

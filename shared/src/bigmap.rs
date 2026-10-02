@@ -31,6 +31,7 @@ impl<K: BigMapKey, V> Default for BigMap<K, V> {
 
 impl<K: BigMapKey, V> BigMap<K, V> {
     /// Creates an empty `BigMap`.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             inner: HashMap::new(),
@@ -52,12 +53,11 @@ impl<K: BigMapKey, V> BigMap<K, V> {
     /// Inserts a value and returns its newly generated key. Panics on `u64` overflow.
     pub fn insert(&mut self, value: V) -> K {
         // [entity-replication-11] GlobalEntity rollover is a terminal error
-        if self.current_index == u64::MAX {
-            panic!(
-                "BigMap counter overflow: cannot allocate new key (current_index = u64::MAX). \
-                 This is a terminal error per entity-replication-11 spec."
-            );
-        }
+        assert!(
+            self.current_index != u64::MAX,
+            "BigMap counter overflow: cannot allocate new key (current_index = u64::MAX). \
+             This is a terminal error per entity-replication-11 spec."
+        );
 
         let old_index = self.current_index;
         self.current_index = self.current_index.wrapping_add(1);
@@ -96,11 +96,13 @@ impl<K: BigMapKey, V> BigMap<K, V> {
     }
 
     /// Returns the number of entries currently in the map.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.inner.len()
     }
 
     /// Returns `true` if the map contains no entries.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }

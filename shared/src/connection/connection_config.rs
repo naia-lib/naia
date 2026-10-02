@@ -23,9 +23,10 @@ pub struct ConnectionConfig {
 }
 
 impl ConnectionConfig {
-    /// Creates a new ConnectionConfig, used to initialize a Connection.
+    /// Creates a new `ConnectionConfig`, used to initialize a Connection.
     /// Uses default `BandwidthConfig`; set the `.bandwidth` field directly
     /// after construction if a non-default budget is required.
+    #[must_use]
     pub fn new(
         disconnection_timeout_duration: Duration,
         heartbeat_interval: Duration,

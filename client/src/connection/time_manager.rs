@@ -350,8 +350,16 @@ impl TimeManager {
         let receiving_incremented = self.client_receiving_tick != prev_client_receiving_tick;
         let sending_incremented = self.client_sending_tick != prev_client_sending_tick;
 
-        let output_receiving = if receiving_incremented { Some((prev_client_receiving_tick, self.client_receiving_tick)) } else { None };
-        let output_sending = if sending_incremented { Some((prev_client_sending_tick, self.client_sending_tick)) } else { None };
+        let output_receiving = if receiving_incremented {
+            Some((prev_client_receiving_tick, self.client_receiving_tick))
+        } else {
+            None
+        };
+        let output_sending = if sending_incremented {
+            Some((prev_client_sending_tick, self.client_sending_tick))
+        } else {
+            None
+        };
 
         (output_receiving, output_sending)
     }

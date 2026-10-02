@@ -34,6 +34,7 @@ pub enum HostType {
 
 impl HostType {
     /// Returns the opposite host type.
+    #[must_use]
     pub fn invert(self) -> Self {
         match self {
             HostType::Server => HostType::Client,

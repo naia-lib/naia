@@ -19,6 +19,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Default for GlobalEntityMap<E> {
 
 impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntityMap<E> {
     /// Creates an empty map with no entity registrations.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             entity_to_global_map: HashMap::new(),
@@ -28,6 +29,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntityMap<E> {
     }
 
     /// Returns the number of world entities currently registered in the map.
+    #[must_use]
     pub fn entity_count(&self) -> usize {
         self.entity_to_global_map.len()
     }
@@ -95,8 +97,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntitySpawner<E> for GlobalEntityM
                 // global entity was reserved, update the mapping
                 let Some(entry) = self.global_to_entity_map.get_mut(&global_entity) else {
                     panic!(
-                        "Global entity {:?} does not exist in the global to entity map",
-                        global_entity
+                        "Global entity {global_entity:?} does not exist in the global to entity map"
                     );
                 };
                 *entry = Some(world_entity);
@@ -108,7 +109,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntitySpawner<E> for GlobalEntityM
         } else {
             // local spawn, no remote entity
             global_entity_opt = None;
-        };
+        }
 
         let global_entity = if let Some(global_entity) = global_entity_opt {
             global_entity
@@ -123,12 +124,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntitySpawner<E> for GlobalEntityM
     }
 
     fn reserve_global_entity(&mut self, remote_entity: RemoteEntity) -> GlobalEntity {
-        if self.reserved_global_entities.contains_key(&remote_entity) {
-            panic!(
-                "Remote entity {:?} already has a reserved global entity",
-                remote_entity
-            );
-        }
+        assert!(
+            !self.reserved_global_entities.contains_key(&remote_entity),
+            "Remote entity {:?} already has a reserved global entity",
+            remote_entity
+        );
 
         let global_entity = self.global_to_entity_map.insert(None);
         self.reserved_global_entities
@@ -144,10 +144,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntitySpawner<E> for GlobalEntityM
 
     fn despawn_by_global(&mut self, global_entity: GlobalEntity) {
         let Some(Some(world_entity)) = self.global_to_entity_map.remove(&global_entity) else {
-            panic!(
-                "Global entity {:?} does not exist in the global to entity map",
-                global_entity
-            );
+            panic!("Global entity {global_entity:?} does not exist in the global to entity map");
         };
         self.entity_to_global_map.remove(&world_entity);
     }

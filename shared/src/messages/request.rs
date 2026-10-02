@@ -28,6 +28,7 @@ pub struct ResponseSendKey<S: Response> {
 
 impl<S: Response> ResponseSendKey<S> {
     /// Creates a `ResponseSendKey` tied to the given global response ID.
+    #[must_use]
     pub fn new(id: GlobalResponseId) -> Self {
         Self {
             response_id: id,
@@ -36,6 +37,7 @@ impl<S: Response> ResponseSendKey<S> {
     }
 
     /// Returns the global response ID carried by this key.
+    #[must_use]
     pub fn response_id(&self) -> GlobalResponseId {
         self.response_id
     }
@@ -81,6 +83,7 @@ pub struct ResponseReceiveKey<S: Response> {
 
 impl<S: Response> ResponseReceiveKey<S> {
     /// Creates a `ResponseReceiveKey` tied to the given global request ID.
+    #[must_use]
     pub fn new(request_id: GlobalRequestId) -> Self {
         Self {
             request_id,
@@ -89,6 +92,7 @@ impl<S: Response> ResponseReceiveKey<S> {
     }
 
     /// Returns the global request ID carried by this key.
+    #[must_use]
     pub fn request_id(&self) -> GlobalRequestId {
         self.request_id
     }
@@ -132,6 +136,7 @@ pub struct GlobalRequestId {
 
 impl GlobalRequestId {
     /// Creates a `GlobalRequestId` from a raw u64.
+    #[must_use]
     pub fn new(id: u64) -> Self {
         Self { id }
     }
@@ -145,6 +150,7 @@ pub struct GlobalResponseId {
 
 impl GlobalResponseId {
     /// Creates a `GlobalResponseId` from a raw u64.
+    #[must_use]
     pub fn new(id: u64) -> Self {
         Self { id }
     }
