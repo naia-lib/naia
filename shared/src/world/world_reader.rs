@@ -57,7 +57,13 @@ impl WorldReader {
                 break;
             }
 
-            Self::read_message(world_manager, component_kinds, tick, reader, &mut last_read_id)?;
+            Self::read_message(
+                world_manager,
+                component_kinds,
+                tick,
+                reader,
+                &mut last_read_id,
+            )?;
         }
 
         Ok(())
@@ -908,7 +914,7 @@ mod world_reader_tests {
         let inserted: HashSet<ComponentKind> = events
             .iter()
             .filter_map(|event| match event {
-                EntityEvent::InsertComponent(_, kind) => Some(*kind),
+                EntityEvent::InsertComponent(_, _, kind) => Some(*kind),
                 _ => None,
             })
             .collect();
@@ -941,7 +947,7 @@ mod world_reader_tests {
         assert!(
             !events
                 .iter()
-                .any(|event| matches!(event, EntityEvent::InsertComponent(_, _))),
+                .any(|event| matches!(event, EntityEvent::InsertComponent(_, _, _))),
             "a zero component count should read no components at all"
         );
     }
@@ -963,7 +969,7 @@ mod world_reader_tests {
         assert!(
             events.iter().any(|event| matches!(
                 event,
-                EntityEvent::InsertComponent(_, kind) if *kind == ComponentKind::of::<Wraith>()
+                EntityEvent::InsertComponent(_, _, kind) if *kind == ComponentKind::of::<Wraith>()
             )),
             "the component carried by InsertComponent should reach the world, \
              not merely its kind tag"
@@ -1005,7 +1011,7 @@ mod world_reader_tests {
         assert!(
             events
                 .iter()
-                .any(|event| matches!(event, EntityEvent::RemoveComponent(_, _))),
+                .any(|event| matches!(event, EntityEvent::RemoveComponent(_, _, _))),
             "a RemoveComponent on the wire should surface as a RemoveComponent event"
         );
     }

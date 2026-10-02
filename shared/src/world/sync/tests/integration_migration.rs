@@ -176,10 +176,10 @@ fn migration_with_buffered_operations() {
     let vel_kind = component_kind::<Velocity>();
 
     // Add buffered operations (out of order)
-    remote_channel.receive_message(5, EntityMessage::<()>::InsertComponent((), vel_kind));
-    remote_channel.receive_message(3, EntityMessage::<()>::InsertComponent((), pos_kind));
-    remote_channel.receive_message(1, EntityMessage::<()>::Spawn(()));
-    remote_channel.receive_message(4, EntityMessage::<()>::RemoveComponent((), pos_kind));
+    remote_channel.receive_message(5, 5, EntityMessage::<()>::InsertComponent((), vel_kind));
+    remote_channel.receive_message(3, 3, EntityMessage::<()>::InsertComponent((), pos_kind));
+    remote_channel.receive_message(1, 1, EntityMessage::<()>::Spawn(()));
+    remote_channel.receive_message(4, 4, EntityMessage::<()>::RemoveComponent((), pos_kind));
 
     // MIGRATION: Force drain all buffers
     remote_channel.force_drain_all_buffers();
@@ -243,8 +243,12 @@ fn migration_memory_efficiency() {
 
     // Add many operations
     for i in 1..=100 {
-        remote_channel.receive_message(i, EntityMessage::<()>::InsertComponent((), pos_kind));
-        remote_channel.receive_message(i + 100, EntityMessage::<()>::RemoveComponent((), pos_kind));
+        remote_channel.receive_message(i, i, EntityMessage::<()>::InsertComponent((), pos_kind));
+        remote_channel.receive_message(
+            i + 100,
+            i + 100,
+            EntityMessage::<()>::RemoveComponent((), pos_kind),
+        );
     }
 
     // Force drain (this should not leak memory)
@@ -266,10 +270,10 @@ fn concurrent_migration_scenarios() {
     let vel_kind = component_kind::<Velocity>();
 
     // Simulate concurrent operations
-    remote_channel.receive_message(1, EntityMessage::<()>::Spawn(()));
-    remote_channel.receive_message(2, EntityMessage::<()>::InsertComponent((), pos_kind));
-    remote_channel.receive_message(3, EntityMessage::<()>::InsertComponent((), vel_kind));
-    remote_channel.receive_message(4, EntityMessage::<()>::RemoveComponent((), pos_kind));
+    remote_channel.receive_message(1, 1, EntityMessage::<()>::Spawn(()));
+    remote_channel.receive_message(2, 2, EntityMessage::<()>::InsertComponent((), pos_kind));
+    remote_channel.receive_message(3, 3, EntityMessage::<()>::InsertComponent((), vel_kind));
+    remote_channel.receive_message(4, 4, EntityMessage::<()>::RemoveComponent((), pos_kind));
 
     // Force drain should handle all operations
     remote_channel.force_drain_all_buffers();

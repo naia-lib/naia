@@ -377,9 +377,9 @@ fn a_buffered_despawn_surfaces_as_one_event_and_noops_are_skipped() {
     let owned = fx.adopt_remote(&mut world, 7);
 
     fx.manager
-        .receiver_buffer_message(0, crate::EntityMessage::Noop);
+        .receiver_buffer_message(0, 0, crate::EntityMessage::Noop);
     fx.manager
-        .receiver_buffer_message(1, crate::EntityMessage::Despawn(owned));
+        .receiver_buffer_message(1, 1, crate::EntityMessage::Despawn(owned));
 
     let events = fx.take_events(&mut world);
     assert_eq!(
@@ -388,7 +388,7 @@ fn a_buffered_despawn_surfaces_as_one_event_and_noops_are_skipped() {
         "the noop should be dropped and the despawn kept"
     );
     assert!(
-        matches!(&events[0], crate::EntityEvent::Despawn(e) if *e == global(7)),
+        matches!(&events[0], crate::EntityEvent::Despawn(_, e) if *e == global(7)),
         "the surviving event should be the despawn"
     );
 }
@@ -412,7 +412,7 @@ fn a_buffered_noop_alone_surfaces_nothing() {
     let _ = fx.adopt_remote(&mut world, 7);
 
     fx.manager
-        .receiver_buffer_message(0, crate::EntityMessage::Noop);
+        .receiver_buffer_message(0, 0, crate::EntityMessage::Noop);
     assert!(
         fx.take_events(&mut world).is_empty(),
         "a noop carries no entity, so skipping it must come before the entity lookup"
@@ -543,6 +543,7 @@ fn a_received_component_is_buffered_and_then_applied_to_the_world() {
     let local_entity = fx.adopt_remote(&mut world, 3);
 
     fx.manager.insert_received_component(
+        1,
         &local_entity,
         &ComponentKind::of::<Wraith>(),
         remote_component(&fx.kinds, &Wraith::new_complete(9)),
@@ -551,15 +552,16 @@ fn a_received_component_is_buffered_and_then_applied_to_the_world() {
     // processed, so the message has to arrive too.
     fx.manager.receiver_buffer_message(
         1,
+        1,
         crate::EntityMessage::InsertComponent(local_entity, ComponentKind::of::<Wraith>()),
     );
     let events = fx.take_events(&mut world);
 
     assert!(
-        events
-            .iter()
-            .any(|e| matches!(e, crate::EntityEvent::InsertComponent(_, kind)
-                if *kind == ComponentKind::of::<Wraith>())),
+        events.iter().any(
+            |e| matches!(e, crate::EntityEvent::InsertComponent(_, _, kind)
+                if *kind == ComponentKind::of::<Wraith>())
+        ),
         "the buffered component should surface as an insert event"
     );
     assert_eq!(

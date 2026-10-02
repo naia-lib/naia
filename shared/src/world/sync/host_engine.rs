@@ -41,7 +41,12 @@ impl HostEngine {
         &self.entity_channels
     }
 
-    pub fn receive_message(&mut self, id: MessageIndex, tick: Tick, msg: EntityMessage<HostEntity>) {
+    pub fn receive_message(
+        &mut self,
+        id: MessageIndex,
+        tick: Tick,
+        msg: EntityMessage<HostEntity>,
+    ) {
         match msg.get_type() {
             EntityMessageType::Spawn
             | EntityMessageType::SpawnWithComponents

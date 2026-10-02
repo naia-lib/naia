@@ -129,7 +129,8 @@ impl HostEntityChannel {
 
                     // info!("EntityChannelSender::process_messages(id={}, msgType={:?})", id, msg.get_type());
 
-                    self.auth_channel.receiver_receive_message(None, id, tick, msg);
+                    self.auth_channel
+                        .receiver_receive_message(None, id, tick, msg);
                     self.auth_channel
                         .receiver_drain_messages_into(&mut self.incoming_messages);
                 }

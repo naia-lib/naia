@@ -2581,11 +2581,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         };
 
         let remote_entities = connection.base.send.world_manager.remote_entities();
+        // Teardown synthesizes mirror-removal events: stamp the last applied
+        // server tick, the tick at which these entities last existed for us.
+        let teardown_tick = connection.time_manager.client_receiving_tick;
         let entity_events = SharedGlobalWorldManager::despawn_all_entities(
             world,
             &self.global_entity_map,
             &self.global_world_manager,
             remote_entities,
+            teardown_tick,
         );
         self.process_entity_events(world, entity_events);
     }
@@ -2693,12 +2697,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             //     response_event.log()
             // );
             match response_event {
-                EntityEvent::Spawn(global_entity) => {
+                EntityEvent::Spawn(tick, global_entity) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
-                    self.incoming_world_events.push_spawn(world_entity);
+                    self.incoming_world_events.push_spawn(tick, world_entity);
                     self.global_world_manager
                         .remote_spawn_entity(&global_entity);
                     let Some(connection) = self.server_connection.as_mut() else {
@@ -2716,7 +2720,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         CLIENT_SCOPE_APPLIED_ADD_E2.fetch_add(1, Ordering::Relaxed);
                     }
                 }
-                EntityEvent::Despawn(global_entity) => {
+                EntityEvent::Despawn(tick, global_entity) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
@@ -2725,7 +2729,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     // a resource entity, clear the registry record so
                     // future has_resource::<R>() calls return false.
                     self.resource_registry.remove_by_entity(&global_entity);
-                    self.incoming_world_events.push_despawn(world_entity);
+                    self.incoming_world_events.push_despawn(tick, world_entity);
                     if self
                         .global_world_manager
                         .entity_is_delegated(&global_entity)
@@ -2753,7 +2757,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         CLIENT_SCOPE_APPLIED_REMOVE_E1.fetch_add(1, Ordering::Relaxed);
                     }
                 }
-                EntityEvent::InsertComponent(global_entity, component_kind) => {
+                EntityEvent::InsertComponent(tick, global_entity, component_kind) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
@@ -2768,7 +2772,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         let _ = self.resource_registry.insert_raw(type_id, global_entity);
                     }
                     self.incoming_world_events
-                        .push_insert(world_entity, component_kind);
+                        .push_insert(tick, world_entity, component_kind);
 
                     if !self
                         .global_world_manager
@@ -2806,14 +2810,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             .remote_insert_component(&global_entity, &component_kind);
                     }
                 }
-                EntityEvent::RemoveComponent(global_entity, component_box) => {
+                EntityEvent::RemoveComponent(tick, global_entity, component_box) => {
                     let component_kind = component_box.kind();
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
                     self.incoming_world_events
-                        .push_remove(world_entity, component_box);
+                        .push_remove(tick, world_entity, component_box);
                     if self
                         .global_world_manager
                         .entity_is_delegated(&global_entity)

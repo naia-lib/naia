@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
-};
+use std::{collections::HashSet, hash::Hash};
 
 use log::warn;
 
@@ -253,7 +250,7 @@ impl RemoteWorldManager {
         component_kinds: &ComponentKinds,
         world: &mut W,
         now: &Instant,
-        incoming_components: &mut HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>>,
+        incoming_components: &mut Vec<(Tick, OwnedLocalEntity, ComponentKind, Box<dyn Replicate>)>,
         incoming_updates: Vec<(Tick, OwnedLocalEntity, PendingComponentUpdate)>,
         incoming_messages: Vec<(MessageIndex, Tick, EntityMessage<RemoteEntity>)>,
     ) -> Vec<EntityEvent> {
@@ -291,7 +288,7 @@ impl RemoteWorldManager {
         local_entity_map: &mut LocalEntityMap,
         world: &mut W,
         now: &Instant,
-        incoming_components: &mut HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>>,
+        incoming_components: &mut Vec<(Tick, OwnedLocalEntity, ComponentKind, Box<dyn Replicate>)>,
         incoming_messages: Vec<(Tick, EntityMessage<RemoteEntity>)>,
     ) {
         self.process_ready_messages(
@@ -319,7 +316,7 @@ impl RemoteWorldManager {
         global_world_manager: &dyn GlobalWorldManagerType,
         local_entity_map: &mut LocalEntityMap,
         world: &mut W,
-        incoming_components: &mut HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>>,
+        incoming_components: &mut Vec<(Tick, OwnedLocalEntity, ComponentKind, Box<dyn Replicate>)>,
         incoming_messages: Vec<(Tick, EntityMessage<RemoteEntity>)>,
     ) {
         // execute the action and emit an event
@@ -337,7 +334,8 @@ impl RemoteWorldManager {
                         local_entity_map.insert_with_remote_entity(global_entity, remote_entity);
                     }
 
-                    self.incoming_events.push(EntityEvent::Spawn(tick, global_entity));
+                    self.incoming_events
+                        .push(EntityEvent::Spawn(tick, global_entity));
                 }
                 EntityMessage::Despawn(remote_entity) => {
                     // On the client (authed_entities_opt is Some): read the mapping before
@@ -387,9 +385,18 @@ impl RemoteWorldManager {
                 }
                 EntityMessage::InsertComponent(remote_entity, component_kind) => {
                     let local_entity = remote_entity.copy_to_owned();
-                    let component = incoming_components
-                        .remove(&(local_entity, component_kind))
-                        .unwrap();
+                    // Consume this tick's own payload: inserts are never
+                    // collapsed, so match the exact (tick, entity, kind) entry.
+                    // A missing payload is a programming error, never a guess.
+                    let position = incoming_components
+                        .iter()
+                        .position(|(entry_tick, entry_entity, entry_kind, _)| {
+                            *entry_tick == tick
+                                && *entry_entity == local_entity
+                                && *entry_kind == component_kind
+                        })
+                        .expect("an InsertComponent message must carry its own ticked payload");
+                    let (_, _, _, component) = incoming_components.remove(position);
 
                     if local_entity_map.contains_remote_entity(&remote_entity) {
                         let global_entity = *local_entity_map
@@ -799,25 +806,30 @@ mod remote_world_manager_tests {
             }
         }
 
-        /// Feeds `messages` through the manager and returns the events raised.
-        fn deliver(&mut self, messages: Vec<EntityMessage<RemoteEntity>>) -> Vec<EntityEvent> {
-            self.deliver_with(messages, &mut HashMap::new())
+        /// Feeds tick-tagged `messages` through the manager and returns the events raised.
+        fn deliver(
+            &mut self,
+            messages: Vec<(Tick, EntityMessage<RemoteEntity>)>,
+        ) -> Vec<EntityEvent> {
+            self.deliver_with(messages, &mut Vec::new())
         }
 
         fn deliver_with(
             &mut self,
-            messages: Vec<EntityMessage<RemoteEntity>>,
-            incoming_components: &mut HashMap<
-                (OwnedLocalEntity, ComponentKind),
+            messages: Vec<(Tick, EntityMessage<RemoteEntity>)>,
+            incoming_components: &mut Vec<(
+                Tick,
+                OwnedLocalEntity,
+                ComponentKind,
                 Box<dyn Replicate>,
-            >,
+            )>,
         ) -> Vec<EntityEvent> {
             let indexed = messages
                 .into_iter()
-                .map(|message| {
+                .map(|(tick, message)| {
                     let index = self.next_index;
                     self.next_index += 1;
-                    (index, message)
+                    (index, tick, message)
                 })
                 .collect();
             self.manager.take_incoming_events(
@@ -845,7 +857,7 @@ mod remote_world_manager_tests {
                 &self.kinds,
                 &mut self.world,
                 &Instant::now(),
-                &mut HashMap::new(),
+                &mut Vec::new(),
                 updates,
                 Vec::new(),
             )
@@ -854,16 +866,18 @@ mod remote_world_manager_tests {
         /// Spawns `entity` remotely and gives it a Ghost, which is the state
         /// every later message assumes.
         fn spawn_with_ghost(&mut self, entity: RemoteEntity) -> GlobalEntity {
-            let mut components: HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>> =
-                HashMap::new();
-            components.insert(
-                (entity.copy_to_owned(), ghost()),
+            let mut components: Vec<(Tick, OwnedLocalEntity, ComponentKind, Box<dyn Replicate>)> =
+                Vec::new();
+            components.push((
+                0,
+                entity.copy_to_owned(),
+                ghost(),
                 remote_component(&self.kinds, &Ghost::new_complete(1)),
-            );
+            ));
             self.deliver_with(
                 vec![
-                    EntityMessage::Spawn(entity),
-                    EntityMessage::InsertComponent(entity, ghost()),
+                    (0, EntityMessage::Spawn(entity)),
+                    (0, EntityMessage::InsertComponent(entity, ghost())),
                 ],
                 &mut components,
             );
@@ -888,7 +902,7 @@ mod remote_world_manager_tests {
     #[test]
     fn a_spawn_message_maps_the_entity_and_raises_a_spawn_event() {
         let mut fixture = Fixture::new(HostType::Client);
-        let events = fixture.deliver(vec![EntityMessage::Spawn(remote(1))]);
+        let events = fixture.deliver(vec![(1, EntityMessage::Spawn(remote(1)))]);
 
         let global = *fixture
             .map
@@ -918,15 +932,17 @@ mod remote_world_manager_tests {
     #[test]
     fn a_component_for_an_entity_that_was_never_spawned_is_dropped() {
         let mut fixture = Fixture::new(HostType::Client);
-        let mut components: HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>> =
-            HashMap::new();
-        components.insert(
-            (remote(1).copy_to_owned(), ghost()),
+        let mut components: Vec<(Tick, OwnedLocalEntity, ComponentKind, Box<dyn Replicate>)> =
+            Vec::new();
+        components.push((
+            1,
+            remote(1).copy_to_owned(),
+            ghost(),
             remote_component(&kinds(), &Ghost::new_complete(1)),
-        );
+        ));
 
         let events = fixture.deliver_with(
-            vec![EntityMessage::InsertComponent(remote(1), ghost())],
+            vec![(1, EntityMessage::InsertComponent(remote(1), ghost()))],
             &mut components,
         );
 
@@ -957,14 +973,8 @@ mod remote_world_manager_tests {
         );
         fixture.gwm.declare_kinds(&global_1, vec![ghost()]);
 
-        let component =
-            remote_component(&fixture.kinds, &Ghost::new_complete(7));
-        let mut components = vec![(
-            10,
-            remote(1).copy_to_owned(),
-            ghost(),
-            component,
-        )];
+        let component = remote_component(&fixture.kinds, &Ghost::new_complete(7));
+        let mut components = vec![(10, remote(1).copy_to_owned(), ghost(), component)];
         let events = fixture.deliver_with(
             vec![
                 (10, EntityMessage::InsertComponent(remote(1), ghost())),
@@ -1007,11 +1017,10 @@ mod remote_world_manager_tests {
             (21, EntityMessage::Despawn(remote(3))),
         ]);
 
-        let global_3 = *fixture
-            .map
-            .global_entity_from_remote(&remote(3))
-            .expect("entity 3 must be mapped after its spawn");
         assert_eq!(events.len(), 2, "spawn and despawn must both survive");
+        // The despawn cleans the entity map in the same window, so the
+        // Spawn event itself — not the map — is what names the entity.
+        let global_3 = events[0].entity();
         assert!(
             matches!(&events[0], EntityEvent::Spawn(20, entity) if *entity == global_3),
             "spawn must arrive first, stamped with tick 20",
@@ -1029,13 +1038,16 @@ mod remote_world_manager_tests {
         let mut fixture = Fixture::new(HostType::Client);
         let global = fixture.spawn_with_ghost(remote(1));
 
-        let events = fixture.deliver(vec![EntityMessage::RemoveComponent(remote(1), ghost())]);
+        let events = fixture.deliver(vec![(
+            1,
+            EntityMessage::RemoveComponent(remote(1), ghost()),
+        )]);
 
         assert_eq!(
             summarize(&events),
             vec![(Some(EntityMessageType::RemoveComponent), global)],
         );
-        let EntityEvent::RemoveComponent(_, component) = &events[0] else {
+        let EntityEvent::RemoveComponent(_, _, component) = &events[0] else {
             panic!("expected a RemoveComponent event");
         };
         assert_eq!(component.kind(), ghost());
@@ -1060,7 +1072,7 @@ mod remote_world_manager_tests {
         let mut fixture = Fixture::new(HostType::Client);
         let global = fixture.spawn_with_ghost(remote(1));
 
-        let events = fixture.deliver(vec![EntityMessage::Despawn(remote(1))]);
+        let events = fixture.deliver(vec![(1, EntityMessage::Despawn(remote(1)))]);
 
         assert_eq!(
             summarize(&events),
@@ -1080,7 +1092,7 @@ mod remote_world_manager_tests {
         let mut fixture = Fixture::new(HostType::Server);
         let global = fixture.spawn_with_ghost(remote(1));
 
-        let events = fixture.deliver(vec![EntityMessage::Despawn(remote(1))]);
+        let events = fixture.deliver(vec![(1, EntityMessage::Despawn(remote(1)))]);
 
         assert_eq!(
             summarize(&events),
@@ -1094,7 +1106,7 @@ mod remote_world_manager_tests {
     #[test]
     fn a_noop_message_raises_nothing() {
         let mut fixture = Fixture::new(HostType::Client);
-        let events = fixture.deliver(vec![EntityMessage::Noop]);
+        let events = fixture.deliver(vec![(1, EntityMessage::Noop)]);
         assert!(summarize(&events).is_empty());
     }
 
@@ -1118,7 +1130,7 @@ mod remote_world_manager_tests {
             let mut fixture = Fixture::new(HostType::Client);
             let global = fixture.spawn_with_ghost(remote(1));
 
-            let events = fixture.deliver(vec![message]);
+            let events = fixture.deliver(vec![(1, message)]);
 
             assert_eq!(summarize(&events), vec![(Some(expected), global)]);
         }
@@ -1363,17 +1375,19 @@ mod remote_world_manager_tests {
             remote(2),
             fixture.map.entity_converter(),
         );
-        let mut components: HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>> =
-            HashMap::new();
-        components.insert(
-            (remote(1).copy_to_owned(), ComponentKind::of::<Haunt>()),
+        let mut components: Vec<(Tick, OwnedLocalEntity, ComponentKind, Box<dyn Replicate>)> =
+            Vec::new();
+        components.push((
+            1,
+            remote(1).copy_to_owned(),
+            ComponentKind::of::<Haunt>(),
             waiting,
-        );
+        ));
 
         let events = fixture.deliver_with(
-            vec![EntityMessage::InsertComponent(
-                remote(1),
-                ComponentKind::of::<Haunt>(),
+            vec![(
+                1,
+                EntityMessage::InsertComponent(remote(1), ComponentKind::of::<Haunt>()),
             )],
             &mut components,
         );
@@ -1382,7 +1396,7 @@ mod remote_world_manager_tests {
             "the component names an entity this peer has not seen",
         );
 
-        let events = fixture.deliver(vec![EntityMessage::Spawn(remote(2))]);
+        let events = fixture.deliver(vec![(1, EntityMessage::Spawn(remote(2)))]);
         let spawned = *fixture.map.global_entity_from_remote(&remote(2)).unwrap();
         assert_eq!(
             summarize(&events),
@@ -1415,16 +1429,18 @@ mod remote_world_manager_tests {
             remote(1),
             fixture.map.entity_converter(),
         );
-        let mut components: HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>> =
-            HashMap::new();
-        components.insert(
-            (remote(1).copy_to_owned(), ComponentKind::of::<Haunt>()),
+        let mut components: Vec<(Tick, OwnedLocalEntity, ComponentKind, Box<dyn Replicate>)> =
+            Vec::new();
+        components.push((
+            1,
+            remote(1).copy_to_owned(),
+            ComponentKind::of::<Haunt>(),
             present,
-        );
+        ));
         fixture.deliver_with(
-            vec![EntityMessage::InsertComponent(
-                remote(1),
-                ComponentKind::of::<Haunt>(),
+            vec![(
+                1,
+                EntityMessage::InsertComponent(remote(1), ComponentKind::of::<Haunt>()),
             )],
             &mut components,
         );
@@ -1437,7 +1453,7 @@ mod remote_world_manager_tests {
             "the half of the update that names nothing applies straight away",
         );
 
-        fixture.deliver(vec![EntityMessage::Spawn(remote(2))]);
+        fixture.deliver(vec![(1, EntityMessage::Spawn(remote(2)))]);
         fixture.manager.spawn_entity(&remote(2));
         let events = fixture.deliver(Vec::new());
         assert_eq!(
@@ -1510,7 +1526,7 @@ mod remote_world_manager_tests {
 
         // A despawn for an entity whose channel never saw a spawn stays in the
         // channel's buffer rather than being processed.
-        let events = fixture.deliver(vec![EntityMessage::Despawn(remote(1))]);
+        let events = fixture.deliver(vec![(1, EntityMessage::Despawn(remote(1)))]);
         assert!(summarize(&events).is_empty());
         assert!(fixture.manager.has_entity_channel(&remote(1)));
 

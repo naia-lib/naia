@@ -185,13 +185,13 @@ impl App {
         }
 
         // Spawn Entity Events
-        for entity in world_events.read::<SpawnEntityEvent>() {
+        for (_, entity) in world_events.read::<SpawnEntityEvent>() {
             self.server_entities.insert(entity);
             info!("spawned entity");
         }
 
         // Despawn Entity Events
-        for entity in world_events.read::<DespawnEntityEvent>() {
+        for (_, entity) in world_events.read::<DespawnEntityEvent>() {
             self.server_entities.remove(&entity);
             self.interp_entities.remove(&entity);
             info!("despawned entity");
@@ -199,7 +199,7 @@ impl App {
         }
 
         // Insert Component Events
-        for entity in world_events.read::<InsertComponentEvent<Position>>() {
+        for (_, entity) in world_events.read::<InsertComponentEvent<Position>>() {
             if let Some(position) = self.world.proxy().component::<Position>(&entity) {
                 self.interp_entities
                     .insert(entity, Interp::new(*position.x, *position.y));

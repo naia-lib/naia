@@ -52,7 +52,13 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
 
             self.bundle_registry.pre_process();
 
-            for (kind, entities) in inserts {
+            for (kind, ticked_entities) in inserts {
+                // The bevy event types are tickless; strip the naia app-event
+                // ticks at this boundary (tick-forwarding is a follow-up).
+                let entities: Vec<Entity> = ticked_entities
+                    .into_iter()
+                    .map(|(_, entity)| entity)
+                    .collect();
                 // trigger bundle events
                 self.bundle_registry
                     .process_inserts(world, &kind, &entities);
@@ -88,11 +94,17 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
         // Remove Component Event
         if events.has_removes() {
             let removes = events.take_removes().unwrap();
-            for (kind, entities) in removes {
+            for (kind, ticked_entities) in removes {
                 let Some(handler) = self.component_handlers.get_mut(&kind) else {
                     trace!("No remove event handler for ComponentKind: {:?}", kind);
                     continue;
                 };
+                // The bevy event types are tickless; strip the naia app-event
+                // ticks at this boundary (tick-forwarding is a follow-up).
+                let entities: Vec<(Entity, Box<dyn Replicate>)> = ticked_entities
+                    .into_iter()
+                    .map(|(_, entity, component)| (entity, component))
+                    .collect();
                 handler.handle_removes(world, entities);
             }
         }

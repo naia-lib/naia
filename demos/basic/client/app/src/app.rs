@@ -107,7 +107,7 @@ impl App {
             // &string_message);
             self.message_count += 1;
         }
-        for entity in world_events.read::<SpawnEntityEvent>() {
+        for (_, entity) in world_events.read::<SpawnEntityEvent>() {
             if let Some(_character) = self
                 .client
                 .entity(self.world.proxy(), &entity)
@@ -140,7 +140,7 @@ impl App {
                 // );
             }
         }
-        for (_, _character) in world_events.read::<RemoveComponentEvent<Character>>() {
+        for (_, _, _character) in world_events.read::<RemoveComponentEvent<Character>>() {
             // info!(
             //     "data delete of Character - x: {}, y: {}, name: {} {}",
             //     *character.x,

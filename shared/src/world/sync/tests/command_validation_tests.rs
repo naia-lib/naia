@@ -314,7 +314,11 @@ fn migrate_response_from_the_server_is_accepted_by_a_client() {
     let mut client_channel = HostEntityChannel::new(HostType::Client);
     client_channel.send_command(EntityCommand::Publish(Some(0), global_entity));
 
-    client_channel.receive_message(0, EntityMessage::MigrateResponse(0, (), new_remote_entity));
+    client_channel.receive_message(
+        0,
+        0,
+        EntityMessage::MigrateResponse(0, (), new_remote_entity),
+    );
 
     let mut events = Vec::new();
     client_channel.drain_incoming_messages_into(host_entity, &mut events);
@@ -342,7 +346,11 @@ fn migrate_response_from_a_client_is_rejected_by_the_server() {
     let mut server_channel = HostEntityChannel::new(HostType::Server);
     let _ = global_entity;
 
-    server_channel.receive_message(0, EntityMessage::MigrateResponse(0, (), new_remote_entity));
+    server_channel.receive_message(
+        0,
+        0,
+        EntityMessage::MigrateResponse(0, (), new_remote_entity),
+    );
 
     let mut events = Vec::new();
     server_channel.drain_incoming_messages_into(host_entity, &mut events);
@@ -474,7 +482,7 @@ fn delivered_on_host_channel(delegate_first: bool, msg: EntityMessage<()>) -> bo
         channel.send_command(EntityCommand::EnableDelegation(Some(0), global_entity));
     }
 
-    channel.receive_message(0, msg);
+    channel.receive_message(0, 0, msg);
 
     let mut events = Vec::new();
     channel.drain_incoming_messages_into(host_entity, &mut events);

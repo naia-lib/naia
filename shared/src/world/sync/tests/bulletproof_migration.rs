@@ -76,9 +76,9 @@ fn migration_preserves_buffered_operations() {
     let comp1 = component_kind::<TestComponent1>();
 
     // Add some buffered operations
-    channel.receive_message(1, EntityMessage::<()>::Spawn(()));
-    channel.receive_message(2, EntityMessage::<()>::InsertComponent((), comp1));
-    channel.receive_message(3, EntityMessage::<()>::RemoveComponent((), comp1));
+    channel.receive_message(1, 1, EntityMessage::<()>::Spawn(()));
+    channel.receive_message(2, 2, EntityMessage::<()>::InsertComponent((), comp1));
+    channel.receive_message(3, 3, EntityMessage::<()>::RemoveComponent((), comp1));
 
     // Force drain to process buffered operations
     channel.force_drain_all_buffers();
@@ -99,10 +99,10 @@ fn migration_handles_concurrent_operations() {
     let comp2 = component_kind::<TestComponent2>();
 
     // Add concurrent operations (out of order)
-    channel.receive_message(5, EntityMessage::<()>::InsertComponent((), comp2));
-    channel.receive_message(3, EntityMessage::<()>::InsertComponent((), comp1));
-    channel.receive_message(1, EntityMessage::<()>::Spawn(()));
-    channel.receive_message(4, EntityMessage::<()>::RemoveComponent((), comp1));
+    channel.receive_message(5, 5, EntityMessage::<()>::InsertComponent((), comp2));
+    channel.receive_message(3, 3, EntityMessage::<()>::InsertComponent((), comp1));
+    channel.receive_message(1, 1, EntityMessage::<()>::Spawn(()));
+    channel.receive_message(4, 4, EntityMessage::<()>::RemoveComponent((), comp1));
 
     // Force drain to process all operations
     channel.force_drain_all_buffers();
@@ -212,9 +212,9 @@ fn migration_handles_high_frequency_operations() {
     let comp1 = component_kind::<TestComponent1>();
 
     // Add operations and verify they are processed
-    channel.receive_message(1, EntityMessage::<()>::Spawn(()));
-    channel.receive_message(2, EntityMessage::<()>::InsertComponent((), comp1));
-    channel.receive_message(3, EntityMessage::<()>::RemoveComponent((), comp1));
+    channel.receive_message(1, 1, EntityMessage::<()>::Spawn(()));
+    channel.receive_message(2, 2, EntityMessage::<()>::InsertComponent((), comp1));
+    channel.receive_message(3, 3, EntityMessage::<()>::RemoveComponent((), comp1));
 
     // Messages are processed immediately by receive_message
     let events = channel.take_incoming_events();
@@ -271,9 +271,9 @@ fn migration_handles_race_conditions() {
     let comp1 = component_kind::<TestComponent1>();
 
     // Add operations that could cause race conditions
-    channel.receive_message(1, EntityMessage::<()>::Spawn(()));
-    channel.receive_message(2, EntityMessage::<()>::InsertComponent((), comp1));
-    channel.receive_message(3, EntityMessage::<()>::RemoveComponent((), comp1)); // Different operation
+    channel.receive_message(1, 1, EntityMessage::<()>::Spawn(()));
+    channel.receive_message(2, 2, EntityMessage::<()>::InsertComponent((), comp1));
+    channel.receive_message(3, 3, EntityMessage::<()>::RemoveComponent((), comp1)); // Different operation
 
     // Force drain should handle duplicates gracefully
     channel.force_drain_all_buffers();

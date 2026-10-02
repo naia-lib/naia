@@ -3653,6 +3653,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 &*entity_map,
                 &*self.shared.global_world_manager.read(),
                 remote_global_entities,
+                self.current_tick(),
             )
         };
         self.process_entity_events(world, user_key, entity_events);
@@ -3914,7 +3915,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         let mut deferred_events = Vec::new();
         for response_event in response_events {
             match response_event {
-                EntityEvent::Spawn(global_entity) => {
+                EntityEvent::Spawn(_, global_entity) => {
                     let world_entity = self
                         .shared
                         .global_entity_map
@@ -3949,7 +3950,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         SERVER_SPAWN_APPLIED.fetch_add(1, Ordering::Relaxed);
                     }
                 }
-                EntityEvent::Despawn(global_entity) => {
+                EntityEvent::Despawn(tick, global_entity) => {
                     let world_entity = self
                         .shared
                         .global_entity_map
@@ -3979,9 +3980,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .state
                         .incoming_world_events
                         .push_despawn(user_key, &world_entity);
-                    deferred_events.push(EntityEvent::Despawn(global_entity));
+                    deferred_events.push(EntityEvent::Despawn(tick, global_entity));
                 }
-                EntityEvent::InsertComponent(global_entity, component_kind) => {
+                EntityEvent::InsertComponent(_, global_entity, component_kind) => {
                     let world_entity = self
                         .shared
                         .global_entity_map
@@ -4040,7 +4041,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         );
                     }
                 }
-                EntityEvent::RemoveComponent(global_entity, component) => {
+                EntityEvent::RemoveComponent(_, global_entity, component) => {
                     let component_kind = component.kind();
                     let world_entity = self
                         .shared
@@ -4271,7 +4272,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
         for response_event in extra_deferred_events {
             match response_event {
-                EntityEvent::Despawn(global_entity) => {
+                EntityEvent::Despawn(_, global_entity) => {
                     let world_entity = self
                         .shared
                         .global_entity_map

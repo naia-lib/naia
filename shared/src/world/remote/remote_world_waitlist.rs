@@ -554,6 +554,7 @@ mod remote_world_waitlist_tests {
         waitlist.waitlist_queue_entity(
             &scope,
             &target,
+            1,
             crate::world::test_world::remote_component(&kinds(), &Ghost::new_complete(5)),
             &ghost(),
             &HashSet::from([dependency]),
@@ -571,8 +572,9 @@ mod remote_world_waitlist_tests {
 
         let released = waitlist.entities_to_insert(&Instant::now(), &map);
         assert_eq!(released.len(), 1, "the spawn must release it");
-        assert_eq!(released[0].0, target, "released against its own entity");
-        assert_eq!(released[0].1, ghost());
+        assert_eq!(released[0].0, 1, "the tick must survive the waitlist");
+        assert_eq!(released[0].1, target, "released against its own entity");
+        assert_eq!(released[0].2, ghost());
 
         assert!(
             waitlist
@@ -597,6 +599,7 @@ mod remote_world_waitlist_tests {
         waitlist.waitlist_queue_entity(
             &scope,
             &target,
+            1,
             crate::world::test_world::remote_component(&kinds(), &Ghost::new_complete(5)),
             &ghost(),
             &HashSet::from([dependency]),
