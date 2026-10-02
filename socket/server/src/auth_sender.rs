@@ -13,7 +13,8 @@ pub struct AuthSender {
 }
 
 impl AuthSender {
-    /// Creates a new AuthSender
+    /// Creates a new `AuthSender`
+    #[must_use]
     pub fn new(channel_sender: Sender<(SocketAddr, AuthResponse)>) -> Self {
         Self { channel_sender }
     }
@@ -36,7 +37,7 @@ impl AuthSender {
         address: &SocketAddr,
         payload: Option<&[u8]>,
     ) -> Result<(), NaiaServerSocketError> {
-        self.send(address, AuthResponse::Reject(payload.map(|p| p.to_vec())))
+        self.send(address, AuthResponse::Reject(payload.map(<[u8]>::to_vec)))
     }
 
     fn send(

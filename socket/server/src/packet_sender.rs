@@ -16,7 +16,8 @@ pub struct PacketSender {
 }
 
 impl PacketSender {
-    /// Creates a new PacketSender
+    /// Creates a new `PacketSender`
+    #[must_use]
     pub fn new(channel_sender: Sender<(SocketAddr, Box<[u8]>)>) -> Self {
         PacketSender {
             channel_sender,
