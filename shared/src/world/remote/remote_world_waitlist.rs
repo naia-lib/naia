@@ -19,7 +19,7 @@ use crate::{
 
 pub struct RemoteWorldWaitlist {
     entity_waitlist: RemoteEntityWaitlist,
-    insert_waitlist_store: WaitlistStore<(RemoteEntity, Box<dyn Replicate>)>,
+    insert_waitlist_store: WaitlistStore<(Tick, RemoteEntity, Box<dyn Replicate>)>,
     insert_waitlist_map: HashMap<(RemoteEntity, ComponentKind), WaitlistHandle>,
     update_waitlist_store: WaitlistStore<(Tick, RemoteEntity, ComponentKind, ComponentFieldUpdate)>,
     update_waitlist_map: HashMap<(RemoteEntity, ComponentKind), HashMap<u8, WaitlistHandle>>,
@@ -60,6 +60,7 @@ impl RemoteWorldWaitlist {
         &mut self,
         in_scope_entities: &dyn InScopeEntities<RemoteEntity>,
         entity: &RemoteEntity,
+        tick: Tick,
         component: Box<dyn Replicate>,
         component_kind: &ComponentKind,
         entity_set: &HashSet<RemoteEntity>,
@@ -68,7 +69,7 @@ impl RemoteWorldWaitlist {
             in_scope_entities,
             entity_set,
             &mut self.insert_waitlist_store,
-            (*entity, component),
+            (tick, *entity, component),
         );
 
         self.insert_waitlist_map
@@ -79,13 +80,13 @@ impl RemoteWorldWaitlist {
         &mut self,
         now: &Instant,
         local_converter: &dyn LocalEntityAndGlobalEntityConverter,
-    ) -> Vec<(RemoteEntity, ComponentKind, Box<dyn Replicate>)> {
+    ) -> Vec<(Tick, RemoteEntity, ComponentKind, Box<dyn Replicate>)> {
         let mut output = Vec::new();
         if let Some(list) = self
             .entity_waitlist
             .collect_ready_items(now, &mut self.insert_waitlist_store)
         {
-            for (global_entity, mut component) in list {
+            for (tick, global_entity, mut component) in list {
                 let component_kind = component.kind();
 
                 // let name = component.name();
@@ -107,7 +108,7 @@ impl RemoteWorldWaitlist {
                     }
                 }
 
-                output.push((global_entity, component_kind, component));
+                output.push((tick, global_entity, component_kind, component));
             }
         }
 

@@ -37,7 +37,7 @@ use std::collections::VecDeque;
 use crate::world::sync::ordered_ids::OrderedIds;
 use crate::{
     sequence_equal_or_less_than, world::sync::remote_entity_channel::EntityChannelState,
-    ComponentKind, EntityMessage, EntityMessageType, MessageIndex,
+    ComponentKind, EntityMessage, EntityMessageType, MessageIndex, Tick,
 };
 
 pub(crate) struct RemoteComponentChannel {
@@ -46,8 +46,10 @@ pub(crate) struct RemoteComponentChannel {
     /// The *newest* message that was valid; guards against replay / re‑order.
     last_epoch_id: Option<MessageIndex>,
     /// Small ring of *pending* insert (`true`) / remove (`false`) flags keyed by their sequence IDs.
-    buffered_messages: OrderedIds<bool>,
-    incoming_messages: VecDeque<EntityMessageType>,
+    /// Each entry also carries the parse tick of its message, so the eventual
+    /// existence event keeps its authored tick across channel delay.
+    buffered_messages: OrderedIds<(Tick, bool)>,
+    incoming_messages: VecDeque<(Tick, EntityMessageType)>,
 }
 
 impl RemoteComponentChannel {
@@ -63,12 +65,12 @@ impl RemoteComponentChannel {
     pub(crate) fn drain_messages_into(
         &mut self,
         component_kind: &ComponentKind,
-        outgoing_messages: &mut Vec<EntityMessage<()>>,
+        outgoing_messages: &mut Vec<(Tick, EntityMessage<()>)>,
     ) {
         // Drain the component channel and append the messages to the outgoing events
         let mut received_messages = Vec::new();
-        for msg_type in std::mem::take(&mut self.incoming_messages) {
-            received_messages.push(msg_type.with_component_kind(component_kind));
+        for (tick, msg_type) in std::mem::take(&mut self.incoming_messages) {
+            received_messages.push((tick, msg_type.with_component_kind(component_kind)));
         }
         outgoing_messages.append(&mut received_messages);
     }
@@ -81,6 +83,7 @@ impl RemoteComponentChannel {
         &mut self,
         entity_state: EntityChannelState,
         id: MessageIndex,
+        tick: Tick,
         msg: EntityMessage<()>,
     ) {
         if let Some(last_epoch_id) = self.last_epoch_id {
@@ -98,7 +101,7 @@ impl RemoteComponentChannel {
             ),
         };
 
-        self.buffered_messages.push_back(id, insert);
+        self.buffered_messages.push_back(id, (tick, insert));
 
         self.process_messages(entity_state);
     }
@@ -109,8 +112,9 @@ impl RemoteComponentChannel {
             return;
         }
 
-        while let Some((id, insert)) = self.buffered_messages.peek_front() {
+        while let Some((id, (tick, insert))) = self.buffered_messages.peek_front() {
             let id = *id;
+            let tick = *tick;
 
             match *insert {
                 true => {
@@ -127,13 +131,13 @@ impl RemoteComponentChannel {
                 }
             }
 
-            let (_, insert) = self.buffered_messages.pop_front().unwrap();
+            let (_, (tick, insert)) = self.buffered_messages.pop_front().unwrap();
             if insert {
                 self.incoming_messages
-                    .push_back(EntityMessageType::InsertComponent);
+                    .push_back((tick, EntityMessageType::InsertComponent));
             } else {
                 self.incoming_messages
-                    .push_back(EntityMessageType::RemoveComponent);
+                    .push_back((tick, EntityMessageType::RemoveComponent));
             }
         }
     }
@@ -149,13 +153,13 @@ impl RemoteComponentChannel {
 
     pub(crate) fn force_drain_buffers(&mut self, _entity_state: EntityChannelState) {
         // Force-drain all buffered operations regardless of FSM state
-        while let Some((id, insert)) = self.buffered_messages.pop_front() {
+        while let Some((id, (tick, insert))) = self.buffered_messages.pop_front() {
             if insert {
                 self.incoming_messages
-                    .push_back(EntityMessageType::InsertComponent);
+                    .push_back((tick, EntityMessageType::InsertComponent));
             } else {
                 self.incoming_messages
-                    .push_back(EntityMessageType::RemoveComponent);
+                    .push_back((tick, EntityMessageType::RemoveComponent));
             }
             // Update the inserted state to reflect the final operation
             self.inserted = insert;
@@ -193,17 +197,21 @@ mod tests {
     }
 
     fn emitted(channel: &RemoteComponentChannel) -> Vec<EntityMessageType> {
-        channel.incoming_messages.iter().copied().collect()
+        channel
+            .incoming_messages
+            .iter()
+            .map(|(_, msg_type)| *msg_type)
+            .collect()
     }
 
     #[test]
     fn an_insert_then_a_remove_toggles_the_component() {
         let mut channel = RemoteComponentChannel::new();
 
-        channel.accept_message(EntityChannelState::Spawned, 1, insert_msg());
+        channel.accept_message(EntityChannelState::Spawned, 1, 11, insert_msg());
         assert!(channel.is_inserted());
 
-        channel.accept_message(EntityChannelState::Spawned, 2, remove_msg());
+        channel.accept_message(EntityChannelState::Spawned, 2, 12, remove_msg());
         assert!(!channel.is_inserted());
 
         assert_eq!(
@@ -221,7 +229,7 @@ mod tests {
     fn messages_are_buffered_until_the_entity_spawns() {
         let mut channel = RemoteComponentChannel::new();
 
-        channel.accept_message(EntityChannelState::Despawned, 1, insert_msg());
+        channel.accept_message(EntityChannelState::Despawned, 1, 11, insert_msg());
         assert!(emitted(&channel).is_empty());
         assert!(!channel.is_inserted());
 
@@ -239,7 +247,7 @@ mod tests {
     fn an_illegal_transition_stalls_the_buffer_instead_of_applying() {
         let mut channel = RemoteComponentChannel::new();
 
-        channel.accept_message(EntityChannelState::Spawned, 1, remove_msg());
+        channel.accept_message(EntityChannelState::Spawned, 1, 11, remove_msg());
 
         assert!(emitted(&channel).is_empty());
         assert!(!channel.is_inserted());
@@ -248,11 +256,11 @@ mod tests {
     #[test]
     fn a_replayed_message_is_ignored() {
         let mut channel = RemoteComponentChannel::new();
-        channel.accept_message(EntityChannelState::Spawned, 5, insert_msg());
+        channel.accept_message(EntityChannelState::Spawned, 5, 15, insert_msg());
         channel.incoming_messages.clear();
 
         // Older than the last applied epoch: a duplicate from the network.
-        channel.accept_message(EntityChannelState::Spawned, 3, remove_msg());
+        channel.accept_message(EntityChannelState::Spawned, 3, 13, remove_msg());
 
         assert!(emitted(&channel).is_empty(), "a stale replay was applied");
         assert!(channel.is_inserted());
@@ -263,7 +271,7 @@ mod tests {
     #[test]
     fn popping_the_buffer_discards_pre_spawn_messages() {
         let mut channel = RemoteComponentChannel::new();
-        channel.accept_message(EntityChannelState::Despawned, 1, insert_msg());
+        channel.accept_message(EntityChannelState::Despawned, 1, 11, insert_msg());
 
         channel.buffer_pop_front_until_and_excluding(5);
         channel.process_messages(EntityChannelState::Spawned);
@@ -281,7 +289,7 @@ mod tests {
     #[test]
     fn popping_the_buffer_keeps_messages_at_or_past_the_boundary() {
         let mut channel = RemoteComponentChannel::new();
-        channel.accept_message(EntityChannelState::Despawned, 5, insert_msg());
+        channel.accept_message(EntityChannelState::Despawned, 5, 15, insert_msg());
 
         channel.buffer_pop_front_until_and_excluding(5);
         channel.process_messages(EntityChannelState::Spawned);
@@ -296,7 +304,7 @@ mod tests {
     #[test]
     fn force_draining_emits_operations_the_fsm_would_have_stalled() {
         let mut channel = RemoteComponentChannel::new();
-        channel.accept_message(EntityChannelState::Spawned, 1, remove_msg());
+        channel.accept_message(EntityChannelState::Spawned, 1, 11, remove_msg());
         assert!(
             emitted(&channel).is_empty(),
             "fixture: the remove should stall"
@@ -317,9 +325,9 @@ mod tests {
     #[test]
     fn force_draining_leaves_the_state_of_the_final_operation() {
         let mut channel = RemoteComponentChannel::new();
-        channel.accept_message(EntityChannelState::Despawned, 1, insert_msg());
-        channel.accept_message(EntityChannelState::Despawned, 2, remove_msg());
-        channel.accept_message(EntityChannelState::Despawned, 3, insert_msg());
+        channel.accept_message(EntityChannelState::Despawned, 1, 11, insert_msg());
+        channel.accept_message(EntityChannelState::Despawned, 2, 12, remove_msg());
+        channel.accept_message(EntityChannelState::Despawned, 3, 13, insert_msg());
 
         channel.force_drain_buffers(EntityChannelState::Despawned);
 

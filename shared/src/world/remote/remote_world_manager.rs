@@ -255,7 +255,7 @@ impl RemoteWorldManager {
         now: &Instant,
         incoming_components: &mut HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>>,
         incoming_updates: Vec<(Tick, OwnedLocalEntity, PendingComponentUpdate)>,
-        incoming_messages: Vec<(MessageIndex, EntityMessage<RemoteEntity>)>,
+        incoming_messages: Vec<(MessageIndex, Tick, EntityMessage<RemoteEntity>)>,
     ) -> Vec<EntityEvent> {
         let incoming_messages = EntityMessageReceiver::remote_take_incoming_messages(
             &mut self.remote_engine,
@@ -292,7 +292,7 @@ impl RemoteWorldManager {
         world: &mut W,
         now: &Instant,
         incoming_components: &mut HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>>,
-        incoming_messages: Vec<EntityMessage<RemoteEntity>>,
+        incoming_messages: Vec<(Tick, EntityMessage<RemoteEntity>)>,
     ) {
         self.process_ready_messages(
             spawner,
@@ -320,10 +320,10 @@ impl RemoteWorldManager {
         local_entity_map: &mut LocalEntityMap,
         world: &mut W,
         incoming_components: &mut HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>>,
-        incoming_messages: Vec<EntityMessage<RemoteEntity>>,
+        incoming_messages: Vec<(Tick, EntityMessage<RemoteEntity>)>,
     ) {
         // execute the action and emit an event
-        for message in incoming_messages {
+        for (tick, message) in incoming_messages {
             // info!("Processing EntityMessage: {:?}", message);
             match message {
                 EntityMessage::Spawn(remote_entity) => {
@@ -337,7 +337,7 @@ impl RemoteWorldManager {
                         local_entity_map.insert_with_remote_entity(global_entity, remote_entity);
                     }
 
-                    self.incoming_events.push(EntityEvent::Spawn(global_entity));
+                    self.incoming_events.push(EntityEvent::Spawn(tick, global_entity));
                 }
                 EntityMessage::Despawn(remote_entity) => {
                     // On the client (authed_entities_opt is Some): read the mapping before
@@ -367,6 +367,7 @@ impl RemoteWorldManager {
                     {
                         for component_kind in component_kinds {
                             self.process_remove(
+                                tick,
                                 world,
                                 local_entity_map,
                                 &remote_entity,
@@ -382,7 +383,7 @@ impl RemoteWorldManager {
                     world.despawn_entity(&world_entity);
 
                     self.incoming_events
-                        .push(EntityEvent::Despawn(global_entity));
+                        .push(EntityEvent::Despawn(tick, global_entity));
                 }
                 EntityMessage::InsertComponent(remote_entity, component_kind) => {
                     let local_entity = remote_entity.copy_to_owned();
@@ -397,6 +398,7 @@ impl RemoteWorldManager {
                         let world_entity = spawner.global_entity_to_entity(&global_entity).unwrap();
 
                         self.process_insert(
+                            tick,
                             world,
                             local_entity_map,
                             &remote_entity,
@@ -415,6 +417,7 @@ impl RemoteWorldManager {
                         .unwrap();
                     let world_entity = spawner.global_entity_to_entity(global_entity).unwrap();
                     self.process_remove(
+                        tick,
                         world,
                         local_entity_map,
                         &remote_entity,
@@ -449,6 +452,7 @@ impl RemoteWorldManager {
 
     fn process_insert<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
+        tick: Tick,
         world: &mut W,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         entity: &RemoteEntity,
@@ -460,12 +464,14 @@ impl RemoteWorldManager {
             self.waitlist.waitlist_queue_entity(
                 &self.remote_engine,
                 entity,
+                tick,
                 component,
                 component_kind,
                 &remote_entity_set,
             );
         } else {
             self.finish_insert(
+                tick,
                 world,
                 converter,
                 entity,
@@ -478,6 +484,7 @@ impl RemoteWorldManager {
 
     fn finish_insert<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
+        tick: Tick,
         world: &mut W,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         entity: &RemoteEntity,
@@ -495,12 +502,16 @@ impl RemoteWorldManager {
 
         let global_entity = converter.remote_entity_to_global_entity(entity).unwrap();
 
-        self.incoming_events
-            .push(EntityEvent::InsertComponent(global_entity, *component_kind));
+        self.incoming_events.push(EntityEvent::InsertComponent(
+            tick,
+            global_entity,
+            *component_kind,
+        ));
     }
 
     fn process_remove<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
+        tick: Tick,
         world: &mut W,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         entity: &RemoteEntity,
@@ -514,8 +525,11 @@ impl RemoteWorldManager {
         if let Some(component) = world.remove_component_of_kind(world_entity, component_kind) {
             // Send out event
             if let Ok(global_entity) = converter.remote_entity_to_global_entity(entity) {
-                self.incoming_events
-                    .push(EntityEvent::RemoveComponent(global_entity, component));
+                self.incoming_events.push(EntityEvent::RemoveComponent(
+                    tick,
+                    global_entity,
+                    component,
+                ));
             }
         }
     }
@@ -527,7 +541,7 @@ impl RemoteWorldManager {
         world: &mut W,
         now: &Instant,
     ) {
-        for (entity, component_kind, component) in
+        for (tick, entity, component_kind, component) in
             self.waitlist.entities_to_insert(now, local_converter)
         {
             // The target entity may have despawned while the component sat
@@ -542,6 +556,7 @@ impl RemoteWorldManager {
                 continue;
             };
             self.finish_insert(
+                tick,
                 world,
                 local_converter,
                 &entity,
@@ -918,6 +933,94 @@ mod remote_world_manager_tests {
         assert!(
             summarize(&events).is_empty(),
             "a component for an unknown entity must not raise an insert event",
+        );
+    }
+
+    /// Window test (Usher 40933/40949): one receive window carries entity 1's
+    /// insert at tick T and its remove at tick T+1, plus entity 2's spawn at
+    /// tick T+2. All three must arrive as separate events, each with its own
+    /// tick, in order — never collapsed last-wins.
+    #[test]
+    fn insert_then_remove_then_spawn_in_one_window_keep_per_tick_order() {
+        let mut fixture = Fixture::new(HostType::Client);
+
+        // Entity 1: spawn only (no insert), so the window's insert is a real
+        // toggle rather than a duplicate.
+        let setup = fixture.deliver(vec![(5, EntityMessage::Spawn(remote(1)))]);
+        let global_1 = *fixture
+            .map
+            .global_entity_from_remote(&remote(1))
+            .expect("entity 1 must be mapped after its spawn");
+        assert!(
+            matches!(&setup[0], EntityEvent::Spawn(5, entity) if *entity == global_1),
+            "setup spawn must already carry its tick",
+        );
+        fixture.gwm.declare_kinds(&global_1, vec![ghost()]);
+
+        let component =
+            remote_component(&fixture.kinds, &Ghost::new_complete(7));
+        let mut components = vec![(
+            10,
+            remote(1).copy_to_owned(),
+            ghost(),
+            component,
+        )];
+        let events = fixture.deliver_with(
+            vec![
+                (10, EntityMessage::InsertComponent(remote(1), ghost())),
+                (11, EntityMessage::RemoveComponent(remote(1), ghost())),
+                (12, EntityMessage::Spawn(remote(2))),
+            ],
+            &mut components,
+        );
+
+        let global_2 = *fixture
+            .map
+            .global_entity_from_remote(&remote(2))
+            .expect("entity 2 must be mapped after its spawn");
+        assert_eq!(events.len(), 3, "no existence event may be dropped");
+        assert!(
+            matches!(&events[0], EntityEvent::InsertComponent(10, entity, kind)
+                if *entity == global_1 && *kind == ghost()),
+            "insert must arrive first, stamped with tick 10",
+        );
+        assert!(
+            matches!(&events[1], EntityEvent::RemoveComponent(11, entity, _)
+                if *entity == global_1),
+            "remove must arrive second, stamped with tick 11",
+        );
+        assert!(
+            matches!(&events[2], EntityEvent::Spawn(12, entity) if *entity == global_2),
+            "spawn must arrive third, stamped with tick 12",
+        );
+    }
+
+    /// Window test (Usher 40949): a short-lived projectile — entity spawned
+    /// at tick T and despawned at tick T+1 inside one receive — must reach
+    /// the app as two events, each with its own tick.
+    #[test]
+    fn spawn_then_despawn_in_one_window_arrive_as_two_ticked_events() {
+        let mut fixture = Fixture::new(HostType::Client);
+
+        let events = fixture.deliver(vec![
+            (20, EntityMessage::Spawn(remote(3))),
+            (21, EntityMessage::Despawn(remote(3))),
+        ]);
+
+        let global_3 = *fixture
+            .map
+            .global_entity_from_remote(&remote(3))
+            .expect("entity 3 must be mapped after its spawn");
+        assert_eq!(events.len(), 2, "spawn and despawn must both survive");
+        assert!(
+            matches!(&events[0], EntityEvent::Spawn(20, entity) if *entity == global_3),
+            "spawn must arrive first, stamped with tick 20",
+        );
+        // Entity 3 holds no components, so its despawn raises no
+        // RemoveComponent events — only the despawn itself, stamped 21.
+        assert!(
+            matches!(&events[1], EntityEvent::Despawn(21, entity) if *entity == global_3),
+            "despawn must arrive second, stamped with tick 21",
         );
     }
 

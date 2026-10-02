@@ -7,6 +7,7 @@ use crate::{
         },
     },
     EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageType, HostType, MessageIndex,
+    Tick,
 };
 
 /// Publication/delegation lifecycle state of an entity's authority channel.
@@ -229,13 +230,13 @@ impl AuthChannel {
 
     pub(crate) fn receiver_drain_messages_into(
         &mut self,
-        outgoing_messages: &mut Vec<EntityMessage<()>>,
+        outgoing_messages: &mut Vec<(Tick, EntityMessage<()>)>,
     ) {
         let mut drained = Vec::new();
         self.receiver.drain_messages_into(&mut drained);
-        for msg in drained {
+        for (tick, msg) in drained {
             if self.receiver_validate(&msg) {
-                outgoing_messages.push(msg);
+                outgoing_messages.push((tick, msg));
             }
         }
     }
@@ -396,9 +397,11 @@ impl AuthChannel {
         &mut self,
         entity_state_opt: Option<EntityChannelState>,
         id: MessageIndex,
+        tick: Tick,
         msg: EntityMessage<()>,
     ) {
-        self.receiver.receive_message(entity_state_opt, id, msg);
+        self.receiver
+            .receive_message(entity_state_opt, id, tick, msg);
     }
 
     pub(crate) fn receiver_process_messages(&mut self, entity_state: EntityChannelState) {

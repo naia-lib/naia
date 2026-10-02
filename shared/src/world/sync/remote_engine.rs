@@ -38,6 +38,7 @@ use crate::{
         sync::{config::EngineConfig, remote_entity_channel::RemoteEntityChannel},
     },
     EntityAuthStatus, EntityMessageType, HostType, InScopeEntities, MessageIndex, RemoteEntity,
+    Tick,
 };
 
 pub struct RemoteEngine<E: Copy + Hash + Eq + Debug> {
@@ -45,7 +46,7 @@ pub struct RemoteEngine<E: Copy + Hash + Eq + Debug> {
     pub config: EngineConfig,
     entity_channels: HashMap<E, RemoteEntityChannel>,
 
-    incoming_events: Vec<EntityMessage<E>>,
+    incoming_events: Vec<(Tick, EntityMessage<E>)>,
     outgoing_commands: Vec<EntityCommand>,
 }
 
@@ -63,7 +64,7 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
     /// Atomically swaps out `outgoing_events`, giving the caller a Vec that
     /// *is already topologically ordered across entities*; apply each event
     /// in sequence and discard.
-    pub(crate) fn take_incoming_events(&mut self) -> Vec<EntityMessage<E>> {
+    pub(crate) fn take_incoming_events(&mut self) -> Vec<(Tick, EntityMessage<E>)> {
         std::mem::take(&mut self.incoming_events)
     }
 
@@ -80,7 +81,7 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
     ///
     /// *Non‑blocking*: may push zero or more *ordered* events into the
     /// engine’s outgoing buffer, but never touches the ECS directly.
-    pub fn receive_message(&mut self, id: MessageIndex, msg: EntityMessage<E>) {
+    pub fn receive_message(&mut self, id: MessageIndex, tick: Tick, msg: EntityMessage<E>) {
         if msg.get_type() == EntityMessageType::Noop {
             return;
         }
@@ -97,7 +98,7 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
         //     info!("Engine::accept_message(id={}, entity={:?}, msgType={:?})", id, entity, msg.get_type());
         // }
 
-        entity_channel.receive_message(id, msg.strip_entity());
+        entity_channel.receive_message(id, tick, msg.strip_entity());
         entity_channel.drain_incoming_messages_into(entity, &mut self.incoming_events);
     }
 

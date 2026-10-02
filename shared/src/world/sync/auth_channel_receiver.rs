@@ -52,13 +52,13 @@ use crate::{
     world::{
         host::host_world_manager::SubCommandId, sync::remote_entity_channel::EntityChannelState,
     },
-    EntityMessage, MessageIndex,
+    EntityMessage, MessageIndex, Tick,
 };
 
 pub(crate) struct AuthChannelReceiver {
     next_subcommand_id: SubCommandId,
-    buffered_messages: OrderedIds<EntityMessage<()>>,
-    incoming_messages: Vec<EntityMessage<()>>,
+    buffered_messages: OrderedIds<(Tick, EntityMessage<()>)>,
+    incoming_messages: Vec<(Tick, EntityMessage<()>)>,
 }
 
 impl AuthChannelReceiver {
@@ -75,7 +75,10 @@ impl AuthChannelReceiver {
         self.next_subcommand_id = id;
     }
 
-    pub(crate) fn drain_messages_into(&mut self, outgoing_messages: &mut Vec<EntityMessage<()>>) {
+    pub(crate) fn drain_messages_into(
+        &mut self,
+        outgoing_messages: &mut Vec<(Tick, EntityMessage<()>)>,
+    ) {
         // Drain the auth channel and append the messages to the outgoing events
         outgoing_messages.append(&mut self.incoming_messages);
     }
@@ -88,9 +91,10 @@ impl AuthChannelReceiver {
         &mut self,
         entity_state_opt: Option<EntityChannelState>,
         id: MessageIndex,
+        tick: Tick,
         msg: EntityMessage<()>,
     ) {
-        self.buffered_messages.push_back(id, msg);
+        self.buffered_messages.push_back(id, (tick, msg));
         self.process_messages(entity_state_opt);
     }
 
@@ -102,7 +106,7 @@ impl AuthChannelReceiver {
             }
         }
 
-        while let Some((_, msg)) = self.buffered_messages.peek_front() {
+        while let Some((_, (_, msg))) = self.buffered_messages.peek_front() {
             let Some(subcommand_id) = msg.subcommand_id() else {
                 panic!("Expected a subcommand ID in the message: {:?}", msg);
             };
@@ -115,9 +119,9 @@ impl AuthChannelReceiver {
             // Move to the next expected subcommand ID
             self.next_subcommand_id = self.next_subcommand_id.wrapping_add(1);
 
-            let (_, msg) = self.buffered_messages.pop_front().unwrap();
+            let (_, (tick, msg)) = self.buffered_messages.pop_front().unwrap();
 
-            self.incoming_messages.push(msg);
+            self.incoming_messages.push((tick, msg));
         }
     }
 
@@ -126,7 +130,7 @@ impl AuthChannelReceiver {
         let head_sub_id = self
             .buffered_messages
             .peek_front()
-            .and_then(|(_, msg)| msg.subcommand_id());
+            .and_then(|(_, (_, msg))| msg.subcommand_id());
         let buffer_len = self.buffered_messages.len();
         let incoming_len = self.incoming_messages.len();
         (

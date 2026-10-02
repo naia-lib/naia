@@ -36,7 +36,7 @@ impl WorldReader {
         Self::read_updates(world_manager, component_kinds, tick, reader)?;
 
         // read entity messages
-        Self::read_messages(world_manager, component_kinds, reader)?;
+        Self::read_messages(world_manager, component_kinds, tick, reader)?;
 
         Ok(())
     }
@@ -45,6 +45,7 @@ impl WorldReader {
     fn read_messages(
         world_manager: &mut LocalWorldManager,
         component_kinds: &ComponentKinds,
+        tick: &Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let mut last_read_id: Option<MessageIndex> = None;
@@ -56,7 +57,7 @@ impl WorldReader {
                 break;
             }
 
-            Self::read_message(world_manager, component_kinds, reader, &mut last_read_id)?;
+            Self::read_message(world_manager, component_kinds, tick, reader, &mut last_read_id)?;
         }
 
         Ok(())
@@ -70,6 +71,7 @@ impl WorldReader {
     fn read_message(
         world_manager: &mut LocalWorldManager,
         component_kinds: &ComponentKinds,
+        tick: &Tick,
         reader: &mut BitReader,
         last_read_id: &mut Option<MessageIndex>,
     ) -> Result<(), SerdeErr> {
@@ -99,6 +101,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
+                    *tick,
                     EntityMessage::Spawn(remote_entity.copy_to_owned()),
                 );
             }
@@ -117,6 +120,7 @@ impl WorldReader {
                     };
                     let new_component_kind = new_component.kind();
                     world_manager.insert_received_component(
+                        *tick,
                         &local_entity,
                         &new_component_kind,
                         new_component,
@@ -126,6 +130,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
+                    *tick,
                     EntityMessage::SpawnWithComponents(local_entity, kinds),
                 );
             }
@@ -135,8 +140,11 @@ impl WorldReader {
                 // apply redirect if entity was migrated
                 local_entity = world_manager.apply_entity_redirect(local_entity);
 
-                world_manager
-                    .receiver_buffer_message(message_id, EntityMessage::Despawn(local_entity));
+                world_manager.receiver_buffer_message(
+                    message_id,
+                    *tick,
+                    EntityMessage::Despawn(local_entity),
+                );
             }
             EntityMessageType::InsertComponent => {
                 // read local entity
@@ -153,9 +161,11 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
+                    *tick,
                     EntityMessage::InsertComponent(local_entity, new_component_kind),
                 );
                 world_manager.insert_received_component(
+                    *tick,
                     &local_entity,
                     &new_component_kind,
                     new_component,
@@ -172,6 +182,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
+                    *tick,
                     EntityMessage::RemoveComponent(local_entity, component_kind),
                 );
             }
@@ -186,6 +197,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
+                    *tick,
                     EntityMessage::Publish(sub_command_id, local_entity),
                 );
             }
@@ -200,6 +212,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
+                    *tick,
                     EntityMessage::Unpublish(sub_command_id, local_entity),
                 );
             }
@@ -214,6 +227,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
+                    *tick,
                     EntityMessage::EnableDelegation(sub_command_id, local_entity),
                 );
             }
@@ -228,6 +242,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
+                    *tick,
                     EntityMessage::DisableDelegation(sub_command_id, remote_entity.copy_to_owned()),
                 );
             }
@@ -258,6 +273,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
+                    *tick,
                     EntityMessage::SetAuthority(
                         sub_command_id,
                         remote_entity.copy_to_owned(),
@@ -278,6 +294,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
+                    *tick,
                     EntityMessage::RequestAuthority(sub_command_id, host_entity.copy_to_owned()),
                 );
             }
@@ -294,6 +311,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
+                    *tick,
                     EntityMessage::ReleaseAuthority(sub_command_id, local_entity),
                 );
             }
@@ -308,6 +326,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
+                    *tick,
                     EntityMessage::EnableDelegationResponse(
                         sub_command_id,
                         host_entity.copy_to_owned(),
@@ -328,6 +347,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
+                    *tick,
                     EntityMessage::MigrateResponse(
                         sub_command_id,
                         client_host_entity.copy_to_owned(),
@@ -336,7 +356,7 @@ impl WorldReader {
                 );
             }
             EntityMessageType::Noop => {
-                world_manager.receiver_buffer_message(message_id, EntityMessage::Noop);
+                world_manager.receiver_buffer_message(message_id, *tick, EntityMessage::Noop);
             }
         }
 
