@@ -330,4 +330,4 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: traces check
-        run: cargo run -p naia_spec_tool -- traces check
+        run: cargo run -p naia-spec-tool -- traces check
