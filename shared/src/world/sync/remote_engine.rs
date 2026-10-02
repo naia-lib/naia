@@ -212,7 +212,7 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
 }
 
 impl InScopeEntities<RemoteEntity> for RemoteEngine<RemoteEntity> {
-    fn has_entity(&self, entity: &RemoteEntity) -> bool {
-        self.get_world().contains_key(entity)
+    fn has_entity(&self, entity: RemoteEntity) -> bool {
+        self.get_world().contains_key(&entity)
     }
 }

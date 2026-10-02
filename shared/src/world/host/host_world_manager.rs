@@ -89,8 +89,8 @@ impl HostWorldManager {
     /// exists). Used to retire entries from `pending_outbound`.
     fn host_entity_fully_delivered(
         &self,
-        host_entity: &HostEntity,
-        global_entity: &GlobalEntity,
+        host_entity: HostEntity,
+        global_entity: GlobalEntity,
     ) -> bool {
         let Some(host_channel) = self.host_engine.get_entity_channel(host_entity) else {
             // Host channel gone (despawned / migrated) — nothing left to
@@ -101,7 +101,7 @@ impl HostWorldManager {
         // its Spawn / SpawnWithComponents has been acked. Until then it is
         // never fully delivered (covers the zero-component Spawn case, which
         // would otherwise vacuously pass the empty component check below).
-        if self.get_delivered_world().get(host_entity).is_none() {
+        if self.get_delivered_world().get(&host_entity).is_none() {
             return false;
         }
         // Component delivery: compare the host channel's CURRENT outstanding
@@ -122,7 +122,7 @@ impl HostWorldManager {
         // panic (silent insert loss in release). Over-retention is harmless by
         // the `pending_outbound` contract; premature retire is the bug this
         // guards against.
-        let delivered = self.delivered_component_kinds.get(global_entity);
+        let delivered = self.delivered_component_kinds.get(&global_entity);
         host_channel
             .component_kinds()
             .iter()
@@ -187,27 +187,27 @@ impl HostWorldManager {
     pub fn init_static_entity_send_host_commands(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
         component_kinds: Vec<ComponentKind>,
     ) {
         // Static entities: NEVER register for diff-tracking — they don't change after spawn.
         // Either path queues a value-reading command → must stay in the snapshot until acked.
-        self.pending_outbound.insert(*global_entity);
+        self.pending_outbound.insert(global_entity);
         if !component_kinds.is_empty() {
             self.host_engine.send_command(
                 converter,
-                EntityCommand::SpawnWithComponents(*global_entity, component_kinds),
+                EntityCommand::SpawnWithComponents(global_entity, component_kinds),
             );
             return;
         }
         self.host_engine
-            .send_command(converter, EntityCommand::Spawn(*global_entity));
+            .send_command(converter, EntityCommand::Spawn(global_entity));
     }
 
     pub(crate) fn host_reserve_entity(
         &mut self,
         entity_map: &mut LocalEntityMap,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> HostEntity {
         self.entity_generator
             .host_reserve_entity(entity_map, global_entity)
@@ -215,21 +215,21 @@ impl HostWorldManager {
 
     pub(crate) fn host_removed_reserved_entity(
         &mut self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Option<HostEntity> {
         self.entity_generator
             .host_remove_reserved_entity(global_entity)
     }
 
-    pub(crate) fn has_entity(&self, host_entity: &HostEntity) -> bool {
-        self.get_host_world().contains_key(host_entity)
+    pub(crate) fn has_entity(&self, host_entity: HostEntity) -> bool {
+        self.get_host_world().contains_key(&host_entity)
     }
 
     /// Registers components for diff-tracking and sends initial spawn command(s) when an entity first enters connection scope.
     pub fn init_entity_send_host_commands(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
         component_kinds: Vec<ComponentKind>,
         entity_update_manager: &mut EntityUpdateManager,
         component_kinds_map: &ComponentKinds,
@@ -237,25 +237,25 @@ impl HostWorldManager {
         // Register only mutable components for diff-tracking immediately at scope entry.
         // Immutable components (is_immutable == true) are never diff-tracked — skip them.
         for component_kind in &component_kinds {
-            if !component_kinds_map.kind_is_immutable(component_kind) {
-                entity_update_manager.register_component(global_entity, component_kind);
+            if !component_kinds_map.kind_is_immutable(*component_kind) {
+                entity_update_manager.register_component(global_entity, *component_kind);
             }
         }
 
         // Either path queues a value-reading command → must stay in the snapshot until acked.
-        self.pending_outbound.insert(*global_entity);
+        self.pending_outbound.insert(global_entity);
         if !component_kinds.is_empty() {
             // Coalesce Spawn + N InsertComponent into one reliable message
             self.host_engine.send_command(
                 converter,
-                EntityCommand::SpawnWithComponents(*global_entity, component_kinds),
+                EntityCommand::SpawnWithComponents(global_entity, component_kinds),
             );
             return;
         }
 
         // Zero-component path: plain Spawn with no component payloads
         self.host_engine
-            .send_command(converter, EntityCommand::Spawn(*global_entity));
+            .send_command(converter, EntityCommand::Spawn(global_entity));
     }
 
     /// Enqueues `command` for reliable delivery to the remote peer.
@@ -296,7 +296,7 @@ impl HostWorldManager {
 
     pub(crate) fn extract_entity_commands(
         &mut self,
-        host_entity: &HostEntity,
+        host_entity: HostEntity,
     ) -> Vec<EntityCommand> {
         self.host_engine.extract_entity_commands(host_entity)
     }
@@ -308,8 +308,8 @@ impl HostWorldManager {
     pub(crate) fn is_component_updatable(
         &self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
-        global_entity: &GlobalEntity,
-        kind: &ComponentKind,
+        global_entity: GlobalEntity,
+        kind: ComponentKind,
     ) -> bool {
         let Ok(host_entity) = converter.global_entity_to_host_entity(global_entity) else {
             return false;
@@ -317,7 +317,7 @@ impl HostWorldManager {
         let Some(host_channel) = self.get_host_world().get(&host_entity) else {
             return false;
         };
-        if !host_channel.component_kinds().contains(kind) {
+        if !host_channel.component_kinds().contains(&kind) {
             return false;
         }
         let Some(delivered_channel) = self.get_delivered_world().get(&host_entity) else {
@@ -360,33 +360,33 @@ impl HostWorldManager {
         ) {
             match message {
                 EntityMessage::Spawn(host_entity) => {
-                    self.on_delivered_spawn_entity(&host_entity);
+                    self.on_delivered_spawn_entity(host_entity);
                 }
                 EntityMessage::Despawn(host_entity) => {
-                    self.on_delivered_despawn_entity(local_entity_map, &host_entity);
+                    self.on_delivered_despawn_entity(local_entity_map, host_entity);
                 }
                 EntityMessage::InsertComponent(host_entity, component_kind) => {
                     let Some(global_entity) =
-                        local_entity_map.global_entity_from_host(&host_entity)
+                        local_entity_map.global_entity_from_host(host_entity)
                     else {
                         return;
                     };
                     self.on_delivered_insert_component(
                         entity_update_manager,
-                        global_entity,
-                        &component_kind,
+                        *global_entity,
+                        component_kind,
                     );
                 }
                 EntityMessage::RemoveComponent(host_entity, component_kind) => {
                     let Some(global_entity) =
-                        local_entity_map.global_entity_from_host(&host_entity)
+                        local_entity_map.global_entity_from_host(host_entity)
                     else {
                         return;
                     };
                     self.on_delivered_remove_component(
                         entity_update_manager,
-                        global_entity,
-                        &component_kind,
+                        *global_entity,
+                        component_kind,
                     );
                 }
                 EntityMessage::Noop => {
@@ -413,8 +413,8 @@ impl HostWorldManager {
                 .iter()
                 .copied()
                 .filter(
-                    |ge| match local_entity_map.global_entity_to_host_entity(ge) {
-                        Ok(host_entity) => self.host_entity_fully_delivered(&host_entity, ge),
+                    |ge| match local_entity_map.global_entity_to_host_entity(*ge) {
+                    Ok(host_entity) => self.host_entity_fully_delivered(host_entity, *ge),
                         // No host mapping → entity is gone; stop tracking it.
                         Err(_) => true,
                     },
@@ -447,7 +447,7 @@ impl HostWorldManager {
                 EntityMessage::Despawn(host_entity) => {
                     // A client with Granted authority sent a Despawn for a server-created entity.
                     if let Some(global_entity) =
-                        local_entity_map.global_entity_from_host(&host_entity)
+                        local_entity_map.global_entity_from_host(host_entity)
                     {
                         self.incoming_events
                             .push(EntityEvent::Despawn(tick, *global_entity));
@@ -491,7 +491,7 @@ impl HostWorldManager {
                     // a client-created delegated entity from HostEntity to RemoteEntity
 
                     // Look up the global entity from the client's HostEntity
-                    let global_entity = *local_entity_map.global_entity_from_host(&client_host_entity)
+                    let global_entity = *local_entity_map.global_entity_from_host(client_host_entity)
                         .expect("Host entity not found in local entity map during MigrateResponse processing");
 
                     // Create event for the client to process the migration
@@ -516,7 +516,7 @@ impl HostWorldManager {
         }
     }
 
-    fn on_delivered_spawn_entity(&mut self, _host_entity: &HostEntity) {
+    fn on_delivered_spawn_entity(&mut self, _host_entity: HostEntity) {
         #[cfg(feature = "observability")]
         metrics::counter!(crate::SERVER_SPAWNS_TOTAL).increment(1);
     }
@@ -525,7 +525,7 @@ impl HostWorldManager {
     pub fn on_delivered_despawn_entity(
         &mut self,
         local_entity_map: &mut LocalEntityMap,
-        host_entity: &HostEntity,
+        host_entity: HostEntity,
     ) {
         #[cfg(feature = "observability")]
         metrics::counter!(crate::SERVER_DESPAWNS_TOTAL).increment(1);
@@ -539,8 +539,8 @@ impl HostWorldManager {
     fn on_delivered_insert_component(
         &mut self,
         entity_update_manager: &mut EntityUpdateManager,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        global_entity: GlobalEntity,
+        component_kind: ComponentKind,
     ) {
         // Component is already registered when entity comes into scope (in host_init_entity),
         // so we don't need to register again here when InsertComponent is delivered.
@@ -548,9 +548,9 @@ impl HostWorldManager {
         // of is_component_updatable_for_entity and use the single-lookup fast path instead.
         entity_update_manager.mark_component_delivered(global_entity, component_kind);
         self.delivered_component_kinds
-            .entry(*global_entity)
+            .entry(global_entity)
             .or_default()
-            .insert(*component_kind);
+            .insert(component_kind);
         #[cfg(feature = "observability")]
         metrics::counter!(crate::SERVER_COMPONENT_INSERTS_TOTAL).increment(1);
     }
@@ -558,14 +558,14 @@ impl HostWorldManager {
     fn on_delivered_remove_component(
         &mut self,
         entity_update_manager: &mut EntityUpdateManager,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        global_entity: GlobalEntity,
+        component_kind: ComponentKind,
     ) {
         #[cfg(feature = "observability")]
         metrics::counter!(crate::SERVER_COMPONENT_REMOVES_TOTAL).increment(1);
         entity_update_manager.deregister_component(global_entity, component_kind);
-        if let Some(set) = self.delivered_component_kinds.get_mut(global_entity) {
-            set.remove(component_kind);
+        if let Some(set) = self.delivered_component_kinds.get_mut(&global_entity) {
+            set.remove(&component_kind);
         }
     }
 
@@ -573,18 +573,18 @@ impl HostWorldManager {
         self.host_engine.insert_entity_channel(entity, channel);
     }
 
-    pub(crate) fn get_entity_channel(&self, entity: &HostEntity) -> Option<&HostEntityChannel> {
+    pub(crate) fn get_entity_channel(&self, entity: HostEntity) -> Option<&HostEntityChannel> {
         self.host_engine.get_entity_channel(entity)
     }
 
     pub(crate) fn get_entity_channel_mut(
         &mut self,
-        entity: &HostEntity,
+        entity: HostEntity,
     ) -> Option<&mut HostEntityChannel> {
         self.host_engine.get_entity_channel_mut(entity)
     }
 
-    pub(crate) fn remove_entity_channel(&mut self, entity: &HostEntity) -> HostEntityChannel {
+    pub(crate) fn remove_entity_channel(&mut self, entity: HostEntity) -> HostEntityChannel {
         self.host_engine.remove_entity_channel(entity)
     }
 }
@@ -675,7 +675,7 @@ mod tests {
 
         /// Gives the global diff handler a live receiver for `(entity, kind)`,
         /// so a later `register_component` on the ledger has something to find.
-        fn arm_diff_handler(&self, entity: &GlobalEntity, kind: &ComponentKind) {
+        fn arm_diff_handler(&self, entity: GlobalEntity, kind: ComponentKind) {
             self.gwm.arm_diff_handler(&self.kinds, entity, kind);
         }
     }
@@ -699,7 +699,7 @@ mod tests {
         fn has_component<R: ReplicatedComponent>(&self, _: &u64) -> bool {
             unreachable!("the inbound path must not read the world")
         }
-        fn has_component_of_kind(&self, _: &u64, _: &ComponentKind) -> bool {
+        fn has_component_of_kind(&self, _: &u64, _: ComponentKind) -> bool {
             unreachable!("the inbound path must not read the world")
         }
         fn component<'a, R: ReplicatedComponent>(
@@ -711,7 +711,7 @@ mod tests {
         fn component_of_kind<'a>(
             &'a self,
             _: &u64,
-            _: &ComponentKind,
+            _: ComponentKind,
         ) -> Option<ReplicaDynRefWrapper<'a>> {
             unreachable!("the inbound path must not read the world")
         }
@@ -742,7 +742,7 @@ mod tests {
         fn component_mut_of_kind<'a>(
             &'a mut self,
             _: &u64,
-            _: &ComponentKind,
+            _: ComponentKind,
         ) -> Option<ReplicaDynMutWrapper<'a>> {
             unreachable!("the inbound path must not mutate the world")
         }
@@ -750,7 +750,7 @@ mod tests {
             &mut self,
             _: &dyn LocalEntityAndGlobalEntityConverter,
             _: &u64,
-            _: &ComponentKind,
+            _: ComponentKind,
             _: PendingComponentUpdate,
         ) -> Result<(), SerdeErr> {
             unreachable!("the inbound path must not mutate the world")
@@ -759,7 +759,7 @@ mod tests {
             &mut self,
             _: &dyn LocalEntityAndGlobalEntityConverter,
             _: &u64,
-            _: &ComponentKind,
+            _: ComponentKind,
             _: ComponentFieldUpdate,
         ) -> Result<(), SerdeErr> {
             unreachable!("the inbound path must not mutate the world")
@@ -767,7 +767,7 @@ mod tests {
         fn mirror_entities(&mut self, _: &u64, _: &u64) {
             unreachable!("the inbound path must not mutate the world")
         }
-        fn mirror_components(&mut self, _: &u64, _: &u64, _: &ComponentKind) {
+        fn mirror_components(&mut self, _: &u64, _: &u64, _: ComponentKind) {
             unreachable!("the inbound path must not mutate the world")
         }
         fn insert_component<R: ReplicatedComponent>(&mut self, _: &u64, _: R) {
@@ -782,7 +782,7 @@ mod tests {
         fn remove_component_of_kind(
             &mut self,
             _: &u64,
-            _: &ComponentKind,
+            _: ComponentKind,
         ) -> Option<Box<dyn Replicate>> {
             unreachable!("the inbound path must not mutate the world")
         }
@@ -801,14 +801,14 @@ mod tests {
             _: &dyn EntityAndGlobalEntityConverter<u64>,
             _: &dyn GlobalWorldManagerType,
             _: &u64,
-            _: &ComponentKind,
+            _: ComponentKind,
         ) {
             unreachable!("the inbound path must not mutate the world")
         }
         fn entity_unpublish(&mut self, _: &u64) {
             unreachable!("the inbound path must not mutate the world")
         }
-        fn component_unpublish(&mut self, _: &u64, _: &ComponentKind) {
+        fn component_unpublish(&mut self, _: &u64, _: ComponentKind) {
             unreachable!("the inbound path must not mutate the world")
         }
         fn entity_enable_delegation(
@@ -826,14 +826,14 @@ mod tests {
             _: &dyn EntityAndGlobalEntityConverter<u64>,
             _: &dyn GlobalWorldManagerType,
             _: &u64,
-            _: &ComponentKind,
+            _: ComponentKind,
         ) {
             unreachable!("the inbound path must not mutate the world")
         }
         fn entity_disable_delegation(&mut self, _: &u64) {
             unreachable!("the inbound path must not mutate the world")
         }
-        fn component_disable_delegation(&mut self, _: &u64, _: &ComponentKind) {
+        fn component_disable_delegation(&mut self, _: &u64, _: ComponentKind) {
             unreachable!("the inbound path must not mutate the world")
         }
     }

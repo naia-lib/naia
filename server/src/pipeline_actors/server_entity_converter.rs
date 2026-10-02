@@ -81,7 +81,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> EntityAndGlobalEntityConverter
 {
     fn global_entity_to_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<E, EntityDoesNotExistError> {
         self.inner.global_entity_to_entity(global_entity)
     }

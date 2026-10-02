@@ -3,7 +3,7 @@ use std::{future, sync::LazyLock, thread};
 use tokio::runtime::{Builder, Handle};
 
 /// Returns a handle to a background tokio runtime.
-/// Required because webrtc-unreliable-client internally uses tokio::spawn.
+/// Required because webrtc-unreliable-client internally uses `tokio::spawn`.
 pub fn get_runtime() -> Handle {
     static GLOBAL: LazyLock<Handle> = LazyLock::new(|| {
         let runtime = Builder::new_multi_thread()

@@ -198,8 +198,8 @@ impl<E: Copy + Eq + Hash> SnapshotWorld<E> {
     /// Removes a single component from the snapshot. The entity stays
     /// live (it may still have other components or be live-with-no-
     /// components via `mark_live`).
-    pub fn remove_component(&mut self, entity: E, kind: &ComponentKind) {
-        self.components.remove(&(entity, *kind));
+    pub fn remove_component(&mut self, entity: E, kind: ComponentKind) {
+        self.components.remove(&(entity, kind));
     }
 
     /// Number of `(entity, kind)` entries currently held. Exposed for
@@ -255,9 +255,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldRefType<E> for SnapshotWorld<E> {
             .contains_key(&(*world_entity, ComponentKind::of::<R>()))
     }
 
-    fn has_component_of_kind(&self, world_entity: &E, component_kind: &ComponentKind) -> bool {
+    fn has_component_of_kind(&self, world_entity: &E, component_kind: ComponentKind) -> bool {
         self.components
-            .contains_key(&(*world_entity, *component_kind))
+            .contains_key(&(*world_entity, component_kind))
     }
 
     fn component<'a, R: ReplicatedComponent>(
@@ -273,9 +273,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldRefType<E> for SnapshotWorld<E> {
     fn component_of_kind<'a>(
         &'a self,
         entity: &E,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
     ) -> Option<ReplicaDynRefWrapper<'a>> {
-        let boxed = self.components.get(&(*entity, *component_kind))?;
+        let boxed = self.components.get(&(*entity, component_kind))?;
         Some(ReplicaDynRefWrapper::new(BoxReplicaDynRef {
             inner: boxed.as_ref(),
         }))

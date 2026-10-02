@@ -123,7 +123,7 @@ pub(crate) fn drain_host_sync_in_place(
                 {
                     let mut world_proxy = world.proxy_mut();
                     let Some(mut component_mut) =
-                        world_proxy.component_mut_of_kind(&entity, &component_kind)
+                        world_proxy.component_mut_of_kind(&entity, component_kind)
                     else {
                         // Component already removed between emission and
                         // drain — same tolerant behavior as the

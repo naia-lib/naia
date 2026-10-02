@@ -64,7 +64,7 @@ impl RemoteComponentChannel {
 
     pub(crate) fn drain_messages_into(
         &mut self,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
         outgoing_messages: &mut Vec<(Tick, EntityMessage<()>)>,
     ) {
         // Drain the component channel and append the messages to the outgoing events

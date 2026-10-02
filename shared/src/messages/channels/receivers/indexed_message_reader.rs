@@ -22,7 +22,7 @@ impl IndexedMessageReader {
                 break;
             }
 
-            let id_w_msg = Self::read_message(message_kinds, converter, reader, &last_read_id)?;
+            let id_w_msg = Self::read_message(message_kinds, converter, reader, last_read_id)?;
             last_read_id = Some(id_w_msg.0);
             output.push(id_w_msg);
         }
@@ -32,7 +32,7 @@ impl IndexedMessageReader {
 
     pub fn read_message_index(
         reader: &mut BitReader,
-        last_read_id: &Option<MessageIndex>,
+        last_read_id: Option<MessageIndex>,
     ) -> Result<MessageIndex, SerdeErr> {
         if let Some(last_id) = last_read_id {
             let id_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as MessageIndex;
@@ -47,7 +47,7 @@ impl IndexedMessageReader {
         message_kinds: &MessageKinds,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
-        last_read_id: &Option<MessageIndex>,
+        last_read_id: Option<MessageIndex>,
     ) -> Result<(MessageIndex, MessageContainer), SerdeErr> {
         // read index
         let message_index = Self::read_message_index(reader, last_read_id)?;

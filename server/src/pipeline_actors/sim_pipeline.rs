@@ -946,7 +946,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                 .shared
                 .global_world_manager
                 .read()
-                .get_entity_auth_accessor(&global_entity);
+                .get_entity_auth_accessor(global_entity);
             component.enable_delegation(&accessor, None);
         }
 
@@ -1042,7 +1042,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_entity_map
             .write()
-            .despawn_by_global(&global_entity);
+            .despawn_by_global(global_entity);
     }
 
     // ── Tick / queue introspection ──
@@ -1212,7 +1212,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_entity_map
             .read()
-            .global_entity_to_entity(&global_entity)
+            .global_entity_to_entity(global_entity)
         {
             Ok(entity) => entity,
             Err(_) => return true,
@@ -2294,7 +2294,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_entity_map
             .write()
-            .despawn_by_global(global_entity);
+            .despawn_by_global(*global_entity);
     }
 
     fn insert_resource_component_record<R: Replicate>(
@@ -2338,7 +2338,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                 .shared
                 .global_world_manager
                 .read()
-                .get_entity_auth_accessor(global_entity);
+                .get_entity_auth_accessor(*global_entity);
             component.enable_delegation(&accessor, None)
         }
     }
@@ -2419,11 +2419,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(global_entity)
+                .has_global_entity(*global_entity)
             {
                 continue;
             }
-            send_conn.base.world_manager.despawn_entity(global_entity);
+            send_conn.base.world_manager.despawn_entity(*global_entity);
             send_conn.clear_entity_visible(entity_idx);
         }
 
@@ -2456,7 +2456,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_entity_map
             .write()
-            .despawn_by_global(global_entity);
+            .despawn_by_global(*global_entity);
     }
 
     /// Phase C / D3 — publish coord-staged lifecycle mutations into
@@ -2501,14 +2501,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(global_entity)
+                .has_global_entity(*global_entity)
             {
                 continue;
             }
             send_conn
                 .base
                 .world_manager
-                .insert_component(global_entity, component_kind);
+                .insert_component(*global_entity, *component_kind);
         }
     }
 
@@ -2521,14 +2521,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(global_entity)
+                .has_global_entity(*global_entity)
             {
                 continue;
             }
             send_conn
                 .base
                 .world_manager
-                .remove_component(global_entity, component_kind);
+                .remove_component(*global_entity, *component_kind);
         }
     }
 
@@ -2550,11 +2550,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(global_entity)
+                .has_global_entity(*global_entity)
             {
                 continue;
             }
-            send_conn.base.world_manager.despawn_entity(global_entity);
+            send_conn.base.world_manager.despawn_entity(*global_entity);
             send_conn.clear_entity_visible(entity_idx);
         }
 
@@ -2572,7 +2572,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         let handler = coord.shared.global_world_manager.read().diff_handler();
         let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
         guard
-            .entity_to_global_idx(global_entity)
+            .entity_to_global_idx(*global_entity)
             .unwrap_or(GlobalEntityIndex::INVALID)
     }
 
@@ -2724,12 +2724,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                         if send_conn
                             .base
                             .world_manager
-                            .has_global_entity(global_entity)
+                            .has_global_entity(*global_entity)
                         {
                             send_conn
                                 .base
                                 .world_manager
-                                .host_send_set_auth(global_entity, EntityAuthStatus::Denied);
+                                .host_send_set_auth(*global_entity, EntityAuthStatus::Denied);
                         }
                     }
                 }
@@ -2742,14 +2742,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                         if !send_conn
                             .base
                             .world_manager
-                            .has_global_entity(global_entity)
+                            .has_global_entity(*global_entity)
                         {
                             continue;
                         }
                         send_conn
                             .base
                             .world_manager
-                            .host_send_set_auth(global_entity, EntityAuthStatus::Denied);
+                            .host_send_set_auth(*global_entity, EntityAuthStatus::Denied);
                     }
                 }
             }
@@ -2770,7 +2770,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(global_entity)
+                .has_global_entity(*global_entity)
             {
                 continue;
             }
@@ -2783,7 +2783,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             send_conn
                 .base
                 .world_manager
-                .host_send_set_auth(global_entity, new_status);
+                .host_send_set_auth(*global_entity, new_status);
             #[cfg(feature = "e2e_debug")]
             if new_status == EntityAuthStatus::Granted {
                 crate::server::world_server::SERVER_SET_AUTH_ENQUEUED
@@ -2806,7 +2806,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(global_entity)
+                .has_global_entity(*global_entity)
             {
                 continue;
             }
@@ -2818,7 +2818,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             send_conn.base.world_manager.send_enable_delegation(
                 HostType::Server,
                 false,
-                global_entity,
+                *global_entity,
             );
         }
     }
@@ -2962,14 +2962,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                 if !send_conn
                     .base
                     .world_manager
-                    .has_global_entity(global_entity)
+                    .has_global_entity(*global_entity)
                 {
                     continue;
                 }
                 send_conn
                     .base
                     .world_manager
-                    .host_send_set_auth(global_entity, EntityAuthStatus::Available);
+                    .host_send_set_auth(*global_entity, EntityAuthStatus::Available);
             }
         }
     }

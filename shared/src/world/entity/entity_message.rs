@@ -228,7 +228,7 @@ impl EntityMessage<RemoteEntity> {
     /// or `None` if the entity is not found in the map (stale mapping after churn -- the caller drops it).
     pub fn to_event(self, local_entity_map: &LocalEntityMap) -> Option<EntityEvent> {
         let remote_entity = self.entity().unwrap();
-        let global_entity = match local_entity_map.global_entity_from_remote(&remote_entity) {
+        let global_entity = match local_entity_map.global_entity_from_remote(remote_entity) {
             Some(ge) => *ge,
             None => {
                 error!(
@@ -297,7 +297,7 @@ impl EntityMessage<HostEntity> {
     /// Converts this host-entity message into an `EntityEvent`, or `None` if the entity is not found in the map.
     pub fn to_event(self, local_entity_map: &LocalEntityMap) -> Option<EntityEvent> {
         let host_entity = self.entity().unwrap();
-        let global_entity = match local_entity_map.global_entity_from_host(&host_entity) {
+        let global_entity = match local_entity_map.global_entity_from_host(host_entity) {
             Some(ge) => *ge,
             None => {
                 error!(

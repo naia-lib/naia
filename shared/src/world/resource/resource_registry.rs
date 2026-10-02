@@ -91,8 +91,8 @@ impl ResourceRegistry {
 
     /// Receiver-side: remove by entity (used when an incoming Despawn
     /// for a resource entity arrives).
-    pub fn remove_by_entity(&mut self, entity: &GlobalEntity) -> Option<TypeId> {
-        let type_id = self.by_entity.remove(entity)?;
+    pub fn remove_by_entity(&mut self, entity: GlobalEntity) -> Option<TypeId> {
+        let type_id = self.by_entity.remove(&entity)?;
         self.by_type.remove(&type_id);
         Some(type_id)
     }
@@ -108,13 +108,13 @@ impl ResourceRegistry {
     }
 
     /// O(1): "is this entity a resource entity, and if so which type?"
-    pub fn type_for(&self, entity: &GlobalEntity) -> Option<TypeId> {
-        self.by_entity.get(entity).copied()
+    pub fn type_for(&self, entity: GlobalEntity) -> Option<TypeId> {
+        self.by_entity.get(&entity).copied()
     }
 
     /// O(1): "is this entity a resource entity?"
-    pub fn is_resource_entity(&self, entity: &GlobalEntity) -> bool {
-        self.by_entity.contains_key(entity)
+    pub fn is_resource_entity(&self, entity: GlobalEntity) -> bool {
+        self.by_entity.contains_key(&entity)
     }
 
     /// Returns the number of registered resources.

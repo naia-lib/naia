@@ -25,6 +25,7 @@ impl TickEvents {
     }
 
     /// Returns `true` if no tick events have been queued this frame.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.empty
     }
@@ -35,6 +36,7 @@ impl TickEvents {
     }
 
     /// Returns `true` if at least one tick event of type `V` is queued.
+    #[must_use]
     pub fn has<V: TickEvent>(&self) -> bool {
         V::has(self)
     }

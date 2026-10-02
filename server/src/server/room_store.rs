@@ -158,7 +158,7 @@ impl RoomStore {
                 .get(room_key)
                 .map(|room| {
                     room.entities()
-                        .filter_map(|ge| entity_map.global_entity_to_entity(ge).ok())
+                        .filter_map(|ge| entity_map.global_entity_to_entity(*ge).ok())
                         .collect()
                 })
                 .unwrap_or_default()
@@ -300,7 +300,7 @@ impl RoomStore {
         let mut pairs = Vec::with_capacity(global_entities.len());
         for global_entity in global_entities {
             room.remove_entity(&global_entity, false);
-            if let Ok(world_entity) = entity_map.global_entity_to_entity(&global_entity) {
+            if let Ok(world_entity) = entity_map.global_entity_to_entity(global_entity) {
                 pairs.push((world_entity, global_entity));
             }
         }

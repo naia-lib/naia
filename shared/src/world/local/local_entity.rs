@@ -145,18 +145,18 @@ impl OwnedLocalEntity {
             OwnedLocalEntity::Host {
                 id,
                 is_static: true,
-            } => converter.static_host_entity_to_global_entity(&HostEntity::new(*id)),
+            } => converter.static_host_entity_to_global_entity(HostEntity::new(*id)),
             OwnedLocalEntity::Host {
                 id,
                 is_static: false,
-            } => converter.host_entity_to_global_entity(&HostEntity::new(*id)),
+            } => converter.host_entity_to_global_entity(HostEntity::new(*id)),
             OwnedLocalEntity::Remote { id, is_static } => {
                 let remote = if *is_static {
                     RemoteEntity::new_static(*id)
                 } else {
                     RemoteEntity::new(*id)
                 };
-                converter.remote_entity_to_global_entity(&remote)
+                converter.remote_entity_to_global_entity(remote)
             }
         }
     }

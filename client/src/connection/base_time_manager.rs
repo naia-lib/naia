@@ -126,7 +126,7 @@ impl BaseTimeManager {
                 .as_millis();
 
             // Final values
-            let time_offset_millis = (send_offset_millis + recv_offset_millis) / 2;
+            let time_offset_millis = i32::midpoint(send_offset_millis, recv_offset_millis);
             // Use saturating_sub to handle edge cases where server processing appears to take longer than RTT
             // (can happen in fast test scenarios or clock inconsistencies)
             let round_trip_delay_millis =

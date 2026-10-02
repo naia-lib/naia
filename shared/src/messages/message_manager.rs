@@ -296,7 +296,7 @@ impl MessageManager {
     }
 
     /// Advances all channel senders, re-queuing any messages due for retransmission given current RTT.
-    pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {
+    pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: f32) {
         for channel in self.channel_senders.values_mut() {
             channel.collect_messages(now, rtt_millis);
         }
@@ -471,7 +471,7 @@ impl MessageManager {
                     // must also name the outstanding exchange, or the packet
                     // drops without touching the mapping.
                     let Some(global_request_id) =
-                        channel_sender.process_incoming_response(&local_request_id, wire_nonce)
+                        channel_sender.process_incoming_response(local_request_id, wire_nonce)
                     else {
                         warn!(
                             "dropping a response on channel {:?} that answers no outstanding request",
@@ -495,7 +495,7 @@ impl PacketNotifiable for MessageManager {
             for (channel_kind, message_indices) in channel_list {
                 if let Some(channel) = self.channel_senders.get_mut(channel_kind) {
                     for message_index in message_indices {
-                        channel.notify_message_delivered(message_index);
+                        channel.notify_message_delivered(*message_index);
                     }
                 }
             }

@@ -282,7 +282,7 @@ impl Protocol {
     /// order — membership by net ID, never by sorted name. Feeds fingerprint
     /// v2's resource section.
     pub fn resource_member_net_ids(&self) -> Vec<u16> {
-        self.resource_kinds.member_net_ids(&self.component_kinds)
+        self.resource_kinds.member_net_ids(&&self.component_kinds)
     }
 
     /// Compute the protocol fingerprint from current state.

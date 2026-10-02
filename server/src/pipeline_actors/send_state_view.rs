@@ -97,7 +97,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
         }
         #[cfg(not(feature = "f3_diag"))]
         gwm.all_global_entities()
-            .filter_map(|ge| gem.global_entity_to_entity(ge).ok())
+            .filter_map(|ge| gem.global_entity_to_entity(*ge).ok())
             .collect()
     }
 
@@ -115,7 +115,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
 
         let mut out = Vec::new();
         for ge in gwm.all_global_entities() {
-            let Ok(world_entity) = gem.global_entity_to_entity(ge) else {
+            let Ok(world_entity) = gem.global_entity_to_entity(*ge) else {
                 // Reserved-but-not-yet-spawned global entities have no
                 // world-entity counterpart; skip them (cyberlith can't
                 // look them up anyway).
@@ -186,10 +186,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
             let Some(ge) = guard.global_entity_at(idx) else {
                 continue;
             };
-            let Ok(world_entity) = gem.global_entity_to_entity(&ge) else {
+            let Ok(world_entity) = gem.global_entity_to_entity(ge) else {
                 continue;
             };
-            if gwm.entity_is_replicating(&ge) {
+            if gwm.entity_is_replicating(ge) {
                 live.push(world_entity);
             }
             if let Some(kinds) = gwm.component_kinds(&ge) {
@@ -263,10 +263,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
             // the bevy world panics on an unregistered kind, so this guard
             // (not the `else` arm below) is what makes the assembler match the
             // bevy assembler's skip semantics and stay panic-free.
-            if !world.has_component_of_kind(entity, kind) {
+            if !world.has_component_of_kind(entity, *kind) {
                 continue;
             }
-            let Some(dyn_ref) = world.component_of_kind(entity, kind) else {
+            let Some(dyn_ref) = world.component_of_kind(entity, *kind) else {
                 // Belt-and-suspenders: a TOCTOU removal between the has-check
                 // and the fetch also skips rather than panics.
                 continue;

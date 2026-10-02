@@ -49,7 +49,7 @@ impl ChannelSender<MessageContainer> for SequencedUnreliableSender {
         true
     }
 
-    fn collect_messages(&mut self, _: &Instant, _: &f32) {
+    fn collect_messages(&mut self, _: &Instant, _: f32) {
         // not necessary for an unreliable channel
     }
 
@@ -57,7 +57,7 @@ impl ChannelSender<MessageContainer> for SequencedUnreliableSender {
         !self.outgoing_messages.is_empty()
     }
 
-    fn notify_message_delivered(&mut self, _: &MessageIndex) {
+    fn notify_message_delivered(&mut self, _: MessageIndex) {
         // not necessary for an unreliable channel
     }
 }
@@ -105,7 +105,7 @@ impl MessageChannelSender for SequencedUnreliableSender {
 
     fn process_incoming_response(
         &mut self,
-        _: &LocalRequestId,
+        _: LocalRequestId,
         _: ConnectionRequestNonce,
     ) -> Option<GlobalRequestId> {
         panic!("SequencedUnreliable channel does not support requests");

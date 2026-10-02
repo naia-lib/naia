@@ -18,6 +18,7 @@ impl Socket {
     /// digits. Naia sends it as its own header on the session request; see
     /// [`stamp_protocol_id_header`](naia_socket_shared::stamp_protocol_id_header)
     /// for why it is stamped rather than left to the caller.
+    #[must_use]
     pub fn connect(
         server_session_url: &str,
         config: &SocketConfig,
@@ -27,6 +28,7 @@ impl Socket {
     }
 
     /// Connects to the given server address with authentication
+    #[must_use]
     pub fn connect_with_auth(
         server_session_url: &str,
         config: &SocketConfig,
@@ -43,6 +45,7 @@ impl Socket {
     }
 
     /// Connects to the given server address with authentication
+    #[must_use]
     pub fn connect_with_auth_headers(
         server_session_url: &str,
         config: &SocketConfig,
@@ -59,6 +62,7 @@ impl Socket {
     }
 
     /// Connects to the given server address with authentication
+    #[must_use]
     pub fn connect_with_auth_and_headers(
         server_session_url: &str,
         config: &SocketConfig,

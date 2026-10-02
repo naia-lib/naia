@@ -42,9 +42,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntityMap<E> {
 impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E> for GlobalEntityMap<E> {
     fn global_entity_to_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<E, EntityDoesNotExistError> {
-        match self.global_to_entity_map.get(global_entity) {
+        match self.global_to_entity_map.get(&global_entity) {
             Some(world_entity_opt) => {
                 if let Some(world_entity) = world_entity_opt {
                     return Ok(*world_entity);
@@ -79,7 +79,7 @@ pub trait GlobalEntitySpawner<E: Copy + Eq + Hash + Send + Sync>:
     /// Pre-allocates a [`GlobalEntity`] slot for `remote_entity` before the local world entity is spawned.
     fn reserve_global_entity(&mut self, remote_entity: RemoteEntity) -> GlobalEntity;
     /// Removes the mapping keyed by `global_entity`, panicking if it does not exist.
-    fn despawn_by_global(&mut self, global_entity: &GlobalEntity);
+    fn despawn_by_global(&mut self, global_entity: GlobalEntity);
     /// Removes the mapping keyed by `world_entity`, panicking if it does not exist.
     fn despawn_by_world(&mut self, world_entity: &E);
     /// Returns `self` as an [`EntityAndGlobalEntityConverter`] reference for read-only lookups.
@@ -142,8 +142,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntitySpawner<E> for GlobalEntityM
         global_entity
     }
 
-    fn despawn_by_global(&mut self, global_entity: &GlobalEntity) {
-        let Some(Some(world_entity)) = self.global_to_entity_map.remove(global_entity) else {
+    fn despawn_by_global(&mut self, global_entity: GlobalEntity) {
+        let Some(Some(world_entity)) = self.global_to_entity_map.remove(&global_entity) else {
             panic!(
                 "Global entity {:?} does not exist in the global to entity map",
                 global_entity

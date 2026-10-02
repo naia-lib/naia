@@ -17,7 +17,7 @@ impl<T> SequenceList<T> {
         self.list.remove(0)
     }
 
-    pub fn contains_scan_from_back(&self, id: &u16) -> bool {
+    pub fn contains_scan_from_back(&self, id: u16) -> bool {
         let mut index = self.list.len();
 
         loop {
@@ -29,16 +29,16 @@ impl<T> SequenceList<T> {
             index -= 1;
 
             let (old_id, _) = self.list.get(index).unwrap();
-            if *old_id == *id {
+            if *old_id == id {
                 return true;
             }
-            if sequence_less_than(*old_id, *id) {
+            if sequence_less_than(*old_id, id) {
                 return false;
             }
         }
     }
 
-    pub fn get_mut_scan_from_back<'a>(&'a mut self, id: &u16) -> Option<&'a mut T> {
+    pub fn get_mut_scan_from_back<'a>(&'a mut self, id: u16) -> Option<&'a mut T> {
         let mut index = self.list.len();
 
         loop {
@@ -51,10 +51,10 @@ impl<T> SequenceList<T> {
 
             {
                 let (old_id, _) = self.list.get(index).unwrap();
-                if *old_id == *id {
+                if *old_id == id {
                     break;
                 }
-                if sequence_less_than(*old_id, *id) {
+                if sequence_less_than(*old_id, id) {
                     return None;
                 }
             }
@@ -87,7 +87,7 @@ impl<T> SequenceList<T> {
         }
     }
 
-    pub fn remove_scan_from_front(&mut self, id: &u16) -> Option<T> {
+    pub fn remove_scan_from_front(&mut self, id: u16) -> Option<T> {
         let mut index = 0;
         let mut remove = false;
 
@@ -97,7 +97,7 @@ impl<T> SequenceList<T> {
             }
 
             let (old_id, _) = self.list.get(index).unwrap();
-            if *old_id == *id {
+            if *old_id == id {
                 remove = true;
             }
 

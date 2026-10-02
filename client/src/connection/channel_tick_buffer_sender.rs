@@ -184,7 +184,7 @@ impl ChannelTickBufferSender {
         bits_needed: u32,
         bits_free: u32,
     ) {
-        let mut message_names = "".to_string();
+        let mut message_names = String::new();
         let mut added = false;
         for (_id, message) in messages {
             if added {

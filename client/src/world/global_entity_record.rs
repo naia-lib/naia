@@ -15,9 +15,7 @@ pub struct GlobalEntityRecord {
 
 impl GlobalEntityRecord {
     pub fn new(owner: EntityOwner) -> Self {
-        if owner == EntityOwner::Local {
-            panic!("Should not insert Local entity in this record");
-        }
+        assert!(owner != EntityOwner::Local, "Should not insert Local entity in this record");
 
         // Host-owned entities always start public, client-owned entities always start private
         let replication_config = if owner.is_server() {
@@ -70,15 +68,11 @@ impl GlobalEntityRecord {
     }
 
     pub(crate) fn insert_component(&mut self, component_kind: ComponentKind) {
-        if !self.component_kinds.insert(component_kind) {
-            panic!("Attempted to insert a component that already exists in the global entity record: {:?}", component_kind);
-        }
+        assert!(self.component_kinds.insert(component_kind), "Attempted to insert a component that already exists in the global entity record: {component_kind:?}");
     }
 
     pub(crate) fn remove_component(&mut self, component_kind: &ComponentKind) {
         let result = self.component_kinds.remove(component_kind);
-        if !result {
-            panic!("Attempted to remove a component that does not exist in the global entity record: {:?}", component_kind);
-        }
+        assert!(result, "Attempted to remove a component that does not exist in the global entity record: {component_kind:?}")
     }
 }

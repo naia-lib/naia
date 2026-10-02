@@ -79,7 +79,7 @@ impl Fixture {
 
     /// Brings `entity` into scope as a host-owned entity carrying `kinds`,
     /// then drains the spawn command it queues.
-    fn spawn_host(&mut self, entity: &GlobalEntity, kinds: Vec<ComponentKind>) -> HostEntity {
+    fn spawn_host(&mut self, entity: GlobalEntity, kinds: Vec<ComponentKind>) -> HostEntity {
         self.manager
             .host_init_entity(entity, kinds, &self.kinds, false);
         let _ = self.drain_commands();
@@ -524,7 +524,7 @@ impl Fixture {
         }
     }
 
-    fn owned(&self, global_entity: &GlobalEntity) -> OwnedLocalEntity {
+    fn owned(&self, global_entity: GlobalEntity) -> OwnedLocalEntity {
         self.manager
             .entity_converter()
             .global_entity_to_owned_entity(global_entity)
@@ -817,7 +817,7 @@ fn releasing_authority_on_a_host_entity_goes_out_through_the_host_engine() {
 /// authority -- which marks the component fully dirty. Returns nothing; the
 /// caller asserts on the manager's mask queries.
 impl Fixture {
-    fn arm_and_grant(&mut self, entity: &GlobalEntity, kind: &ComponentKind) {
+    fn arm_and_grant(&mut self, entity: GlobalEntity, kind: ComponentKind) {
         self.gwm.arm_diff_handler(&self.kinds, entity, kind);
         self.gwm.declare_kinds(entity, vec![*kind]);
         self.manager.insert_component(entity, kind);
@@ -1070,7 +1070,7 @@ fn migrating_an_unmapped_entity_reports_the_missing_entity() {
 impl Fixture {
     /// Resolves the dense (entity index, kind bit) pair the hot-path
     /// predicates take, for a component already armed on the diff handler.
-    fn dense(&self, entity: &GlobalEntity, kind: &ComponentKind) -> (GlobalEntityIndex, u16) {
+    fn dense(&self, entity: GlobalEntity, kind: ComponentKind) -> (GlobalEntityIndex, u16) {
         let gdh = self.gwm.diff_handler.read().unwrap();
         (
             gdh.entity_to_global_idx(entity)

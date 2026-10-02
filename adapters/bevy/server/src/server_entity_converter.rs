@@ -54,7 +54,7 @@ impl ServerEntityConverter {
 impl EntityAndGlobalEntityConverter<Entity> for ServerEntityConverter {
     fn global_entity_to_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<Entity, EntityDoesNotExistError> {
         self.inner.global_entity_to_entity(global_entity)
     }

@@ -133,7 +133,7 @@ pub(crate) enum UpdateDropReason {
 fn planned_update_drop_reason<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
     world: &W,
     world_entity: &E,
-    global_entity: &GlobalEntity,
+    global_entity: GlobalEntity,
     kinds: &UpdateKinds,
     global_world_manager: &dyn GlobalWorldManagerType,
     converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -144,7 +144,7 @@ fn planned_update_drop_reason<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType
 
     if !kinds
         .iter()
-        .any(|(kind, _, _)| world.has_component_of_kind(world_entity, kind))
+        .any(|(kind, _, _)| world.has_component_of_kind(world_entity, *kind))
     {
         return Some(UpdateDropReason::AllKindsStale);
     }
@@ -234,10 +234,10 @@ impl WorldWriter {
     fn write_command_id(
         writer: &mut dyn BitWrite,
         last_id_opt: &mut Option<CommandId>,
-        current_id: &CommandId,
+        current_id: CommandId,
     ) {
-        IndexedMessageWriter::write_message_index(writer, last_id_opt, current_id);
-        *last_id_opt = Some(*current_id);
+        IndexedMessageWriter::write_message_index(writer, *last_id_opt, current_id);
+        *last_id_opt = Some(current_id);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -245,7 +245,7 @@ impl WorldWriter {
         component_kinds: &ComponentKinds,
         now: &Instant,
         writer: &mut BitWriter,
-        packet_index: &PacketIndex,
+        packet_index: PacketIndex,
         world: &W,
         entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
@@ -291,7 +291,7 @@ impl WorldWriter {
         component_kinds: &ComponentKinds,
         now: &Instant,
         writer: &mut BitWriter,
-        packet_index: &PacketIndex,
+        packet_index: PacketIndex,
         world: &W,
         entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
@@ -375,13 +375,14 @@ impl WorldWriter {
         entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
         world_manager: &mut LocalWorldManager,
-        packet_index: &PacketIndex,
+        packet_index: PacketIndex,
         writer: &mut dyn BitWrite,
         last_written_id: &mut Option<CommandId>,
         is_writing: bool,
         next_send_commands: &mut VecDeque<(CommandId, EntityCommand)>,
     ) {
         let (command_id, command) = next_send_commands.front().unwrap();
+        let command_id = *command_id;
 
         // info!("Writing (command_id: {:?}), command {:?} into packet {:?}", command_id, command, packet_index);
 
@@ -395,7 +396,7 @@ impl WorldWriter {
                 // get host entity
                 let host_entity = world_manager
                     .entity_converter()
-                    .global_entity_to_host_entity(global_entity)
+                    .global_entity_to_host_entity(*global_entity)
                     .unwrap();
 
                 // write host entity
@@ -412,7 +413,7 @@ impl WorldWriter {
             }
             EntityCommand::SpawnWithComponents(global_entity, comp_kind_list) => {
                 let Some(world_entity) =
-                    entity_converter.global_entity_to_entity(global_entity).ok()
+                    entity_converter.global_entity_to_entity(*global_entity).ok()
                 else {
                     EntityMessageType::Noop.ser(writer);
                     if is_writing {
@@ -425,7 +426,7 @@ impl WorldWriter {
                     return;
                 };
 
-                let has_global = world_manager.has_global_entity(global_entity);
+                let has_global = world_manager.has_global_entity(*global_entity);
                 if !has_global {
                     // LEGITIMATE race: a Despawn superseded this Spawn in the
                     // same window (`host_engine` removes the channel on Despawn
@@ -444,7 +445,7 @@ impl WorldWriter {
 
                 let present_count = comp_kind_list
                     .iter()
-                    .filter(|k| world.has_component_of_kind(&world_entity, k))
+                    .filter(|k| world.has_component_of_kind(&world_entity, **k))
                     .count();
                 let all_present = present_count == comp_kind_list.len();
                 if !all_present {
@@ -509,7 +510,7 @@ impl WorldWriter {
 
                 let host_entity = world_manager
                     .entity_converter()
-                    .global_entity_to_host_entity(global_entity)
+                    .global_entity_to_host_entity(*global_entity)
                     .unwrap();
                 host_entity.copy_to_owned().ser(writer);
 
@@ -520,7 +521,7 @@ impl WorldWriter {
                     let mut converter = world_manager.entity_converter_mut(global_world_manager);
                     for component_kind in comp_kind_list.iter() {
                         world
-                            .component_of_kind(&world_entity, component_kind)
+                            .component_of_kind(&world_entity, *component_kind)
                             .expect("Component does not exist in World")
                             .write(component_kinds, writer, &mut converter);
                     }
@@ -546,7 +547,7 @@ impl WorldWriter {
                 // get local entity
                 let local_entity = world_manager
                     .entity_converter()
-                    .global_entity_to_owned_entity(global_entity)
+                    .global_entity_to_owned_entity(*global_entity)
                     .unwrap();
 
                 // write local entity
@@ -564,7 +565,7 @@ impl WorldWriter {
             EntityCommand::InsertComponent(global_entity, component_kind) => {
                 // get world entity
                 let Some(world_entity) =
-                    entity_converter.global_entity_to_entity(global_entity).ok()
+                    entity_converter.global_entity_to_entity(*global_entity).ok()
                 else {
                     EntityMessageType::Noop.ser(writer);
                     if is_writing {
@@ -577,12 +578,12 @@ impl WorldWriter {
                     return;
                 };
 
-                let insert_has_global = world_manager.has_global_entity(global_entity);
+                let insert_has_global = world_manager.has_global_entity(*global_entity);
                 // Same split as SpawnWithComponents: `!has_global` is the
                 // legitimate despawn-race Noop; `has_global && !present` is a
                 // needed-set under-supply that would silently drop the insert.
                 let insert_present =
-                    insert_has_global && world.has_component_of_kind(&world_entity, component_kind);
+                    insert_has_global && world.has_component_of_kind(&world_entity, *component_kind);
                 debug_assert!(
                     !insert_has_global || insert_present,
                     "InsertComponent: entity {:?} is host-tracked but component {:?} \
@@ -622,7 +623,7 @@ impl WorldWriter {
                     // get local entity
                     let local_entity = world_manager
                         .entity_converter()
-                        .global_entity_to_owned_entity(global_entity)
+                        .global_entity_to_owned_entity(*global_entity)
                         .unwrap();
 
                     // write local entity
@@ -634,7 +635,7 @@ impl WorldWriter {
 
                         // write component payload
                         world
-                            .component_of_kind(&world_entity, component_kind)
+                            .component_of_kind(&world_entity, *component_kind)
                             .expect("Component does not exist in World")
                             .write(component_kinds, writer, &mut converter);
                     }
@@ -651,7 +652,7 @@ impl WorldWriter {
                 }
             }
             EntityCommand::RemoveComponent(global_entity, component_kind) => {
-                if !world_manager.has_global_entity(global_entity) {
+                if !world_manager.has_global_entity(*global_entity) {
                     EntityMessageType::Noop.ser(writer);
 
                     // if we are actually writing this packet
@@ -669,7 +670,7 @@ impl WorldWriter {
                     // get local entity
                     let local_entity = world_manager
                         .entity_converter()
-                        .global_entity_to_owned_entity(global_entity)
+                        .global_entity_to_owned_entity(*global_entity)
                         .unwrap();
 
                     // write local entity
@@ -703,7 +704,7 @@ impl WorldWriter {
                 // get local entity
                 let local_entity = world_manager
                     .entity_converter()
-                    .global_entity_to_owned_entity(global_entity)
+                    .global_entity_to_owned_entity(*global_entity)
                     .unwrap();
 
                 // write local entity
@@ -733,7 +734,7 @@ impl WorldWriter {
                 // get local entity
                 let local_entity = world_manager
                     .entity_converter()
-                    .global_entity_to_owned_entity(global_entity)
+                    .global_entity_to_owned_entity(*global_entity)
                     .unwrap();
 
                 // write local entity
@@ -763,7 +764,7 @@ impl WorldWriter {
                 // get local entity
                 let local_entity = world_manager
                     .entity_converter()
-                    .global_entity_to_owned_entity(global_entity)
+                    .global_entity_to_owned_entity(*global_entity)
                     .unwrap();
 
                 local_entity.ser(writer);
@@ -794,7 +795,7 @@ impl WorldWriter {
                 // get host entity
                 let host_entity = world_manager
                     .entity_converter()
-                    .global_entity_to_host_entity(global_entity)
+                    .global_entity_to_host_entity(*global_entity)
                     .unwrap();
 
                 // write host entity
@@ -827,13 +828,13 @@ impl WorldWriter {
                 // Try RemoteEntity first (for client-owned entities on server), fall back to HostEntity if needed
                 let remote_entity = world_manager
                     .entity_converter()
-                    .global_entity_to_remote_entity(global_entity)
+                    .global_entity_to_remote_entity(*global_entity)
                     .or_else(|_| {
                         // Fallback: if it's a HostEntity, convert it to RemoteEntity
                         // This handles the case where server-owned entities are sent as SetAuthority
                         world_manager
                             .entity_converter()
-                            .global_entity_to_host_entity(global_entity)
+                            .global_entity_to_host_entity(*global_entity)
                             .map(|he| he.to_remote())
                     })
                     .unwrap_or_else(|_| {
@@ -881,7 +882,7 @@ impl WorldWriter {
                 // get remote entity
                 let remote_entity = world_manager
                     .entity_converter()
-                    .global_entity_to_remote_entity(global_entity)
+                    .global_entity_to_remote_entity(*global_entity)
                     .unwrap();
 
                 // write remote entity
@@ -914,7 +915,7 @@ impl WorldWriter {
                 // NOTE: this is actually valid because it should be possible to ReleaseAuthority right after EnableDelegation, so that auth isn't automatically set to Granted
                 let local_entity = world_manager
                     .entity_converter()
-                    .global_entity_to_owned_entity(global_entity)
+                    .global_entity_to_owned_entity(*global_entity)
                     .unwrap();
 
                 // write local entity
@@ -946,7 +947,7 @@ impl WorldWriter {
                 // get remote entity
                 let remote_entity = world_manager
                     .entity_converter()
-                    .global_entity_to_remote_entity(global_entity)
+                    .global_entity_to_remote_entity(*global_entity)
                     .unwrap();
 
                 // write remote entity
@@ -1028,7 +1029,7 @@ impl WorldWriter {
                 )
             }
             EntityCommand::InsertComponent(_entity, component_kind) => {
-                let component_name = component_kinds.kind_to_name(component_kind);
+                let component_name = component_kinds.kind_to_name(*component_kind);
                 panic!(
                     "Packet Write Error: Blocking overflow detected! Component Insertion message of type `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! This condition should never be reached, as large Messages should be Fragmented in the Reliable channel"
                 )
@@ -1059,7 +1060,7 @@ impl WorldWriter {
         component_kinds: &ComponentKinds,
         now: &Instant,
         writer: &mut BitWriter,
-        packet_index: &PacketIndex,
+        packet_index: PacketIndex,
         world: &W,
         global_world_manager: &dyn GlobalWorldManagerType,
         global_diff_handler: Option<&GlobalDiffHandler>,
@@ -1079,7 +1080,7 @@ impl WorldWriter {
             if let Some(reason) = planned_update_drop_reason(
                 world,
                 &world_entity,
-                &global_entity,
+                global_entity,
                 &update_list[i].3,
                 global_world_manager,
                 &world_manager.entity_converter(),
@@ -1092,7 +1093,7 @@ impl WorldWriter {
 
             let local_entity = world_manager
                 .entity_converter()
-                .global_entity_to_owned_entity(&global_entity)
+                .global_entity_to_owned_entity(global_entity)
                 .unwrap();
 
             // check that we can at least write a LocalEntity and a ComponentContinue bit
@@ -1126,7 +1127,7 @@ impl WorldWriter {
                 world_manager,
                 packet_index,
                 writer,
-                &global_entity,
+                global_entity,
                 entity_idx,
                 &world_entity,
                 has_written,
@@ -1165,9 +1166,9 @@ impl WorldWriter {
         global_world_manager: &dyn GlobalWorldManagerType,
         global_diff_handler: Option<&GlobalDiffHandler>,
         world_manager: &mut LocalWorldManager,
-        packet_index: &PacketIndex,
+        packet_index: PacketIndex,
         writer: &mut BitWriter,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
         entity_idx: GlobalEntityIndex,
         world_entity: &E,
         has_written: &mut bool,
@@ -1196,7 +1197,7 @@ impl WorldWriter {
             let diff_mask = if entity_idx.is_valid() {
                 plan_diff_mask.clone()
             } else {
-                world_manager.get_diff_mask(global_entity, &component_kind)
+                world_manager.get_diff_mask(global_entity, component_kind)
             };
 
             // When `global_diff_handler` is `Some` (server path), attempt PATH A or PATH B.
@@ -1208,7 +1209,7 @@ impl WorldWriter {
             if let Some(gdh) = global_diff_handler {
                 let is_user_dep = gdh
                     .is_component_user_dependent(entity_idx, kind_bit)
-                    .unwrap_or_else(|| component_kinds.is_user_dependent(&component_kind));
+                    .unwrap_or_else(|| component_kinds.is_user_dependent(component_kind));
                 if !is_user_dep {
                     // ── PATH A: UserIndependent ─────────────────────────────────
                     // Bytes are identical for all users with the same DiffMask.
@@ -1233,7 +1234,7 @@ impl WorldWriter {
                                     // planned update has nothing left to serialize, so
                                     // drop it rather than panicking.
                                     let Some(component) =
-                                        world.component_of_kind(world_entity, &component_kind)
+                                        world.component_of_kind(world_entity, component_kind)
                                     else {
                                         written_count += 1;
                                         continue;
@@ -1259,7 +1260,7 @@ impl WorldWriter {
                         if counter.overflowed() {
                             if !*has_written {
                                 Self::warn_overflow_update(
-                                    component_kinds.kind_to_name(&component_kind),
+                                    component_kinds.kind_to_name(component_kind),
                                     cached.bit_count,
                                     writer.bits_free(),
                                 );
@@ -1279,7 +1280,7 @@ impl WorldWriter {
                     // serialize from the snapshot, never from ECS directly.
                     // Phase 1+2 guarantees every entry is present. If somehow missing,
                     // optimized_write stays false and the two-pass path below handles it.
-                    if let Some(snapshot_entry) = sm.get(&(*global_entity, component_kind)) {
+                    if let Some(snapshot_entry) = sm.get(&(global_entity, component_kind)) {
                         let snapshot: &dyn Replicate = snapshot_entry.as_ref();
 
                         let mut converter =
@@ -1293,7 +1294,7 @@ impl WorldWriter {
                         if counter.overflowed() {
                             if !*has_written {
                                 Self::warn_overflow_update(
-                                    component_kinds.kind_to_name(&component_kind),
+                                    component_kinds.kind_to_name(component_kind),
                                     counter.bits_needed(),
                                     writer.bits_free(),
                                 );
@@ -1318,7 +1319,7 @@ impl WorldWriter {
                 // fallback for cases not handled by PATH A or PATH B above.
                 // See the cache-miss arm above: a component removed inside the
                 // freeze→transmit window has a stale plan entry, not an error.
-                if !world.has_component_of_kind(world_entity, &component_kind) {
+                if !world.has_component_of_kind(world_entity, component_kind) {
                     written_count += 1;
                     continue;
                 }
@@ -1327,12 +1328,12 @@ impl WorldWriter {
                 true.ser(&mut counter);
                 component_kind.ser(component_kinds, &mut counter);
                 world
-                    .component_of_kind(world_entity, &component_kind)
+                    .component_of_kind(world_entity, component_kind)
                     .expect("Component does not exist in World")
                     .write_update(&diff_mask, &mut counter, &mut converter);
                 if counter.overflowed() {
                     if !*has_written {
-                        let component_name = component_kinds.kind_to_name(&component_kind);
+                        let component_name = component_kinds.kind_to_name(component_kind);
                         Self::warn_overflow_update(
                             component_name,
                             counter.bits_needed(),
@@ -1345,7 +1346,7 @@ impl WorldWriter {
                 true.ser(writer);
                 component_kind.ser(component_kinds, writer);
                 world
-                    .component_of_kind(world_entity, &component_kind)
+                    .component_of_kind(world_entity, component_kind)
                     .expect("Component does not exist in World")
                     .write_update(&diff_mask, writer, &mut converter);
             }
@@ -1361,7 +1362,7 @@ impl WorldWriter {
                     now,
                     packet_index,
                     global_entity,
-                    &component_kind,
+                    component_kind,
                     diff_mask,
                 );
             } else {
@@ -1369,7 +1370,7 @@ impl WorldWriter {
                     now,
                     packet_index,
                     global_entity,
-                    &component_kind,
+                    component_kind,
                     diff_mask,
                 );
             }
@@ -1486,16 +1487,16 @@ mod delegated_send_guard_tests {
     }
 
     impl InScopeEntities<GlobalEntity> for AuthGwm {
-        fn has_entity(&self, _: &GlobalEntity) -> bool {
+        fn has_entity(&self, _: GlobalEntity) -> bool {
             true
         }
     }
 
     impl GlobalWorldManagerType for AuthGwm {
-        fn component_kinds(&self, _: &GlobalEntity) -> Option<Vec<ComponentKind>> {
+        fn component_kinds(&self, _: GlobalEntity) -> Option<Vec<ComponentKind>> {
             Some(vec![ComponentKind::of::<Ghost>()])
         }
-        fn entity_can_relate_to_user(&self, _: &GlobalEntity, _: &u64) -> bool {
+        fn entity_can_relate_to_user(&self, _: GlobalEntity, _: &u64) -> bool {
             true
         }
         fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>> {
@@ -1511,25 +1512,25 @@ mod delegated_send_guard_tests {
         fn register_component(
             &self,
             _: &ComponentKinds,
-            _: &GlobalEntity,
-            _: &ComponentKind,
+            _: GlobalEntity,
+            _: ComponentKind,
             _: u8,
         ) -> PropertyMutator {
             unreachable!("not exercised by these tests")
         }
-        fn get_entity_auth_accessor(&self, _: &GlobalEntity) -> EntityAuthAccessor {
+        fn get_entity_auth_accessor(&self, _: GlobalEntity) -> EntityAuthAccessor {
             self.auth.clone()
         }
-        fn entity_auth_status(&self, _: &GlobalEntity) -> Option<HostEntityAuthStatus> {
+        fn entity_auth_status(&self, _: GlobalEntity) -> Option<HostEntityAuthStatus> {
             Some(self.auth.auth_status())
         }
-        fn entity_needs_mutator_for_delegation(&self, _: &GlobalEntity) -> bool {
+        fn entity_needs_mutator_for_delegation(&self, _: GlobalEntity) -> bool {
             false
         }
-        fn entity_is_replicating(&self, _: &GlobalEntity) -> bool {
+        fn entity_is_replicating(&self, _: GlobalEntity) -> bool {
             true
         }
-        fn entity_is_static(&self, _: &GlobalEntity) -> bool {
+        fn entity_is_static(&self, _: GlobalEntity) -> bool {
             false
         }
         fn global_dirty_bitset(&self) -> Option<Arc<GlobalDirtyBitset>> {
@@ -1569,7 +1570,7 @@ mod delegated_send_guard_tests {
         fn has_component<R: ReplicatedComponent>(&self, _: &u64) -> bool {
             self.component_present
         }
-        fn has_component_of_kind(&self, _: &u64, _: &ComponentKind) -> bool {
+        fn has_component_of_kind(&self, _: &u64, _: ComponentKind) -> bool {
             self.component_present
         }
         fn component<'a, R: ReplicatedComponent>(
@@ -1581,7 +1582,7 @@ mod delegated_send_guard_tests {
         fn component_of_kind<'a>(
             &'a self,
             _: &u64,
-            _: &ComponentKind,
+            _: ComponentKind,
         ) -> Option<ReplicaDynRefWrapper<'a>> {
             panic!("serialization must not be reached: the queued update should have been dropped");
         }
@@ -1613,7 +1614,7 @@ mod delegated_send_guard_tests {
         fn has_component<R: ReplicatedComponent>(&self, _: &u64) -> bool {
             true
         }
-        fn has_component_of_kind(&self, _: &u64, _: &ComponentKind) -> bool {
+        fn has_component_of_kind(&self, _: &u64, _: ComponentKind) -> bool {
             true
         }
         fn component<'a, R: ReplicatedComponent>(
@@ -1625,7 +1626,7 @@ mod delegated_send_guard_tests {
         fn component_of_kind<'a>(
             &'a self,
             _: &u64,
-            _: &ComponentKind,
+            _: ComponentKind,
         ) -> Option<ReplicaDynRefWrapper<'a>> {
             Some(ReplicaDynRefWrapper::new(GhostDynRef {
                 inner: &self.ghost,
@@ -1893,7 +1894,7 @@ mod delegated_send_guard_tests {
         fn has_component<R: ReplicatedComponent>(&self, _: &u64) -> bool {
             unimplemented!("the update path uses has_component_of_kind")
         }
-        fn has_component_of_kind(&self, _: &u64, kind: &ComponentKind) -> bool {
+        fn has_component_of_kind(&self, _: &u64, kind: ComponentKind) -> bool {
             // `Wraith` is the one kind this world has already lost.
             *kind != ComponentKind::of::<Wraith>()
         }
@@ -1906,7 +1907,7 @@ mod delegated_send_guard_tests {
         fn component_of_kind<'a>(
             &'a self,
             _: &u64,
-            kind: &ComponentKind,
+            kind: ComponentKind,
         ) -> Option<ReplicaDynRefWrapper<'a>> {
             (*kind == ComponentKind::of::<Ghost>())
                 .then(|| ReplicaDynRefWrapper::new(GhostDynRef { inner: &self.ghost }))
@@ -2078,7 +2079,7 @@ mod delegated_send_guard_tests {
     fn server_diff_handler(
         component_kinds: &ComponentKinds,
         gwm: &dyn GlobalWorldManagerType,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> (GlobalDiffHandler, GlobalEntityIndex) {
         let mut gdh = GlobalDiffHandler::new();
         gdh.set_protocol_kind_count(component_kinds.kind_count());
@@ -2559,7 +2560,7 @@ mod delegated_send_guard_tests {
     impl EntityAndGlobalEntityConverter<u64> for OneEntityConverter {
         fn global_entity_to_entity(
             &self,
-            global_entity: &GlobalEntity,
+            global_entity: GlobalEntity,
         ) -> Result<u64, EntityDoesNotExistError> {
             if *global_entity == self.global_entity {
                 Ok(1)

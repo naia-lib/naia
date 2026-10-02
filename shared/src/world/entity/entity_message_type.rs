@@ -41,10 +41,10 @@ pub enum EntityMessageType {
 
 impl EntityMessageType {
     /// Builds an `EntityMessage<()>` for component-bearing types, attaching `component_kind`. Panics for other variants.
-    pub fn with_component_kind(&self, component_kind: &ComponentKind) -> EntityMessage<()> {
+    pub fn with_component_kind(&self, component_kind: ComponentKind) -> EntityMessage<()> {
         match self {
-            Self::InsertComponent => EntityMessage::InsertComponent((), *component_kind),
-            Self::RemoveComponent => EntityMessage::RemoveComponent((), *component_kind),
+            Self::InsertComponent => EntityMessage::InsertComponent((), component_kind),
+            Self::RemoveComponent => EntityMessage::RemoveComponent((), component_kind),
             t => panic!("Cannot apply component kind to message type: {:?}", t),
         }
     }

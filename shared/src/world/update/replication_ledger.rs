@@ -41,8 +41,8 @@ impl ReplicationLedger {
     pub fn register_component(
         &self,
         address: &Option<SocketAddr>,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        entity: GlobalEntity,
+        component_kind: ComponentKind,
     ) {
         self.handler
             .write()
@@ -50,7 +50,7 @@ impl ReplicationLedger {
             .register_component(address, entity, component_kind);
     }
 
-    pub fn deregister_component(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn deregister_component(&self, entity: GlobalEntity, component_kind: ComponentKind) {
         self.handler
             .write()
             .expect("ReplicationLedger lock poisoned")
@@ -59,14 +59,14 @@ impl ReplicationLedger {
 
     // ── Entry ops — read guard + `&self` atomic ─────────────────────────────
 
-    pub fn has_component(&self, entity: &GlobalEntity, component_kind: &ComponentKind) -> bool {
+    pub fn has_component(&self, entity: GlobalEntity, component_kind: ComponentKind) -> bool {
         self.read().has_component(entity, component_kind)
     }
 
     pub fn or_diff_mask(
         &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        entity: GlobalEntity,
+        component_kind: ComponentKind,
         new_diff_mask: &DiffMask,
     ) {
         self.read()
@@ -75,29 +75,29 @@ impl ReplicationLedger {
 
     pub fn diff_mask_snapshot(
         &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        entity: GlobalEntity,
+        component_kind: ComponentKind,
     ) -> DiffMask {
         self.read().diff_mask_snapshot(entity, component_kind)
     }
 
-    pub fn clear_diff_mask(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn clear_diff_mask(&self, entity: GlobalEntity, component_kind: ComponentKind) {
         self.read().clear_diff_mask(entity, component_kind);
     }
 
-    pub fn mark_receiver_delivered(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn mark_receiver_delivered(&self, entity: GlobalEntity, component_kind: ComponentKind) {
         self.read().mark_receiver_delivered(entity, component_kind);
     }
 
-    pub fn mark_receiver_fully_dirty(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn mark_receiver_fully_dirty(&self, entity: GlobalEntity, component_kind: ComponentKind) {
         self.read()
             .mark_receiver_fully_dirty(entity, component_kind);
     }
 
     pub fn is_receiver_dirty_and_delivered(
         &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        entity: GlobalEntity,
+        component_kind: ComponentKind,
     ) -> bool {
         self.read()
             .is_receiver_dirty_and_delivered(entity, component_kind)
@@ -130,8 +130,8 @@ impl ReplicationLedger {
 
     pub fn diff_mask_is_clear(
         &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        entity: GlobalEntity,
+        component_kind: ComponentKind,
     ) -> bool {
         self.read().diff_mask_is_clear(entity, component_kind)
     }

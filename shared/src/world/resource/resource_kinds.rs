@@ -48,8 +48,8 @@ impl ResourceKinds {
     }
 
     /// O(1) — is the given `ComponentKind` a registered resource?
-    pub fn is_resource(&self, kind: &ComponentKind) -> bool {
-        self.kinds.contains(kind)
+    pub fn is_resource(&self, kind: ComponentKind) -> bool {
+        self.kinds.contains(&kind)
     }
 
     /// Return the `ComponentKind` registered for `R`, or `None` if `R`
@@ -99,7 +99,7 @@ impl ResourceKinds {
             .iter()
             .map(|kind| {
                 components
-                    .net_id_of(kind)
+                    .net_id_of(*kind)
                     .expect("every Replicated Resource must be registered as a component first")
             })
             .collect();

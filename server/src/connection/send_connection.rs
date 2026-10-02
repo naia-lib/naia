@@ -244,7 +244,7 @@ impl SendConnection {
     ) {
         #[cfg(feature = "bench_instrumentation")]
         let t = std::time::Instant::now();
-        self.base.collect_messages(now, &rtt_millis);
+        self.base.collect_messages(now, rtt_millis);
         #[cfg(feature = "bench_instrumentation")]
         bench_send_counters::NS_COLLECT_MESSAGES.fetch_add(
             t.elapsed().as_nanos() as u64,
@@ -258,7 +258,7 @@ impl SendConnection {
         let mut host_world_events = self
             .base
             .world_manager
-            .take_outgoing_commands(now, &rtt_millis);
+            .take_outgoing_commands(now, rtt_millis);
         #[cfg(feature = "bench_instrumentation")]
         bench_send_counters::NS_TAKE_OUTGOING_EVENTS.fetch_add(
             t.elapsed().as_nanos() as u64,
@@ -548,11 +548,11 @@ impl SendConnection {
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
         snapshot_map: &SnapshotMap,
     ) -> (Vec<OutgoingPacket>, bool) {
-        self.base.collect_messages(now, &rtt_millis);
+        self.base.collect_messages(now, rtt_millis);
         let mut host_world_events = self
             .base
             .world_manager
-            .take_outgoing_commands(now, &rtt_millis);
+            .take_outgoing_commands(now, rtt_millis);
         self.base.accumulate_bandwidth(now);
 
         let mut packets = Vec::new();
@@ -682,7 +682,7 @@ impl SendConnection {
             channel_kinds,
             message_kinds,
             component_kinds,
-            &client_tick,
+            client_tick,
             client_authoritative_entities,
             reader,
         )

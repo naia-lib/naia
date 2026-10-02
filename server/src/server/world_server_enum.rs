@@ -927,7 +927,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         global_entity: &GlobalEntity,
     ) -> Result<E, EntityDoesNotExistError> {
         match &self.inner {
-            WorldServerImpl::Resident(ws) => ws.global_entity_to_entity(global_entity),
+            WorldServerImpl::Resident(ws) => ws.global_entity_to_entity(*global_entity),
             WorldServerImpl::Pipelined(ps) => ps.global_entity_to_entity(global_entity),
         }
     }
@@ -1453,9 +1453,9 @@ impl<E: Hash + Copy + Eq + Sync + Send + 'static> EntityAndGlobalEntityConverter
 {
     fn global_entity_to_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<E, EntityDoesNotExistError> {
-        WorldServer::global_entity_to_entity(self, global_entity)
+        WorldServer::global_entity_to_entity(self, &global_entity)
     }
 
     fn entity_to_global_entity(&self, entity: &E) -> Result<GlobalEntity, EntityDoesNotExistError> {

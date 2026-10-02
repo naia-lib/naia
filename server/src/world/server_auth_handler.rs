@@ -41,23 +41,23 @@ impl ServerAuthHandler {
     }
 
     pub fn get_accessor(&self, entity: &GlobalEntity) -> EntityAuthAccessor {
-        self.host_auth_handler.get_accessor(entity)
+        self.host_auth_handler.get_accessor(*entity)
     }
 
     pub fn register_entity(&mut self, entity: &GlobalEntity) {
         self.host_auth_handler
-            .register_entity(HostType::Server, entity);
+            .register_entity(HostType::Server, *entity);
         self.entity_auth_map.insert(*entity, AuthOwner::None);
     }
 
     pub fn deregister_entity(&mut self, entity: &GlobalEntity) {
-        self.host_auth_handler.deregister_entity(entity);
+        self.host_auth_handler.deregister_entity(*entity);
         self.entity_auth_map.remove(entity);
     }
 
     pub(crate) fn authority_status(&self, entity: &GlobalEntity) -> Option<EntityAuthStatus> {
         self.host_auth_handler
-            .auth_status(entity)
+            .auth_status(*entity)
             .map(|host_status| host_status.status())
     }
 
@@ -86,7 +86,7 @@ impl ServerAuthHandler {
                     *owner = AuthOwner::Server;
                     // If the Server is requesting Authority, grant the Server local Authority
                     self.host_auth_handler
-                        .set_auth_status(entity, EntityAuthStatus::Granted);
+                        .set_auth_status(*entity, EntityAuthStatus::Granted);
                 }
                 AuthOwner::Client(user_key) => {
                     *owner = AuthOwner::Client(*user_key);
@@ -96,7 +96,7 @@ impl ServerAuthHandler {
                         .insert(*entity);
                     // If a Client is requesting Authority, restrict the Server's local Authority
                     self.host_auth_handler
-                        .set_auth_status(entity, EntityAuthStatus::Denied);
+                        .set_auth_status(*entity, EntityAuthStatus::Denied);
                 }
                 AuthOwner::None => {}
             }
@@ -174,7 +174,7 @@ impl ServerAuthHandler {
             .insert(*entity);
         // Restrict the server's local Authority — a client now holds it.
         self.host_auth_handler
-            .set_auth_status(entity, EntityAuthStatus::Denied);
+            .set_auth_status(*entity, EntityAuthStatus::Denied);
         Ok(previous_owner)
     }
 
@@ -196,7 +196,7 @@ impl ServerAuthHandler {
         self.release_all_authority(entity, previous_owner);
         // Server holds authority — transition to Granted
         self.host_auth_handler
-            .set_auth_status(entity, EntityAuthStatus::Granted);
+            .set_auth_status(*entity, EntityAuthStatus::Granted);
 
         Ok(previous_owner)
     }
@@ -220,7 +220,7 @@ impl ServerAuthHandler {
         }
 
         self.host_auth_handler
-            .set_auth_status(entity, EntityAuthStatus::Available);
+            .set_auth_status(*entity, EntityAuthStatus::Available);
 
         true
     }

@@ -19,7 +19,8 @@ pub enum PacketReceiver {
 }
 
 impl PacketReceiver {
-    /// Creates a PacketReceiver, conditioned or not depending on the config
+    /// Creates a `PacketReceiver`, conditioned or not depending on the config
+    #[must_use]
     pub fn new(
         inner_receiver: PlainPacketReceiver,
         conditioner_config: &Option<LinkConditionerConfig>,
@@ -41,6 +42,7 @@ impl PacketReceiver {
     }
 
     /// Get the Server's Socket address
+    #[must_use]
     pub fn server_addr(&self) -> ServerAddr {
         match self {
             PacketReceiver::Plain(receiver) => receiver.server_addr(),

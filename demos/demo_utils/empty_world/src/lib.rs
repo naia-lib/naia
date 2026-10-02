@@ -29,7 +29,7 @@ impl WorldRefType<EmptyEntity> for EmptyWorldRef {
     fn has_component_of_kind(
         &self,
         _world_entity: &EmptyEntity,
-        _component_kind: &ComponentKind,
+        _component_kind: ComponentKind,
     ) -> bool {
         unimplemented!()
     }
@@ -44,7 +44,7 @@ impl WorldRefType<EmptyEntity> for EmptyWorldRef {
     fn component_of_kind<'a>(
         &'a self,
         _world_entity: &EmptyEntity,
-        _component_kind: &ComponentKind,
+        _component_kind: ComponentKind,
     ) -> Option<ReplicaDynRefWrapper<'a>> {
         unimplemented!()
     }
@@ -66,7 +66,7 @@ impl WorldRefType<EmptyEntity> for EmptyWorldMut {
     fn has_component_of_kind(
         &self,
         _world_entity: &EmptyEntity,
-        _component_kind: &ComponentKind,
+        _component_kind: ComponentKind,
     ) -> bool {
         unimplemented!()
     }
@@ -81,7 +81,7 @@ impl WorldRefType<EmptyEntity> for EmptyWorldMut {
     fn component_of_kind<'a>(
         &'a self,
         _world_entity: &EmptyEntity,
-        _component_kind: &ComponentKind,
+        _component_kind: ComponentKind,
     ) -> Option<ReplicaDynRefWrapper<'a>> {
         unimplemented!()
     }
@@ -122,7 +122,7 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
     fn component_mut_of_kind<'a>(
         &'a mut self,
         _world_entity: &EmptyEntity,
-        _component_kind: &ComponentKind,
+        _component_kind: ComponentKind,
     ) -> Option<ReplicaDynMutWrapper<'a>> {
         unimplemented!()
     }
@@ -131,7 +131,7 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         &mut self,
         _converter: &dyn LocalEntityAndGlobalEntityConverter,
         _world_entity: &EmptyEntity,
-        _component_kind: &ComponentKind,
+        _component_kind: ComponentKind,
         _update: PendingComponentUpdate,
     ) -> Result<(), SerdeErr> {
         unimplemented!()
@@ -141,7 +141,7 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         &mut self,
         _converter: &dyn LocalEntityAndGlobalEntityConverter,
         _world_entity: &EmptyEntity,
-        _component_kind: &ComponentKind,
+        _component_kind: ComponentKind,
         _update: ComponentFieldUpdate,
     ) -> Result<(), SerdeErr> {
         unimplemented!()
@@ -155,7 +155,7 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         &mut self,
         _mutable_entity: &EmptyEntity,
         _immutable_entity: &EmptyEntity,
-        _component_kind: &ComponentKind,
+        _component_kind: ComponentKind,
     ) {
         unimplemented!()
     }
@@ -186,7 +186,7 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
     fn remove_component_of_kind(
         &mut self,
         _world_entity: &EmptyEntity,
-        _component_kind: &ComponentKind,
+        _component_kind: ComponentKind,
     ) -> Option<Box<dyn Replicate>> {
         unimplemented!()
     }
@@ -207,7 +207,7 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         _converter: &dyn EntityAndGlobalEntityConverter<EmptyEntity>,
         _global_world_manager: &dyn GlobalWorldManagerType,
         _world_entity: &EmptyEntity,
-        _component_kind: &ComponentKind,
+        _component_kind: ComponentKind,
     ) {
         unimplemented!()
     }
@@ -219,7 +219,7 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
     fn component_unpublish(
         &mut self,
         _world_entity: &EmptyEntity,
-        _component_kind: &ComponentKind,
+        _component_kind: ComponentKind,
     ) {
         unimplemented!()
     }
@@ -240,7 +240,7 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         _converter: &dyn EntityAndGlobalEntityConverter<EmptyEntity>,
         _global_world_manager: &dyn GlobalWorldManagerType,
         _world_entity: &EmptyEntity,
-        _component_kind: &ComponentKind,
+        _component_kind: ComponentKind,
     ) {
         unimplemented!()
     }
@@ -252,7 +252,7 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
     fn component_disable_delegation(
         &mut self,
         _world_entity: &EmptyEntity,
-        _component_kind: &ComponentKind,
+        _component_kind: ComponentKind,
     ) {
         unimplemented!()
     }

@@ -61,9 +61,7 @@ impl Io {
         packet_sender: Box<dyn PacketSender>,
         packet_receiver: Box<dyn PacketReceiver>,
     ) {
-        if self.packet_sender.is_some() {
-            panic!("Packet sender/receiver already loaded! Cannot do this twice!");
-        }
+        assert!(self.packet_sender.is_none(), "Packet sender/receiver already loaded! Cannot do this twice!");
 
         self.id_receiver = Some(id_receiver);
         self.packet_sender = Some(packet_sender);

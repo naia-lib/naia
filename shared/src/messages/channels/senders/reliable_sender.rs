@@ -116,7 +116,7 @@ impl<P: Send + Sync> ReliableSender<P> {
     // Called when a message has been delivered
     // If this message has never been delivered before, will clear from the outgoing
     // buffer and return the message previously there
-    pub fn deliver_message(&mut self, message_index: &MessageIndex) -> Option<P> {
+    pub fn deliver_message(&mut self, message_index: MessageIndex) -> Option<P> {
         let mut index = 0;
         let mut found = false;
 
@@ -126,7 +126,7 @@ impl<P: Send + Sync> ReliableSender<P> {
             }
 
             if let Some(Some((old_message_index, _, _))) = self.sending_messages.get(index) {
-                if *message_index == *old_message_index {
+                if message_index == *old_message_index {
                     found = true;
                 }
             }
@@ -168,7 +168,7 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
         true
     }
 
-    fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
+    fn collect_messages(&mut self, now: &Instant, rtt_millis: f32) {
         let resend_duration = Duration::from_millis((self.rtt_resend_factor * rtt_millis) as u64);
 
         // Fast path: no newly-queued messages and min(last_sent) + resend_duration > now
@@ -228,7 +228,7 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
         !self.outgoing_messages.is_empty()
     }
 
-    fn notify_message_delivered(&mut self, message_index: &MessageIndex) {
+    fn notify_message_delivered(&mut self, message_index: MessageIndex) {
         self.deliver_message(message_index);
     }
 }

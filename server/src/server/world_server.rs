@@ -1220,7 +1220,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 if !send_conn
                     .base
                     .world_manager
-                    .has_global_entity(&global_entity)
+                    .has_global_entity(global_entity)
                 {
                     continue;
                 }
@@ -1233,7 +1233,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 send_conn
                     .base
                     .world_manager
-                    .host_send_set_auth(&global_entity, new_status);
+                    .host_send_set_auth(global_entity, new_status);
                 #[cfg(feature = "e2e_debug")]
                 if new_status == EntityAuthStatus::Granted {
                     SERVER_SET_AUTH_ENQUEUED.fetch_add(1, Ordering::Relaxed);
@@ -1506,7 +1506,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .shared
             .global_entity_map
             .read()
-            .global_entity_to_entity(&global_entity)
+            .global_entity_to_entity(global_entity)
         {
             Ok(e) => e,
             Err(_) => return true, // registry stale; nothing more to do
@@ -1525,7 +1525,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         self.shared
             .global_entity_map
             .read()
-            .global_entity_to_entity(&global_entity)
+            .global_entity_to_entity(global_entity)
             .ok()
     }
 
@@ -1590,7 +1590,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 .shared
                 .global_entity_map
                 .read()
-                .global_entity_to_entity(global_entity)
+                .global_entity_to_entity(*global_entity)
             {
                 out.push(e);
             }
@@ -1665,12 +1665,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         if send_conn
                             .base
                             .world_manager
-                            .has_global_entity(global_entity)
+                            .has_global_entity(*global_entity)
                         {
                             send_conn
                                 .base
                                 .world_manager
-                                .host_send_set_auth(global_entity, EntityAuthStatus::Denied);
+                                .host_send_set_auth(*global_entity, EntityAuthStatus::Denied);
                         }
                     }
                 }
@@ -1687,14 +1687,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         if !send_conn
                             .base
                             .world_manager
-                            .has_global_entity(global_entity)
+                            .has_global_entity(*global_entity)
                         {
                             continue;
                         }
                         send_conn
                             .base
                             .world_manager
-                            .host_send_set_auth(global_entity, EntityAuthStatus::Denied);
+                            .host_send_set_auth(*global_entity, EntityAuthStatus::Denied);
                     }
                 }
             }
@@ -1723,7 +1723,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 if !send_conn
                     .base
                     .world_manager
-                    .has_global_entity(global_entity)
+                    .has_global_entity(*global_entity)
                 {
                     // entity is not mapped to this connection
                     continue;
@@ -1735,7 +1735,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 send_conn
                     .base
                     .world_manager
-                    .host_send_set_auth(global_entity, EntityAuthStatus::Available);
+                    .host_send_set_auth(*global_entity, EntityAuthStatus::Available);
             }
         }
     }
@@ -1944,7 +1944,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(&global_entity)
+                .has_global_entity(global_entity)
             {
                 // entity is not mapped to this connection
                 continue;
@@ -1961,7 +1961,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             send_conn
                 .base
                 .world_manager
-                .host_send_set_auth(&global_entity, new_status);
+                .host_send_set_auth(global_entity, new_status);
             #[cfg(feature = "e2e_debug")]
             if new_status == EntityAuthStatus::Granted {
                 SERVER_SET_AUTH_ENQUEUED.fetch_add(1, Ordering::Relaxed);
@@ -2019,7 +2019,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(&global_entity)
+                .has_global_entity(global_entity)
             {
                 continue;
             }
@@ -2031,7 +2031,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             send_conn
                 .base
                 .world_manager
-                .host_send_set_auth(&global_entity, new_status);
+                .host_send_set_auth(global_entity, new_status);
         }
 
         self.recv
@@ -2056,14 +2056,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         if !send_conn
             .base
             .world_manager
-            .has_global_entity(global_entity)
+            .has_global_entity(*global_entity)
         {
             return;
         }
         send_conn
             .base
             .world_manager
-            .host_send_set_auth(global_entity, EntityAuthStatus::Denied);
+            .host_send_set_auth(*global_entity, EntityAuthStatus::Denied);
     }
 
     #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
@@ -2605,7 +2605,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         self.shared
             .global_entity_map
             .write()
-            .despawn_by_global(&global_entity);
+            .despawn_by_global(global_entity);
     }
 
     fn cleanup_entity_replication(&mut self, global_entity: &GlobalEntity) {
@@ -2649,12 +2649,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(global_entity)
+                .has_global_entity(*global_entity)
             {
                 continue;
             }
             // remove entity from user connection
-            send_conn.base.world_manager.despawn_entity(global_entity);
+            send_conn.base.world_manager.despawn_entity(*global_entity);
             send_conn.clear_entity_visible(entity_idx);
         }
     }
@@ -2799,7 +2799,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
         let component_kind = component.kind();
 
-        if world.has_component_of_kind(world_entity, &component_kind) {
+        if world.has_component_of_kind(world_entity, component_kind) {
             // Entity already has this Component type yet, update Component
 
             let Some(mut component_mut) = world.component_mut::<R>(world_entity) else {
@@ -2869,7 +2869,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 .shared
                 .global_world_manager
                 .read()
-                .get_entity_auth_accessor(&global_entity);
+                .get_entity_auth_accessor(global_entity);
             component.enable_delegation(&accessor, None)
         }
     }
@@ -2903,7 +2903,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             let has_entity = send_conn
                 .base
                 .world_manager
-                .has_global_entity(global_entity);
+                .has_global_entity(*global_entity);
 
             if !has_entity {
                 // entity is not in scope for this connection
@@ -2912,7 +2912,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             send_conn
                 .base
                 .world_manager
-                .insert_component(global_entity, component_kind);
+                .insert_component(*global_entity, *component_kind);
         }
     }
 
@@ -2960,7 +2960,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(global_entity)
+                .has_global_entity(*global_entity)
             {
                 // entity is not in scope for this connection
                 continue;
@@ -2969,7 +2969,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             send_conn
                 .base
                 .world_manager
-                .remove_component(global_entity, component_kind);
+                .remove_component(*global_entity, *component_kind);
         }
     }
 
@@ -3006,7 +3006,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                     send_conn
                         .base
                         .world_manager
-                        .send_publish(HostType::Server, global_entity);
+                        .send_publish(HostType::Server, *global_entity);
                 }
             }
         }
@@ -3081,7 +3081,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                     send_conn
                         .base
                         .world_manager
-                        .send_unpublish(HostType::Server, global_entity);
+                        .send_unpublish(HostType::Server, *global_entity);
                 }
             }
         }
@@ -3123,9 +3123,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             if send_conn
                 .base
                 .world_manager
-                .has_global_entity(global_entity)
+                .has_global_entity(*global_entity)
             {
-                send_conn.base.world_manager.despawn_entity(global_entity);
+                send_conn.base.world_manager.despawn_entity(*global_entity);
                 send_conn.clear_entity_visible(entity_idx);
             }
         }
@@ -3167,7 +3167,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 if !send_conn
                     .base
                     .world_manager
-                    .has_global_entity(global_entity)
+                    .has_global_entity(*global_entity)
                 {
                     // entity is not in scope for this connection
                     continue;
@@ -3182,7 +3182,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 send_conn.base.world_manager.send_enable_delegation(
                     HostType::Server,
                     client_origin.is_some(),
-                    global_entity,
+                    *global_entity,
                 );
             }
         }
@@ -3312,7 +3312,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .base
             .world_manager
             .entity_converter()
-            .global_entity_to_remote_entity(global_entity)
+            .global_entity_to_remote_entity(*global_entity)
         {
             Ok(entity) => entity,
             Err(_) => {
@@ -3328,7 +3328,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         let new_host_entity = match send_conn
             .base
             .world_manager
-            .migrate_entity_remote_to_host(global_entity)
+            .migrate_entity_remote_to_host(*global_entity)
         {
             Ok(entity) => entity,
             Err(e) => {
@@ -3342,14 +3342,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         send_conn
             .base
             .world_manager
-            .host_local_enable_delegation(&new_host_entity);
+            .host_local_enable_delegation(new_host_entity);
 
         // Step 3: Send MigrateResponse to client
         // This will be the FIRST message in the new HostEntityChannel sequence (subcommand_id=0)
         send_conn.base.world_manager.host_send_migrate_response(
-            global_entity,
-            &old_remote_entity,
-            &new_host_entity,
+            *global_entity,
+            old_remote_entity,
+            new_host_entity,
         );
 
         self.shared
@@ -3415,7 +3415,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 if !send_conn
                     .base
                     .world_manager
-                    .has_global_entity(global_entity)
+                    .has_global_entity(*global_entity)
                 {
                     continue;
                 }
@@ -3427,7 +3427,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 send_conn
                     .base
                     .world_manager
-                    .host_send_set_auth(global_entity, new_status);
+                    .host_send_set_auth(*global_entity, new_status);
             }
         }
         // else: owner is out-of-scope — leave AuthOwner::None and don't
@@ -3460,7 +3460,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 if !send_conn
                     .base
                     .world_manager
-                    .has_global_entity(global_entity)
+                    .has_global_entity(*global_entity)
                 {
                     // entity is not in scope for this connection
                     continue;
@@ -3470,7 +3470,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 send_conn
                     .base
                     .world_manager
-                    .send_disable_delegation(global_entity);
+                    .send_disable_delegation(*global_entity);
             }
         }
 
@@ -3524,7 +3524,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .shared
                         .global_entity_map
                         .read()
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .ok();
                     if let Some(world_entity) = world_entity_opt {
                         let _ = self.entity_release_authority(Some(user_key), &world_entity);
@@ -3920,7 +3920,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .shared
                         .global_entity_map
                         .read()
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     self.recv
                         .state
@@ -3944,7 +3944,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                     send_conn
                         .base
                         .world_manager
-                        .remote_spawn_entity(&global_entity); // TODO: migrate to localworldmanager
+                        .remote_spawn_entity(global_entity); // TODO: migrate to localworldmanager
                     #[cfg(feature = "e2e_debug")]
                     {
                         SERVER_SPAWN_APPLIED.fetch_add(1, Ordering::Relaxed);
@@ -3955,7 +3955,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .shared
                         .global_entity_map
                         .read()
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     // Fire synthetic remove events for each component before despawn.
                     // Symmetric to the client-side process_remove ordering: RemoveComponentEvent
@@ -3987,7 +3987,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .shared
                         .global_entity_map
                         .read()
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     self.recv.state.incoming_world_events.push_insert(
                         user_key,
@@ -4020,7 +4020,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                             &*entity_map,
                             &*self.shared.global_world_manager.read(),
                             &world_entity,
-                            &component_kind,
+                            component_kind,
                         );
 
                         if is_delegated {
@@ -4029,7 +4029,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                                 &*entity_map,
                                 &*self.shared.global_world_manager.read(),
                                 &world_entity,
-                                &component_kind,
+                                component_kind,
                             );
                         }
                         drop(entity_map);
@@ -4047,7 +4047,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .shared
                         .global_entity_map
                         .read()
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     self.recv.state.incoming_world_events.push_remove(
                         user_key,
@@ -4078,7 +4078,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .shared
                         .global_entity_map
                         .read()
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     self.recv.state.incoming_world_events.push_update(
                         user_key,
@@ -4101,7 +4101,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .shared
                         .global_entity_map
                         .read()
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     // Entity may have been despawned in the same message batch before
                     // this deferred event fires; skip world operations if it's gone.
@@ -4122,7 +4122,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .shared
                         .global_entity_map
                         .read()
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     if !world.has_entity(&world_entity) {
                         continue;
@@ -4139,7 +4139,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .shared
                         .global_entity_map
                         .read()
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     // Entity may have been despawned in the same message batch
                     // (Despawn arrives alongside EnableDelegation but the Bevy
@@ -4174,7 +4174,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .shared
                         .global_entity_map
                         .read()
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     if self
                         .entity_handle_client_request_authority(user_key, &world_entity)
@@ -4199,7 +4199,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .shared
                         .global_entity_map
                         .read()
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     if self
                         .entity_release_authority(Some(user_key), &world_entity)
@@ -4277,7 +4277,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .shared
                         .global_entity_map
                         .read()
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     self.recv
                         .state
@@ -4325,7 +4325,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         send_conn
                             .base
                             .world_manager
-                            .remote_despawn_entity(&global_entity);
+                            .remote_despawn_entity(global_entity);
 
                         self.despawn_entity_worldless(&world_entity);
                     } else if is_delegated {
@@ -4341,7 +4341,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         self.shared
                             .global_entity_map
                             .write()
-                            .despawn_by_global(&global_entity);
+                            .despawn_by_global(global_entity);
                     }
                 }
                 _ => {
@@ -4392,7 +4392,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 if !send_conn
                     .base
                     .world_manager
-                    .has_global_entity(&removed_global_entity)
+                    .has_global_entity(removed_global_entity)
                 {
                     // entity is not in scope for this connection
                     continue;
@@ -4403,7 +4403,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .read()
                         .expect("GlobalDiffHandler lock poisoned");
                     guard
-                        .entity_to_global_idx(&removed_global_entity)
+                        .entity_to_global_idx(removed_global_entity)
                         .unwrap_or(GlobalEntityIndex::INVALID)
                 };
 
@@ -4433,7 +4433,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         send_conn
                             .base
                             .world_manager
-                            .pause_entity(&removed_global_entity);
+                            .pause_entity(removed_global_entity);
                         send_conn.clear_entity_visible(entity_idx);
                     }
                     ScopeExit::Despawn => {
@@ -4441,7 +4441,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         send_conn
                             .base
                             .world_manager
-                            .despawn_entity(&removed_global_entity);
+                            .despawn_entity(removed_global_entity);
                         send_conn.clear_entity_visible(entity_idx);
                     }
                 }
@@ -4540,7 +4540,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         if !send_conn
                             .base
                             .world_manager
-                            .has_global_entity(global_entity)
+                            .has_global_entity(*global_entity)
                         {
                             continue;
                         }
@@ -4549,7 +4549,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                                 .read()
                                 .expect("GlobalDiffHandler lock poisoned");
                             guard
-                                .entity_to_global_idx(global_entity)
+                                .entity_to_global_idx(*global_entity)
                                 .unwrap_or(GlobalEntityIndex::INVALID)
                         };
                         let scope_exit = self
@@ -4574,11 +4574,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         };
                         match scope_exit {
                             ScopeExit::Persist => {
-                                send_conn.base.world_manager.pause_entity(global_entity);
+                                send_conn.base.world_manager.pause_entity(*global_entity);
                                 send_conn.clear_entity_visible(entity_idx);
                             }
                             ScopeExit::Despawn => {
-                                send_conn.base.world_manager.despawn_entity(global_entity);
+                                send_conn.base.world_manager.despawn_entity(*global_entity);
                                 send_conn.clear_entity_visible(entity_idx);
                             }
                         }
@@ -4649,7 +4649,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .shared
             .global_entity_map
             .read()
-            .global_entity_to_entity(global_entity)
+            .global_entity_to_entity(*global_entity)
             .ok()
         else {
             #[cfg(feature = "f3_diag")]
@@ -4696,7 +4696,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         let is_tracked = send_conn
             .base
             .world_manager
-            .has_global_entity(global_entity);
+            .has_global_entity(*global_entity);
         let currently_paused = is_tracked && !currently_visible;
 
         // Decide scope membership. Per contract [entity-scopes-06] /
@@ -4732,7 +4732,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .sim_handle
             .state
             .resource_registry
-            .is_resource_entity(global_entity);
+            .is_resource_entity(*global_entity);
         // [entity-scopes-09]: explicit include() MUST NOT bypass the room gate for
         // server-owned entities that have no rooms at all. If the entity has rooms
         // (even rooms the user isn't in), include() is a valid cross-room override
@@ -4776,7 +4776,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             }
             if currently_paused {
                 // Re-entering scope on a paused (ScopeExit::Persist) entity.
-                send_conn.base.world_manager.resume_entity(global_entity);
+                send_conn.base.world_manager.resume_entity(*global_entity);
                 send_conn.set_entity_visible(entity_idx);
                 return;
             }
@@ -4790,13 +4790,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             #[cfg(feature = "f3_diag")]
             eprintln!("[F3-DIAG naia/apply_scope_for_user] HOST_INIT user={:?} ge={:?} component_kinds.len={}", user_key, global_entity, component_kinds.len());
             send_conn.base.world_manager.host_init_entity(
-                global_entity,
+                *global_entity,
                 component_kinds,
                 &self.shared.component_kinds,
                 self.shared
                     .global_world_manager
                     .read()
-                    .entity_is_static(global_entity),
+                    .entity_is_static(*global_entity),
             );
             send_conn.set_entity_visible(entity_idx);
             #[cfg(feature = "e2e_debug")]
@@ -4815,7 +4815,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             send_conn.base.world_manager.send_enable_delegation(
                 HostType::Server,
                 false,
-                global_entity,
+                *global_entity,
             );
             // Re-entering scope on a delegated entity that already has a
             // holder must surface the current holder's state to the
@@ -4842,7 +4842,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 send_conn
                     .base
                     .world_manager
-                    .host_send_set_auth(global_entity, new_status);
+                    .host_send_set_auth(*global_entity, new_status);
             }
         } else if currently_visible {
             // Entity leaving active scope — check ScopeExit policy.
@@ -4867,11 +4867,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             };
             match scope_exit {
                 ScopeExit::Persist => {
-                    send_conn.base.world_manager.pause_entity(global_entity);
+                    send_conn.base.world_manager.pause_entity(*global_entity);
                     send_conn.clear_entity_visible(entity_idx);
                 }
                 ScopeExit::Despawn => {
-                    send_conn.base.world_manager.despawn_entity(global_entity);
+                    send_conn.base.world_manager.despawn_entity(*global_entity);
                     send_conn.clear_entity_visible(entity_idx);
                 }
             }
@@ -4895,7 +4895,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         let handler = self.shared.global_world_manager.read().diff_handler();
         let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
         guard
-            .entity_to_global_idx(global_entity)
+            .entity_to_global_idx(*global_entity)
             .unwrap_or(GlobalEntityIndex::INVALID)
     }
 
@@ -4922,7 +4922,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E>
 {
     fn global_entity_to_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<E, EntityDoesNotExistError> {
         // 4-E.2c: read guard lives only for the call. Returns owned `E`
         // (Copy) — no borrow escapes the guard.
@@ -5027,12 +5027,12 @@ cfg_if! {
 
             let owned_local_entity: OwnedLocalEntity = (*local_entity).into();
             let global_entity = converter
-                .owned_entity_to_global_entity(&owned_local_entity)
+                .owned_entity_to_global_entity(owned_local_entity)
                 .ok()?;
             let world_entity = shared
                 .global_entity_map
                 .read()
-                .global_entity_to_entity(&global_entity)
+                .global_entity_to_entity(global_entity)
                 .ok()?;
 
             Some(world_entity)
@@ -5055,7 +5055,7 @@ cfg_if! {
             let send_conn = send_user_connections.get(&user.address())?;
             let converter = send_conn.base.world_manager.entity_converter();
             let owned_entity = converter
-                .global_entity_to_owned_entity(&global_entity)
+                .global_entity_to_owned_entity(global_entity)
                 .ok()?;
 
             Some(LocalEntity::from(owned_entity))
@@ -5217,7 +5217,7 @@ pub(crate) fn user_scope_has_entity_impl<E: Copy + Eq + Hash + Send + Sync>(
             // [entity-scopes-06]; only completely roomless entities are gated.
             let entity_is_roomless = entity_room_map.entity_get_rooms(&global_entity).is_none();
             if entity_is_roomless {
-                let is_resource = resource_registry.is_resource_entity(&global_entity);
+                let is_resource = resource_registry.is_resource_entity(global_entity);
                 let server_owned = shared
                     .global_world_manager
                     .read()

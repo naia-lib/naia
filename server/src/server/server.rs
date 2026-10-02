@@ -1260,9 +1260,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
 impl<E: Hash + Copy + Eq + Sync + Send + 'static> EntityAndGlobalEntityConverter<E> for Server<E> {
     fn global_entity_to_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<E, EntityDoesNotExistError> {
-        self.world_server.global_entity_to_entity(global_entity)
+        self.world_server.global_entity_to_entity(&global_entity)
     }
 
     fn entity_to_global_entity(

@@ -31,7 +31,7 @@ impl PendingComponentUpdate {
         component_kinds: &ComponentKinds,
     ) -> SplitUpdateResult {
         let kind = self.kind;
-        component_kinds.split_update(converter, &kind, self)
+        component_kinds.split_update(converter, kind, self)
     }
 }
 

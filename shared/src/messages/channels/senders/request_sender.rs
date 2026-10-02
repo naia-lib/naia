@@ -68,21 +68,21 @@ impl RequestSender {
 
     pub(crate) fn process_incoming_response(
         &mut self,
-        local_request_id: &LocalRequestId,
+        local_request_id: LocalRequestId,
         wire_nonce: ConnectionRequestNonce,
     ) -> Option<GlobalRequestId> {
         // Both halves must name the outstanding exchange. A foreign nonce
         // recycles nothing: the exchange stays live so the real response
         // still resolves, and the packet drops on the unknown-id path.
         match (
-            self.local_to_global_ids.get(local_request_id),
-            self.local_to_nonce.get(local_request_id),
+            self.local_to_global_ids.get(&local_request_id),
+            self.local_to_nonce.get(&local_request_id),
         ) {
             (Some(global), Some(recorded)) if *recorded == wire_nonce => {
                 let global = *global;
-                self.local_key_generator.recycle_key(local_request_id);
-                self.local_to_global_ids.remove(local_request_id);
-                self.local_to_nonce.remove(local_request_id);
+                self.local_key_generator.recycle_key(&local_request_id);
+                self.local_to_global_ids.remove(&local_request_id);
+                self.local_to_nonce.remove(&local_request_id);
                 Some(global)
             }
             _ => None,
