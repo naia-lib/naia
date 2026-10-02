@@ -155,8 +155,8 @@ impl UserDiffHandler {
     pub fn register_component(
         &mut self,
         address: &Option<SocketAddr>,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        entity: GlobalEntity,
+        component_kind: ComponentKind,
     ) {
         let Ok(global_handler) = self.global_diff_handler.as_ref().read() else {
             panic!("Be sure you can get self.global_diff_handler before calling this!");
@@ -217,7 +217,7 @@ impl UserDiffHandler {
             self.kinds_by_bit.resize(bit_idx + 1, None);
         }
         if self.kinds_by_bit[bit_idx].is_none() {
-            self.kinds_by_bit[bit_idx] = Some(*component_kind);
+            self.kinds_by_bit[bit_idx] = Some(component_kind);
         }
 
         // Server path: dirty_set is None — pass a dead Weak so DirtyNotifier's
@@ -238,12 +238,12 @@ impl UserDiffHandler {
         let slot = self.slot(entity_idx, kind_bit);
         self.receivers_dense[slot] = Some(receiver);
         self.entity_kind_to_key
-            .insert((*entity, *component_kind), (entity_idx, kind_bit));
+            .insert((entity, component_kind), (entity_idx, kind_bit));
     }
 
-    pub fn deregister_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn deregister_component(&mut self, entity: GlobalEntity, component_kind: ComponentKind) {
         let Some((entity_idx, kind_bit)) =
-            self.entity_kind_to_key.remove(&(*entity, *component_kind))
+            self.entity_kind_to_key.remove(&(entity, component_kind))
         else {
             // Never registered (or already deregistered) — nothing to clean up.
             return;
@@ -279,20 +279,20 @@ impl UserDiffHandler {
         }
     }
 
-    pub fn has_component(&self, entity: &GlobalEntity, component: &ComponentKind) -> bool {
-        self.entity_kind_to_key.contains_key(&(*entity, *component))
+    pub fn has_component(&self, entity: GlobalEntity, component: ComponentKind) -> bool {
+        self.entity_kind_to_key.contains_key(&(entity, component))
     }
 
     // Diff masks — cold paths resolve via entity_kind_to_key (no RwLock required).
 
     pub fn diff_mask_snapshot(
         &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        entity: GlobalEntity,
+        component_kind: ComponentKind,
     ) -> DiffMask {
         let (entity_idx, kind_bit) = self
             .entity_kind_to_key
-            .get(&(*entity, *component_kind))
+            .get(&(entity, component_kind))
             .copied()
             .expect("Should not call this unless we're sure there's a receiver");
         let slot = self.slot(entity_idx, kind_bit);
@@ -304,12 +304,12 @@ impl UserDiffHandler {
 
     pub fn diff_mask_is_clear(
         &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        entity: GlobalEntity,
+        component_kind: ComponentKind,
     ) -> bool {
         let Some((entity_idx, kind_bit)) = self
             .entity_kind_to_key
-            .get(&(*entity, *component_kind))
+            .get(&(entity, component_kind))
             .copied()
         else {
             return true;
@@ -326,10 +326,10 @@ impl UserDiffHandler {
     /// granted: optimistic mutations made between the authority request and
     /// the grant fanned out before this receiver existed and were lost, so
     /// the new authority publishes its complete component state once.
-    pub fn mark_receiver_fully_dirty(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn mark_receiver_fully_dirty(&self, entity: GlobalEntity, component_kind: ComponentKind) {
         let Some((entity_idx, kind_bit)) = self
             .entity_kind_to_key
-            .get(&(*entity, *component_kind))
+            .get(&(entity, component_kind))
             .copied()
         else {
             return;
@@ -342,10 +342,10 @@ impl UserDiffHandler {
 
     /// Marks the receiver for `(entity, component_kind)` as delivered.
     /// Called by the delivery-confirmation path when a spawn/insert ACK arrives.
-    pub fn mark_receiver_delivered(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn mark_receiver_delivered(&self, entity: GlobalEntity, component_kind: ComponentKind) {
         let Some((entity_idx, kind_bit)) = self
             .entity_kind_to_key
-            .get(&(*entity, *component_kind))
+            .get(&(entity, component_kind))
             .copied()
         else {
             return;
@@ -359,12 +359,12 @@ impl UserDiffHandler {
     /// Cold-path combined check — resolves via entity_kind_to_key.
     pub fn is_receiver_dirty_and_delivered(
         &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        entity: GlobalEntity,
+        component_kind: ComponentKind,
     ) -> bool {
         let Some((entity_idx, kind_bit)) = self
             .entity_kind_to_key
-            .get(&(*entity, *component_kind))
+            .get(&(entity, component_kind))
             .copied()
         else {
             return false;
@@ -415,13 +415,13 @@ impl UserDiffHandler {
 
     pub fn or_diff_mask(
         &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        entity: GlobalEntity,
+        component_kind: ComponentKind,
         other_mask: &DiffMask,
     ) {
         let (entity_idx, kind_bit) = self
             .entity_kind_to_key
-            .get(&(*entity, *component_kind))
+            .get(&(entity, component_kind))
             .copied()
             .expect("Should not call this unless we're sure there's a receiver");
         let slot = self.slot(entity_idx, kind_bit);
@@ -431,10 +431,10 @@ impl UserDiffHandler {
         receiver.or_mask(other_mask);
     }
 
-    pub fn clear_diff_mask(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn clear_diff_mask(&self, entity: GlobalEntity, component_kind: ComponentKind) {
         let (entity_idx, kind_bit) = self
             .entity_kind_to_key
-            .get(&(*entity, *component_kind))
+            .get(&(entity, component_kind))
             .copied()
             .expect("Should not call this unless we're sure there's a receiver");
         let slot = self.slot(entity_idx, kind_bit);
@@ -714,16 +714,16 @@ mod user_diff_handler_tests {
     }
 
     impl InScopeEntities<GlobalEntity> for TestGwm {
-        fn has_entity(&self, _: &GlobalEntity) -> bool {
+        fn has_entity(&self, _: GlobalEntity) -> bool {
             true
         }
     }
 
     impl GlobalWorldManagerType for TestGwm {
-        fn component_kinds(&self, _: &GlobalEntity) -> Option<Vec<ComponentKind>> {
+        fn component_kinds(&self, _: GlobalEntity) -> Option<Vec<ComponentKind>> {
             None
         }
-        fn entity_can_relate_to_user(&self, _: &GlobalEntity, _: &u64) -> bool {
+        fn entity_can_relate_to_user(&self, _: GlobalEntity, _: &u64) -> bool {
             true
         }
         fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>> {
@@ -739,22 +739,22 @@ mod user_diff_handler_tests {
         fn register_component(
             &self,
             _: &ComponentKinds,
-            _: &GlobalEntity,
-            _: &ComponentKind,
+            _: GlobalEntity,
+            _: ComponentKind,
             _: u8,
         ) -> PropertyMutator {
             unreachable!("not exercised by these tests")
         }
-        fn get_entity_auth_accessor(&self, _: &GlobalEntity) -> EntityAuthAccessor {
+        fn get_entity_auth_accessor(&self, _: GlobalEntity) -> EntityAuthAccessor {
             unreachable!("not exercised by these tests")
         }
-        fn entity_needs_mutator_for_delegation(&self, _: &GlobalEntity) -> bool {
+        fn entity_needs_mutator_for_delegation(&self, _: GlobalEntity) -> bool {
             false
         }
-        fn entity_is_replicating(&self, _: &GlobalEntity) -> bool {
+        fn entity_is_replicating(&self, _: GlobalEntity) -> bool {
             true
         }
-        fn entity_is_static(&self, _: &GlobalEntity) -> bool {
+        fn entity_is_static(&self, _: GlobalEntity) -> bool {
             false
         }
         fn global_dirty_bitset(&self) -> Option<Arc<GlobalDirtyBitset>> {
@@ -815,7 +815,7 @@ mod user_diff_handler_tests {
         fx: &Fixture,
         udh: &mut UserDiffHandler,
         entity: GlobalEntity,
-        kind: &ComponentKind,
+        kind: ComponentKind,
     ) -> (GlobalEntityIndex, u16) {
         let (idx, kind_bit) = {
             let mut gdh = fx.gwm.diff_handler.write().unwrap();
@@ -832,7 +832,7 @@ mod user_diff_handler_tests {
 
     /// Dirties an already-registered `(entity, kind)` pair through the real
     /// mutation fan-out.
-    fn dirty(fx: &Fixture, entity: GlobalEntity, kind: &ComponentKind) {
+    fn dirty(fx: &Fixture, entity: GlobalEntity, kind: ComponentKind) {
         fx.gwm
             .diff_handler
             .read()

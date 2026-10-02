@@ -73,7 +73,7 @@ impl Connection {
             let component_kinds = global_world_manager.component_kinds(&entity).unwrap();
             let is_static = global_world_manager.entity_is_static(&entity);
             connection.base.send.world_manager.host_init_entity(
-                &entity,
+                entity,
                 component_kinds,
                 component_kinds_map,
                 is_static,
@@ -92,7 +92,7 @@ impl Connection {
     }
 
     pub fn mark_heard(&mut self) {
-        self.timeout_timer.reset()
+        self.timeout_timer.reset();
     }
 
     pub fn should_drop(&self) -> bool {
@@ -111,8 +111,7 @@ impl Connection {
     ) -> Result<(), SerdeErr> {
         // Use debug logging instead of println to reduce noise
         debug!(
-            "[CLIENT_CONN] buffer_data_packet: Buffering packet for server_tick={:?}",
-            incoming_tick
+            "[CLIENT_CONN] buffer_data_packet: Buffering packet for server_tick={incoming_tick:?}"
         );
         self.jitter_buffer
             .add_item(*incoming_tick, reader.to_owned());
@@ -145,16 +144,14 @@ impl Connection {
     ) -> Result<(), SerdeErr> {
         let receiving_tick = self.time_manager.client_receiving_tick;
         debug!(
-            "[CLIENT_CONN] read_buffered_packets: Reading packets for receiving_tick={:?}",
-            receiving_tick
+            "[CLIENT_CONN] read_buffered_packets: Reading packets for receiving_tick={receiving_tick:?}"
         );
 
         let mut packets_read = 0;
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
             packets_read += 1;
             debug!(
-                "[CLIENT_CONN] read_buffered_packets: Reading packet server_tick={:?}",
-                server_tick
+                "[CLIENT_CONN] read_buffered_packets: Reading packet server_tick={server_tick:?}"
             );
             let mut reader = owned_reader.borrow();
 
@@ -162,15 +159,14 @@ impl Connection {
                 channel_kinds,
                 message_kinds,
                 component_kinds,
-                &server_tick,
+                server_tick,
                 true,
                 &mut reader,
             )?;
         }
         if packets_read > 0 {
             debug!(
-                "[CLIENT_CONN] read_buffered_packets: Read {} packets",
-                packets_read
+                "[CLIENT_CONN] read_buffered_packets: Read {packets_read} packets"
             );
         }
 
@@ -251,7 +247,7 @@ impl Connection {
         global_world_manager: &GlobalWorldManager,
     ) {
         let rtt_millis = self.time_manager.rtt();
-        self.base.collect_messages(now, &rtt_millis);
+        self.base.collect_messages(now, rtt_millis);
         self.tick_buffer.collect_messages(
             &self.time_manager.client_sending_tick,
             &self.time_manager.server_receivable_tick,
@@ -260,7 +256,7 @@ impl Connection {
             .base
             .send
             .world_manager
-            .take_outgoing_events(now, &rtt_millis, world, converter, global_world_manager);
+            .take_outgoing_events(now, rtt_millis, world, converter, global_world_manager);
         // MISSION_TICK_FLOOR Lever 3: `write_update`'s plan entry is now
         // `(kind_bit, DiffMask)`. The client send is synchronous (no
         // prepare/transmit lag split), so `write_update` still live-fetches the
@@ -271,7 +267,7 @@ impl Connection {
             update_events_map
                 .into_iter()
                 .filter_map(|(ge, kinds)| {
-                    converter.global_entity_to_entity(&ge).ok().map(|we| {
+                    converter.global_entity_to_entity(ge).ok().map(|we| {
                         let kind_vec: UpdateKinds = kinds
                             .into_iter()
                             .map(|k| (k, 0u16, DiffMask::new(0)))

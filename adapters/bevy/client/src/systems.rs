@@ -55,7 +55,7 @@ pub fn world_to_host_sync<T: Send + Sync + 'static>(world: &mut World) {
                 HostSyncEvent::Insert(_, entity, component_kind) => {
                     let mut world_proxy = world.proxy_mut();
                     let Some(mut component_mut) =
-                        world_proxy.component_mut_of_kind(&entity, &component_kind)
+                        world_proxy.component_mut_of_kind(&entity, component_kind)
                     else {
                         // let component_name = client.client.component_name(&component_kind);
                         // warn!(

@@ -397,7 +397,7 @@ fn resident_room_entities<E: Copy + Eq + Hash + Send + Sync + 'static>(
     for global_entity in server.room_entities(key) {
         if let Ok(entity) = server
             .entity_converter()
-            .global_entity_to_entity(global_entity)
+            .global_entity_to_entity(*global_entity)
         {
             output.push(entity);
         }

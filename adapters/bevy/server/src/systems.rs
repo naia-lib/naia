@@ -106,7 +106,7 @@ pub fn world_to_host_sync(world: &mut World) {
                     }
                     let mut world_proxy = world.proxy_mut();
                     let Some(mut component_mut) =
-                        world_proxy.component_mut_of_kind(&entity, &component_kind)
+                        world_proxy.component_mut_of_kind(&entity, component_kind)
                     else {
                         warn!("could not find Component in World which has just been inserted!");
                         continue;

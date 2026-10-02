@@ -163,7 +163,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldMutType<E>> Entity
 
                 let mut component = component_ref;
                 let component_kind = component.kind();
-                if world.has_component_of_kind(&entity, &component_kind) {
+                if world.has_component_of_kind(&entity, component_kind) {
                     let Some(mut component_mut) = world.component_mut::<R>(&entity) else {
                         panic!("Should never happen because we checked for this above");
                     };

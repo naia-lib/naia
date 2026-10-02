@@ -39,19 +39,19 @@ impl RetransmitLedger {
     pub fn record_sent_update(
         &mut self,
         now: &Instant,
-        packet_index: &PacketIndex,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        packet_index: PacketIndex,
+        global_entity: GlobalEntity,
+        component_kind: ComponentKind,
         diff_mask: DiffMask,
     ) {
-        self.last_update_packet_index = *packet_index;
+        self.last_update_packet_index = packet_index;
 
-        if !self.sent_updates.contains_key(packet_index) {
+        if !self.sent_updates.contains_key(&packet_index) {
             self.sent_updates
-                .insert(*packet_index, (now.clone(), HashMap::new()));
+                .insert(packet_index, (now.clone(), HashMap::new()));
         }
-        let (_, sent_updates_map) = self.sent_updates.get_mut(packet_index).unwrap();
-        sent_updates_map.insert((*global_entity, *component_kind), diff_mask);
+        let (_, sent_updates_map) = self.sent_updates.get_mut(&packet_index).unwrap();
+        sent_updates_map.insert((global_entity, component_kind), diff_mask);
     }
 
     /// Drop a delivered packet's record (called from the ACK drain).
@@ -71,7 +71,7 @@ impl RetransmitLedger {
     pub fn collect_dropped_masks(
         &mut self,
         now: &Instant,
-        rtt_millis: &f32,
+        rtt_millis: f32,
     ) -> Vec<(GlobalEntity, ComponentKind, DiffMask)> {
         let drop_duration = Duration::from_millis((DROP_UPDATE_RTT_FACTOR * rtt_millis) as u64);
 

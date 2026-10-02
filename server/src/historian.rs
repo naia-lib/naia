@@ -114,7 +114,7 @@ impl Historian {
         let mut tick_snapshot: HashMap<GlobalEntity, EntitySnapshot> = HashMap::new();
 
         for &global_entity in global_world_manager.all_global_entities() {
-            let Ok(world_entity) = global_entity_map.global_entity_to_entity(&global_entity) else {
+            let Ok(world_entity) = global_entity_map.global_entity_to_entity(global_entity) else {
                 continue;
             };
             let Some(kinds) = global_world_manager.component_kinds(&global_entity) else {
@@ -127,7 +127,7 @@ impl Historian {
                         continue;
                     }
                 }
-                if let Some(component_ref) = world.component_of_kind(&world_entity, &kind) {
+                if let Some(component_ref) = world.component_of_kind(&world_entity, kind) {
                     entity_snapshot.insert(kind, component_ref.copy_to_box());
                 }
             }

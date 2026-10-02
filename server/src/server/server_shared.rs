@@ -259,7 +259,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
 impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E> for ServerShared<E> {
     fn global_entity_to_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<E, EntityDoesNotExistError> {
         self.global_entity_map
             .read()

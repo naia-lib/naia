@@ -83,7 +83,7 @@ impl BundleEventRegistry {
                 // check if all components are present
                 let mut all_components_present = true;
                 for kind in bundle_info.kinds.iter() {
-                    if !world.proxy().has_component_of_kind(entity, kind) {
+                    if !world.proxy().has_component_of_kind(entity, *kind) {
                         all_components_present = false;
                         break;
                     }

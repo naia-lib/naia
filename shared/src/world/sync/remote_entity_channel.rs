@@ -208,8 +208,8 @@ impl RemoteEntityChannel {
         outgoing_commands.append(&mut self.outgoing_commands);
     }
 
-    pub(crate) fn has_component_kind(&self, component_kind: &ComponentKind) -> bool {
-        self.component_channels.contains_key(component_kind)
+    pub(crate) fn has_component_kind(&self, component_kind: ComponentKind) -> bool {
+        self.component_channels.contains_key(&component_kind)
     }
 
     fn process_messages(&mut self) {
@@ -253,7 +253,7 @@ impl RemoteEntityChannel {
                     for (component_kind, component_channel) in self.component_channels.iter_mut() {
                         component_channel.buffer_pop_front_until_and_excluding(id);
                         component_channel.process_messages(self.state);
-                        component_channel.drain_messages_into(component_kind, &mut self.incoming_messages);
+                        component_channel.drain_messages_into(*component_kind, &mut self.incoming_messages);
                     }
                 }
                 EntityMessageType::SpawnWithComponents => {
@@ -280,7 +280,7 @@ impl RemoteEntityChannel {
                     for (component_kind, component_channel) in self.component_channels.iter_mut() {
                         component_channel.buffer_pop_front_until_and_excluding(id);
                         component_channel.process_messages(self.state);
-                        component_channel.drain_messages_into(component_kind, &mut self.incoming_messages);
+                        component_channel.drain_messages_into(*component_kind, &mut self.incoming_messages);
                     }
 
                     // Accept coalesced components: mark inserted + emit InsertComponent events
@@ -322,7 +322,7 @@ impl RemoteEntityChannel {
                         .or_insert_with(RemoteComponentChannel::new);
 
                     component_channel.accept_message(self.state, id, tick, msg);
-                    component_channel.drain_messages_into(&component_kind, &mut self.incoming_messages);
+                    component_channel.drain_messages_into(component_kind, &mut self.incoming_messages);
                 }
                 EntityMessageType::Publish | EntityMessageType::Unpublish |
                 EntityMessageType::EnableDelegation | EntityMessageType::DisableDelegation |

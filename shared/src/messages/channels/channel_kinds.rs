@@ -51,7 +51,7 @@ impl ChannelKind {
                 net_id |= 1 << i;
             }
         }
-        channel_kinds.net_id_to_kind(&net_id)
+        channel_kinds.net_id_to_kind(net_id)
     }
 }
 
@@ -125,8 +125,8 @@ impl ChannelKinds {
     /// The net-ID comes from a remote peer, so an unregistered value is a
     /// malformed packet rather than a local programming error: return an error
     /// and let the caller drop the packet.
-    fn net_id_to_kind(&self, net_id: &NetId) -> Result<ChannelKind, SerdeErr> {
-        self.net_id_map.get(net_id).copied().ok_or(SerdeErr)
+    fn net_id_to_kind(&self, net_id: NetId) -> Result<ChannelKind, SerdeErr> {
+        self.net_id_map.get(&net_id).copied().ok_or(SerdeErr)
     }
 
     fn kind_to_net_id(&self, channel_kind: &ChannelKind) -> NetId {

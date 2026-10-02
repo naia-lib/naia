@@ -102,6 +102,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     }
 
     /// Returns `true` if no events were queued this frame.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.empty
     }
@@ -112,12 +113,14 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     }
 
     /// Returns `true` if at least one event of type `V` is queued.
+    #[must_use]
     pub fn has<V: WorldEvent<E>>(&self) -> bool {
         V::has(self)
     }
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     /// Returns `true` if any messages are queued; prefer `read::<MessageEvent<C, M>>()` in application code.
+    #[must_use]
     pub fn has_messages(&self) -> bool {
         !self.messages.is_empty()
     }
@@ -130,6 +133,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     /// Returns `true` if any requests are queued; prefer `read::<RequestEvent<C, Q>>()` in application code.
+    #[must_use]
     pub fn has_requests(&self) -> bool {
         !self.requests.is_empty()
     }
@@ -142,6 +146,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
 
     // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     /// Returns `true` if any component-insert events are queued; prefer `read::<InsertComponentEvent<C>>()` in application code.
+    #[must_use]
     pub fn has_inserts(&self) -> bool {
         !self.inserts.is_empty()
     }
@@ -156,6 +161,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
 
     // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     /// Returns `true` if any component-update events are queued; prefer `read::<UpdateComponentEvent<C>>()` in application code.
+    #[must_use]
     pub fn has_updates(&self) -> bool {
         !self.updates.is_empty()
     }
@@ -170,6 +176,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
 
     // These method are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     /// Returns `true` if any component-remove events are queued; prefer `read::<RemoveComponentEvent<C>>()` in application code.
+    #[must_use]
     pub fn has_removes(&self) -> bool {
         !self.removes.is_empty()
     }
@@ -192,6 +199,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     }
 
     /// Returns `true` if any lifecycle entries are queued.
+    #[must_use]
     pub fn has_lifecycle(&self) -> bool {
         !self.lifecycle.is_empty()
     }
@@ -315,7 +323,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     ) {
         self.inserts
             .entry(component_kind)
-            .or_insert_with(|| Vec::new());
+            .or_default();
         let list = self.inserts.get_mut(&component_kind).unwrap();
         list.push((tick, world_entity));
         self.lifecycle.push(LifecycleOrder {

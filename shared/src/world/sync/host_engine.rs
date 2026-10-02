@@ -102,7 +102,7 @@ impl HostEngine {
     ) {
         let global_entity = command.entity();
         let host_entity = converter
-            .global_entity_to_host_entity(&global_entity)
+            .global_entity_to_host_entity(global_entity)
             .unwrap();
 
         // info!("HostEngine::send_command(global entity={:?}, host_entity={:?}, command={:?})", global_entity, host_entity, command.get_type());
@@ -171,7 +171,7 @@ impl HostEngine {
     ) {
         let global_entity = command.entity();
         let host_entity = converter
-            .global_entity_to_host_entity(&global_entity)
+            .global_entity_to_host_entity(global_entity)
             .unwrap();
         let Some(entity_channel) = self.entity_channels.get_mut(&host_entity) else {
             panic!(
@@ -188,14 +188,14 @@ impl HostEngine {
         entity_channel.drain_outgoing_messages_into(&mut self.outgoing_commands);
     }
 
-    pub(crate) fn remove_entity_channel(&mut self, entity: &HostEntity) -> HostEntityChannel {
+    pub(crate) fn remove_entity_channel(&mut self, entity: HostEntity) -> HostEntityChannel {
         self.entity_channels
-            .remove(entity)
+            .remove(&entity)
             .expect("Cannot remove entity channel that doesn't exist")
     }
 
-    pub(crate) fn extract_entity_commands(&mut self, entity: &HostEntity) -> Vec<EntityCommand> {
-        if let Some(channel) = self.entity_channels.get_mut(entity) {
+    pub(crate) fn extract_entity_commands(&mut self, entity: HostEntity) -> Vec<EntityCommand> {
+        if let Some(channel) = self.entity_channels.get_mut(&entity) {
             channel.extract_outgoing_commands()
         } else {
             Vec::new()
@@ -209,14 +209,14 @@ impl HostEngine {
         self.entity_channels.insert(entity, channel);
     }
 
-    pub(crate) fn get_entity_channel(&self, entity: &HostEntity) -> Option<&HostEntityChannel> {
-        self.entity_channels.get(entity)
+    pub(crate) fn get_entity_channel(&self, entity: HostEntity) -> Option<&HostEntityChannel> {
+        self.entity_channels.get(&entity)
     }
 
     pub(crate) fn get_entity_channel_mut(
         &mut self,
-        entity: &HostEntity,
+        entity: HostEntity,
     ) -> Option<&mut HostEntityChannel> {
-        self.entity_channels.get_mut(entity)
+        self.entity_channels.get_mut(&entity)
     }
 }

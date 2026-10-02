@@ -13,7 +13,8 @@ pub struct ConditionedPacketReceiver {
 }
 
 impl ConditionedPacketReceiver {
-    /// Creates a new ConditionedPacketReceiver
+    /// Creates a new `ConditionedPacketReceiver`
+    #[must_use]
     pub fn new(
         inner_receiver: PlainPacketReceiver,
         link_conditioner_config: &LinkConditionerConfig,
@@ -58,6 +59,7 @@ impl ConditionedPacketReceiver {
     }
 
     /// Get the Server's Socket address
+    #[must_use]
     pub fn server_addr(&self) -> ServerAddr {
         self.inner_receiver.server_addr()
     }

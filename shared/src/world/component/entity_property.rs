@@ -119,7 +119,7 @@ impl EntityRelation {
         let inner_global_entity = self.get_global_entity();
 
         if let Some(global_entity) = inner_global_entity {
-            if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
+            if let Ok(world_entity) = converter.global_entity_to_entity(global_entity) {
                 return Some(world_entity);
             } else {
                 warn!("Could not find World Entity from Global Entity `{:?}`, in order to get the EntityRelation value!", global_entity);
@@ -340,7 +340,7 @@ impl EntityProperty {
             // CRITICAL: Apply entity redirects for migrated entities
             // If an entity was migrated (e.g., RemoteEntity → HostEntity), the EntityProperty
             // might reference the old entity ID. The redirect system ensures we use the new ID.
-            let redirected_entity = converter.apply_entity_redirect(&local_entity);
+            let redirected_entity = converter.apply_entity_redirect(local_entity);
 
             // info!("EntityProperty::new_read() local_entity: {:?}, redirected: {:?}", local_entity, redirected_entity);
 
@@ -493,7 +493,7 @@ impl EntityProperty {
                     // CRITICAL: Apply entity redirects for migrated entities
                     // The RemoteEntity stored here might reference an old entity ID before migration
                     let owned_entity = inner.remote_entity.copy_to_owned();
-                    let redirected_entity = converter.apply_entity_redirect(&owned_entity);
+                    let redirected_entity = converter.apply_entity_redirect(owned_entity);
 
                     match redirected_entity.convert_to_global(converter) {
                         Ok(global_entity) => Some(global_entity),
@@ -812,7 +812,7 @@ impl HostCreatedRelation {
 
         // info!("HostCreatedRelation::write() `global_entity`: {:?}", global_entity);
 
-        let Ok(owned_local_entity) = converter.get_or_reserve_entity(global_entity) else {
+        let Ok(owned_local_entity) = converter.get_or_reserve_entity(*global_entity) else {
             false.ser(writer);
             return;
         };
@@ -896,7 +896,7 @@ impl RemoteCreatedRelation {
             false.ser(writer);
             return;
         };
-        let Ok(owned_entity) = converter.global_entity_to_owned_entity(global_entity) else {
+        let Ok(owned_entity) = converter.global_entity_to_owned_entity(*global_entity) else {
             warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
             false.ser(writer);
             return;
@@ -987,7 +987,7 @@ impl RemotePublicRelation {
             false.ser(writer);
             return;
         };
-        let Ok(local_entity) = converter.get_or_reserve_entity(global_entity) else {
+        let Ok(local_entity) = converter.get_or_reserve_entity(*global_entity) else {
             false.ser(writer);
             return;
         };
@@ -1009,7 +1009,7 @@ impl RemotePublicRelation {
             false.ser(writer);
             return;
         };
-        let Ok(owned_entity) = converter.global_entity_to_owned_entity(global_entity) else {
+        let Ok(owned_entity) = converter.global_entity_to_owned_entity(*global_entity) else {
             warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
             false.ser(writer);
             return;
@@ -1123,7 +1123,7 @@ impl DelegatedRelation {
             false.ser(writer);
             return;
         };
-        let Ok(local_entity) = converter.get_or_reserve_entity(global_entity) else {
+        let Ok(local_entity) = converter.get_or_reserve_entity(*global_entity) else {
             false.ser(writer);
             return;
         };
@@ -1145,7 +1145,7 @@ impl DelegatedRelation {
             false.ser(writer);
             return;
         };
-        let Ok(host_entity) = converter.global_entity_to_owned_entity(global_entity) else {
+        let Ok(host_entity) = converter.global_entity_to_owned_entity(*global_entity) else {
             warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
             false.ser(writer);
             return;
@@ -1500,44 +1500,44 @@ mod relation_state_machine_tests {
     impl LocalEntityAndGlobalEntityConverter for MapConverter {
         fn global_entity_to_host_entity(
             &self,
-            global_entity: &GlobalEntity,
+            global_entity: GlobalEntity,
         ) -> Result<HostEntity, EntityDoesNotExistError> {
             self.check(global_entity.to_u64())
                 .map(|_| HostEntity::new(global_entity.to_u64() as u32))
         }
         fn global_entity_to_remote_entity(
             &self,
-            global_entity: &GlobalEntity,
+            global_entity: GlobalEntity,
         ) -> Result<RemoteEntity, EntityDoesNotExistError> {
             self.check(global_entity.to_u64())
                 .map(|_| RemoteEntity::new(global_entity.to_u64() as u32))
         }
         fn global_entity_to_owned_entity(
             &self,
-            global_entity: &GlobalEntity,
+            global_entity: GlobalEntity,
         ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
             self.check(global_entity.to_u64())
                 .map(|_| OwnedLocalEntity::new_host_dynamic(global_entity.to_u64() as u32))
         }
         fn host_entity_to_global_entity(
             &self,
-            host_entity: &HostEntity,
+            host_entity: HostEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             self.check(host_entity.value() as u64)
         }
         fn static_host_entity_to_global_entity(
             &self,
-            host_entity: &HostEntity,
+            host_entity: HostEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             self.check(host_entity.value() as u64)
         }
         fn remote_entity_to_global_entity(
             &self,
-            remote_entity: &RemoteEntity,
+            remote_entity: RemoteEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             self.check(remote_entity.value() as u64)
         }
-        fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
+        fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity {
             self.redirects.get(entity).copied().unwrap_or(*entity)
         }
     }
@@ -1545,7 +1545,7 @@ mod relation_state_machine_tests {
     impl LocalEntityAndGlobalEntityConverterMut for MapConverter {
         fn get_or_reserve_entity(
             &mut self,
-            global_entity: &GlobalEntity,
+            global_entity: GlobalEntity,
         ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
             self.global_entity_to_owned_entity(global_entity)
         }
@@ -1554,7 +1554,7 @@ mod relation_state_machine_tests {
     impl EntityAndGlobalEntityConverter<u64> for MapConverter {
         fn global_entity_to_entity(
             &self,
-            global_entity: &GlobalEntity,
+            global_entity: GlobalEntity,
         ) -> Result<u64, EntityDoesNotExistError> {
             self.check(global_entity.to_u64()).map(|g| g.to_u64())
         }

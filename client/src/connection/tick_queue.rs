@@ -9,7 +9,7 @@ pub struct TickQueue<T> {
 }
 
 impl<T> TickQueue<T> {
-    /// Create a new TimeQueue
+    /// Create a new `TimeQueue`
     pub fn new() -> Self {
         TickQueue {
             queue: BinaryHeap::new(),

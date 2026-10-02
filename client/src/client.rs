@@ -117,6 +117,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ///
     /// Bevy and macroquad adapters use this to inject a pre-computed ID.
     /// Prefer [`new`](Client::new) in application code.
+    #[must_use]
     pub fn new_with_protocol_id(
         client_config: ClientConfig,
         protocol: Protocol,
@@ -221,9 +222,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ///
     /// [`ConnectEvent`]: crate::ConnectEvent
     pub fn connect<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
-        if !self.is_disconnected() {
-            panic!("Client has already initiated a connection, cannot initiate a new one. TIP: Check client.is_disconnected() before calling client.connect()");
-        }
+        assert!(self.is_disconnected(), "Client has already initiated a connection, cannot initiate a new one. TIP: Check client.is_disconnected() before calling client.connect()");
 
         // Start the handshake deadline: a fresh attempt gets the full
         // link-silence window. (Without this, a client constructed long
@@ -273,6 +272,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// [`connect`](Client::connect)) → `Connected` (after handshake) →
     /// `Disconnecting` (after [`disconnect`](Client::disconnect)) →
     /// `Disconnected`.
+    #[must_use]
     pub fn connection_status(&self) -> ConnectionStatus {
         if self.is_connected() {
             if self.is_disconnecting() {
@@ -328,9 +328,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ///
     /// [`DisconnectEvent`]: crate::DisconnectEvent
     pub fn disconnect(&mut self) {
-        if !self.is_connected() {
-            panic!("Trying to disconnect Client which is not connected yet!")
-        }
+        assert!(self.is_connected(), "Trying to disconnect Client which is not connected yet!");
 
         for _ in 0..10 {
             let writer = self.handshake_manager.write_disconnect();
@@ -363,6 +361,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     /// Returns the socket configuration from the protocol.
+    #[must_use]
     pub fn socket_config(&self) -> &SocketConfig {
         &self.protocol.socket
     }
@@ -645,9 +644,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ) -> Result<GlobalRequestId, NaiaClientError> {
         let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
 
-        if !channel_settings.can_request_and_respond() {
-            std::panic!("Requests can only be sent over Bidirectional, Reliable Channels");
-        }
+        assert!(channel_settings.can_request_and_respond(), "Requests can only be sent over Bidirectional, Reliable Channels");
 
         let Some(connection) = &mut self.server_connection else {
             warn!("currently not connected to server");
@@ -749,6 +746,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Non-destructive — does not consume the response. Call
     /// [`receive_response`](Client::receive_response) to retrieve and consume
     /// it.
+    #[must_use]
     pub fn has_response<S: Response>(&self, response_key: &ResponseReceiveKey<S>) -> bool {
         let Some(connection) = &self.server_connection else {
             return false;
@@ -866,13 +864,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ) {
         let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
 
-        if !channel_settings.can_send_to_server() {
-            panic!("Cannot send message to Server on this Channel");
-        }
+        assert!(channel_settings.can_send_to_server(), "Cannot send message to Server on this Channel");
 
-        if !channel_settings.tick_buffered() {
-            panic!("Can only use `Client.send_tick_buffer_message()` on a Channel that is configured for it.");
-        }
+        assert!(channel_settings.tick_buffered(), "Can only use `Client.send_tick_buffer_message()` on a Channel that is configured for it.");
 
         if let Some(connection) = self.server_connection.as_mut() {
             let message = MessageContainer::new(message_box);
@@ -956,7 +950,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .component_kinds(&global_entity)
             .unwrap();
         connection.base.send.world_manager.host_init_entity(
-            &global_entity,
+            global_entity,
             component_kinds,
             &self.protocol.component_kinds,
             is_static,
@@ -970,16 +964,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     /// Returns `true` if the client has a server-replicated resource of type
     /// `R` currently in scope.
+    #[must_use]
     pub fn has_resource<R: 'static>(&self) -> bool {
         self.resource_registry.entity_for::<R>().is_some()
     }
 
     /// O(1): the world-entity carrying resource `R` on this client,
     /// or `None` if not currently in scope.
+    #[must_use]
     pub fn resource_entity<R: 'static>(&self) -> Option<E> {
         let global_entity = self.resource_registry.entity_for::<R>()?;
         self.global_entity_map
-            .global_entity_to_entity(&global_entity)
+            .global_entity_to_entity(global_entity)
             .ok()
     }
 
@@ -989,21 +985,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity) else {
             return false;
         };
-        self.resource_registry.is_resource_entity(&global_entity)
+        self.resource_registry.is_resource_entity(global_entity)
     }
 
     /// Number of currently-mirrored Replicated Resources.
+    #[must_use]
     pub fn resources_count(&self) -> usize {
         self.resource_registry.len()
     }
 
     /// Iterate over the world-entities of all currently-mirrored resources.
+    #[must_use]
     pub fn resource_entities(&self) -> Vec<E> {
         let mut out = Vec::with_capacity(self.resource_registry.len());
         for global_entity in self.resource_registry.entities() {
             if let Ok(e) = self
                 .global_entity_map
-                .global_entity_to_entity(global_entity)
+                .global_entity_to_entity(*global_entity)
             {
                 out.push(e);
             }
@@ -1159,21 +1157,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .global_entity_map
             .entity_to_global_entity(world_entity)
             .unwrap();
-        if !self.global_world_manager.has_entity(&global_entity) {
-            panic!("Entity is not yet replicating. Be sure to call `enable_replication` or `spawn_entity` on the Client, before configuring replication.");
-        }
+        assert!(self.global_world_manager.has_entity(&global_entity), "Entity is not yet replicating. Be sure to call `enable_replication` or `spawn_entity` on the Client, before configuring replication.");
         let entity_owner = self
             .global_world_manager
             .entity_owner(&global_entity)
             .unwrap();
         let server_owned = entity_owner.is_server();
-        if server_owned {
-            panic!("Client cannot configure replication strategy of Server-owned Entities.");
-        }
+        assert!(!server_owned, "Client cannot configure replication strategy of Server-owned Entities.");
         let client_owned = entity_owner.is_client();
-        if !client_owned {
-            panic!("Client cannot configure replication strategy of Entities it does not own.");
-        }
+        assert!(client_owned, "Client cannot configure replication strategy of Entities it does not own.");
         let next_config = config;
         let prev_config = self
             .global_world_manager
@@ -1306,7 +1298,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .base
                 .send
                 .world_manager
-                .remote_send_request_auth(&global_entity);
+                .remote_send_request_auth(global_entity);
         }
         result
     }
@@ -1342,7 +1334,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .base
                 .send
                 .world_manager
-                .remote_send_release_auth(&global_entity);
+                .remote_send_release_auth(global_entity);
         }
         result
     }
@@ -1361,22 +1353,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Returns the rolling-average round-trip time (seconds) to the server.
     ///
     /// Returns `0.0` if the connection has not been established yet.
+    #[must_use]
     pub fn rtt(&self) -> f32 {
         self.server_connection
             .as_ref()
-            .map(|conn| conn.time_manager.rtt() / 1000.0)
-            .unwrap_or(0.0)
+            .map_or(0.0, |conn| conn.time_manager.rtt() / 1000.0)
     }
 
     /// Returns the rolling-average jitter (seconds) measured for the server
     /// connection.
     ///
     /// Returns `0.0` if the connection has not been established yet.
+    #[must_use]
     pub fn jitter(&self) -> f32 {
         self.server_connection
             .as_ref()
-            .map(|conn| conn.time_manager.jitter() / 1000.0)
-            .unwrap_or(0.0)
+            .map_or(0.0, |conn| conn.time_manager.jitter() / 1000.0)
     }
 
     // Ticks ─────────────────────────────────────────────────────────────────
@@ -1387,6 +1379,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// stamp [`TickBuffered`] messages for prediction.
     ///
     /// [`TickBuffered`]: naia_shared::ChannelMode::TickBuffered
+    #[must_use]
     pub fn client_tick(&self) -> Option<Tick> {
         let connection = self.server_connection.as_ref()?;
         Some(connection.time_manager.client_sending_tick)
@@ -1394,6 +1387,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     /// Returns the `GameInstant` corresponding to the client's current sending
     /// tick, or `None` if not connected.
+    #[must_use]
     pub fn client_instant(&self) -> Option<GameInstant> {
         let connection = self.server_connection.as_ref()?;
         Some(connection.time_manager.client_sending_instant)
@@ -1404,6 +1398,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ///
     /// This lags slightly behind the server's actual current tick due to
     /// network latency and the jitter buffer.
+    #[must_use]
     pub fn server_tick(&self) -> Option<Tick> {
         let connection = self.server_connection.as_ref()?;
         Some(connection.time_manager.client_receiving_tick)
@@ -1411,6 +1406,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     /// Returns the `GameInstant` corresponding to the current server-receive
     /// tick, or `None` if not connected.
+    #[must_use]
     pub fn server_instant(&self) -> Option<GameInstant> {
         let connection = self.server_connection.as_ref()?;
         Some(connection.time_manager.client_receiving_instant)
@@ -1418,6 +1414,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     /// Converts a tick counter value to the corresponding `GameInstant`,
     /// or `None` if not connected.
+    #[must_use]
     pub fn tick_to_instant(&self, tick: Tick) -> Option<GameInstant> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.time_manager.tick_to_instant(tick));
@@ -1427,6 +1424,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     /// Returns the duration of a single tick as configured in the protocol,
     /// or `None` if not connected.
+    #[must_use]
     pub fn tick_duration(&self) -> Option<Duration> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.time_manager.tick_duration());
@@ -1441,6 +1439,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ///
     /// Use this to lerp predicted entities between their state at the previous
     /// and current client ticks. Returns `None` if not connected.
+    #[must_use]
     pub fn client_interpolation(&self) -> Option<f32> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.time_manager.client_interpolation());
@@ -1454,6 +1453,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Use this to lerp authoritative server-replicated entities between their
     /// state at the previous and current server ticks. Returns `None` if not
     /// connected.
+    #[must_use]
     pub fn server_interpolation(&self) -> Option<f32> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.time_manager.server_interpolation());
@@ -1465,12 +1465,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     /// Returns the rolling-average outgoing bandwidth to the server
     /// (bytes/second).
+    #[must_use]
     pub fn outgoing_bandwidth(&self) -> f32 {
         self.io.outgoing_bandwidth()
     }
 
     /// Returns the rolling-average incoming bandwidth from the server
     /// (bytes/second).
+    #[must_use]
     pub fn incoming_bandwidth(&self) -> f32 {
         self.io.incoming_bandwidth()
     }
@@ -1479,6 +1481,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ///
     /// Returns `None` if not connected. Includes RTT (average in ms), jitter,
     /// packet-loss fraction, and send/recv bandwidth in kbps.
+    #[must_use]
     pub fn connection_stats(&self) -> Option<ConnectionStats> {
         let conn = self.server_connection.as_ref()?;
         let rtt_ms = conn.time_manager.rtt();
@@ -1501,9 +1504,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// This will also remove all of the Entity’s Components.
     /// Panics if the Entity does not exist.
     pub(crate) fn despawn_entity<W: WorldMutType<E>>(&mut self, world: &mut W, entity: &E) {
-        if !world.has_entity(entity) {
-            panic!("attempted to de-spawn nonexistent entity");
-        }
+        assert!(world.has_entity(entity), "attempted to de-spawn nonexistent entity");
 
         // Actually despawn from world
         world.despawn_entity(entity);
@@ -1541,9 +1542,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 let is_delegated = self
                     .global_world_manager
                     .entity_is_delegated(&global_entity);
-                if !is_delegated {
-                    panic!("attempting to despawn entity that is not yet delegated. Delegation needs some time to be confirmed by the Server, so check that a despawn is possible by calling `commands.entity(..).replication_config(..).is_delegated()` first.");
-                }
+                assert!(is_delegated, "attempting to despawn entity that is not yet delegated. Delegation needs some time to be confirmed by the Server, so check that a despawn is possible by calling `commands.entity(..).replication_config(..).is_delegated()` first.");
                 // For HOST (client-origin) delegated entities, the host channel
                 // sends the despawn to the server unconditionally — no Granted check
                 // needed. `despawn_entity_and_notify_server` → `despawn_entity` →
@@ -1561,7 +1560,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .base
                 .send
                 .world_manager
-                .despawn_entity_and_notify_server(&global_entity);
+                .despawn_entity_and_notify_server(global_entity);
         }
 
         // Remove from ECS Record
@@ -1576,9 +1575,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         entity: &E,
         mut component: R,
     ) {
-        if !world.has_entity(entity) {
-            panic!("attempted to add component to non-existent entity");
-        }
+        assert!(world.has_entity(entity), "attempted to add component to non-existent entity");
 
         let component_kind = component.kind();
 
@@ -1611,7 +1608,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             }
         }
 
-        if world.has_component_of_kind(entity, &component_kind) {
+        if world.has_component_of_kind(entity, component_kind) {
             // Entity already has this Component type yet, update Component
 
             let Some(mut component_mut) = world.component_mut::<R>(entity) else {
@@ -1630,8 +1627,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     // For debugging purposes only
     /// Returns the registered name of the component identified by `component_kind`; intended for debug logging.
+    #[must_use]
     pub fn component_name(&self, component_kind: &ComponentKind) -> String {
-        self.protocol.component_kinds.kind_to_name(component_kind)
+        self.protocol.component_kinds.kind_to_name(*component_kind)
     }
 
     /// Registers a component insertion with the replication layer without
@@ -1679,13 +1677,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .base
                 .send
                 .world_manager
-                .has_global_entity(&global_entity)
+                .has_global_entity(global_entity)
             {
                 connection
                     .base
                     .send
                     .world_manager
-                    .insert_component(&global_entity, &component_kind);
+                    .insert_component(global_entity, component_kind);
             } else {
                 warn!("Attempting to insert component into a non-existent entity in the server connection. This should not happen.");
             }
@@ -1700,8 +1698,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         {
             let accessor = self
                 .global_world_manager
-                .get_entity_auth_accessor(&global_entity);
-            component.enable_delegation(&accessor, None)
+                .get_entity_auth_accessor(global_entity);
+            component.enable_delegation(&accessor, None);
         }
     }
 
@@ -1776,13 +1774,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .base
                 .send
                 .world_manager
-                .has_global_entity(&global_entity)
+                .has_global_entity(global_entity)
             {
                 connection
                     .base
                     .send
                     .world_manager
-                    .remove_component(&global_entity, component_kind);
+                    .remove_component(global_entity, *component_kind);
             }
         }
 
@@ -1801,7 +1799,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .base
                 .send
                 .world_manager
-                .send_publish(HostType::Client, global_entity);
+                .send_publish(HostType::Client, *global_entity);
         } else if self
             .global_world_manager
             .entity_replication_config(global_entity)
@@ -1827,7 +1825,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .base
                 .send
                 .world_manager
-                .send_unpublish(HostType::Client, global_entity);
+                .send_unpublish(HostType::Client, *global_entity);
         } else if self
             .global_world_manager
             .entity_replication_config(global_entity)
@@ -1863,7 +1861,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection.base.send.world_manager.send_enable_delegation(
                 HostType::Client,
                 true,
-                global_entity,
+                *global_entity,
             );
         } else {
             self.entity_complete_delegation(world, global_entity, world_entity);
@@ -1910,9 +1908,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         client_is_origin: bool,
     ) {
         info!("client.entity_disable_delegation");
-        if client_is_origin {
-            panic!("Cannot disable delegation from Client. Server owns all delegated Entities.");
-        }
+        assert!(!client_is_origin, "Cannot disable delegation from Client. Server owns all delegated Entities.");
 
         // Snapshot authority status BEFORE clearing delegation
         let had_granted = self
@@ -1936,7 +1932,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .base
                 .send
                 .world_manager
-                .despawn_entity(global_entity);
+                .despawn_entity(*global_entity);
         }
 
         // Note: We do NOT call despawn_entity_worldless here.
@@ -1974,7 +1970,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .base
                 .send
                 .world_manager
-                .get_remote_entity_auth_status(global_entity);
+                .get_remote_entity_auth_status(*global_entity);
 
             // Only sync if entity exists as RemoteEntity (i.e., migration completed)
             if channel_status_before.is_some() {
@@ -1982,11 +1978,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     .base
                     .send
                     .world_manager
-                    .remote_receive_set_auth(global_entity, new_auth_status);
+                    .remote_receive_set_auth(*global_entity, new_auth_status);
             } else {
                 warn!(
-                    "Entity {:?} not yet migrated to RemoteEntity - channel sync skipped",
-                    global_entity
+                    "Entity {global_entity:?} not yet migrated to RemoteEntity - channel sync skipped"
                 );
             }
         } else {
@@ -2001,9 +1996,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // Updated Host Manager
         match (old_auth_status, new_auth_status) {
             // Grant authority (from any state)
-            (EntityAuthStatus::Requested, EntityAuthStatus::Granted)
-            | (EntityAuthStatus::Denied, EntityAuthStatus::Granted)
-            | (EntityAuthStatus::Available, EntityAuthStatus::Granted) => {
+            (EntityAuthStatus::Requested | EntityAuthStatus::Denied |
+EntityAuthStatus::Available, EntityAuthStatus::Granted) => {
                 // Register and emit grant event
                 self.server_connection
                     .as_mut()
@@ -2011,7 +2005,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     .base
                     .send
                     .world_manager
-                    .register_authed_entity(&self.global_world_manager, global_entity);
+                    .register_authed_entity(&self.global_world_manager, *global_entity);
                 self.incoming_world_events.push_auth_grant(*world_entity);
                 #[cfg(feature = "e2e_debug")]
                 {
@@ -2021,8 +2015,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
             }
             // Lose authority (must deregister and emit reset)
-            (EntityAuthStatus::Granted, EntityAuthStatus::Available)
-            | (EntityAuthStatus::Granted, EntityAuthStatus::Denied) => {
+            (EntityAuthStatus::Granted,
+EntityAuthStatus::Available | EntityAuthStatus::Denied) => {
                 // Deregister and emit reset event
                 self.server_connection
                     .as_mut()
@@ -2030,14 +2024,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     .base
                     .send
                     .world_manager
-                    .deregister_authed_entity(&self.global_world_manager, global_entity);
+                    .deregister_authed_entity(&self.global_world_manager, *global_entity);
                 self.incoming_world_events.push_auth_reset(*world_entity);
             }
             // Request denied (Requested -> Denied or Requested -> Available)
             // Available case: server made entity Available (e.g. cascade despawn) while a
             // request was in-flight — client never held authority, nothing to deregister.
-            (EntityAuthStatus::Requested, EntityAuthStatus::Denied)
-            | (EntityAuthStatus::Requested, EntityAuthStatus::Available) => {
+            (EntityAuthStatus::Requested,
+EntityAuthStatus::Denied | EntityAuthStatus::Available) => {
                 // Emit denied event, but do NOT deregister (never had authority)
                 self.incoming_world_events.push_auth_deny(*world_entity);
             }
@@ -2049,7 +2043,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     .base
                     .send
                     .world_manager
-                    .deregister_authed_entity(&self.global_world_manager, global_entity);
+                    .deregister_authed_entity(&self.global_world_manager, *global_entity);
                 self.incoming_world_events.push_auth_reset(*world_entity);
             }
             (EntityAuthStatus::Releasing, EntityAuthStatus::Denied) => {
@@ -2060,7 +2054,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     .base
                     .send
                     .world_manager
-                    .deregister_authed_entity(&self.global_world_manager, global_entity);
+                    .deregister_authed_entity(&self.global_world_manager, *global_entity);
                 self.incoming_world_events.push_auth_reset(*world_entity);
             }
             (EntityAuthStatus::Releasing, EntityAuthStatus::Granted) => {
@@ -2096,8 +2090,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             }
             (_, _) => {
                 panic!(
-                    "-- Entity {:?} updated authority, not handled -- {:?} -> {:?}",
-                    global_entity, old_auth_status, new_auth_status
+                    "-- Entity {global_entity:?} updated authority, not handled -- {old_auth_status:?} -> {new_auth_status:?}"
                 );
             }
         }
@@ -2106,9 +2099,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     // Private methods
 
     fn check_client_authoritative_allowed(&self) {
-        if !self.protocol.client_authoritative_entities {
-            panic!("Cannot perform this operation: Client Authoritative Entities are not enabled! Enable them in the Protocol, with the `enable_client_authoritative_entities() method, and note that if you do enable them, to make sure you handle all Spawn/Insert/Update events in the Server, as this may be an attack vector.")
-        }
+        assert!(self.protocol.client_authoritative_entities, "Cannot perform this operation: Client Authoritative Entities are not enabled! Enable them in the Protocol, with the `enable_client_authoritative_entities() method, and note that if you do enable them, to make sure you handle all Spawn/Insert/Update events in the Server, as this may be an attack vector.");
     }
 
     fn maintain_socket(&mut self) {
@@ -2216,19 +2207,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         // is known, None while still Finding.
                         let reject_message = reject_payload.and_then(|bytes| {
                             let mut reader = BitReader::new(&bytes);
-                            match self
+                            if let Ok(container) = self
                                 .protocol
                                 .message_kinds
-                                .read(&mut reader, &FakeEntityConverter)
-                            {
-                                Ok(container) => Some(container),
-                                Err(_) => {
-                                    warn!(
-                                        "Server sent a rejection message this client's \
-                                         protocol cannot decode. Ignoring the message."
-                                    );
-                                    None
-                                }
+                                .read(&mut reader, &FakeEntityConverter) { Some(container) } else {
+                                warn!(
+                                    "Server sent a rejection message this client's \
+                                     protocol cannot decode. Ignoring the message."
+                                );
+                                None
                             }
                         });
 
@@ -2288,7 +2275,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             break;
                         }
                         Some(HandshakeResult::Rejected(reason)) => {
-                            info!("Client: Received HandshakeResult::Rejected({:?})", reason);
+                            info!("Client: Received HandshakeResult::Rejected({reason:?})");
                             let server_addr = self.server_address_unwrapped();
                             // The in-band handshake rejection carries no
                             // message; only the auth (401) path can (#133).
@@ -2376,7 +2363,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                                 // The server said why, and may have enclosed a
                                 // message explaining itself (naia-lib/naia#10).
                                 HandshakeHeader::ServerDisconnect(reason) => {
-                                    info!("Received disconnect from server: {:?}", reason);
+                                    info!("Received disconnect from server: {reason:?}");
                                     self.server_disconnect = true;
                                     // The packet is sent several times over for
                                     // reliability; keep the first reading.
@@ -2522,16 +2509,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         manual_disconnect: bool,
         server_disconnect: bool,
     ) -> (naia_shared::DisconnectReason, Option<Vec<u8>>) {
-        match server_details {
-            Some((reason, payload)) => (reason, payload),
-            None => {
-                let reason = if manual_disconnect || server_disconnect {
-                    naia_shared::DisconnectReason::ClientDisconnected
-                } else {
-                    naia_shared::DisconnectReason::TimedOut
-                };
-                (reason, None)
-            }
+        if let Some((reason, payload)) = server_details { (reason, payload) } else {
+            let reason = if manual_disconnect || server_disconnect {
+                naia_shared::DisconnectReason::ClientDisconnected
+            } else {
+                naia_shared::DisconnectReason::TimedOut
+            };
+            (reason, None)
         }
     }
 
@@ -2557,16 +2541,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// client's own protocol (naia-lib/naia#10).
     fn decode_server_message(&self, bytes: &[u8]) -> Option<MessageContainer> {
         let mut reader = BitReader::new(bytes);
-        match self
+        if let Ok(container) = self
             .protocol
             .message_kinds
-            .read(&mut reader, &FakeEntityConverter)
-        {
-            Ok(container) => Some(container),
-            Err(_) => {
-                warn!("Server sent a disconnect message this client's protocol cannot decode. Ignoring the message.");
-                None
-            }
+            .read(&mut reader, &FakeEntityConverter) { Some(container) } else {
+            warn!("Server sent a disconnect message this client's protocol cannot decode. Ignoring the message.");
+            None
         }
     }
 
@@ -2698,7 +2678,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 EntityEvent::Spawn(tick, global_entity) => {
                     let world_entity = self
                         .global_entity_map
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     self.incoming_world_events.push_spawn(tick, world_entity);
                     self.global_world_manager
@@ -2710,7 +2690,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .base
                         .send
                         .world_manager
-                        .remote_spawn_entity(&global_entity); // TODO: move to localworld?
+                        .remote_spawn_entity(global_entity); // TODO: move to localworld?
                     #[cfg(feature = "e2e_debug")]
                     {
                         use crate::counters::CLIENT_SCOPE_APPLIED_ADD_E2;
@@ -2721,12 +2701,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 EntityEvent::Despawn(tick, global_entity) => {
                     let world_entity = self
                         .global_entity_map
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     // Resource registry maintenance: if this entity was
                     // a resource entity, clear the registry record so
                     // future has_resource::<R>() calls return false.
-                    self.resource_registry.remove_by_entity(&global_entity);
+                    self.resource_registry.remove_by_entity(global_entity);
                     self.incoming_world_events.push_despawn(tick, world_entity);
                     if self
                         .global_world_manager
@@ -2747,7 +2727,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     }
                     self.global_world_manager
                         .remove_entity_record(&global_entity);
-                    self.global_entity_map.despawn_by_global(&global_entity);
+                    self.global_entity_map.despawn_by_global(global_entity);
                     #[cfg(feature = "e2e_debug")]
                     {
                         use crate::counters::CLIENT_SCOPE_APPLIED_REMOVE_E1;
@@ -2758,14 +2738,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 EntityEvent::InsertComponent(tick, global_entity, component_kind) => {
                     let world_entity = self
                         .global_entity_map
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     // Resource registry maintenance: if the inserted
                     // component is a Replicated Resource kind, record
                     // the (TypeId, GlobalEntity) mapping so the bevy
                     // adapter's mirror system + has_resource::<R>()
                     // lookups work O(1).
-                    if self.protocol.resource_kinds.is_resource(&component_kind) {
+                    if self.protocol.resource_kinds.is_resource(component_kind) {
                         let type_id: std::any::TypeId = component_kind.into();
                         let _ = self.resource_registry.insert_raw(type_id, global_entity);
                     }
@@ -2793,14 +2773,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                                 &self.global_entity_map,
                                 &self.global_world_manager,
                                 &world_entity,
-                                &component_kind,
+                                component_kind,
                             );
                             world.component_enable_delegation(
                                 &self.protocol.component_kinds,
                                 &self.global_entity_map,
                                 &self.global_world_manager,
                                 &world_entity,
-                                &component_kind,
+                                component_kind,
                             );
                         }
 
@@ -2812,7 +2792,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     let component_kind = component_box.kind();
                     let world_entity = self
                         .global_entity_map
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     self.incoming_world_events
                         .push_remove(tick, world_entity, component_box);
@@ -2829,7 +2809,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 EntityEvent::Publish(global_entity) => {
                     let world_entity = self
                         .global_entity_map
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     self.publish_entity(&global_entity, false);
                     self.incoming_world_events.push_publish(world_entity);
@@ -2837,7 +2817,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 EntityEvent::Unpublish(global_entity) => {
                     let world_entity = self
                         .global_entity_map
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     self.unpublish_entity(&global_entity, false);
                     self.incoming_world_events.push_unpublish(world_entity);
@@ -2851,7 +2831,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     );
                     let world_entity = self
                         .global_entity_map
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
 
                     self.entity_enable_delegation(world, &global_entity, &world_entity, false);
@@ -2864,7 +2844,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .base
                         .send
                         .world_manager
-                        .send_enable_delegation_response(&global_entity); // TODO: move to localworld?
+                        .send_enable_delegation_response(global_entity); // TODO: move to localworld?
                 }
                 #[cfg(feature = "entity_delegation")]
                 EntityEvent::EnableDelegationResponse(_global_entity) => {
@@ -2885,7 +2865,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     }
                     let world_entity = self
                         .global_entity_map
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     self.entity_disable_delegation(world, &global_entity, &world_entity, false);
                 }
@@ -2909,7 +2889,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     }
                     let world_entity = self
                         .global_entity_map
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     self.entity_update_authority(&global_entity, &world_entity, new_auth_status);
                 }
@@ -2949,18 +2929,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
                 EntityEvent::MigrateResponse(global_entity, new_remote_entity) => {
                     // Validate we have a valid world entity
-                    let world_entity = match self
+                    let world_entity = if let Ok(entity) = self
                         .global_entity_map
-                        .global_entity_to_entity(&global_entity)
-                    {
-                        Ok(entity) => entity,
-                        Err(_) => {
-                            warn!(
-                                "Received MigrateResponse for unknown global entity: {:?}",
-                                global_entity
-                            );
-                            return;
-                        }
+                        .global_entity_to_entity(global_entity) { entity } else {
+                        warn!(
+                            "Received MigrateResponse for unknown global entity: {global_entity:?}"
+                        );
+                        return;
                     };
 
                     // Scope the connection borrow to complete migration steps
@@ -2970,21 +2945,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             return;
                         };
 
-                        let old_host_entity = match connection
+                        let old_host_entity = if let Ok(entity) = connection
                             .base
                             .send
                             .world_manager
                             .entity_converter()
-                            .global_entity_to_host_entity(&global_entity)
-                        {
-                            Ok(entity) => entity,
-                            Err(_) => {
-                                warn!(
-                                    "Entity {:?} does not exist as HostEntity before migration",
-                                    global_entity
-                                );
-                                return;
-                            }
+                            .global_entity_to_host_entity(global_entity) { entity } else {
+                            warn!(
+                                "Entity {global_entity:?} does not exist as HostEntity before migration"
+                            );
+                            return;
                         };
 
                         // Extract and buffer outgoing commands to preserve pending operations
@@ -2992,25 +2962,25 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             .base
                             .send
                             .world_manager
-                            .extract_host_entity_commands(&global_entity);
+                            .extract_host_entity_commands(global_entity);
 
                         // Extract component state to preserve during migration
                         let component_kinds = connection
                             .base
                             .send
                             .world_manager
-                            .extract_host_component_kinds(&global_entity);
+                            .extract_host_component_kinds(global_entity);
 
                         // Remove old HostEntityChannel
                         connection
                             .base
                             .send
                             .world_manager
-                            .remove_host_entity(&global_entity);
+                            .remove_host_entity(global_entity);
 
                         // Create new RemoteEntityChannel with preserved component state
                         connection.base.send.world_manager.insert_remote_entity(
-                            &global_entity,
+                            global_entity,
                             new_remote_entity,
                             component_kinds,
                         );
@@ -3033,7 +3003,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             .send
                             .world_manager
                             .update_sent_command_entity_refs(
-                                &global_entity,
+                                global_entity,
                                 old_entity,
                                 new_entity,
                             );
@@ -3045,7 +3015,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                                     .base
                                     .send
                                     .world_manager
-                                    .replay_entity_command(&global_entity, command);
+                                    .replay_entity_command(global_entity, command);
                             }
                         }
 
@@ -3055,7 +3025,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             .base
                             .send
                             .world_manager
-                            .remote_receive_set_auth(&global_entity, EntityAuthStatus::Granted);
+                            .remote_receive_set_auth(global_entity, EntityAuthStatus::Granted);
                     }
 
                     // Register the entity with the client's auth handler
@@ -3103,7 +3073,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             .base
                             .send
                             .world_manager
-                            .register_authed_entity(&self.global_world_manager, &global_entity);
+                            .register_authed_entity(&self.global_world_manager, global_entity);
                     }
 
                     // Emit AuthGrant event
@@ -3118,7 +3088,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 EntityEvent::UpdateComponent(tick, global_entity, component_kind) => {
                     let world_entity = self
                         .global_entity_map
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .unwrap();
                     self.incoming_world_events
                         .push_update(tick, world_entity, component_kind);
@@ -3131,7 +3101,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E> for Client<E> {
     fn global_entity_to_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<E, EntityDoesNotExistError> {
         self.global_entity_map
             .global_entity_to_entity(global_entity)
@@ -3162,21 +3132,25 @@ pub enum ConnectionStatus {
 
 impl ConnectionStatus {
     /// Returns `true` if the client is fully disconnected.
+    #[must_use]
     pub fn is_disconnected(&self) -> bool {
         self == &ConnectionStatus::Disconnected
     }
 
     /// Returns `true` if the handshake is in progress.
+    #[must_use]
     pub fn is_connecting(&self) -> bool {
         self == &ConnectionStatus::Connecting
     }
 
     /// Returns `true` if the connection is active.
+    #[must_use]
     pub fn is_connected(&self) -> bool {
         self == &ConnectionStatus::Connected
     }
 
     /// Returns `true` if the client is tearing down an active connection.
+    #[must_use]
     pub fn is_disconnecting(&self) -> bool {
         self == &ConnectionStatus::Disconnecting
     }
@@ -3251,10 +3225,10 @@ cfg_if! {
                 let converter = connection.base.send.world_manager.entity_converter();
 
                 let owned_local_entity: OwnedLocalEntity = (*local_entity).into();
-                let global_entity = converter.owned_entity_to_global_entity(&owned_local_entity).ok()?;
+                let global_entity = converter.owned_entity_to_global_entity(owned_local_entity).ok()?;
                 let world_entity = self
                     .global_entity_map
-                    .global_entity_to_entity(&global_entity)
+                    .global_entity_to_entity(global_entity)
                     .ok()?;
 
                 Some(world_entity)
@@ -3268,7 +3242,7 @@ cfg_if! {
 
                 let connection = self.server_connection.as_ref()?;
                 let converter = connection.base.send.world_manager.entity_converter();
-                let owned_entity = converter.global_entity_to_owned_entity(&global_entity).ok()?;
+                let owned_entity = converter.global_entity_to_owned_entity(global_entity).ok()?;
 
                 Some(LocalEntity::from(owned_entity))
             }

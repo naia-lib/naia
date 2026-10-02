@@ -18,11 +18,11 @@ pub trait OutgoingPriorityHook {
     /// (`global.gain × user.gain`, defaults 1.0) and return the new accumulated
     /// value. The send loop sorts dirty entity bundles by this value descending
     /// to drive the k-way merge against the bandwidth budget.
-    fn advance(&mut self, entity: &GlobalEntity) -> f32;
+    fn advance(&mut self, entity: GlobalEntity) -> f32;
 
     /// Reset the per-user accumulator for `entity` after its update bundle has
     /// been fully drained into the wire this tick. Stamps `last_sent_tick`.
-    fn reset_after_send(&mut self, entity: &GlobalEntity, current_tick: u32);
+    fn reset_after_send(&mut self, entity: GlobalEntity, current_tick: u32);
 }
 
 /// Sender-wide priority layer. One instance lives on `WorldServer`.

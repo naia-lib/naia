@@ -127,7 +127,7 @@ mod inner {
 
     /// Used to clone Box<dyn PacketReceiver>
     pub trait PacketReceiverClone {
-        /// Clone the boxed PacketReceiver
+        /// Clone the boxed `PacketReceiver`
         fn clone_box(&self) -> Box<dyn PacketReceiver>;
     }
 
@@ -153,7 +153,7 @@ mod inner {
 
     /// Used to clone Box<dyn IdentityReceiver>
     pub trait IdentityReceiverClone {
-        /// Clone the boxed IdentityReceiver
+        /// Clone the boxed `IdentityReceiver`
         fn clone_box(&self) -> Box<dyn IdentityReceiver>;
     }
 

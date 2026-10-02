@@ -219,7 +219,7 @@ impl<'w, T: Send + Sync + 'static> Client<'w, T> {
 impl<'w, T: Send + Sync + 'static> EntityAndGlobalEntityConverter<Entity> for Client<'w, T> {
     fn global_entity_to_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<Entity, EntityDoesNotExistError> {
         self.client.client.global_entity_to_entity(global_entity)
     }

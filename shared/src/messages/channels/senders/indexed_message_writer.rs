@@ -39,8 +39,8 @@ impl IndexedMessageWriter {
                 message_kinds,
                 converter,
                 &mut counter,
-                &last_written_id,
-                message_index,
+                last_written_id,
+                *message_index,
                 message,
             );
             if counter.overflowed() {
@@ -62,8 +62,8 @@ impl IndexedMessageWriter {
                 message_kinds,
                 converter,
                 writer,
-                &last_written_id,
-                message_index,
+                last_written_id,
+               *message_index,
                 message,
             );
 
@@ -78,12 +78,12 @@ impl IndexedMessageWriter {
 
     pub fn write_message_index(
         writer: &mut dyn BitWrite,
-        last_written_id: &Option<MessageIndex>,
-        message_index: &MessageIndex,
+        last_written_id: Option<MessageIndex>,
+        message_index: MessageIndex,
     ) {
         if let Some(last_id) = last_written_id {
             // write message id diff
-            let id_diff = wrapping_diff(*last_id, *message_index);
+            let id_diff = wrapping_diff(last_id, message_index);
             if id_diff < 0 {
                 panic!("Packet Write Error: Message Index diff is negative in subsequent message.. Previous: {}, Current: {}, Diff: {}", last_id, message_index, id_diff);
             }
@@ -99,8 +99,8 @@ impl IndexedMessageWriter {
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         writer: &mut dyn BitWrite,
-        last_written_id: &Option<MessageIndex>,
-        message_index: &MessageIndex,
+        last_written_id: Option<MessageIndex>,
+        message_index: MessageIndex,
         message: &MessageContainer,
     ) {
         Self::write_message_index(writer, last_written_id, message_index);

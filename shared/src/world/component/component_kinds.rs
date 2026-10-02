@@ -73,7 +73,7 @@ impl ComponentKind {
 
     /// Serializes this kind's compact net-ID into `writer` using the bit-width in `component_kinds`.
     pub fn ser(&self, component_kinds: &ComponentKinds, writer: &mut dyn BitWrite) {
-        let net_id = component_kinds.kind_to_net_id(self);
+        let net_id = component_kinds.kind_to_net_id(*self);
         let bits = component_kinds.kind_bit_width;
         for i in 0..bits {
             writer.write_bit((net_id >> i) & 1 != 0);
@@ -89,7 +89,7 @@ impl ComponentKind {
                 net_id |= 1 << i;
             }
         }
-        component_kinds.net_id_to_kind(&net_id)
+        component_kinds.net_id_to_kind(net_id)
     }
 }
 
@@ -349,8 +349,8 @@ impl ComponentKinds {
     /// walks.
     /// Returns `true` if this component kind has `EntityProperty` fields —
     /// its serialized bytes differ per connection and cannot use the shared cache.
-    pub fn is_user_dependent(&self, kind: &ComponentKind) -> bool {
-        self.user_dependent.contains(kind)
+    pub fn is_user_dependent(&self, kind: ComponentKind) -> bool {
+        self.user_dependent.contains(&kind)
     }
 
     /// Returns the `ComponentKind` for the given `net_id`, or `None` if not registered.
@@ -373,7 +373,7 @@ impl ComponentKinds {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<Box<dyn Replicate>, SerdeErr> {
         let component_kind: ComponentKind = ComponentKind::de(self, reader)?;
-        self.kind_to_builder(&component_kind)
+        self.kind_to_builder(component_kind)
             .read(reader, converter)
     }
 
@@ -383,7 +383,7 @@ impl ComponentKinds {
         reader: &mut BitReader,
     ) -> Result<PendingComponentUpdate, SerdeErr> {
         let component_kind: ComponentKind = ComponentKind::de(self, reader)?;
-        self.kind_to_builder(&component_kind)
+        self.kind_to_builder(component_kind)
             .read_create_update(reader)
     }
 
@@ -391,7 +391,7 @@ impl ComponentKinds {
     pub fn split_update(
         &self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
         update: PendingComponentUpdate,
     ) -> SplitUpdateResult {
         self.kind_to_builder(component_kind)
@@ -399,9 +399,9 @@ impl ComponentKinds {
     }
 
     /// Returns the protocol name for `component_kind`. Panics if not registered.
-    pub fn kind_to_name(&self, component_kind: &ComponentKind) -> String {
+    pub fn kind_to_name(&self, component_kind: ComponentKind) -> String {
         self.kind_map
-            .get(component_kind)
+            .get(&component_kind)
             .expect(
                 "Must properly initialize Component with Protocol via `add_component()` function!",
             )
@@ -414,13 +414,13 @@ impl ComponentKinds {
     /// The net-ID comes from a remote peer, so an unregistered value is a
     /// malformed packet rather than a local programming error: return an error
     /// and let the caller drop the packet.
-    fn net_id_to_kind(&self, net_id: &NetId) -> Result<ComponentKind, SerdeErr> {
-        self.net_id_map.get(net_id).copied().ok_or(SerdeErr)
+    fn net_id_to_kind(&self, net_id: NetId) -> Result<ComponentKind, SerdeErr> {
+        self.net_id_map.get(&net_id).copied().ok_or(SerdeErr)
     }
 
-    fn kind_to_net_id(&self, component_kind: &ComponentKind) -> NetId {
+    fn kind_to_net_id(&self, component_kind: ComponentKind) -> NetId {
         self.kind_map
-            .get(component_kind)
+            .get(&component_kind)
             .expect(
                 "Must properly initialize Component with Protocol via `add_component()` function!",
             )
@@ -430,15 +430,15 @@ impl ComponentKinds {
     /// Public accessor for a kind's NetId (== bit position in the
     /// `DirtyQueue` u64 mask, max 64). Returns `None` for unregistered
     /// kinds.
-    pub fn net_id_of(&self, component_kind: &ComponentKind) -> Option<u16> {
+    pub fn net_id_of(&self, component_kind: ComponentKind) -> Option<u16> {
         self.kind_map
-            .get(component_kind)
+            .get(&component_kind)
             .map(|(net_id, _, _)| *net_id)
     }
 
-    fn kind_to_builder(&self, component_kind: &ComponentKind) -> &dyn ReplicateBuilder {
+    fn kind_to_builder(&self, component_kind: ComponentKind) -> &dyn ReplicateBuilder {
         self.kind_map
-            .get(component_kind)
+            .get(&component_kind)
             .expect(
                 "Must properly initialize Component with Protocol via `add_component()` function!",
             )
@@ -447,9 +447,9 @@ impl ComponentKinds {
     }
 
     /// Returns `true` if the given kind was registered as an immutable component.
-    pub fn kind_is_immutable(&self, component_kind: &ComponentKind) -> bool {
+    pub fn kind_is_immutable(&self, component_kind: ComponentKind) -> bool {
         self.kind_map
-            .get(component_kind)
+            .get(&component_kind)
             .map(|(_, builder, _)| builder.is_immutable())
             .unwrap_or(false)
     }

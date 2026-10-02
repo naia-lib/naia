@@ -123,7 +123,7 @@ impl GlobalWorldManager {
         self.diff_handler
             .write()
             .expect("GlobalDiffHandler lock poisoned")
-            .free_entity(global_entity);
+            .free_entity(*global_entity);
         self.entity_records
             .remove(global_entity)
             .expect("Cannot despawn non-existant entity!");
@@ -196,7 +196,7 @@ impl GlobalWorldManager {
         let kind = component.kind();
         let diff_mask_length: u8 = component.diff_mask_size();
         let prop_mutator =
-            self.register_component(component_kinds, global_entity, &kind, diff_mask_length);
+            self.register_component(component_kinds, *global_entity, kind, diff_mask_length);
         component.set_mutator(&prop_mutator);
     }
 
@@ -228,7 +228,7 @@ impl GlobalWorldManager {
             .as_ref()
             .write()
             .expect("Haven't initialized DiffHandler")
-            .deregister_component(global_entity, component_kind);
+            .deregister_component(*global_entity, *component_kind);
     }
 
     // Public
@@ -522,13 +522,13 @@ impl GlobalWorldManager {
 }
 
 impl GlobalWorldManagerType for GlobalWorldManager {
-    fn component_kinds(&self, global_entity: &GlobalEntity) -> Option<Vec<ComponentKind>> {
-        self.component_kinds(global_entity)
+    fn component_kinds(&self, global_entity: GlobalEntity) -> Option<Vec<ComponentKind>> {
+        self.component_kinds(&global_entity)
     }
 
     /// Whether or not a given user can receive a Message/Component with an EntityProperty relating to the given Entity
-    fn entity_can_relate_to_user(&self, global_entity: &GlobalEntity, user_key: &u64) -> bool {
-        if let Some(record) = self.entity_records.get(global_entity) {
+    fn entity_can_relate_to_user(&self, global_entity: GlobalEntity, user_key: &u64) -> bool {
+        if let Some(record) = self.entity_records.get(&global_entity) {
             return match record.owner {
                 EntityOwner::Server | EntityOwner::ClientPublic(_) => true,
                 EntityOwner::Client(owning_user_key)
@@ -553,8 +553,8 @@ impl GlobalWorldManagerType for GlobalWorldManager {
     fn register_component(
         &self,
         component_kinds: &ComponentKinds,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        global_entity: GlobalEntity,
+        component_kind: ComponentKind,
         diff_mask_length: u8,
     ) -> PropertyMutator {
         let mut_sender = self
@@ -573,8 +573,8 @@ impl GlobalWorldManagerType for GlobalWorldManager {
         PropertyMutator::new(mut_sender)
     }
 
-    fn get_entity_auth_accessor(&self, global_entity: &GlobalEntity) -> EntityAuthAccessor {
-        self.auth_handler.get_accessor(global_entity)
+    fn get_entity_auth_accessor(&self, global_entity: GlobalEntity) -> EntityAuthAccessor {
+        self.auth_handler.get_accessor(&global_entity)
     }
 
     /// The trait default is `None`, which is fail-open: it disables the
@@ -584,26 +584,26 @@ impl GlobalWorldManagerType for GlobalWorldManager {
     /// the server's correctness to a value chosen for unrelated implementors.
     /// Report the real status instead, so no production implementor is
     /// fail-open and the guard is uniform on both sides of the wire.
-    fn entity_auth_status(&self, global_entity: &GlobalEntity) -> Option<HostEntityAuthStatus> {
+    fn entity_auth_status(&self, global_entity: GlobalEntity) -> Option<HostEntityAuthStatus> {
         self.auth_handler
-            .authority_status(global_entity)
+            .authority_status(&global_entity)
             .map(|status| HostEntityAuthStatus::new(HostType::Server, status))
     }
 
-    fn entity_needs_mutator_for_delegation(&self, _global_entity: &GlobalEntity) -> bool {
+    fn entity_needs_mutator_for_delegation(&self, _global_entity: GlobalEntity) -> bool {
         false
     }
 
-    fn entity_is_replicating(&self, global_entity: &GlobalEntity) -> bool {
-        let Some(record) = self.entity_records.get(global_entity) else {
+    fn entity_is_replicating(&self, global_entity: GlobalEntity) -> bool {
+        let Some(record) = self.entity_records.get(&global_entity) else {
             return false;
         };
         record.is_replicating
     }
 
-    fn entity_is_static(&self, global_entity: &GlobalEntity) -> bool {
+    fn entity_is_static(&self, global_entity: GlobalEntity) -> bool {
         self.entity_records
-            .get(global_entity)
+            .get(&global_entity)
             .map(|r| r.is_static)
             .unwrap_or(false)
     }
@@ -614,8 +614,8 @@ impl GlobalWorldManagerType for GlobalWorldManager {
 }
 
 impl InScopeEntities<GlobalEntity> for GlobalWorldManager {
-    fn has_entity(&self, global_entity: &GlobalEntity) -> bool {
-        self.entity_records.contains_key(global_entity)
+    fn has_entity(&self, global_entity: GlobalEntity) -> bool {
+        self.entity_records.contains_key(&global_entity)
     }
 }
 

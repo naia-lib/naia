@@ -71,7 +71,7 @@ impl RemoteEntityWaitlist {
         entities: &HashSet<RemoteEntity>,
     ) -> bool {
         for entity in entities {
-            if !in_scope_entities.has_entity(entity) {
+            if !in_scope_entities.has_entity(*entity) {
                 return false;
             }
         }
@@ -107,7 +107,7 @@ impl RemoteEntityWaitlist {
                 TOTAL_WAITLIST_CAP, oldest
             );
             self.removed_handles.insert(oldest);
-            self.drop_waiting_handle_indexes(&oldest);
+            self.drop_waiting_handle_indexes(oldest);
         }
 
         // Enforce per-entity FIFO cap: evict oldest handles before inserting.
@@ -123,7 +123,7 @@ impl RemoteEntityWaitlist {
         }
         for evicted in evictions {
             self.removed_handles.insert(evicted);
-            self.remove_waiting_handle(&evicted);
+            self.remove_waiting_handle(evicted);
         }
         for entity in entities {
             self.waiting_entity_to_handles
@@ -172,7 +172,7 @@ impl RemoteEntityWaitlist {
         &mut self,
         in_scope_entities: &dyn InScopeEntities<RemoteEntity>,
         // converter: &dyn LocalEntityAndGlobalEntityConverter,
-        entity: &RemoteEntity,
+        entity: RemoteEntity,
     ) {
         // let remote_entity = converter.global_entity_to_remote_entity(global_entity).unwrap();
         // warn!("Waitlist is tracking in-scope entity ({:?}, {:?}) .. should have been added to GlobalWorldManager", remote_entity, global_entity);
@@ -180,7 +180,7 @@ impl RemoteEntityWaitlist {
         // get a list of handles ready to send
         let mut outgoing_handles = Vec::new();
 
-        if let Some(message_set) = self.waiting_entity_to_handles.get(entity) {
+        if let Some(message_set) = self.waiting_entity_to_handles.get(&entity) {
             for message_handle in message_set.iter() {
                 if let Some(entities) = self.handle_to_required_entities.get(message_handle) {
                     if self.required_entities_are_in_scope(in_scope_entities, entities) {
@@ -195,20 +195,20 @@ impl RemoteEntityWaitlist {
         for outgoing_handle in outgoing_handles {
             // push outgoing message
             self.ready_handles.insert(outgoing_handle);
-            self.remove_waiting_handle(&outgoing_handle);
+            self.remove_waiting_handle(outgoing_handle);
         }
     }
 
-    pub fn despawn_entity(&mut self, _entity: &RemoteEntity) {
+    pub fn despawn_entity(&mut self, _entity: RemoteEntity) {
         // stub
     }
 
-    pub fn remove_waiting_handle(&mut self, handle: &WaitlistHandle) {
+    pub fn remove_waiting_handle(&mut self, handle: WaitlistHandle) {
         // remove handle from ttl list
         if let Some(ttl_index) = self
             .handle_ttls
             .iter()
-            .position(|(_, ttl_handle)| ttl_handle == handle)
+            .position(|(_, ttl_handle)| *ttl_handle == handle)
         {
             self.handle_ttls.remove(ttl_index);
         }
@@ -224,15 +224,15 @@ impl RemoteEntityWaitlist {
     /// the entry they just popped -- paying for the scan again would make every
     /// eviction cost O(cap), which a peer sitting at the cap could drive once per
     /// message it sends.
-    fn drop_waiting_handle_indexes(&mut self, handle: &WaitlistHandle) {
+    fn drop_waiting_handle_indexes(&mut self, handle: WaitlistHandle) {
         // remove handle from required entities map
-        let entities = self.handle_to_required_entities.remove(handle).unwrap();
+        let entities = self.handle_to_required_entities.remove(&handle).unwrap();
 
         // for all associated entities, remove from waitlist
         for entity in entities {
             let mut remove = false;
             if let Some(queue) = self.waiting_entity_to_handles.get_mut(&entity) {
-                queue.retain(|h| h != handle);
+                queue.retain(|h| *h != handle);
                 if queue.is_empty() {
                     remove = true;
                 }
@@ -250,7 +250,7 @@ impl RemoteEntityWaitlist {
             }
             let (_, handle) = self.handle_ttls.pop_front().unwrap();
             self.removed_handles.insert(handle);
-            self.drop_waiting_handle_indexes(&handle);
+            self.drop_waiting_handle_indexes(handle);
         }
     }
 }
@@ -293,7 +293,7 @@ impl<T> WaitlistStore<T> {
 
         for handle in intersection {
             ready_handles.remove(&handle);
-            let item = self.remove(&handle).unwrap();
+            let item = self.remove(handle).unwrap();
             collected_handles.push(handle);
             ready_messages.push(item);
         }
@@ -314,15 +314,15 @@ impl<T> WaitlistStore<T> {
         let mut removed = Vec::with_capacity(intersection.len());
         for handle in intersection {
             expired_handles.remove(&handle);
-            self.remove(&handle);
+            self.remove(handle);
             removed.push(handle);
         }
         removed
     }
 
-    pub fn remove(&mut self, handle: &WaitlistHandle) -> Option<T> {
-        self.item_handles.remove(handle);
-        self.items.remove(handle)
+    pub fn remove(&mut self, handle: WaitlistHandle) -> Option<T> {
+        self.item_handles.remove(&handle);
+        self.items.remove(&handle)
     }
 }
 
@@ -334,7 +334,7 @@ mod tests {
     struct Scope(HashSet<RemoteEntity>);
 
     impl InScopeEntities<RemoteEntity> for Scope {
-        fn has_entity(&self, entity: &RemoteEntity) -> bool {
+        fn has_entity(&self, entity: RemoteEntity) -> bool {
             self.0.contains(entity)
         }
     }
@@ -469,7 +469,7 @@ mod tests {
 
     struct EmptyScope;
     impl InScopeEntities<RemoteEntity> for EmptyScope {
-        fn has_entity(&self, _entity: &RemoteEntity) -> bool {
+        fn has_entity(&self, _entity: RemoteEntity) -> bool {
             false
         }
     }

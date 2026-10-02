@@ -41,6 +41,7 @@ impl<T: Clone> CommandHistory<T> {
     /// back in time the buffer reaches. Because [`Self::insert`] requires
     /// strictly increasing ticks, each retained entry occupies a distinct
     /// tick, so bounding the span bounds the entry count too (at `max_ticks + 1`).
+    #[must_use]
     pub fn new(max_ticks: u16) -> Self {
         Self {
             buffer: VecDeque::new(),
@@ -66,7 +67,7 @@ impl<T: Clone> CommandHistory<T> {
         // Get copies of all remaining stored Commands
         let mut output = Vec::new();
 
-        for (tick, command) in self.buffer.iter() {
+        for (tick, command) in &self.buffer {
             output.push((*tick, command.clone()));
         }
 
@@ -77,9 +78,7 @@ impl<T: Clone> CommandHistory<T> {
     // this only goes forward
     pub fn insert(&mut self, command_tick: Tick, new_command: T) {
         if let Some((last_most_recent_command_tick, _)) = self.buffer.back() {
-            if !sequence_greater_than(command_tick, *last_most_recent_command_tick) {
-                panic!("You must always insert a more recent command into the CommandHistory than the one you last inserted.");
-            }
+            assert!(sequence_greater_than(command_tick, *last_most_recent_command_tick), "You must always insert a more recent command into the CommandHistory than the one you last inserted.");
         }
 
         // go ahead and push
@@ -119,6 +118,7 @@ impl<T: Clone> CommandHistory<T> {
     }
 
     /// Returns `true` if `tick` is strictly later than the most-recently inserted tick, meaning a new command can be appended.
+    #[must_use]
     pub fn can_insert(&self, tick: &Tick) -> bool {
         if let Some((last_most_recent_command_tick, _)) = self.buffer.back() {
             if !sequence_greater_than(*tick, *last_most_recent_command_tick) {
@@ -129,6 +129,7 @@ impl<T: Clone> CommandHistory<T> {
     }
 
     /// Returns the tick of the most-recently buffered command, or `None` if the buffer is empty.
+    #[must_use]
     pub fn most_recent_tick(&self) -> Option<Tick> {
         self.buffer.back().map(|(tick, _)| *tick)
     }
@@ -141,6 +142,7 @@ impl<T: Clone> CommandHistory<T> {
     /// re-derive a past tick's command without disturbing the rollback-replay
     /// buffer. Callers must read BEFORE the rollback prunes the tick (the
     /// confirmed re-sim runs in `HandleTickEvents`, before the `Rollback` set).
+    #[must_use]
     pub fn get(&self, tick: &Tick) -> Option<&T> {
         self.buffer
             .iter()

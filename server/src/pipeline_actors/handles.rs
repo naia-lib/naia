@@ -73,7 +73,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         };
         self.state
             .resource_registry
-            .is_resource_entity(&global_entity)
+            .is_resource_entity(global_entity)
     }
 
     /// Returns the current [`EntityOwner`] — who holds authoritative
@@ -189,7 +189,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         self.shared
             .global_entity_map
             .read()
-            .global_entity_to_entity(&global_entity)
+            .global_entity_to_entity(global_entity)
             .ok()
     }
 
@@ -212,7 +212,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         self.shared
             .global_entity_map
             .read()
-            .global_entity_to_entity(global_entity)
+            .global_entity_to_entity(*global_entity)
     }
 
     /// Convert the consumer's entity handle to a [`GlobalEntity`].
@@ -591,7 +591,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         self.shared
             .global_world_manager
             .read()
-            .entity_is_static(&global_entity)
+            .entity_is_static(global_entity)
     }
 
     // ====================================================================

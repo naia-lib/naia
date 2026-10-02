@@ -51,17 +51,17 @@ impl HostEntityGenerator {
     pub fn host_reserve_entity(
         &mut self,
         entity_map: &mut LocalEntityMap,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> HostEntity {
         self.process_reserved_entity_timeouts();
 
-        if self.reserved_host_entities.contains_key(global_entity) {
+        if self.reserved_host_entities.contains_key(&global_entity) {
             panic!("Global Entity has already reserved Local Entity!");
         }
         let host_entity = self.generate_host_entity();
-        entity_map.insert_with_host_entity(*global_entity, host_entity);
+        entity_map.insert_with_host_entity(global_entity, host_entity);
         self.reserved_host_entities
-            .insert(*global_entity, host_entity);
+            .insert(global_entity, host_entity);
         host_entity
     }
 
@@ -82,9 +82,9 @@ impl HostEntityGenerator {
     /// Removes and returns the reserved [`HostEntity`] for `global_entity`, if one exists.
     pub fn host_remove_reserved_entity(
         &mut self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Option<HostEntity> {
-        self.reserved_host_entities.remove(global_entity)
+        self.reserved_host_entities.remove(&global_entity)
     }
 
     pub(crate) fn generate_host_entity(&mut self) -> HostEntity {
@@ -101,7 +101,7 @@ impl HostEntityGenerator {
     pub(crate) fn remove_by_global_entity(
         &mut self,
         entity_map: &mut LocalEntityMap,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) {
         let record = entity_map
             .remove_by_global_entity(global_entity)
@@ -119,7 +119,7 @@ impl HostEntityGenerator {
     pub(crate) fn remove_by_host_entity(
         &mut self,
         converter: &mut LocalEntityMap,
-        host_entity: &HostEntity,
+        host_entity: HostEntity,
     ) {
         // The mapping may already have been cleared at send time by
         // `LocalWorldManager::despawn_entity` (see [entity-delegation-15]).
@@ -127,7 +127,7 @@ impl HostEntityGenerator {
         // already happened. Otherwise (legacy path, or non-despawn cleanup),
         // do the full remove.
         if let Some(global_entity) = converter.global_entity_from_host(host_entity).copied() {
-            self.remove_by_global_entity(converter, &global_entity);
+            self.remove_by_global_entity(converter, global_entity);
         } else {
             // Send-time cleanup already removed the mapping; just free the id.
             if host_entity.is_static() {
@@ -142,13 +142,13 @@ impl HostEntityGenerator {
     pub fn remove_by_remote_entity(
         &mut self,
         entity_map: &mut LocalEntityMap,
-        remote_entity: &RemoteEntity,
+        remote_entity: RemoteEntity,
     ) -> GlobalEntity {
         let global_entity = *(entity_map
             .global_entity_from_remote(remote_entity)
             .expect("Attempting to despawn entity which does not exist!"));
         let record = entity_map
-            .remove_by_global_entity(&global_entity)
+            .remove_by_global_entity(global_entity)
             .expect("Attempting to despawn entity which does not exist!");
         if record.is_host_owned() {
             let host_entity = record.host_entity();

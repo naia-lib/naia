@@ -261,7 +261,7 @@ impl BaseSendConnection {
     }
 
     /// Drains pending world-manager and message-manager outbound queues into writeable packets.
-    pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
+    pub fn collect_messages(&mut self, now: &Instant, rtt_millis: f32) {
         self.world_manager.collect_messages(now, rtt_millis);
         self.message_manager
             .collect_outgoing_messages(now, rtt_millis);
@@ -325,7 +325,7 @@ impl BaseSendConnection {
                 component_kinds,
                 now,
                 writer,
-                &packet_index,
+                packet_index,
                 world,
                 entity_converter,
                 global_world_manager,
@@ -345,7 +345,7 @@ impl BaseSendConnection {
         channel_kinds: &ChannelKinds,
         message_kinds: &MessageKinds,
         component_kinds: &ComponentKinds,
-        tick: &Tick,
+        tick: Tick,
         read_world_events: bool,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
@@ -445,7 +445,7 @@ impl BaseConnection {
         self.send.packet_loss_pct()
     }
     /// Send pipeline: see [`BaseSendConnection::collect_messages`].
-    pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
+    pub fn collect_messages(&mut self, now: &Instant, rtt_millis: f32) {
         self.send.collect_messages(now, rtt_millis);
     }
     /// Read pipeline: see [`BaseSendConnection::read_packet`].
@@ -454,7 +454,7 @@ impl BaseConnection {
         channel_kinds: &ChannelKinds,
         message_kinds: &MessageKinds,
         component_kinds: &ComponentKinds,
-        tick: &Tick,
+        tick: Tick,
         read_world_events: bool,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {

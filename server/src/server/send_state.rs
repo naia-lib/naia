@@ -539,7 +539,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         let guard = handler_arc.read().expect("GlobalDiffHandler lock poisoned");
         for send_conn in self.send_user_connections.values() {
             for global_entity in send_conn.base.world_manager.pending_outbound_entities() {
-                if let Some(idx) = guard.entity_to_global_idx(&global_entity) {
+                if let Some(idx) = guard.entity_to_global_idx(global_entity) {
                     needed.set_bit(idx.as_usize() as u32);
                 }
             }
@@ -822,8 +822,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                                             .base
                                             .world_manager
                                             .is_component_updatable_for_entity(
-                                                &global_entity,
-                                                &component_kind,
+                                                global_entity,
+                                                component_kind,
                                             )
                                         {
                                             bic::N_FASTPATH_LEAK.fetch_add(1, Ordering::Relaxed);
@@ -835,7 +835,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                             } else if !send_conn
                                 .base
                                 .world_manager
-                                .is_component_updatable_for_entity(&global_entity, &component_kind)
+                                .is_component_updatable_for_entity(global_entity, component_kind)
                             {
                                 #[cfg(feature = "bench_instrumentation")]
                                 {
@@ -863,7 +863,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                             let diff_mask = diff
                                 .diff_mask_snapshot_fast(global_idx, kind_bit)
                                 .unwrap_or_else(|| {
-                                    diff.diff_mask_snapshot(&global_entity, &component_kind)
+                                    diff.diff_mask_snapshot(global_entity, component_kind)
                                 });
                             diff.clear_diff_mask_fast(global_idx, kind_bit);
 
@@ -941,7 +941,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     .shared
                     .global_world_manager
                     .read()
-                    .entity_is_replicating(&global_entity)
+                    .entity_is_replicating(global_entity)
                 {
                     continue;
                 }
@@ -963,7 +963,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         let Some(component_kind) = guard.kind_for_bit(kind_bit) else {
                             continue;
                         };
-                        if !world.has_component_of_kind(&world_entity, &component_kind) {
+                        if !world.has_component_of_kind(&world_entity, component_kind) {
                             continue;
                         }
 
@@ -972,7 +972,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                             .unwrap_or(false)
                         {
                             let snap = world
-                                .component_of_kind(&world_entity, &component_kind)
+                                .component_of_kind(&world_entity, component_kind)
                                 .expect("component verified above")
                                 .copy_to_box();
                             snapshot_map.insert((global_entity, component_kind), snap);
@@ -1053,7 +1053,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     let mut scored: Vec<(GlobalEntity, GlobalEntityIndex, f32, UpdateKinds)> =
                         update_events
                             .drain(..)
-                            .map(|(ge, idx, kinds)| (ge, idx, hook.advance(&ge), kinds))
+                            .map(|(ge, idx, kinds)| (ge, idx, hook.advance(ge), kinds))
                             .collect();
                     #[cfg(feature = "bench_instrumentation")]
                     let _sort_only_t0 = std::time::Instant::now();
@@ -1101,7 +1101,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         let ledger = send_conn.base.world_manager.replication_ledger();
                         for (global_entity, _, _, kinds) in update_list.iter() {
                             for (component_kind, _, diff_mask) in kinds.iter() {
-                                ledger.or_diff_mask(global_entity, component_kind, diff_mask);
+                                ledger.or_diff_mask(*global_entity, *component_kind, diff_mask);
                             }
                         }
                     }
@@ -1111,7 +1111,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         update_list.iter().map(|(ge, _, _, _)| *ge).collect();
                     for ge in &initial_entities {
                         if !remaining.contains(ge) {
-                            hook.reset_after_send(ge, current_tick as u32);
+                            hook.reset_after_send(*ge, current_tick as u32);
                         }
                     }
 
@@ -1332,7 +1332,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     send_conn
                         .base
                         .world_manager
-                        .send_publish(HostType::Server, &global_entity);
+                        .send_publish(HostType::Server, global_entity);
                 }
             }
 
@@ -1367,7 +1367,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         send_conn
                             .base
                             .world_manager
-                            .send_unpublish(HostType::Server, &global_entity);
+                            .send_unpublish(HostType::Server, global_entity);
                     }
                 }
 
@@ -1379,9 +1379,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     if send_conn
                         .base
                         .world_manager
-                        .has_global_entity(&global_entity)
+                        .has_global_entity(global_entity)
                     {
-                        send_conn.base.world_manager.despawn_entity(&global_entity);
+                        send_conn.base.world_manager.despawn_entity(global_entity);
                         send_conn.clear_entity_visible(entity_idx);
                     }
                 }
@@ -1413,14 +1413,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     if !send_conn
                         .base
                         .world_manager
-                        .has_global_entity(&global_entity)
+                        .has_global_entity(global_entity)
                     {
                         continue;
                     }
                     send_conn.base.world_manager.send_enable_delegation(
                         HostType::Server,
                         client_origin.is_some(),
-                        &global_entity,
+                        global_entity,
                     );
                 }
             }
@@ -1444,14 +1444,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     if !send_conn
                         .base
                         .world_manager
-                        .has_global_entity(&global_entity)
+                        .has_global_entity(global_entity)
                     {
                         continue;
                     }
                     send_conn
                         .base
                         .world_manager
-                        .send_disable_delegation(&global_entity);
+                        .send_disable_delegation(global_entity);
                 }
             }
         }
@@ -1464,7 +1464,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         let handler = self.shared.global_world_manager.read().diff_handler();
         let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
         guard
-            .entity_to_global_idx(global_entity)
+            .entity_to_global_idx(*global_entity)
             .unwrap_or(GlobalEntityIndex::INVALID)
     }
 
@@ -1565,7 +1565,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             .base
             .world_manager
             .entity_converter()
-            .global_entity_to_remote_entity(global_entity)
+            .global_entity_to_remote_entity(*global_entity)
         {
             Ok(entity) => entity,
             Err(_) => {
@@ -1578,7 +1578,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         let new_host_entity = match send_conn
             .base
             .world_manager
-            .migrate_entity_remote_to_host(global_entity)
+            .migrate_entity_remote_to_host(*global_entity)
         {
             Ok(entity) => entity,
             Err(e) => {
@@ -1588,12 +1588,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         send_conn
             .base
             .world_manager
-            .host_local_enable_delegation(&new_host_entity);
+            .host_local_enable_delegation(new_host_entity);
         // MigrateResponse reserved at subcommand_id=0 (D.2.3).
         send_conn.base.world_manager.host_send_migrate_response(
-            global_entity,
-            &old_remote_entity,
-            &new_host_entity,
+            *global_entity,
+            old_remote_entity,
+            new_host_entity,
         );
 
         self.shared
@@ -1643,7 +1643,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 if !send_conn
                     .base
                     .world_manager
-                    .has_global_entity(global_entity)
+                    .has_global_entity(*global_entity)
                 {
                     continue;
                 }
@@ -1655,7 +1655,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 send_conn
                     .base
                     .world_manager
-                    .host_send_set_auth(global_entity, new_status);
+                    .host_send_set_auth(*global_entity, new_status);
             }
         }
     }
@@ -1828,7 +1828,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         if !send_conn
                             .base
                             .world_manager
-                            .has_global_entity(global_entity)
+                            .has_global_entity(*global_entity)
                         {
                             continue;
                         }
@@ -1837,7 +1837,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                                 .read()
                                 .expect("GlobalDiffHandler lock poisoned");
                             guard
-                                .entity_to_global_idx(global_entity)
+                                .entity_to_global_idx(*global_entity)
                                 .unwrap_or(GlobalEntityIndex::INVALID)
                         };
                         let scope_exit = self
@@ -1860,11 +1860,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         };
                         match scope_exit {
                             ScopeExit::Persist => {
-                                send_conn.base.world_manager.pause_entity(global_entity);
+                                send_conn.base.world_manager.pause_entity(*global_entity);
                                 send_conn.clear_entity_visible(entity_idx);
                             }
                             ScopeExit::Despawn => {
-                                send_conn.base.world_manager.despawn_entity(global_entity);
+                                send_conn.base.world_manager.despawn_entity(*global_entity);
                                 send_conn.clear_entity_visible(entity_idx);
                             }
                         }
@@ -1885,7 +1885,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                             self.shared
                                 .global_entity_map
                                 .read()
-                                .global_entity_to_entity(&global_entity)
+                                .global_entity_to_entity(global_entity)
                                 .ok()
                         });
                     let Some(world_entity) = world_entity_opt else {
@@ -1907,7 +1907,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         .shared
                         .global_entity_map
                         .read()
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .ok();
                     let Some(world_entity) = world_entity_opt else {
                         continue;
@@ -1984,7 +1984,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             let handler = self.shared.global_world_manager.read().diff_handler();
             let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
             guard
-                .entity_to_global_idx(global_entity)
+                .entity_to_global_idx(*global_entity)
                 .unwrap_or(GlobalEntityIndex::INVALID)
         };
 
@@ -2088,7 +2088,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         let is_tracked = send_conn
             .base
             .world_manager
-            .has_global_entity(global_entity);
+            .has_global_entity(*global_entity);
         let currently_paused = is_tracked && !currently_visible;
 
         let in_common_room =
@@ -2127,7 +2127,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 return;
             }
             if currently_paused {
-                send_conn.base.world_manager.resume_entity(global_entity);
+                send_conn.base.world_manager.resume_entity(*global_entity);
                 send_conn.set_entity_visible(entity_idx);
                 return;
             }
@@ -2141,7 +2141,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 .shared
                 .global_world_manager
                 .read()
-                .entity_is_static(global_entity);
+                .entity_is_static(*global_entity);
             #[cfg(feature = "f3_diag")]
             eprintln!(
                 "[F3-DIAG naia/SendState] apply_scope_for_user host_init_entity+set_visible user={:?} ge={:?} is_static={} kinds={}",
@@ -2151,7 +2151,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 component_kinds.len()
             );
             send_conn.base.world_manager.host_init_entity(
-                global_entity,
+                *global_entity,
                 component_kinds,
                 &self.shared.component_kinds,
                 is_static,
@@ -2169,7 +2169,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             send_conn.base.world_manager.send_enable_delegation(
                 HostType::Server,
                 false,
-                global_entity,
+                *global_entity,
             );
             if self
                 .shared
@@ -2190,7 +2190,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 send_conn
                     .base
                     .world_manager
-                    .host_send_set_auth(global_entity, new_status);
+                    .host_send_set_auth(*global_entity, new_status);
             }
         } else if currently_visible {
             let scope_exit = self
@@ -2212,11 +2212,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             };
             match scope_exit {
                 ScopeExit::Persist => {
-                    send_conn.base.world_manager.pause_entity(global_entity);
+                    send_conn.base.world_manager.pause_entity(*global_entity);
                     send_conn.clear_entity_visible(entity_idx);
                 }
                 ScopeExit::Despawn => {
-                    send_conn.base.world_manager.despawn_entity(global_entity);
+                    send_conn.base.world_manager.despawn_entity(*global_entity);
                     send_conn.clear_entity_visible(entity_idx);
                 }
             }
@@ -2307,14 +2307,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             let has_entity = send_conn
                 .base
                 .world_manager
-                .has_global_entity(&global_entity);
+                .has_global_entity(global_entity);
             if !has_entity {
                 continue;
             }
             send_conn
                 .base
                 .world_manager
-                .insert_component(&global_entity, &component_kind);
+                .insert_component(global_entity, component_kind);
         }
 
         // if entity is delegated, convert over
@@ -2328,7 +2328,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 .shared
                 .global_world_manager
                 .read()
-                .get_entity_auth_accessor(&global_entity);
+                .get_entity_auth_accessor(global_entity);
             component.enable_delegation(&accessor, None)
         }
     }
@@ -2352,14 +2352,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(&global_entity)
+                .has_global_entity(global_entity)
             {
                 continue;
             }
             send_conn
                 .base
                 .world_manager
-                .remove_component(&global_entity, component_kind);
+                .remove_component(global_entity, *component_kind);
         }
 
         // cleanup all other loose ends
@@ -2432,7 +2432,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         self.shared
             .global_entity_map
             .write()
-            .despawn_by_global(&global_entity);
+            .despawn_by_global(global_entity);
     }
 
     /// Inlined `InternalWorldServer::despawn_entity_from_all_connections`
@@ -2444,7 +2444,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             let handler = self.shared.global_world_manager.read().diff_handler();
             let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
             guard
-                .entity_to_global_idx(global_entity)
+                .entity_to_global_idx(*global_entity)
                 .unwrap_or(GlobalEntityIndex::INVALID)
         };
         if entity_idx.is_valid() {
@@ -2454,11 +2454,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(global_entity)
+                .has_global_entity(*global_entity)
             {
                 continue;
             }
-            send_conn.base.world_manager.despawn_entity(global_entity);
+            send_conn.base.world_manager.despawn_entity(*global_entity);
             send_conn.clear_entity_visible(entity_idx);
         }
     }
@@ -2479,7 +2479,7 @@ struct SendStatePriorityHook<'a, E: Copy + Eq + Hash + Send + Sync> {
 }
 
 impl<'a, E: Copy + Eq + Hash + Send + Sync> OutgoingPriorityHook for SendStatePriorityHook<'a, E> {
-    fn advance(&mut self, entity: &GlobalEntity) -> f32 {
+    fn advance(&mut self, entity: GlobalEntity) -> f32 {
         let Ok(world_entity) = self.converter.global_entity_to_entity(entity) else {
             return 0.0;
         };
@@ -2488,7 +2488,7 @@ impl<'a, E: Copy + Eq + Hash + Send + Sync> OutgoingPriorityHook for SendStatePr
         self.user.advance(world_entity, g * u)
     }
 
-    fn reset_after_send(&mut self, entity: &GlobalEntity, current_tick: u32) {
+    fn reset_after_send(&mut self, entity: GlobalEntity, current_tick: u32) {
         let Ok(world_entity) = self.converter.global_entity_to_entity(entity) else {
             return;
         };

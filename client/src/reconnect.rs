@@ -70,6 +70,7 @@ pub struct ReconnectPolicy {
 
 impl ReconnectPolicy {
     /// Create a policy that paces retry attempts behind `retry_interval`.
+    #[must_use]
     pub fn new(retry_interval: Duration) -> Self {
         Self {
             send_timer: Timer::new(retry_interval),
@@ -118,6 +119,7 @@ impl ReconnectPolicy {
     /// [`DisconnectReason::Kicked`] is terminal (the remote deliberately evicted
     /// us — auto-reconnect would flap); every other reason is a transient drop
     /// that is safe to reconnect from. Stateless by design.
+    #[must_use]
     pub fn classify_disconnect(reason: DisconnectReason) -> DisconnectAction {
         match reason {
             DisconnectReason::Kicked => DisconnectAction::Terminal,
