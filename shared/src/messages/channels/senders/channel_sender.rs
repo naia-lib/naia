@@ -27,7 +27,7 @@ pub trait ChannelSender<P>: Send + Sync {
 
 /// Extended sender trait for message channels that writes wire bits and supports request/response lifecycle.
 pub trait MessageChannelSender: ChannelSender<MessageContainer> {
-    /// Gets Messages from the internal buffer and writes it to the BitWriter
+    /// Gets Messages from the internal buffer and writes it to the `BitWriter`
     fn write_messages(
         &mut self,
         message_kinds: &MessageKinds,

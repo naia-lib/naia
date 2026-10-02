@@ -34,7 +34,7 @@ impl AtomicDiffMask {
     /// `notify_dirty` exactly once per clean→dirty transition).
     #[inline]
     pub fn set_bit(&self, index: u8) -> bool {
-        self.bits.set_bit(index as u32)
+        self.bits.set_bit(u32::from(index))
     }
 
     /// Clear all bits. Returns `true` iff the mask had any bit set,

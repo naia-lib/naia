@@ -50,7 +50,7 @@ pub struct RemoteEntityWaitlist {
 
 impl RemoteEntityWaitlist {
     pub fn new() -> Self {
-        Self::with_recycle_timeout(Duration::from_secs(60))
+        Self::with_recycle_timeout(Duration::from_mins(1))
     }
 
     fn with_recycle_timeout(recycle_timeout: Duration) -> Self {
@@ -61,7 +61,7 @@ impl RemoteEntityWaitlist {
             ready_handles: HashSet::new(),
             removed_handles: HashSet::new(),
             handle_ttls: VecDeque::new(),
-            handle_ttl: Duration::from_secs(60),
+            handle_ttl: Duration::from_mins(1),
         }
     }
 
@@ -102,9 +102,8 @@ impl RemoteEntityWaitlist {
         while self.handle_ttls.len() >= TOTAL_WAITLIST_CAP {
             let (_, oldest) = self.handle_ttls.pop_front().unwrap();
             warn!(
-                "entity waitlist full ({} items); evicting the oldest waiting handle {:?}. \
-                 A peer can reach this by referencing entities that never come into scope.",
-                TOTAL_WAITLIST_CAP, oldest
+                "entity waitlist full ({TOTAL_WAITLIST_CAP} items); evicting the oldest waiting handle {oldest:?}. \
+                 A peer can reach this by referencing entities that never come into scope."
             );
             self.removed_handles.insert(oldest);
             self.drop_waiting_handle_indexes(oldest);
@@ -181,7 +180,7 @@ impl RemoteEntityWaitlist {
         let mut outgoing_handles = Vec::new();
 
         if let Some(message_set) = self.waiting_entity_to_handles.get(&entity) {
-            for message_handle in message_set.iter() {
+            for message_handle in message_set {
                 if let Some(entities) = self.handle_to_required_entities.get(message_handle) {
                     if self.required_entities_are_in_scope(in_scope_entities, entities) {
                         // info!("Entity's dependencies {:?} are in scope", entities);
@@ -280,7 +279,7 @@ impl<T> WaitlistStore<T> {
         let intersection: HashSet<WaitlistHandle> = self
             .item_handles
             .intersection(ready_handles)
-            .cloned()
+            .copied()
             .collect();
 
         if intersection.is_empty() {
@@ -308,7 +307,7 @@ impl<T> WaitlistStore<T> {
         let intersection: HashSet<WaitlistHandle> = self
             .item_handles
             .intersection(expired_handles)
-            .cloned()
+            .copied()
             .collect();
 
         let mut removed = Vec::with_capacity(intersection.len());

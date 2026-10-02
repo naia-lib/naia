@@ -19,26 +19,31 @@ pub enum EntityAuthStatus {
 
 impl EntityAuthStatus {
     /// Returns `true` if no host currently holds authority over this entity.
+    #[must_use]
     pub fn is_available(&self) -> bool {
         matches!(self, EntityAuthStatus::Available)
     }
 
     /// Returns `true` if this host has requested but not yet been granted authority.
+    #[must_use]
     pub fn is_requested(&self) -> bool {
         matches!(self, EntityAuthStatus::Requested)
     }
 
     /// Returns `true` if this host currently holds authority over the entity.
+    #[must_use]
     pub fn is_granted(&self) -> bool {
         matches!(self, EntityAuthStatus::Granted)
     }
 
     /// Returns `true` if this host's authority request was denied.
+    #[must_use]
     pub fn is_denied(&self) -> bool {
         matches!(self, EntityAuthStatus::Denied)
     }
 
     /// Returns `true` if this host is in the process of releasing authority.
+    #[must_use]
     pub fn is_releasing(&self) -> bool {
         matches!(self, EntityAuthStatus::Releasing)
     }
@@ -53,6 +58,7 @@ pub struct HostEntityAuthStatus {
 
 impl HostEntityAuthStatus {
     /// Creates a `HostEntityAuthStatus` for `host_type` at the given `auth_status`.
+    #[must_use]
     pub fn new(host_type: HostType, auth_status: EntityAuthStatus) -> Self {
         Self {
             host_type,
@@ -74,6 +80,7 @@ impl HostEntityAuthStatus {
     /// Reaching a `(HostType::Server, *)` arm here means a server-side
     /// caller mistakenly drove the client request flow against a server
     /// auth status — a contract violation worth surfacing loudly.
+    #[must_use]
     pub fn can_request(&self) -> bool {
         match (self.host_type, self.auth_status) {
             (HostType::Client, EntityAuthStatus::Available) => true,
@@ -98,6 +105,7 @@ impl HostEntityAuthStatus {
     /// (the server grants/revokes). Server-side instances should never
     /// reach this method. The only caller is
     /// `client/src/world/global_world_manager.rs::entity_release_authority`.
+    #[must_use]
     pub fn can_release(&self) -> bool {
         match (self.host_type, self.auth_status) {
             (HostType::Client, EntityAuthStatus::Available) => false,
@@ -116,6 +124,7 @@ impl HostEntityAuthStatus {
     }
 
     /// Returns `true` if this host may mutate component properties on the entity.
+    #[must_use]
     pub fn can_mutate(&self) -> bool {
         match (self.host_type, self.auth_status) {
             (HostType::Client, EntityAuthStatus::Available) => false,
@@ -132,6 +141,7 @@ impl HostEntityAuthStatus {
     }
 
     /// Returns `true` if this host may read component values from the entity's delegated properties.
+    #[must_use]
     pub fn can_read(&self) -> bool {
         match (self.host_type, self.auth_status) {
             (HostType::Client, EntityAuthStatus::Available) => true,
@@ -148,6 +158,7 @@ impl HostEntityAuthStatus {
     }
 
     /// Returns `true` if this host may write (serialize) delegated entity properties for the wire.
+    #[must_use]
     pub fn can_write(&self) -> bool {
         match (self.host_type, self.auth_status) {
             (HostType::Client, EntityAuthStatus::Available) => false,
@@ -164,6 +175,7 @@ impl HostEntityAuthStatus {
     }
 
     /// Returns the underlying `EntityAuthStatus` value.
+    #[must_use]
     pub fn status(&self) -> EntityAuthStatus {
         self.auth_status
     }

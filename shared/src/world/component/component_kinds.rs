@@ -12,7 +12,7 @@ use crate::{
 
 type NetId = u16;
 
-/// Wire encoding for `ComponentKind` NetIds is a fixed-width raw bit
+/// Wire encoding for `ComponentKind` `NetIds` is a fixed-width raw bit
 /// field whose width is `ceil(log2(N))`, where N is the number of kinds
 /// registered in the protocol. Both ends share the same registration
 /// order, so both compute the same width and the encoding stays in sync.
@@ -34,7 +34,7 @@ type NetId = u16;
 ///
 /// Width is precomputed at registration time and cached on
 /// `ComponentKinds`, so ser/de pays only an inline u8 read plus N
-/// `write_bit` calls — no struct construction, no HashMap lookup for the
+/// `write_bit` calls — no struct construction, no `HashMap` lookup for the
 /// width. Pinned by `benches/tests/component_kind_wire.rs`.
 fn bit_width_for_kind_count(count: NetId) -> u8 {
     // count <= 1 → 0 bits (degenerate; nothing to disambiguate).
@@ -42,11 +42,11 @@ fn bit_width_for_kind_count(count: NetId) -> u8 {
     if count < 2 {
         0
     } else {
-        (count as u32).next_power_of_two().trailing_zeros() as u8
+        u32::from(count).next_power_of_two().trailing_zeros() as u8
     }
 }
 
-/// ComponentKind - should be one unique value for each type of Component
+/// `ComponentKind` - should be one unique value for each type of Component
 #[derive(Eq, Hash, Copy, Clone, PartialEq, Debug)]
 pub struct ComponentKind {
     type_id: TypeId,
@@ -65,6 +65,7 @@ impl From<ComponentKind> for TypeId {
 
 impl ComponentKind {
     /// Returns the `ComponentKind` corresponding to the type `C`.
+    #[must_use]
     pub fn of<C: Replicate>() -> Self {
         Self {
             type_id: TypeId::of::<C>(),
@@ -134,14 +135,14 @@ pub struct ComponentFacts {
 /// A map to hold all component types
 pub struct ComponentKinds {
     current_net_id: NetId,
-    /// Number of bits needed to encode any registered NetId — recomputed
+    /// Number of bits needed to encode any registered `NetId` — recomputed
     /// on every `add_component` so it always reflects the current count.
     /// Read directly by `ComponentKind::ser`/`de` on the hot path.
     kind_bit_width: u8,
     kind_map: HashMap<ComponentKind, (NetId, Box<dyn ReplicateBuilder>, String)>,
     net_id_map: HashMap<NetId, ComponentKind>,
     /// Components where `has_entity_properties() == true` — their serialized bytes
-    /// differ per connection and cannot use the shared CachedComponentUpdate cache.
+    /// differ per connection and cannot use the shared `CachedComponentUpdate` cache.
     user_dependent: HashSet<ComponentKind>,
     /// Structural facts per registered component, keyed by kind. Stored at
     /// registration from the type's static schema methods so the fingerprint
@@ -157,7 +158,7 @@ impl Clone for ComponentKinds {
         let user_dependent = self.user_dependent.clone();
 
         let mut kind_map = HashMap::new();
-        for (key, value) in self.kind_map.iter() {
+        for (key, value) in &self.kind_map {
             kind_map.insert(*key, (value.0, value.1.box_clone(), value.2.clone()));
         }
 
@@ -180,6 +181,7 @@ impl Default for ComponentKinds {
 
 impl ComponentKinds {
     /// Creates an empty `ComponentKinds` registry.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             current_net_id: 0,
@@ -269,7 +271,7 @@ impl ComponentKinds {
         self.kind_bit_width = bit_width_for_kind_count(self.current_net_id);
     }
 
-    /// Enforces the CachedComponentUpdate ceiling for one registration.
+    /// Enforces the `CachedComponentUpdate` ceiling for one registration.
     /// Cold error path shared by every [`add_component`](Self::add_component)
     /// instantiation: the sentinel skips the assert (unbounded components
     /// trip the `capture()` expect in `world_writer.rs` instead), and the
@@ -280,11 +282,8 @@ impl ComponentKinds {
         if max_bits != UNBOUNDED_BIT_LENGTH {
             assert!(
                 max_bits <= CACHED_UPDATE_BITS,
-                "Component {} serializes to {} bits, exceeding the {}-bit \
-                 CachedComponentUpdate ceiling. Slim the component before registering.",
-                type_name,
-                max_bits,
-                CACHED_UPDATE_BITS
+                "Component {type_name} serializes to {max_bits} bits, exceeding the {CACHED_UPDATE_BITS}-bit \
+                 CachedComponentUpdate ceiling. Slim the component before registering."
             );
         }
     }
@@ -296,8 +295,7 @@ impl ComponentKinds {
     fn assert_label_mask_agreement(type_name: &str, labels: usize, masks: usize) {
         assert_eq!(
             labels, masks,
-            "refusing to register component {}: {} property labels but {} mask indices",
-            type_name, labels, masks,
+            "refusing to register component {type_name}: {labels} property labels but {masks} mask indices",
         );
     }
 
@@ -315,8 +313,7 @@ impl ComponentKinds {
             entity_property_labels
                 .iter()
                 .all(|label| property_labels.contains(label)),
-            "refusing to register component {}: entity labels name properties outside its wired properties",
-            type_name,
+            "refusing to register component {type_name}: entity labels name properties outside its wired properties",
         );
     }
 
@@ -327,6 +324,7 @@ impl ComponentKinds {
     /// net-IDs are dense registration ordinals, so the walk covers the whole
     /// net-ID space and `HashMap` iteration order never leaks into the
     /// result.
+    #[must_use]
     pub fn schema_fact_entries(&self) -> Vec<(NetId, ComponentFacts)> {
         let mut output = Vec::with_capacity(self.current_net_id as usize);
         for net_id in 0..self.current_net_id {
@@ -349,19 +347,22 @@ impl ComponentKinds {
     /// walks.
     /// Returns `true` if this component kind has `EntityProperty` fields —
     /// its serialized bytes differ per connection and cannot use the shared cache.
+    #[must_use]
     pub fn is_user_dependent(&self, kind: ComponentKind) -> bool {
         self.user_dependent.contains(&kind)
     }
 
     /// Returns the `ComponentKind` for the given `net_id`, or `None` if not registered.
-    /// Provides O(1) inverse lookup from NetId to ComponentKind.
+    /// Provides O(1) inverse lookup from `NetId` to `ComponentKind`.
+    #[must_use]
     pub fn kind_for_net_id(&self, net_id: u16) -> Option<ComponentKind> {
         self.net_id_map.get(&net_id).copied()
     }
 
     /// Number of component kinds currently registered. Used at
     /// `UserDiffHandler` construction to size the per-user `DirtyQueue`'s
-    /// stride (= `ceil(kind_count / 64)` AtomicU64 words per entity).
+    /// stride (= `ceil(kind_count / 64)` `AtomicU64` words per entity).
+    #[must_use]
     pub fn kind_count(&self) -> u16 {
         self.current_net_id
     }
@@ -373,8 +374,7 @@ impl ComponentKinds {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<Box<dyn Replicate>, SerdeErr> {
         let component_kind: ComponentKind = ComponentKind::de(self, reader)?;
-        self.kind_to_builder(component_kind)
-            .read(reader, converter)
+        self.kind_to_builder(component_kind).read(reader, converter)
     }
 
     /// Reads a component kind tag then deserializes an initial-create update payload from `reader`.
@@ -399,6 +399,7 @@ impl ComponentKinds {
     }
 
     /// Returns the protocol name for `component_kind`. Panics if not registered.
+    #[must_use]
     pub fn kind_to_name(&self, component_kind: ComponentKind) -> String {
         self.kind_map
             .get(&component_kind)
@@ -427,9 +428,10 @@ impl ComponentKinds {
             .0
     }
 
-    /// Public accessor for a kind's NetId (== bit position in the
+    /// Public accessor for a kind's `NetId` (== bit position in the
     /// `DirtyQueue` u64 mask, max 64). Returns `None` for unregistered
     /// kinds.
+    #[must_use]
     pub fn net_id_of(&self, component_kind: ComponentKind) -> Option<u16> {
         self.kind_map
             .get(&component_kind)
@@ -447,11 +449,11 @@ impl ComponentKinds {
     }
 
     /// Returns `true` if the given kind was registered as an immutable component.
+    #[must_use]
     pub fn kind_is_immutable(&self, component_kind: ComponentKind) -> bool {
         self.kind_map
             .get(&component_kind)
-            .map(|(_, builder, _)| builder.is_immutable())
-            .unwrap_or(false)
+            .is_some_and(|(_, builder, _)| builder.is_immutable())
     }
 
     /// Returns every registered component in **wire net-ID order**, as
@@ -465,6 +467,7 @@ impl ComponentKinds {
     /// makes the fingerprint reproducible across processes.
     ///
     /// Net-IDs are dense by construction, so a gap is a broken invariant.
+    #[must_use]
     pub fn schema_entries(&self) -> Vec<(NetId, String)> {
         let mut output = Vec::with_capacity(self.current_net_id as usize);
         for net_id in 0..self.current_net_id {
@@ -482,6 +485,7 @@ impl ComponentKinds {
     }
 
     /// Returns a sorted list of all registered component protocol names.
+    #[must_use]
     pub fn all_names(&self) -> Vec<String> {
         let mut output = Vec::new();
         for (_, _, name) in self.kind_map.values() {

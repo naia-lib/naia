@@ -54,6 +54,7 @@ pub struct KeyGenerator<K: From<I> + Into<I> + Copy, I: KeyInt = u16> {
 
 impl<K: From<I> + Into<I> + Copy, I: KeyInt> KeyGenerator<K, I> {
     /// Creates a `KeyGenerator` that holds recycled keys for at least `recycle_timeout` before reissuing them.
+    #[must_use]
     pub fn new(recycle_timeout: Duration) -> Self {
         Self {
             recycle_timeout,

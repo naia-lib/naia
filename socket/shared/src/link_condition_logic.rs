@@ -39,7 +39,10 @@ pub fn process_packet<T: Eq>(
     // Use debug logging instead of println to reduce noise
     debug!(
         "[LINK_COND] Queuing packet: delay={}ms (latency={}, jitter={}, loss={})",
-        u64::from(latency), config.incoming_latency, config.incoming_jitter, config.incoming_loss
+        u64::from(latency),
+        config.incoming_latency,
+        config.incoming_jitter,
+        config.incoming_loss
     );
     time_queue.add_item(packet_timestamp, packet);
     debug!("[LINK_COND] Queue length after add: {}", time_queue.len());

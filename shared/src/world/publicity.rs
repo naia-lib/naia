@@ -43,6 +43,7 @@ pub enum Publicity {
 
 impl Publicity {
     /// Returns `true` if this is [`Publicity::Delegated`].
+    #[must_use]
     pub fn is_delegated(&self) -> bool {
         matches!(self, Publicity::Delegated)
     }

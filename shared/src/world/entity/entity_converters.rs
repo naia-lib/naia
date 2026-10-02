@@ -20,7 +20,7 @@ use crate::{
 pub trait GlobalWorldManagerType: InScopeEntities<GlobalEntity> {
     /// Returns the list of component kinds currently attached to `entity`, or `None` if the entity is not known.
     fn component_kinds(&self, entity: GlobalEntity) -> Option<Vec<ComponentKind>>;
-    /// Whether or not a given user can receive a Message/Component with an EntityProperty relating to the given Entity
+    /// Whether or not a given user can receive a Message/Component with an `EntityProperty` relating to the given Entity
     fn entity_can_relate_to_user(&self, global_entity: GlobalEntity, user_key: &u64) -> bool;
     /// Creates a new `MutChannelType` of `diff_mask_length` bytes for a component's mutation tracking.
     fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>>;
@@ -225,7 +225,7 @@ impl<'a, 'b> EntityConverterMut<'a, 'b> {
     }
 }
 
-impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b> {
+impl LocalEntityAndGlobalEntityConverter for EntityConverterMut<'_, '_> {
     fn global_entity_to_host_entity(
         &self,
         global_entity: GlobalEntity,
@@ -287,7 +287,7 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b> 
     }
 }
 
-impl<'a, 'b> LocalEntityAndGlobalEntityConverterMut for EntityConverterMut<'a, 'b> {
+impl LocalEntityAndGlobalEntityConverterMut for EntityConverterMut<'_, '_> {
     fn get_or_reserve_entity(
         &mut self,
         global_entity: GlobalEntity,
@@ -331,6 +331,7 @@ pub struct EntityMapReadConverter<'a> {
 
 impl<'a> EntityMapReadConverter<'a> {
     /// Wrap a read guard on the shared entity map as a read-only converter.
+    #[must_use]
     pub fn new(guard: RwLockReadGuard<'a, LocalEntityMap>) -> Self {
         Self { guard }
     }

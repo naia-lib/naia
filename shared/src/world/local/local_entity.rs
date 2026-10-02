@@ -23,6 +23,7 @@ pub enum OwnedLocalEntity {
 
 impl OwnedLocalEntity {
     /// Creates a dynamic `Host` variant from a [`HostEntity`].
+    #[must_use]
     pub fn new_host(id: HostEntity) -> Self {
         Self::Host {
             id: id.value(),
@@ -31,6 +32,7 @@ impl OwnedLocalEntity {
     }
 
     /// Creates a dynamic `Host` variant from a raw `u32` ID.
+    #[must_use]
     pub fn new_host_dynamic(id: u32) -> Self {
         Self::Host {
             id,
@@ -39,6 +41,7 @@ impl OwnedLocalEntity {
     }
 
     /// Creates a static `Host` variant from a raw `u32` ID.
+    #[must_use]
     pub fn new_host_static(id: u32) -> Self {
         Self::Host {
             id,
@@ -47,6 +50,7 @@ impl OwnedLocalEntity {
     }
 
     /// Creates a `Remote` variant from a [`RemoteEntity`], preserving its `is_static` flag.
+    #[must_use]
     pub fn new_remote(id: RemoteEntity) -> Self {
         Self::Remote {
             id: id.value(),
@@ -55,6 +59,7 @@ impl OwnedLocalEntity {
     }
 
     /// Creates a dynamic `Remote` variant from a raw `u32` ID.
+    #[must_use]
     pub fn new_remote_dynamic(id: u32) -> Self {
         Self::Remote {
             id,
@@ -63,6 +68,7 @@ impl OwnedLocalEntity {
     }
 
     /// Creates a static `Remote` variant from a raw `u32` ID.
+    #[must_use]
     pub fn new_remote_static(id: u32) -> Self {
         Self::Remote {
             id,
@@ -71,6 +77,7 @@ impl OwnedLocalEntity {
     }
 
     /// Returns `true` if this is a `Host` variant.
+    #[must_use]
     pub fn is_host(&self) -> bool {
         match self {
             Self::Host { .. } => true,
@@ -79,11 +86,13 @@ impl OwnedLocalEntity {
     }
 
     /// Returns `true` if this is a `Remote` variant.
+    #[must_use]
     pub fn is_remote(&self) -> bool {
         !self.is_host()
     }
 
     /// Returns `true` if this entity belongs to the static pool.
+    #[must_use]
     pub fn is_static(&self) -> bool {
         match self {
             Self::Host { is_static, .. } => *is_static,
@@ -92,6 +101,7 @@ impl OwnedLocalEntity {
     }
 
     /// Returns the raw `u32` wire ID for this entity, regardless of variant.
+    #[must_use]
     pub fn id(&self) -> u32 {
         match self {
             Self::Host { id, .. } | Self::Remote { id, .. } => *id,
@@ -127,6 +137,7 @@ impl OwnedLocalEntity {
     }
 
     /// Returns the encoded bit length of this entity.
+    #[must_use]
     pub fn bit_length(&self) -> u32 {
         match self {
             Self::Host { id, .. } | Self::Remote { id, .. } => {
@@ -180,6 +191,7 @@ impl OwnedLocalEntity {
     }
 
     /// Extracts the inner [`HostEntity`], panicking if this is a `Remote` variant.
+    #[must_use]
     pub fn host(&self) -> HostEntity {
         match self {
             OwnedLocalEntity::Host { id, is_static } => {
@@ -196,6 +208,7 @@ impl OwnedLocalEntity {
     }
 
     /// Extracts the inner [`RemoteEntity`], panicking if this is a `Host` variant.
+    #[must_use]
     pub fn remote(&self) -> RemoteEntity {
         match self {
             OwnedLocalEntity::Remote { id, is_static } => {
@@ -222,6 +235,7 @@ pub struct HostEntity {
 
 impl HostEntity {
     /// Creates a dynamic host entity with the given `id`.
+    #[must_use]
     pub fn new(id: u32) -> Self {
         Self {
             id,
@@ -230,6 +244,7 @@ impl HostEntity {
     }
 
     /// Creates a static host entity with the given `id`.
+    #[must_use]
     pub fn new_static(id: u32) -> Self {
         Self {
             id,
@@ -238,16 +253,19 @@ impl HostEntity {
     }
 
     /// Returns the raw `u32` wire ID.
+    #[must_use]
     pub fn value(&self) -> u32 {
         self.id
     }
 
     /// Returns `true` if this entity is from the static pool.
+    #[must_use]
     pub fn is_static(&self) -> bool {
         self.is_static
     }
 
     /// Converts this host entity into the equivalent [`RemoteEntity`] with the same ID and static flag.
+    #[must_use]
     pub fn to_remote(self) -> RemoteEntity {
         if self.is_static {
             RemoteEntity::new_static(self.id)
@@ -271,11 +289,13 @@ impl HostEntity {
     }
 
     /// Returns the encoded bit length of this entity's ID.
+    #[must_use]
     pub fn bit_length(&self) -> u32 {
         UnsignedVariableInteger::<7>::new(self.value()).bit_length()
     }
 
     /// Wraps this entity as an `OwnedLocalEntity::Host`, preserving the `is_static` flag.
+    #[must_use]
     pub fn copy_to_owned(&self) -> OwnedLocalEntity {
         OwnedLocalEntity::Host {
             id: self.value(),
@@ -284,6 +304,7 @@ impl HostEntity {
     }
 
     /// Wraps this entity as a dynamic `OwnedLocalEntity::Host` (forcing `is_static = false`).
+    #[must_use]
     pub fn copy_to_owned_dynamic(&self) -> OwnedLocalEntity {
         OwnedLocalEntity::Host {
             id: self.value(),
@@ -292,6 +313,7 @@ impl HostEntity {
     }
 
     /// Wraps this entity as a static `OwnedLocalEntity::Host` (forcing `is_static = true`).
+    #[must_use]
     pub fn copy_to_owned_static(&self) -> OwnedLocalEntity {
         OwnedLocalEntity::Host {
             id: self.value(),
@@ -309,6 +331,7 @@ pub struct RemoteEntity {
 
 impl RemoteEntity {
     /// Creates a dynamic remote entity with the given `id`.
+    #[must_use]
     pub fn new(id: u32) -> Self {
         Self {
             id,
@@ -317,6 +340,7 @@ impl RemoteEntity {
     }
 
     /// Creates a static remote entity with the given `id`.
+    #[must_use]
     pub fn new_static(id: u32) -> Self {
         Self {
             id,
@@ -325,16 +349,19 @@ impl RemoteEntity {
     }
 
     /// Returns the raw `u32` wire ID.
+    #[must_use]
     pub fn value(&self) -> u32 {
         self.id
     }
 
     /// Returns `true` if this entity is from the static pool.
+    #[must_use]
     pub fn is_static(&self) -> bool {
         self.is_static
     }
 
     /// Converts this remote entity into the equivalent [`HostEntity`] with the same ID and static flag.
+    #[must_use]
     pub fn to_host(self) -> HostEntity {
         if self.is_static {
             HostEntity::new_static(self.id)
@@ -358,6 +385,7 @@ impl RemoteEntity {
     }
 
     /// Wraps this entity as an `OwnedLocalEntity::Remote`, preserving the `is_static` flag.
+    #[must_use]
     pub fn copy_to_owned(&self) -> OwnedLocalEntity {
         OwnedLocalEntity::Remote {
             id: self.id,

@@ -44,6 +44,7 @@ pub enum EntityEvent {
 
 impl EntityEvent {
     /// Returns the [`EntityMessageType`] discriminant for this event, or `None` for `UpdateComponent` (which has no wire type).
+    #[must_use]
     pub fn to_type(&self) -> Option<EntityMessageType> {
         match self {
             Self::Spawn(_, _) => Some(EntityMessageType::Spawn),
@@ -64,6 +65,7 @@ impl EntityEvent {
     }
 
     /// Returns the [`GlobalEntity`] this event refers to.
+    #[must_use]
     pub fn entity(&self) -> GlobalEntity {
         match self {
             Self::Spawn(_, entity) => *entity,
@@ -84,12 +86,13 @@ impl EntityEvent {
     }
 
     /// Returns a human-readable string describing this event, suitable for debug logging.
+    #[must_use]
     pub fn log(&self) -> String {
         let entity = self.entity();
         if let Some(ev_type) = self.to_type() {
-            format!("{:?} {:?}", ev_type, entity)
+            format!("{ev_type:?} {entity:?}")
         } else {
-            format!("UpdateComponent {:?}", entity)
+            format!("UpdateComponent {entity:?}")
         }
     }
 }

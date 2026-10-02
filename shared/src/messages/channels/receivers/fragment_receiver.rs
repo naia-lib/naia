@@ -42,9 +42,10 @@ impl FragmentReceiver {
     ) -> Option<(MessageIndex, MessageIndex, MessageContainer)> {
         // Callers gate on `is_fragment()`, so reaching here with anything else is
         // a local routing bug, not remote input.
-        if !message.is_fragment() {
-            panic!("Received non-fragmented message in FragmentReceiver!");
-        }
+        assert!(
+            message.is_fragment(),
+            "Received non-fragmented message in FragmentReceiver!"
+        );
 
         let fragment = message
             .to_boxed_any()
@@ -132,8 +133,7 @@ impl FragmentReceiver {
                 // Reassembled bytes are unreadable — peer sent a malformed fragmented
                 // message. Discard the whole sequence rather than crashing.
                 warn!(
-                    "Discarding malformed reassembled fragment (id={:?}, {}); dropping message.",
-                    fragment_id, e
+                    "Discarding malformed reassembled fragment (id={fragment_id:?}, {e}); dropping message."
                 );
                 return None;
             }

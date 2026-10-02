@@ -23,6 +23,7 @@ impl Default for PingStore {
 
 impl PingStore {
     /// Creates an empty `PingStore`.
+    #[must_use]
     pub fn new() -> Self {
         PingStore {
             ping_index: 0,

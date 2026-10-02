@@ -6,7 +6,7 @@ use crate::messages::channels::channel::{Channel, ChannelSettings};
 
 type NetId = u16;
 
-/// Wire encoding for `ChannelKind` NetIds: a fixed-width raw bit field
+/// Wire encoding for `ChannelKind` `NetIds`: a fixed-width raw bit field
 /// whose width is `ceil(log2(N))` for the protocol's registered channel
 /// count. Both ends share registration order, so both compute the same
 /// width. See `world::component::component_kinds` for the matching
@@ -15,11 +15,11 @@ fn bit_width_for_kind_count(count: NetId) -> u8 {
     if count < 2 {
         0
     } else {
-        (count as u32).next_power_of_two().trailing_zeros() as u8
+        u32::from(count).next_power_of_two().trailing_zeros() as u8
     }
 }
 
-/// ChannelKind - should be one unique value for each type of Channel
+/// `ChannelKind` - should be one unique value for each type of Channel
 #[derive(Eq, Hash, Copy, Clone, PartialEq, Debug)]
 pub struct ChannelKind {
     type_id: TypeId,
@@ -27,6 +27,7 @@ pub struct ChannelKind {
 
 impl ChannelKind {
     /// Returns the `ChannelKind` corresponding to the type `C`.
+    #[must_use]
     pub fn of<C: Channel>() -> Self {
         Self {
             type_id: TypeId::of::<C>(),
@@ -59,7 +60,7 @@ impl ChannelKind {
 #[derive(Clone)]
 pub struct ChannelKinds {
     current_net_id: NetId,
-    /// Number of bits needed to encode any registered NetId — recomputed
+    /// Number of bits needed to encode any registered `NetId` — recomputed
     /// on every `add_channel`. Read directly by `ChannelKind::ser`/`de`
     /// on the hot path.
     kind_bit_width: u8,
@@ -75,6 +76,7 @@ impl Default for ChannelKinds {
 
 impl ChannelKinds {
     /// Creates an empty `ChannelKinds` registry.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             current_net_id: 0,
@@ -104,6 +106,7 @@ impl ChannelKinds {
     }
 
     /// Returns all registered `(ChannelKind, ChannelSettings)` pairs.
+    #[must_use]
     pub fn channels(&self) -> Vec<(ChannelKind, ChannelSettings)> {
         // TODO: is there a better way to do this without copying + cloning?
         // How to return a reference here (behind a Mutex ..)
@@ -115,6 +118,7 @@ impl ChannelKinds {
     }
 
     /// Returns the `ChannelSettings` for the given kind. Panics if the kind was not registered.
+    #[must_use]
     pub fn channel(&self, kind: &ChannelKind) -> ChannelSettings {
         let (_, settings, _) = self.kind_map.get(kind).expect("could not find ChannelKind for given Channel. Make sure Channel struct has `#[derive(Channel)]` on it!");
         settings.clone()
@@ -155,6 +159,7 @@ impl ChannelKinds {
     /// Net-IDs are dense by construction (`add_channel` hands out
     /// `0..current_net_id` with no gaps), so a missing entry is a broken
     /// invariant rather than a recoverable condition.
+    #[must_use]
     pub fn schema_entries(&self) -> Vec<(NetId, String, Vec<u8>)> {
         let mut output = Vec::with_capacity(self.current_net_id as usize);
         for net_id in 0..self.current_net_id {
@@ -172,6 +177,7 @@ impl ChannelKinds {
     }
 
     /// Returns a sorted list of all registered channel protocol names.
+    #[must_use]
     pub fn all_names(&self) -> Vec<String> {
         let mut output = Vec::new();
         for (_, _, name) in self.kind_map.values() {
@@ -182,11 +188,13 @@ impl ChannelKinds {
     }
 
     /// Returns the protocol name for `kind`, or `None` if not registered.
+    #[must_use]
     pub fn channel_name(&self, kind: &ChannelKind) -> Option<&str> {
         self.kind_map.get(kind).map(|(_, _, name)| name.as_str())
     }
 
     /// Returns all `(ChannelKind, protocol_name)` pairs registered in this registry.
+    #[must_use]
     pub fn channel_names(&self) -> Vec<(ChannelKind, String)> {
         self.kind_map
             .iter()

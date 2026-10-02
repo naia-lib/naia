@@ -26,6 +26,7 @@ pub struct HostEntityChannel {
 
 impl HostEntityChannel {
     /// Creates a fresh `HostEntityChannel` with no components and default auth state for `host_type`.
+    #[must_use]
     pub fn new(host_type: HostType) -> Self {
         Self {
             component_channels: HashSet::new(),
@@ -57,17 +58,19 @@ impl HostEntityChannel {
             }
             EntityMessageType::InsertComponent => {
                 let component_kind = command.component_kind().unwrap();
-                if self.component_channels.contains(&component_kind) {
-                    panic!("Cannot insert a component that already exists in the entity channel");
-                }
+                assert!(
+                    !self.component_channels.contains(&component_kind),
+                    "Cannot insert a component that already exists in the entity channel"
+                );
                 self.component_channels.insert(component_kind);
                 self.outgoing_commands.push(command);
             }
             EntityMessageType::RemoveComponent => {
                 let component_kind = command.component_kind().unwrap();
-                if !self.component_channels.contains(&component_kind) {
-                    panic!("Cannot remove a component that does not exist in the entity channel");
-                }
+                assert!(
+                    self.component_channels.contains(&component_kind),
+                    "Cannot remove a component that does not exist in the entity channel"
+                );
                 self.component_channels.remove(&component_kind);
                 self.outgoing_commands.push(command);
             }
@@ -138,7 +141,7 @@ impl HostEntityChannel {
                     // Drop it
                 }
                 msg => {
-                    panic!("EntityChannelSender::process_messages() received an unexpected message type: {:?}", msg);
+                    panic!("EntityChannelSender::process_messages() received an unexpected message type: {msg:?}");
                 }
             }
         }
@@ -179,7 +182,7 @@ impl HostEntityChannel {
     /// `host_send_migrate_response` first. Encoding it explicitly at
     /// the channel level decouples the invariant from caller order
     /// and unblocks deferring the Send-side delegation work to a
-    /// later preamble drain (see MISSION_USER_ONLY_SEES_SIM Phase
+    /// later preamble drain (see `MISSION_USER_ONLY_SEES_SIM` Phase
     /// D.2 blocker 2).
     ///
     /// The reserved command will be enqueued (and consume
@@ -195,26 +198,24 @@ impl HostEntityChannel {
     ///   this channel (i.e. the would-be `subcommand_id=0` slot is
     ///   already gone).
     /// - The reserved command MUST be an auth-channel command type
-    ///   (Publish / Unpublish / EnableDelegation / DisableDelegation /
-    ///   SetAuthority / RequestAuthority / ReleaseAuthority /
-    ///   EnableDelegationResponse / MigrateResponse). Lifecycle
+    ///   (Publish / Unpublish / `EnableDelegation` / `DisableDelegation` /
+    ///   `SetAuthority` / `RequestAuthority` / `ReleaseAuthority` /
+    ///   `EnableDelegationResponse` / `MigrateResponse`). Lifecycle
     ///   commands (Spawn/Despawn/Noop) and component commands are
     ///   rejected with a panic.
     pub fn reserve_first_command(&mut self, command: EntityCommand) {
-        if self.reserved_first_command.is_some() {
-            panic!(
-                "HostEntityChannel::reserve_first_command called twice before drain (type={:?})",
-                command.get_type()
-            );
-        }
-        if self.auth_channel.sender_has_sent_any() {
-            panic!(
-                "HostEntityChannel::reserve_first_command called after a command was already \
-                 emitted on this channel; subcommand_id=0 slot has already been consumed \
-                 (incoming type={:?})",
-                command.get_type()
-            );
-        }
+        assert!(
+            !self.reserved_first_command.is_some(),
+            "HostEntityChannel::reserve_first_command called twice before drain (type={:?})",
+            command.get_type()
+        );
+        assert!(
+            !self.auth_channel.sender_has_sent_any(),
+            "HostEntityChannel::reserve_first_command called after a command was already \
+             emitted on this channel; subcommand_id=0 slot has already been consumed \
+             (incoming type={:?})",
+            command.get_type()
+        );
         match command.get_type() {
             EntityMessageType::Publish
             | EntityMessageType::Unpublish
@@ -228,8 +229,7 @@ impl HostEntityChannel {
             other => {
                 panic!(
                     "HostEntityChannel::reserve_first_command only accepts auth-channel command \
-                     types; got {:?}",
-                    other
+                     types; got {other:?}"
                 );
             }
         }
@@ -249,19 +249,21 @@ impl HostEntityChannel {
     }
 
     /// Force-enable delegation on this channel (client-side only)
-    /// This is called when the client originates an EnableDelegation message,
-    /// to ensure the local channel is in the correct state to receive MigrateResponse
+    /// This is called when the client originates an `EnableDelegation` message,
+    /// to ensure the local channel is in the correct state to receive `MigrateResponse`
     pub fn local_enable_delegation(&mut self) {
         // Delegated subsumes Published, so this one call covers both.
         self.auth_channel.force_enable_delegation();
     }
 
     /// Returns `true` if this channel's authority sub-channel is in the Delegated state.
+    #[must_use]
     pub fn is_delegated(&self) -> bool {
         self.auth_channel.is_delegated()
     }
 
     /// Returns the current publication/delegation state of this channel's authority sub-channel.
+    #[must_use]
     pub fn auth_channel_state(&self) -> crate::world::sync::auth_channel::EntityAuthChannelState {
         self.auth_channel.state()
     }

@@ -37,7 +37,7 @@ pub struct BaseRecvConnection {
 /// manager, the outbound ack pipeline, the heartbeat timer, and the
 /// bandwidth accumulator.
 ///
-/// Per the MessageManager sub-audit called out in the §7 §8 spec: although
+/// Per the `MessageManager` sub-audit called out in the §7 §8 spec: although
 /// `MessageManager` contains both `channel_senders` (send-only) and
 /// `channel_receivers` (recv-only), the recv-side decode path
 /// (`read_messages` / `receive_messages` / `receive_requests_and_responses`)
@@ -74,7 +74,7 @@ pub struct BaseConnection {
 }
 
 impl BaseConnection {
-    /// Create a new BaseConnection, given the appropriate underlying managers
+    /// Create a new `BaseConnection`, given the appropriate underlying managers
     pub fn new(
         connection_config: &ConnectionConfig,
         address: &Option<SocketAddr>,
@@ -147,6 +147,7 @@ impl BaseConnection {
     }
 
     /// Returns the sequence index of the last received packet from the remote.
+    #[must_use]
     pub fn last_received_packet_index(&self) -> PacketIndex {
         self.recv.ack_recv.last_received_packet_index()
     }
@@ -164,6 +165,7 @@ impl BaseSendConnection {
     /// Check whether a packet of `estimated_bytes` is permitted under the
     /// current budget. Allows one MTU-sized overshoot per tick when the
     /// budget is positive but short.
+    #[must_use]
     pub fn can_spend_bandwidth(&self, estimated_bytes: u32) -> bool {
         self.bandwidth_accumulator.can_spend(estimated_bytes)
     }
@@ -174,17 +176,20 @@ impl BaseSendConnection {
     }
 
     /// Current remaining budget (may be negative after overshoot).
+    #[must_use]
     pub fn bandwidth_remaining(&self) -> f64 {
         self.bandwidth_accumulator.remaining()
     }
 
     /// Bytes sent during the most-recently-completed send cycle (D13 telemetry).
+    #[must_use]
     pub fn bandwidth_bytes_sent_last_tick(&self) -> u64 {
         self.bandwidth_accumulator.bytes_sent_last_tick()
     }
 
     /// Packets deferred by the budget gate during the most-recently-completed
     /// send cycle. Always 0 unless `bench_instrumentation` is enabled.
+    #[must_use]
     pub fn bandwidth_packets_deferred_last_tick(&self) -> u32 {
         self.bandwidth_accumulator.packets_deferred_last_tick()
     }
@@ -205,6 +210,7 @@ impl BaseSendConnection {
     }
 
     /// Returns whether a heartbeat message should be sent
+    #[must_use]
     pub fn should_send_heartbeat(&self) -> bool {
         self.heartbeat_timer.ringing()
     }
@@ -217,6 +223,7 @@ impl BaseSendConnection {
     }
 
     /// Returns `true` if an empty ack should be sent this tick.
+    #[must_use]
     pub fn should_send_empty_ack(&self) -> bool {
         self.ack_send.should_send_empty_ack()
     }
@@ -251,11 +258,13 @@ impl BaseSendConnection {
     }
 
     /// Get the next outgoing packet's index
+    #[must_use]
     pub fn next_packet_index(&self) -> PacketIndex {
         self.ack_send.next_sender_packet_index()
     }
 
     /// Fraction of sent data-packets that were lost in the last 64-packet window.
+    #[must_use]
     pub fn packet_loss_pct(&self) -> f32 {
         self.ack_send.packet_loss_pct()
     }
@@ -393,6 +402,7 @@ impl BaseConnection {
         self.send.accumulate_bandwidth(now);
     }
     /// Bandwidth: see [`BaseSendConnection::can_spend_bandwidth`].
+    #[must_use]
     pub fn can_spend_bandwidth(&self, b: u32) -> bool {
         self.send.can_spend_bandwidth(b)
     }
@@ -401,14 +411,17 @@ impl BaseConnection {
         self.send.spend_bandwidth(b);
     }
     /// Bandwidth: see [`BaseSendConnection::bandwidth_remaining`].
+    #[must_use]
     pub fn bandwidth_remaining(&self) -> f64 {
         self.send.bandwidth_remaining()
     }
     /// Bandwidth: see [`BaseSendConnection::bandwidth_bytes_sent_last_tick`].
+    #[must_use]
     pub fn bandwidth_bytes_sent_last_tick(&self) -> u64 {
         self.send.bandwidth_bytes_sent_last_tick()
     }
     /// Bandwidth: see [`BaseSendConnection::bandwidth_packets_deferred_last_tick`].
+    #[must_use]
     pub fn bandwidth_packets_deferred_last_tick(&self) -> u32 {
         self.send.bandwidth_packets_deferred_last_tick()
     }
@@ -421,6 +434,7 @@ impl BaseConnection {
         self.send.mark_sent();
     }
     /// Heartbeat: see [`BaseSendConnection::should_send_heartbeat`].
+    #[must_use]
     pub fn should_send_heartbeat(&self) -> bool {
         self.send.should_send_heartbeat()
     }
@@ -429,6 +443,7 @@ impl BaseConnection {
         self.send.mark_should_send_empty_ack();
     }
     /// Acks: see [`BaseSendConnection::should_send_empty_ack`].
+    #[must_use]
     pub fn should_send_empty_ack(&self) -> bool {
         self.send.should_send_empty_ack()
     }
@@ -437,10 +452,12 @@ impl BaseConnection {
         self.send.take_should_send_empty_ack()
     }
     /// Packet info: see [`BaseSendConnection::next_packet_index`].
+    #[must_use]
     pub fn next_packet_index(&self) -> PacketIndex {
         self.send.next_packet_index()
     }
     /// Packet info: see [`BaseSendConnection::packet_loss_pct`].
+    #[must_use]
     pub fn packet_loss_pct(&self) -> f32 {
         self.send.packet_loss_pct()
     }

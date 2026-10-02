@@ -43,6 +43,7 @@ impl Default for HostAuthHandler {
 #[cfg(feature = "entity_delegation")]
 impl HostAuthHandler {
     /// Creates an empty `HostAuthHandler`.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             auth_channels: HashMap::new(),
@@ -55,9 +56,10 @@ impl HostAuthHandler {
         host_type: HostType,
         entity: GlobalEntity,
     ) -> EntityAuthAccessor {
-        if self.auth_channels.contains_key(&entity) {
-            panic!("Entity cannot register with Server more than once!");
-        }
+        assert!(
+            !self.auth_channels.contains_key(&entity),
+            "Entity cannot register with Server more than once!"
+        );
 
         let (mutator, accessor) = EntityAuthChannel::new_channel(host_type);
 
@@ -73,6 +75,7 @@ impl HostAuthHandler {
     }
 
     /// Returns a cloned `EntityAuthAccessor` for `entity`. Panics if not registered.
+    #[must_use]
     pub fn get_accessor(&self, entity: GlobalEntity) -> EntityAuthAccessor {
         let (_, receiver) = self
             .auth_channels
@@ -83,6 +86,7 @@ impl HostAuthHandler {
     }
 
     /// Returns the current authority status for `entity`, or `None` if not registered.
+    #[must_use]
     pub fn auth_status(&self, entity: GlobalEntity) -> Option<HostEntityAuthStatus> {
         if let Some((_, receiver)) = self.auth_channels.get(&entity) {
             return Some(receiver.auth_status());

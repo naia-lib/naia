@@ -69,6 +69,7 @@ cfg_if! {
 
         impl Decoder {
             /// Creates a no-op decoder (compression mode is ignored in this build variant).
+            #[must_use]
             pub fn new(_: CompressionMode) -> Self {
                 Self {
                     result: Vec::new(),

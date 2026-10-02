@@ -68,7 +68,8 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
     /// True if this component contains one or more `EntityProperty` fields,
     /// meaning its serialized bytes differ per connection and cannot be cached
     /// in a shared `CachedComponentUpdate`. Default: false.
-    /// The derive macro overrides to `true` for any component with ≥1 EntityProperty field.
+    /// The derive macro overrides to `true` for any component with ≥1 `EntityProperty` field.
+    #[must_use]
     fn has_entity_properties() -> bool
     where
         Self: Sized,
@@ -79,13 +80,14 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
     /// Returns `u32::MAX` if not precisely known (sentinel — skips the registration
     /// assertion against `CACHED_UPDATE_BITS`).
     /// The derive macro may override with a precise sum via `ConstBitLength` impls.
+    #[must_use]
     fn max_bit_length() -> u32
     where
         Self: Sized,
     {
         u32::MAX
     }
-    /// Gets the ComponentKind of this type
+    /// Gets the `ComponentKind` of this type
     fn kind(&self) -> ComponentKind;
     /// Returns this component's canonical domain descriptor: the domain tag
     /// plus a STRUCT node with one labeled entry per wired property in
@@ -160,7 +162,7 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
     fn create_builder() -> Box<dyn ReplicateBuilder>
     where
         Self: Sized;
-    /// Gets the number of bytes of the Component's DiffMask
+    /// Gets the number of bytes of the Component's `DiffMask`
     fn diff_mask_size(&self) -> u8;
     /// Get an immutable reference to the inner Component as a Replicate trait object
     fn dyn_ref(&self) -> ReplicaDynRef<'_>;
@@ -172,7 +174,7 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
     /// Mirror a SINGLE Property field from `other` into `self`, identified
     /// by its 0-based property index (the same index used by the diff-mask
     /// bit positions). Calls `Property::mirror` on exactly one field —
-    /// fires that field's PropertyMutator without touching any others.
+    /// fires that field's `PropertyMutator` without touching any others.
     ///
     /// Used by the Replicated Resources Mode B mirror system to propagate
     /// per-field changes from the user-facing bevy `Resource` storage to
@@ -188,7 +190,7 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
     /// This is hostile to ignore but a hot per-tick sync system shouldn't
     /// panic in production.
     fn mirror_single_field(&mut self, field_index: u8, other: &dyn Replicate);
-    /// Set the Component's PropertyMutator, which keeps track
+    /// Set the Component's `PropertyMutator`, which keeps track
     /// of which Properties have been mutated, necessary to sync only the
     /// Properties that have changed with the client
     fn set_mutator(&mut self, mutator: &PropertyMutator);
@@ -221,9 +223,9 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         update: ComponentFieldUpdate,
     ) -> Result<(), SerdeErr>;
-    /// Returns a list of LocalEntities contained within the Component's EntityProperty fields, which are waiting to be converted to GlobalEntities
+    /// Returns a list of `LocalEntities` contained within the Component's `EntityProperty` fields, which are waiting to be converted to `GlobalEntities`
     fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>>;
-    /// Converts any LocalEntities contained within the Component's EntityProperty fields to GlobalEntities.
+    /// Converts any `LocalEntities` contained within the Component's `EntityProperty` fields to `GlobalEntities`.
     /// Returns `false` when any awaited entity is still unresolvable; the caller must drop the stale component.
     fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> bool;
     /// Publish Replicate

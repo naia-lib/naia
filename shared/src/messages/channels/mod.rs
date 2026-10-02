@@ -2,7 +2,7 @@
 pub mod channel;
 /// Typed channel-kind registry and lookup.
 pub mod channel_kinds;
-/// Built-in default channel definitions (DefaultUnreliable, DefaultReliable, etc.).
+/// Built-in default channel definitions (`DefaultUnreliable`, `DefaultReliable`, etc.).
 pub mod default_channels;
 /// Inbound channel receiver traits and implementations.
 pub mod receivers;

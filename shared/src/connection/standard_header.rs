@@ -22,6 +22,7 @@ impl StandardHeader {
     /// packets, containing sequence numbers in the range `[remote sequence - 32,
     /// remote sequence]`. We set bit _n_ (in `[1,32]`) in ack bits to 1 if the
     /// sequence number remote sequence - _n_ is in the received queue.
+    #[must_use]
     pub fn new(
         packet_type: PacketType,
         sender_packet_index: PacketIndex,

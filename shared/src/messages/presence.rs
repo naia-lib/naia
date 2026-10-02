@@ -1,4 +1,4 @@
-//! LOCAL_GUEST_PLAN: controller-presence heartbeat cadence/carrier/freshness
+//! `LOCAL_GUEST_PLAN`: controller-presence heartbeat cadence/carrier/freshness
 //! producer primitives (naia-only; before P1 step 6).
 //!
 //! Tests for the [`super`] producer contract: idle heartbeat emission,
@@ -7,7 +7,7 @@
 //! commit of this file (red): these tests name the API the producer must
 //! supply.
 //!
-//! # Producer contract (LOCAL_GUEST_PLAN, before P1 step 6)
+//! # Producer contract (`LOCAL_GUEST_PLAN`, before P1 step 6)
 //!
 //! One active carrier epoch per presence scope. The producer emits one frame
 //! per heartbeat tick of the carrying connection — the cadence is that
@@ -49,11 +49,13 @@ impl PresenceEpoch {
     /// Names an epoch observed on the wire or in storage. Only the producer
     /// mints new epochs (via [`PresenceProducer::replace_carrier`]); this
     /// names one the peer already issued, it never allocates.
+    #[must_use]
     pub fn from_wire(value: u64) -> Self {
         Self { value }
     }
 
     /// Reads the raw epoch value, for diagnostics and routing keys.
+    #[must_use]
     pub fn value(self) -> u64 {
         self.value
     }
@@ -71,17 +73,20 @@ pub struct PresenceSeq {
 
 impl PresenceSeq {
     /// The first sequence of an epoch. Every epoch starts here.
+    #[must_use]
     pub fn first() -> Self {
         Self { value: 1 }
     }
 
     /// Names a sequence observed on the wire or in storage. It names a
     /// peer-issued value, it never allocates.
+    #[must_use]
     pub fn from_wire(value: u64) -> Self {
         Self { value }
     }
 
     /// Reads the raw sequence value, for diagnostics.
+    #[must_use]
     pub fn value(self) -> u64 {
         self.value
     }
@@ -99,16 +104,19 @@ pub struct ControllerBitmap {
 
 impl ControllerBitmap {
     /// No controller observed present.
+    #[must_use]
     pub fn empty() -> Self {
         Self { bits: 0 }
     }
 
     /// Builds the bitmap from raw slot bits.
+    #[must_use]
     pub fn from_bits(bits: u16) -> Self {
         Self { bits }
     }
 
     /// Reads the raw slot bits.
+    #[must_use]
     pub fn bits(self) -> u16 {
         self.bits
     }
@@ -168,6 +176,7 @@ impl PresenceProducer {
     /// empty bitmap. The first real bitmap arrives via
     /// [`controller_event`](PresenceProducer::controller_event) or the
     /// consumer's initial observation; idle ticks emit empty until then.
+    #[must_use]
     pub fn new(epoch: PresenceEpoch) -> Self {
         Self {
             epoch,
@@ -243,6 +252,7 @@ pub struct PresenceTracker {
 impl PresenceTracker {
     /// Starts with no active epoch: the first applied frame must carry
     /// seq 1 of whatever epoch arrives first.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             active_epoch: None,
@@ -270,7 +280,7 @@ impl PresenceTracker {
                 PresenceApply::Applied
             }
             Some(active) => {
-                use std::cmp::Ordering::*;
+                use std::cmp::Ordering::{Equal, Greater, Less};
                 match frame.epoch.value.cmp(&active.value) {
                     Less => PresenceApply::RejectedRetiredEpoch,
                     Greater => {
@@ -305,12 +315,14 @@ impl PresenceTracker {
     }
 
     /// Consecutive ticks with no applied observation.
+    #[must_use]
     pub fn consecutive_misses(&self) -> u32 {
         self.misses
     }
 
     /// Whether the miss run reached [`HEARTBEAT_LOSS_MISSES`]. An
     /// observation for the deadline owner, never a deadline.
+    #[must_use]
     pub fn is_stale(&self) -> bool {
         self.misses >= HEARTBEAT_LOSS_MISSES
     }
@@ -319,6 +331,7 @@ impl PresenceTracker {
     /// handover: replacement changes routing keys, not the observed
     /// controller lifetimes — until the new carrier's own frames arrive,
     /// the last known observation still reads.
+    #[must_use]
     pub fn last_bitmap(&self) -> Option<ControllerBitmap> {
         self.last_bitmap
     }
@@ -334,6 +347,7 @@ impl PresenceTracker {
     /// carrying connection's config rather than a second timer. Present
     /// so the owner contract names the exact integration point: emit on
     /// the tick that answers `should_send_heartbeat`.
+    #[must_use]
     pub fn cadence(config: &ConnectionConfig) -> Duration {
         config.heartbeat_interval
     }

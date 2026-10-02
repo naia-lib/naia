@@ -70,7 +70,7 @@ impl AuthChannelReceiver {
         }
     }
 
-    /// Set the next expected subcommand_id (used after migration to sync with server's sequence)
+    /// Set the next expected `subcommand_id` (used after migration to sync with server's sequence)
     pub(crate) fn set_next_subcommand_id(&mut self, id: SubCommandId) {
         self.next_subcommand_id = id;
     }
@@ -108,7 +108,7 @@ impl AuthChannelReceiver {
 
         while let Some((_, (_, msg))) = self.buffered_messages.peek_front() {
             let Some(subcommand_id) = msg.subcommand_id() else {
-                panic!("Expected a subcommand ID in the message: {:?}", msg);
+                panic!("Expected a subcommand ID in the message: {msg:?}");
             };
 
             if subcommand_id != self.next_subcommand_id {

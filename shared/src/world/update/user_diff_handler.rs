@@ -52,7 +52,7 @@ pub mod dirty_scan_counters {
 ///
 /// `entity_kind_to_key` maps `(GlobalEntity, ComponentKind) → (GlobalEntityIndex, u16)`.
 /// It is populated at registration time and used by cold-path methods, eliminating
-/// any RwLock acquisition on `GlobalDiffHandler` for the per-connection diff paths.
+/// any `RwLock` acquisition on `GlobalDiffHandler` for the per-connection diff paths.
 ///
 /// `kinds_by_bit` records `kind_bit → ComponentKind` so `dirty_receiver_candidates`
 /// can rebuild the `HashMap<GlobalEntity, HashSet<ComponentKind>>` shape that
@@ -62,20 +62,20 @@ pub mod dirty_scan_counters {
 /// Cold-path methods take `(&GlobalEntity, &ComponentKind)` and resolve via `entity_kind_to_key`.
 #[derive(Clone)]
 pub struct UserDiffHandler {
-    /// Stride-indexed flat receiver array. Slot = entity_idx * kind_count + kind_bit.
+    /// Stride-indexed flat receiver array. Slot = `entity_idx` * `kind_count` + `kind_bit`.
     /// `None` for unregistered (entity, component) pairs.
     receivers_dense: Vec<Option<MutReceiver>>,
     /// Number of component kinds. Fixed at construction (protocol is locked before
     /// any connection is established). Used as the stride for slot calculation.
     kind_count: usize,
-    /// Reverse lookup: (GlobalEntity, ComponentKind) → (GlobalEntityIndex, kind_bit).
+    /// Reverse lookup: (`GlobalEntity`, `ComponentKind`) → (`GlobalEntityIndex`, `kind_bit`).
     /// Populated at `register_component`; removed at `deregister_component`.
     /// Used by cold-path methods and by `deregister_component` to avoid needing the
-    /// GlobalDiffHandler RwLock after the entity may already have been freed.
+    /// `GlobalDiffHandler` `RwLock` after the entity may already have been freed.
     entity_kind_to_key: HashMap<(GlobalEntity, ComponentKind), (GlobalEntityIndex, u16)>,
     global_diff_handler: Arc<RwLock<GlobalDiffHandler>>,
     /// Reverse table for rebuilding `ComponentKind` from a `kind_bit`
-    /// at snapshot time. Bit position == NetId per
+    /// at snapshot time. Bit position == `NetId` per
     /// `ComponentKinds::add_component`. `None` at indices not yet
     /// registered. `Vec` (was fixed-size `[_; 64]`) since the
     /// 2026-05-05 unlimited-kind-count refactor — sized to the
@@ -107,8 +107,7 @@ impl UserDiffHandler {
         let global_diff_handler = global_world_manager.diff_handler();
         let kind_count = global_diff_handler
             .read()
-            .map(|h| h.kind_count() as usize)
-            .unwrap_or(0);
+            .map_or(0, |h| h.kind_count() as usize);
         let global_dirty_arc = global_world_manager.global_dirty_bitset();
         let global_dirty = global_dirty_arc
             .as_ref()
@@ -184,8 +183,7 @@ impl UserDiffHandler {
         // that issued the receiver above). Bail with a no-op if not.
         let Some(kind_bit) = kind_bit else {
             warn!(
-                "UserDiffHandler: kind_bit unresolved for {:?}; notifier not attached",
-                component_kind
+                "UserDiffHandler: kind_bit unresolved for {component_kind:?}; notifier not attached"
             );
             return;
         };
@@ -302,11 +300,7 @@ impl UserDiffHandler {
         receiver.mask_snapshot()
     }
 
-    pub fn diff_mask_is_clear(
-        &self,
-        entity: GlobalEntity,
-        component_kind: ComponentKind,
-    ) -> bool {
+    pub fn diff_mask_is_clear(&self, entity: GlobalEntity, component_kind: ComponentKind) -> bool {
         let Some((entity_idx, kind_bit)) = self
             .entity_kind_to_key
             .get(&(entity, component_kind))
@@ -356,7 +350,7 @@ impl UserDiffHandler {
         }
     }
 
-    /// Cold-path combined check — resolves via entity_kind_to_key.
+    /// Cold-path combined check — resolves via `entity_kind_to_key`.
     pub fn is_receiver_dirty_and_delivered(
         &self,
         entity: GlobalEntity,
@@ -376,7 +370,7 @@ impl UserDiffHandler {
         }
     }
 
-    /// Hot-path combined check for Phase 3: O(1) array access, no hashing, no RwLock.
+    /// Hot-path combined check for Phase 3: O(1) array access, no hashing, no `RwLock`.
     /// `entity_idx` and `kind_bit` are pre-resolved by the Phase 3 bitset scan.
     pub fn is_receiver_dirty_and_delivered_fast(
         &self,
@@ -390,7 +384,7 @@ impl UserDiffHandler {
         }
     }
 
-    /// Hot-path diff mask check for Phase 3: O(1) array access, no hashing, no RwLock.
+    /// Hot-path diff mask check for Phase 3: O(1) array access, no hashing, no `RwLock`.
     pub fn diff_mask_is_clear_fast(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) -> bool {
         let slot = entity_idx.as_usize() * self.kind_count + kind_bit as usize;
         match self.receivers_dense.get(slot) {
@@ -399,8 +393,8 @@ impl UserDiffHandler {
         }
     }
 
-    /// Hot-path mask snapshot for write_update: O(1) array access, no hashing, no RwLock.
-    /// Returns `None` if no receiver is registered for this (entity_idx, kind_bit).
+    /// Hot-path mask snapshot for `write_update`: O(1) array access, no hashing, no `RwLock`.
+    /// Returns `None` if no receiver is registered for this (`entity_idx`, `kind_bit`).
     pub fn diff_mask_snapshot_fast(
         &self,
         entity_idx: GlobalEntityIndex,
@@ -444,7 +438,7 @@ impl UserDiffHandler {
         receiver.clear_mask();
     }
 
-    /// Hot-path clear: O(1) array access, no hashing, no RwLock.
+    /// Hot-path clear: O(1) array access, no hashing, no `RwLock`.
     pub fn clear_diff_mask_fast(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
         let slot = entity_idx.as_usize() * self.kind_count + kind_bit as usize;
         if let Some(Some(receiver)) = self.receivers_dense.get(slot) {
@@ -466,9 +460,9 @@ impl UserDiffHandler {
             .count()
     }
 
-    /// Builds the dirty candidate set for this connection from the per-user DirtySet.
+    /// Builds the dirty candidate set for this connection from the per-user `DirtySet`.
     /// CLIENT PATH ONLY — returns an empty map on the server, which uses the
-    /// GlobalDirtyBitset + ConnectionVisibilityBitset three-phase loop instead.
+    /// `GlobalDirtyBitset` + `ConnectionVisibilityBitset` three-phase loop instead.
     pub fn dirty_receiver_candidates(&self) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
         // Server path: no DirtySet allocated — the Iris three-phase loop drives candidate
         // selection from GlobalDirtyBitset directly. This path should never be called

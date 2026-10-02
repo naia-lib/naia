@@ -54,7 +54,7 @@ pub struct Protocol {
     pub compression: Option<CompressionConfig>,
     /// Whether or not Client Authoritative Entities will be allowed
     pub client_authoritative_entities: bool,
-    /// Cached protocol ID, computed when lock() is called
+    /// Cached protocol ID, computed when `lock()` is called
     cached_protocol_id: Option<ProtocolId>,
     locked: bool,
 }
@@ -88,6 +88,7 @@ impl Protocol {
     /// Mutation triage: replacing this body with `Default::default()` is an
     /// equivalent mutant -- that is exactly what it does. Named for readability
     /// at the call site, not for behavior.
+    #[must_use]
     pub fn builder() -> Self {
         Self::default()
     }
@@ -114,6 +115,7 @@ impl Protocol {
     }
 
     /// Returns the configured WebRTC signalling endpoint path.
+    #[must_use]
     pub fn get_rtc_endpoint(&self) -> String {
         self.socket.rtc_endpoint_path.clone()
     }
@@ -198,9 +200,9 @@ impl Protocol {
     /// as its sole replicated component. This call:
     ///
     /// 1. Calls `add_component::<R>()` to allocate a normal `ComponentKind`
-    ///    + NetId for `R` (Resources reuse the component wire encoding).
+    ///    + `NetId` for `R` (Resources reuse the component wire encoding).
     /// 2. Records the `ComponentKind` in `resource_kinds` so the receiver
-    ///    side can recognize incoming SpawnWithComponents messages whose
+    ///    side can recognize incoming `SpawnWithComponents` messages whose
     ///    components are resources, and populate its `ResourceRegistry`.
     ///
     /// Idempotent — registering the same type twice is a no-op (matches
@@ -241,9 +243,7 @@ impl Protocol {
 
     /// Panics if the protocol has already been locked.
     pub fn check_lock(&self) {
-        if self.locked {
-            panic!("Protocol already locked!");
-        }
+        assert!(!self.locked, "Protocol already locked!");
     }
 
     /// Moves out of the builder and returns the owned `Protocol`.
@@ -252,6 +252,7 @@ impl Protocol {
     }
 
     /// Returns the cached protocol ID. Panics if protocol is not locked.
+    #[must_use]
     pub fn protocol_id(&self) -> ProtocolId {
         self.cached_protocol_id
             .expect("Protocol must be locked before calling protocol_id()")
@@ -260,6 +261,7 @@ impl Protocol {
     /// Structural message registry: every registered message's canonical
     /// domain descriptor in wire net-ID order, as `(net_id, descriptor)`.
     /// Feeds fingerprint v2's message section.
+    #[must_use]
     pub fn message_descriptors(&self) -> Vec<(u16, Vec<u8>)> {
         self.message_kinds.schema_descriptor_entries()
     }
@@ -267,6 +269,7 @@ impl Protocol {
     /// Structural component registry: every registered component's
     /// [`ComponentFacts`] in wire net-ID order, as `(net_id, facts)`. Feeds
     /// fingerprint v2's component section.
+    #[must_use]
     pub fn component_fact_table(&self) -> Vec<(u16, ComponentFacts)> {
         self.component_kinds.schema_fact_entries()
     }
@@ -274,6 +277,7 @@ impl Protocol {
     /// Request→response pairs in registration order, as
     /// `(request_net_id, response_net_id)` wire net-ID pairs. Feeds
     /// fingerprint v2's pairing section.
+    #[must_use]
     pub fn request_pairs(&self) -> Vec<(u16, u16)> {
         self.message_kinds.request_response_pairs().to_vec()
     }
@@ -281,8 +285,9 @@ impl Protocol {
     /// Replicated Resources as component wire net-IDs in ascending numeric
     /// order — membership by net ID, never by sorted name. Feeds fingerprint
     /// v2's resource section.
+    #[must_use]
     pub fn resource_member_net_ids(&self) -> Vec<u16> {
-        self.resource_kinds.member_net_ids(&&self.component_kinds)
+        self.resource_kinds.member_net_ids(&self.component_kinds)
     }
 
     /// Compute the protocol fingerprint from current state.
@@ -471,6 +476,7 @@ impl Protocol {
     ///
     /// This is a pure function of the registrations: it works on unlocked
     /// protocols and never touches the socket, the clock, or the wire.
+    #[must_use]
     pub fn fingerprint_mismatch_section(&self, other: &Protocol) -> Option<FingerprintSection> {
         let mine = self.fingerprint_sections();
         let theirs = other.fingerprint_sections();

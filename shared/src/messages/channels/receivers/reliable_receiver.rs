@@ -91,13 +91,12 @@ impl<M> ReliableReceiver<M> {
             if current_index < self.record.len() {
                 if let Some((old_message_index, old_message)) = self.record.get_mut(current_index) {
                     if *old_message_index == message_index {
-                        if !(*old_message) {
-                            *old_message = true;
-                            should_push_message = true;
-                        } else {
+                        if *old_message {
                             // already received this message
                             return;
                         }
+                        *old_message = true;
+                        should_push_message = true;
                     }
                 }
             } else {

@@ -328,7 +328,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ///
     /// [`DisconnectEvent`]: crate::DisconnectEvent
     pub fn disconnect(&mut self) {
-        assert!(self.is_connected(), "Trying to disconnect Client which is not connected yet!");
+        assert!(
+            self.is_connected(),
+            "Trying to disconnect Client which is not connected yet!"
+        );
 
         for _ in 0..10 {
             let writer = self.handshake_manager.write_disconnect();
@@ -644,7 +647,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ) -> Result<GlobalRequestId, NaiaClientError> {
         let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
 
-        assert!(channel_settings.can_request_and_respond(), "Requests can only be sent over Bidirectional, Reliable Channels");
+        assert!(
+            channel_settings.can_request_and_respond(),
+            "Requests can only be sent over Bidirectional, Reliable Channels"
+        );
 
         let Some(connection) = &mut self.server_connection else {
             warn!("currently not connected to server");
@@ -864,7 +870,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ) {
         let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
 
-        assert!(channel_settings.can_send_to_server(), "Cannot send message to Server on this Channel");
+        assert!(
+            channel_settings.can_send_to_server(),
+            "Cannot send message to Server on this Channel"
+        );
 
         assert!(channel_settings.tick_buffered(), "Can only use `Client.send_tick_buffer_message()` on a Channel that is configured for it.");
 
@@ -1163,9 +1172,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .entity_owner(&global_entity)
             .unwrap();
         let server_owned = entity_owner.is_server();
-        assert!(!server_owned, "Client cannot configure replication strategy of Server-owned Entities.");
+        assert!(
+            !server_owned,
+            "Client cannot configure replication strategy of Server-owned Entities."
+        );
         let client_owned = entity_owner.is_client();
-        assert!(client_owned, "Client cannot configure replication strategy of Entities it does not own.");
+        assert!(
+            client_owned,
+            "Client cannot configure replication strategy of Entities it does not own."
+        );
         let next_config = config;
         let prev_config = self
             .global_world_manager
@@ -1504,7 +1519,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// This will also remove all of the Entity’s Components.
     /// Panics if the Entity does not exist.
     pub(crate) fn despawn_entity<W: WorldMutType<E>>(&mut self, world: &mut W, entity: &E) {
-        assert!(world.has_entity(entity), "attempted to de-spawn nonexistent entity");
+        assert!(
+            world.has_entity(entity),
+            "attempted to de-spawn nonexistent entity"
+        );
 
         // Actually despawn from world
         world.despawn_entity(entity);
@@ -1575,7 +1593,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         entity: &E,
         mut component: R,
     ) {
-        assert!(world.has_entity(entity), "attempted to add component to non-existent entity");
+        assert!(
+            world.has_entity(entity),
+            "attempted to add component to non-existent entity"
+        );
 
         let component_kind = component.kind();
 
@@ -1908,7 +1929,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         client_is_origin: bool,
     ) {
         info!("client.entity_disable_delegation");
-        assert!(!client_is_origin, "Cannot disable delegation from Client. Server owns all delegated Entities.");
+        assert!(
+            !client_is_origin,
+            "Cannot disable delegation from Client. Server owns all delegated Entities."
+        );
 
         // Snapshot authority status BEFORE clearing delegation
         let had_granted = self
@@ -1996,8 +2020,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // Updated Host Manager
         match (old_auth_status, new_auth_status) {
             // Grant authority (from any state)
-            (EntityAuthStatus::Requested | EntityAuthStatus::Denied |
-EntityAuthStatus::Available, EntityAuthStatus::Granted) => {
+            (
+                EntityAuthStatus::Requested
+                | EntityAuthStatus::Denied
+                | EntityAuthStatus::Available,
+                EntityAuthStatus::Granted,
+            ) => {
                 // Register and emit grant event
                 self.server_connection
                     .as_mut()
@@ -2015,8 +2043,7 @@ EntityAuthStatus::Available, EntityAuthStatus::Granted) => {
                 }
             }
             // Lose authority (must deregister and emit reset)
-            (EntityAuthStatus::Granted,
-EntityAuthStatus::Available | EntityAuthStatus::Denied) => {
+            (EntityAuthStatus::Granted, EntityAuthStatus::Available | EntityAuthStatus::Denied) => {
                 // Deregister and emit reset event
                 self.server_connection
                     .as_mut()
@@ -2030,8 +2057,10 @@ EntityAuthStatus::Available | EntityAuthStatus::Denied) => {
             // Request denied (Requested -> Denied or Requested -> Available)
             // Available case: server made entity Available (e.g. cascade despawn) while a
             // request was in-flight — client never held authority, nothing to deregister.
-            (EntityAuthStatus::Requested,
-EntityAuthStatus::Denied | EntityAuthStatus::Available) => {
+            (
+                EntityAuthStatus::Requested,
+                EntityAuthStatus::Denied | EntityAuthStatus::Available,
+            ) => {
                 // Emit denied event, but do NOT deregister (never had authority)
                 self.incoming_world_events.push_auth_deny(*world_entity);
             }
@@ -2210,7 +2239,10 @@ EntityAuthStatus::Denied | EntityAuthStatus::Available) => {
                             if let Ok(container) = self
                                 .protocol
                                 .message_kinds
-                                .read(&mut reader, &FakeEntityConverter) { Some(container) } else {
+                                .read(&mut reader, &FakeEntityConverter)
+                            {
+                                Some(container)
+                            } else {
                                 warn!(
                                     "Server sent a rejection message this client's \
                                      protocol cannot decode. Ignoring the message."
@@ -2509,7 +2541,9 @@ EntityAuthStatus::Denied | EntityAuthStatus::Available) => {
         manual_disconnect: bool,
         server_disconnect: bool,
     ) -> (naia_shared::DisconnectReason, Option<Vec<u8>>) {
-        if let Some((reason, payload)) = server_details { (reason, payload) } else {
+        if let Some((reason, payload)) = server_details {
+            (reason, payload)
+        } else {
             let reason = if manual_disconnect || server_disconnect {
                 naia_shared::DisconnectReason::ClientDisconnected
             } else {
@@ -2544,7 +2578,10 @@ EntityAuthStatus::Denied | EntityAuthStatus::Available) => {
         if let Ok(container) = self
             .protocol
             .message_kinds
-            .read(&mut reader, &FakeEntityConverter) { Some(container) } else {
+            .read(&mut reader, &FakeEntityConverter)
+        {
+            Some(container)
+        } else {
             warn!("Server sent a disconnect message this client's protocol cannot decode. Ignoring the message.");
             None
         }
@@ -2931,7 +2968,10 @@ EntityAuthStatus::Denied | EntityAuthStatus::Available) => {
                     // Validate we have a valid world entity
                     let world_entity = if let Ok(entity) = self
                         .global_entity_map
-                        .global_entity_to_entity(global_entity) { entity } else {
+                        .global_entity_to_entity(global_entity)
+                    {
+                        entity
+                    } else {
                         warn!(
                             "Received MigrateResponse for unknown global entity: {global_entity:?}"
                         );
@@ -2950,7 +2990,10 @@ EntityAuthStatus::Denied | EntityAuthStatus::Available) => {
                             .send
                             .world_manager
                             .entity_converter()
-                            .global_entity_to_host_entity(global_entity) { entity } else {
+                            .global_entity_to_host_entity(global_entity)
+                        {
+                            entity
+                        } else {
                             warn!(
                                 "Entity {global_entity:?} does not exist as HostEntity before migration"
                             );
@@ -3002,11 +3045,7 @@ EntityAuthStatus::Denied | EntityAuthStatus::Available) => {
                             .base
                             .send
                             .world_manager
-                            .update_sent_command_entity_refs(
-                                global_entity,
-                                old_entity,
-                                new_entity,
-                            );
+                            .update_sent_command_entity_refs(global_entity, old_entity, new_entity);
 
                         // Replay buffered commands
                         for command in buffered_commands {

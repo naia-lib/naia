@@ -6,16 +6,16 @@ use crate::world::update::global_entity_index::GlobalEntityIndex;
 /// Server-global dirty tracking matrix.
 ///
 /// Three layers:
-///   ref_counts:        per (entity, kind) — count of users with non-clear DiffMask
-///   dirty_components:  per (entity, kind) — summary bit: ref_count > 0 ↔ bit set
-///   dirty_entities:    per entity         — summary bit: any dirty_component bit set
+///   `ref_counts`:        per (entity, kind) — count of users with non-clear `DiffMask`
+///   `dirty_components`:  per (entity, kind) — summary bit: `ref_count` > 0 ↔ bit set
+///   `dirty_entities`:    per entity         — summary bit: any `dirty_component` bit set
 ///
 /// Layout:
-///   ref_counts[entity_idx * component_count + kind_bit]
-///   dirty_components[entity_idx * component_stride + kind_bit / 64], bit = kind_bit % 64
-///   dirty_entities[entity_idx / 64], bit = entity_idx % 64
+///   `ref_counts`[`entity_idx` * `component_count` + `kind_bit`]
+///   `dirty_components`[`entity_idx` * `component_stride` + `kind_bit` / 64], bit = `kind_bit` % 64
+///   `dirty_entities`[`entity_idx` / 64], bit = `entity_idx` % 64
 ///
-/// All indices use GlobalEntityIndex values (slot 0 = INVALID sentinel, never set).
+/// All indices use `GlobalEntityIndex` values (slot 0 = INVALID sentinel, never set).
 pub struct GlobalDirtyBitset {
     ref_counts: Vec<AtomicU32>,
     component_count: usize,
@@ -29,6 +29,7 @@ impl GlobalDirtyBitset {
     /// Pre-allocates all storage. `capacity` is the maximum `GlobalEntityIndex.as_usize()` value
     /// (inclusive), i.e. `max_replicated_entities + 1` (slot 0 unused as INVALID sentinel).
     /// `component_count` is `ComponentKinds::kind_count()` at startup.
+    #[must_use]
     pub fn new(capacity: usize, component_count: usize) -> Self {
         // Guard against zero component_count (client side / tests with no registered kinds)
         let component_count = component_count.max(1);
@@ -64,8 +65,8 @@ impl GlobalDirtyBitset {
     }
 
     /// Called from `DirtyNotifier::notify_dirty` — user's (entity, kind) goes clean→dirty.
-    /// Increments ref-count; on 0→1 transition sets dirty_components bit and,
-    /// if the entity's component word was zero, sets dirty_entities bit.
+    /// Increments ref-count; on 0→1 transition sets `dirty_components` bit and,
+    /// if the entity's component word was zero, sets `dirty_entities` bit.
     pub fn increment(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
         let ei = entity_idx.as_usize();
         if ei == 0 || ei >= self.capacity {
@@ -81,7 +82,7 @@ impl GlobalDirtyBitset {
         if prev_rc == 0 {
             // 0→1: mark this component dirty.
             let word_idx = ei * self.component_stride + (kind_bit as usize) / 64;
-            let bit = (kind_bit as u64) % 64;
+            let bit = u64::from(kind_bit) % 64;
             let prev_word =
                 self.dirty_components[word_idx].fetch_or(1u64 << bit, Ordering::Relaxed);
             if prev_word == 0 {
@@ -94,8 +95,8 @@ impl GlobalDirtyBitset {
     }
 
     /// Called from `DirtyNotifier::notify_clean` — user's (entity, kind) goes dirty→clean.
-    /// Decrements ref-count; on 1→0 transition clears dirty_components bit and,
-    /// if all component words for the entity become zero, clears dirty_entities bit.
+    /// Decrements ref-count; on 1→0 transition clears `dirty_components` bit and,
+    /// if all component words for the entity become zero, clears `dirty_entities` bit.
     pub fn decrement(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
         let ei = entity_idx.as_usize();
         if ei == 0 || ei >= self.capacity {
@@ -111,7 +112,7 @@ impl GlobalDirtyBitset {
         if prev_rc == 1 {
             // 1→0: clear this component's dirty bit.
             let word_idx = ei * self.component_stride + (kind_bit as usize) / 64;
-            let bit = (kind_bit as u64) % 64;
+            let bit = u64::from(kind_bit) % 64;
             let prev_word =
                 self.dirty_components[word_idx].fetch_and(!(1u64 << bit), Ordering::Relaxed);
             let after_clear = prev_word & !(1u64 << bit);
@@ -131,6 +132,7 @@ impl GlobalDirtyBitset {
     }
 
     /// Returns `true` if this (entity, kind) is dirty for any user. O(1).
+    #[must_use]
     pub fn is_component_dirty(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) -> bool {
         let ei = entity_idx.as_usize();
         if ei == 0 || ei >= self.capacity {
@@ -158,8 +160,9 @@ impl GlobalDirtyBitset {
     }
 
     /// Returns the component-level dirty words for one entity.
-    /// Slice length = component_stride. Bit kind_bit%64 in word kind_bit/64 is set
+    /// Slice length = `component_stride`. Bit `kind_bit%64` in word `kind_bit/64` is set
     /// iff this component is dirty for at least one user.
+    #[must_use]
     pub fn dirty_words(&self, entity_idx: GlobalEntityIndex) -> &[AtomicU64] {
         let start = entity_idx.as_usize() * self.component_stride;
         &self.dirty_components[start..start + self.component_stride]
@@ -168,13 +171,14 @@ impl GlobalDirtyBitset {
     /// Returns the entity-summary dirty word slice (one bit per entity index).
     /// Word `i` covers entities `i*64 .. i*64+63`.
     /// Used by `ConnectionVisibilityBitset::intersect_dirty` for word-by-word AND.
+    #[must_use]
     pub fn dirty_entity_words(&self) -> &[AtomicU64] {
         &self.dirty_entities
     }
 
     /// Capture a plain-`u64` frozen snapshot of the current dirty state, for
     /// the active-path send worker to iterate concurrently with the gameplay
-    /// thread mutating the live bitset for the next tick (MISSION_TICK_FLOOR
+    /// thread mutating the live bitset for the next tick (`MISSION_TICK_FLOOR`
     /// Lever 3: the "what-to-send" set must be frozen into the send job so the
     /// lagged transmit doesn't read a torn live `global_dirty`).
     ///
@@ -182,6 +186,7 @@ impl GlobalDirtyBitset {
     /// time, so it copies only the *dirty* entities' component words (O(dirty
     /// entities), not O(capacity)). The deterministic oracle never freezes (it
     /// sends synchronously against the live bitset within the same tick).
+    #[must_use]
     pub fn freeze(&self) -> FrozenGlobalDirty {
         let dirty_entity_words: Vec<u64> = self
             .dirty_entities
@@ -235,14 +240,15 @@ impl FrozenGlobalDirty {
     /// Mirror of [`GlobalDirtyBitset::dirty_words`]: the entity's frozen
     /// component-dirty words, or a shared zero slice if the entity was clean.
     /// Slice length is always `component_stride` (matching the live API).
+    #[must_use]
     pub fn dirty_words(&self, entity_idx: GlobalEntityIndex) -> &[u64] {
         self.component_words
             .get(&(entity_idx.as_usize() as u32))
-            .map(|v| v.as_slice())
-            .unwrap_or(&self.zero_words)
+            .map_or(&[], |v| v.as_slice())
     }
 
     /// Mirror of [`GlobalDirtyBitset::dirty_entity_words`] (plain `u64`).
+    #[must_use]
     pub fn dirty_entity_words(&self) -> &[u64] {
         &self.dirty_entity_words
     }

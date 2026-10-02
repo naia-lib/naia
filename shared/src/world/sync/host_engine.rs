@@ -64,10 +64,7 @@ impl HostEngine {
                 if self.entity_channels.remove(&host_entity).is_some() {
                     self.incoming_events.push((tick, msg));
                 } else {
-                    warn!(
-                        "host_engine: Despawn for unknown entity {:?}, discarding",
-                        host_entity
-                    );
+                    warn!("host_engine: Despawn for unknown entity {host_entity:?}, discarding");
                 }
                 return;
             }
@@ -82,10 +79,7 @@ impl HostEngine {
         let Some(entity_channel) = self.entity_channels.get_mut(&host_entity) else {
             // Discard messages for unknown entities — this can happen with reordered or stale
             // packets from a buggy/lagging client after the entity has been despawned.
-            warn!(
-                "host_engine: message for unknown entity {:?}, discarding",
-                host_entity
-            );
+            warn!("host_engine: message for unknown entity {host_entity:?}, discarding");
             return;
         };
 
@@ -94,7 +88,7 @@ impl HostEngine {
     }
 
     /// Main entry point - validates command and returns it if valid
-    /// This mirrors ReceiverEngine.accept_message() but for outgoing commands
+    /// This mirrors `ReceiverEngine.accept_message()` but for outgoing commands
     pub(crate) fn send_command(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -109,22 +103,24 @@ impl HostEngine {
 
         match command.get_type() {
             EntityMessageType::Spawn => {
-                if self.entity_channels.contains_key(&host_entity) {
-                    panic!("Cannot spawn an entity that already exists in the engine");
-                }
+                assert!(
+                    !self.entity_channels.contains_key(&host_entity),
+                    "Cannot spawn an entity that already exists in the engine"
+                );
                 self.entity_channels
                     .insert(host_entity, HostEntityChannel::new(self.host_type));
                 self.outgoing_commands.push(command);
                 return;
             }
             EntityMessageType::SpawnWithComponents => {
-                if self.entity_channels.contains_key(&host_entity) {
-                    panic!("Cannot spawn an entity that already exists in the engine");
-                }
+                assert!(
+                    !self.entity_channels.contains_key(&host_entity),
+                    "Cannot spawn an entity that already exists in the engine"
+                );
                 let component_kinds = match &command {
                     EntityCommand::SpawnWithComponents(_, kinds) => kinds
                         .iter()
-                        .cloned()
+                        .copied()
                         .collect::<std::collections::HashSet<_>>(
                     ),
                     _ => unreachable!(),
@@ -137,9 +133,10 @@ impl HostEngine {
                 return;
             }
             EntityMessageType::Despawn => {
-                if !self.entity_channels.contains_key(&host_entity) {
-                    panic!("Cannot despawn an entity that does not exist in the engine");
-                }
+                assert!(
+                    self.entity_channels.contains_key(&host_entity),
+                    "Cannot despawn an entity that does not exist in the engine"
+                );
                 // Remove the entity channel
                 self.entity_channels.remove(&host_entity).unwrap();
                 self.outgoing_commands.push(command);
@@ -151,7 +148,7 @@ impl HostEngine {
         }
 
         let Some(entity_channel) = self.entity_channels.get_mut(&host_entity) else {
-            panic!("Cannot accept command for an entity that does not exist in the engine. Command: {:?}", command);
+            panic!("Cannot accept command for an entity that does not exist in the engine. Command: {command:?}");
         };
 
         entity_channel.send_command(command);
@@ -203,9 +200,10 @@ impl HostEngine {
     }
 
     pub(crate) fn insert_entity_channel(&mut self, entity: HostEntity, channel: HostEntityChannel) {
-        if self.entity_channels.contains_key(&entity) {
-            panic!("Cannot insert entity channel that already exists");
-        }
+        assert!(
+            !self.entity_channels.contains_key(&entity),
+            "Cannot insert entity channel that already exists"
+        );
         self.entity_channels.insert(entity, channel);
     }
 

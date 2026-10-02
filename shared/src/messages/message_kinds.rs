@@ -8,7 +8,7 @@ use crate::{
 
 type NetId = u16;
 
-/// Wire encoding for `MessageKind` NetIds: a fixed-width raw bit field
+/// Wire encoding for `MessageKind` `NetIds`: a fixed-width raw bit field
 /// whose width is `ceil(log2(N))` for the protocol's registered message
 /// count. Both ends share registration order, so both compute the same
 /// width. See `world::component::component_kinds` for the matching
@@ -17,11 +17,11 @@ fn bit_width_for_kind_count(count: NetId) -> u8 {
     if count < 2 {
         0
     } else {
-        (count as u32).next_power_of_two().trailing_zeros() as u8
+        u32::from(count).next_power_of_two().trailing_zeros() as u8
     }
 }
 
-/// MessageKind - should be one unique value for each type of Message
+/// `MessageKind` - should be one unique value for each type of Message
 #[derive(Eq, Hash, Copy, Clone, PartialEq, Debug)]
 pub struct MessageKind {
     type_id: TypeId,
@@ -29,6 +29,7 @@ pub struct MessageKind {
 
 impl MessageKind {
     /// Returns the `MessageKind` corresponding to the type `M`.
+    #[must_use]
     pub fn of<M: Message>() -> Self {
         Self {
             type_id: TypeId::of::<M>(),
@@ -60,7 +61,7 @@ impl MessageKind {
 /// Registry mapping `Message` types to compact wire net-IDs and their deserializers.
 pub struct MessageKinds {
     current_net_id: NetId,
-    /// Number of bits needed to encode any registered NetId — recomputed
+    /// Number of bits needed to encode any registered `NetId` — recomputed
     /// on every `add_message`. Read directly by `MessageKind::ser`/`de`
     /// on the hot path.
     kind_bit_width: u8,
@@ -85,7 +86,7 @@ impl Clone for MessageKinds {
         let net_id_map = self.net_id_map.clone();
 
         let mut kind_map = HashMap::new();
-        for (key, value) in self.kind_map.iter() {
+        for (key, value) in &self.kind_map {
             kind_map.insert(*key, (value.0, value.1.box_clone(), value.2.clone()));
         }
 
@@ -108,6 +109,7 @@ impl Default for MessageKinds {
 
 impl MessageKinds {
     /// Creates an empty `MessageKinds` registry.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             current_net_id: 0,
@@ -172,6 +174,7 @@ impl MessageKinds {
 
     /// Request→response pairs in registration order, as
     /// `(request_net_id, response_net_id)` wire net-ID pairs.
+    #[must_use]
     pub fn request_response_pairs(&self) -> &[(NetId, NetId)] {
         &self.request_pairs
     }
@@ -183,6 +186,7 @@ impl MessageKinds {
     /// net-IDs are dense registration ordinals, so the walk covers the whole
     /// net-ID space and `HashMap` iteration order never leaks into the
     /// result.
+    #[must_use]
     pub fn schema_descriptor_entries(&self) -> Vec<(NetId, Vec<u8>)> {
         let mut output = Vec::with_capacity(self.current_net_id as usize);
         for net_id in 0..self.current_net_id {
@@ -201,8 +205,9 @@ impl MessageKinds {
 
     /// Bit width of every encoded `MessageKind` in this registry. Used by
     /// derived `Message::bit_length` impls to size the kind-tag prefix.
+    #[must_use]
     pub fn kind_bit_length(&self) -> u32 {
-        self.kind_bit_width as u32
+        u32::from(self.kind_bit_width)
     }
 
     /// Reads a message kind tag then deserializes and returns the message payload from `reader`.
@@ -250,6 +255,7 @@ impl MessageKinds {
     /// makes the fingerprint reproducible across processes.
     ///
     /// Net-IDs are dense by construction, so a gap is a broken invariant.
+    #[must_use]
     pub fn schema_entries(&self) -> Vec<(NetId, String)> {
         let mut output = Vec::with_capacity(self.current_net_id as usize);
         for net_id in 0..self.current_net_id {
@@ -267,6 +273,7 @@ impl MessageKinds {
     }
 
     /// Returns a sorted list of all registered message protocol names.
+    #[must_use]
     pub fn all_names(&self) -> Vec<String> {
         let mut output = Vec::new();
         for (_, _, name) in self.kind_map.values() {

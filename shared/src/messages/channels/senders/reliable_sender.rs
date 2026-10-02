@@ -40,6 +40,7 @@ pub struct ReliableSender<P: Send + Sync> {
 
 impl<P: Send + Sync> ReliableSender<P> {
     /// Creates a `ReliableSender` with the given RTT resend factor and optional queue-depth cap.
+    #[must_use]
     pub fn new(rtt_resend_factor: f32, max_queue_depth: Option<usize>) -> Self {
         Self {
             rtt_resend_factor,

@@ -1,6 +1,6 @@
 //! `SnapshotWorld<E>` — `WorldRefType<E>` impl backed by a per-tick snapshot.
 //!
-//! Pipelined consumers (cyberlith's Send SubApp) build a fresh
+//! Pipelined consumers (cyberlith's Send `SubApp`) build a fresh
 //! `SnapshotWorld<E>` each tick by querying
 //! [`crate::SendStateView::required_snapshot_entries`] +
 //! [`crate::SendStateView::live_entities`] (added in commit 3), reading
@@ -32,15 +32,15 @@ use crate::{
     world::world_writer::UpdateKinds,
 };
 
-/// MISSION_TICK_FLOOR Lever 3: per-user send DECISION — the list of entities to
+/// `MISSION_TICK_FLOOR` Lever 3: per-user send DECISION — the list of entities to
 /// send for one user (each with its `GlobalEntityIndex` + per-component
-/// `UpdateKinds`). Vec instead of HashMap: the per-user entity set is iterated
+/// `UpdateKinds`). Vec instead of `HashMap`: the per-user entity set is iterated
 /// fully each tick (drain → score → sort → build), so there is no lookup by key;
-/// eliminating the HashMap construction + insert allocations saves ~25% of
-/// iris_phase3_build at high player counts.
+/// eliminating the `HashMap` construction + insert allocations saves ~25% of
+/// `iris_phase3_build` at high player counts.
 pub type SendUpdateEvents = Vec<(GlobalEntity, GlobalEntityIndex, UpdateKinds)>;
 
-/// MISSION_TICK_FLOOR Lever 3: a self-contained, frozen send job built by
+/// `MISSION_TICK_FLOOR` Lever 3: a self-contained, frozen send job built by
 /// [`crate::SnapshotWorld`]'s producer at the FREEZE point (on the gameplay
 /// thread, in `SendState::prepare_send_job`) and transmitted later — possibly a
 /// tick later, on the send worker — by `SendState::transmit_send_job`.
@@ -102,14 +102,14 @@ pub struct SendPlan {
 pub struct SnapshotWorld<E: Copy + Eq + Hash> {
     components: HashMap<(E, ComponentKind), Box<dyn Replicate>>,
     live_entities: HashSet<E>,
-    /// MISSION_TICK_FLOOR Lever 3: optional frozen `global_dirty` rider. When
+    /// `MISSION_TICK_FLOOR` Lever 3: optional frozen `global_dirty` rider. When
     /// present, this snapshot is a self-contained send *job* — the active send
     /// worker iterates this frozen "what-to-send" set (via
     /// `send_all_packets_frozen`) instead of the live, concurrently-mutated
     /// `global_dirty`. `None` for the deterministic oracle (which sends
     /// synchronously against the live bitset) and for all non-send uses.
     frozen_dirty: Option<FrozenGlobalDirty>,
-    /// MISSION_TICK_FLOOR Lever 3: the prepared per-user send plan (frozen
+    /// `MISSION_TICK_FLOOR` Lever 3: the prepared per-user send plan (frozen
     /// `DiffMask`s + frozen dirty domain). Attached on the gameplay thread by
     /// `SendState::prepare_send_job` at the freeze point; consumed by the send
     /// worker via `transmit_send_job`. Supersedes `frozen_dirty` as the
@@ -127,6 +127,7 @@ impl<E: Copy + Eq + Hash> Default for SnapshotWorld<E> {
 
 impl<E: Copy + Eq + Hash> SnapshotWorld<E> {
     /// Creates an empty snapshot.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             components: HashMap::new(),
@@ -136,21 +137,21 @@ impl<E: Copy + Eq + Hash> SnapshotWorld<E> {
         }
     }
 
-    /// MISSION_TICK_FLOOR Lever 3: attach the prepared per-user send plan,
+    /// `MISSION_TICK_FLOOR` Lever 3: attach the prepared per-user send plan,
     /// turning this snapshot into a self-contained, frozen send job. Called by
     /// `SendState::prepare_send_job` on the active path.
     pub fn attach_send_plan(&mut self, plan: SendPlan) {
         self.send_plan = Some(plan);
     }
 
-    /// MISSION_TICK_FLOOR Lever 3: take the prepared send plan out of the job.
+    /// `MISSION_TICK_FLOOR` Lever 3: take the prepared send plan out of the job.
     /// The send worker calls this, then dispatches to `transmit_send_job` when
     /// `Some`.
     pub fn take_send_plan(&mut self) -> Option<SendPlan> {
         self.send_plan.take()
     }
 
-    /// MISSION_TICK_FLOOR Lever 3: attach the frozen `global_dirty` rider,
+    /// `MISSION_TICK_FLOOR` Lever 3: attach the frozen `global_dirty` rider,
     /// turning this snapshot into a self-contained send job (see the
     /// `frozen_dirty` field). Called by the snapshot builder on the active
     /// path only.
@@ -158,7 +159,7 @@ impl<E: Copy + Eq + Hash> SnapshotWorld<E> {
         self.frozen_dirty = Some(frozen);
     }
 
-    /// MISSION_TICK_FLOOR Lever 3: take the frozen `global_dirty` rider out of
+    /// `MISSION_TICK_FLOOR` Lever 3: take the frozen `global_dirty` rider out of
     /// the job (leaving `None`). The send worker calls this, then dispatches to
     /// `send_all_packets_frozen` when `Some` / `send_all_packets` when `None`.
     pub fn take_frozen_dirty(&mut self) -> Option<FrozenGlobalDirty> {
@@ -204,12 +205,14 @@ impl<E: Copy + Eq + Hash> SnapshotWorld<E> {
 
     /// Number of `(entity, kind)` entries currently held. Exposed for
     /// tests and instrumentation.
+    #[must_use]
     pub fn component_count(&self) -> usize {
         self.components.len()
     }
 
     /// Number of live entities currently held. Exposed for tests and
     /// instrumentation.
+    #[must_use]
     pub fn live_entity_count(&self) -> usize {
         self.live_entities.len()
     }
@@ -224,7 +227,7 @@ impl<E: Copy + Eq + Hash> SnapshotWorld<E> {
 struct BoxReplicaRef<'a, R: Replicate> {
     inner: &'a R,
 }
-impl<'a, R: Replicate> ReplicaRefTrait<R> for BoxReplicaRef<'a, R> {
+impl<R: Replicate> ReplicaRefTrait<R> for BoxReplicaRef<'_, R> {
     fn to_ref(&self) -> &R {
         self.inner
     }
@@ -235,7 +238,7 @@ impl<'a, R: Replicate> ReplicaRefTrait<R> for BoxReplicaRef<'a, R> {
 struct BoxReplicaDynRef<'a> {
     inner: &'a dyn Replicate,
 }
-impl<'a> ReplicaDynRefTrait for BoxReplicaDynRef<'a> {
+impl ReplicaDynRefTrait for BoxReplicaDynRef<'_> {
     fn to_dyn_ref(&self) -> &dyn Replicate {
         self.inner
     }

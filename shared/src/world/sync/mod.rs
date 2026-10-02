@@ -4,17 +4,17 @@
 //! Keep a distributed **Entity‑Component System (ECS)** in tight,
 //! synchrony over an *unordered, reliable* transport
 //! **without incurring head‑of‑line blocking
-//! (HoLB)** for unrelated entities or components.
+//! (`HoLB`)** for unrelated entities or components.
 //!
 //! ## Architectural sketch
-//! 1. **Message production**  
+//! 1. **Message production**\
 //!    *Sender* listens to ECS change‑events and emits `EntityMessage<E>` records,
 //!    each tagged with a monotonically increasing `MessageIndex` (`u16`).
-//! 2. **Transport**  
+//! 2. **Transport**\
 //!    Messages are batched into packets and delivered over an unordered
 //!    reliability layer. Packet‑level ACKs let the sender garbage‑collect
 //!    its sliding window without caring about intra‑packet order.
-//! 3. **Ingestion path (this crate)**  
+//! 3. **Ingestion path (this crate)**\
 //!    *Receiver* deduplicates on `MessageIndex` and feeds messages into
 //!    [`RemoteEngine::receive_message`].
 //!    The `Engine` owns one **`EntityChannel`** per live entity; each
@@ -24,14 +24,14 @@
 //!
 //!    Each sub‑channel is an *independent state machine* that guarantees
 //!    **idempotent, in‑order delivery per logical stream** while allowing
-//!    global out‑of‑order arrival.  
+//!    global out‑of‑order arrival.\
 //!    Once a channel determines that a message is *now safe* to apply, it
 //!    is pushed into `outgoing_events`; the caller drains these via
 //!    [`RemoteEngine::take_incoming_events`] and mutates its local ECS accordingly.
 //!
 //! ## Why unordered beats ordered
 //! * Ordered transports serialize unrelated entity updates, so a single
-//!   delayed packet stalls the **entire world** (classical HoLB).
+//!   delayed packet stalls the **entire world** (classical `HoLB`).
 //! * By partitioning the stream **per entity → per component/auth domain**,
 //!   we localise ordering to the *minimum necessary scope*.
 //!

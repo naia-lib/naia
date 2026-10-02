@@ -101,8 +101,7 @@ impl RemoteWorldWaitlist {
                 {
                     if !component.relations_complete(local_converter) {
                         warn!(
-                            "Dropping waitlisted component for entity {:?}: an awaited entity relation is still unresolvable (stale redirect or missing mapping).",
-                            global_entity
+                            "Dropping waitlisted component for entity {global_entity:?}: an awaited entity relation is still unresolvable (stale redirect or missing mapping)."
                         );
                         continue;
                     }
@@ -192,9 +191,7 @@ impl RemoteWorldWaitlist {
             if waiting_updates_opt.is_none() && ready_update_opt.is_some() {
                 // warn!("Incoming Update split into ONLY ready part");
             }
-            if waiting_updates_opt.is_none() && ready_update_opt.is_none() {
-                panic!("Incoming Update split into NEITHER waiting nor ready parts. This should not happen.");
-            }
+            assert!(!(waiting_updates_opt.is_none() && ready_update_opt.is_none()), "Incoming Update split into NEITHER waiting nor ready parts. This should not happen.");
 
             // if it exists, queue the waiting part of the component update
             if let Some(waiting_updates) = waiting_updates_opt {
@@ -239,42 +236,43 @@ impl RemoteWorldWaitlist {
             // entity) so it applies the moment the spawn lands, rather than
             // unwrapping a missing entity. See `update_self_waitlist_store`.
             if let Some(ready_update) = ready_update_opt {
-                match local_converter.owned_entity_to_global_entity(local_entity) {
-                    Ok(global_entity) => {
-                        let world_entity = world_converter
-                            .global_entity_to_entity(global_entity)
-                            .unwrap();
-                        if world
-                            .component_apply_update(
-                                local_converter,
-                                &world_entity,
-                               * &component_kind,
-                                ready_update,
-                            )
-                            .is_err()
-                        {
-                            warn!("Remote World Manager: cannot read malformed component update message");
-                            continue;
-                        }
-
-                        output.push((tick, local_entity, component_kind));
-                    }
-                    Err(_) => {
-                        // Target entity not spawned locally yet — defer.
-                        let OwnedLocalEntity::Remote { .. } = local_entity else {
-                            warn!("Remote World Manager: update for a non-remote unspawned entity; dropping");
-                            continue;
-                        };
-                        let remote_entity = local_entity.take_remote();
-                        let mut deps = HashSet::new();
-                        deps.insert(remote_entity);
-                        self.entity_waitlist.queue(
-                            in_scope_entities,
-                            &deps,
-                            &mut self.update_self_waitlist_store,
-                            (tick, remote_entity, component_kind, ready_update),
+                if let Ok(global_entity) =
+                    local_converter.owned_entity_to_global_entity(local_entity)
+                {
+                    let world_entity = world_converter
+                        .global_entity_to_entity(global_entity)
+                        .unwrap();
+                    if world
+                        .component_apply_update(
+                            local_converter,
+                            &world_entity,
+                            *&component_kind,
+                            ready_update,
+                        )
+                        .is_err()
+                    {
+                        warn!(
+                            "Remote World Manager: cannot read malformed component update message"
                         );
+                        continue;
                     }
+
+                    output.push((tick, local_entity, component_kind));
+                } else {
+                    // Target entity not spawned locally yet — defer.
+                    let OwnedLocalEntity::Remote { .. } = local_entity else {
+                        warn!("Remote World Manager: update for a non-remote unspawned entity; dropping");
+                        continue;
+                    };
+                    let remote_entity = local_entity.take_remote();
+                    let mut deps = HashSet::new();
+                    deps.insert(remote_entity);
+                    self.entity_waitlist.queue(
+                        in_scope_entities,
+                        &deps,
+                        &mut self.update_self_waitlist_store,
+                        (tick, remote_entity, component_kind, ready_update),
+                    );
                 }
             }
         }

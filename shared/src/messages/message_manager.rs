@@ -73,7 +73,8 @@ pub struct MessageManager {
 }
 
 impl MessageManager {
-    /// Creates a new MessageManager
+    /// Creates a new `MessageManager`
+    #[must_use]
     pub fn new(host_type: HostType, channel_kinds: &ChannelKinds) -> Self {
         // initialize all reliable channels
 
@@ -117,7 +118,7 @@ impl MessageManager {
                 ChannelMode::TickBuffered(_) => {
                     // Tick buffered channel uses another manager, skip
                 }
-            };
+            }
         }
 
         // initialize receivers
@@ -172,7 +173,7 @@ impl MessageManager {
                 ChannelMode::TickBuffered(_) => {
                     // Tick buffered channel uses another manager, skip
                 }
-            };
+            }
         }
 
         // initialize settings
@@ -304,6 +305,7 @@ impl MessageManager {
 
     /// Returns whether the Manager has queued Messages that can be transmitted
     /// to the remote host
+    #[must_use]
     pub fn has_outgoing_messages(&self) -> bool {
         for channel in self.channel_senders.values() {
             if channel.has_messages() {
@@ -335,8 +337,7 @@ impl MessageManager {
                 let gain = self
                     .channel_settings
                     .get(k)
-                    .map(|s| s.criticality.base_gain())
-                    .unwrap_or(1.0);
+                    .map_or(1.0, |s| s.criticality.base_gain());
                 (*k, gain)
             })
             .collect();
@@ -457,8 +458,7 @@ impl MessageManager {
             if !responses.is_empty() {
                 let Some(channel_sender) = self.channel_senders.get_mut(channel_kind) else {
                     panic!(
-                        "Channel not configured correctly! Cannot send message on channel: {:?}",
-                        channel_kind
+                        "Channel not configured correctly! Cannot send message on channel: {channel_kind:?}"
                     );
                 };
                 for (local_request_id, wire_nonce, response) in responses {
@@ -474,8 +474,7 @@ impl MessageManager {
                         channel_sender.process_incoming_response(local_request_id, wire_nonce)
                     else {
                         warn!(
-                            "dropping a response on channel {:?} that answers no outstanding request",
-                            channel_kind
+                            "dropping a response on channel {channel_kind:?} that answers no outstanding request"
                         );
                         continue;
                     };

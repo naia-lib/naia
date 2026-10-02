@@ -23,7 +23,7 @@ impl Deref for ReplicaDynRef<'_> {
     }
 }
 
-impl<'a> ReplicaDynRefTrait for ReplicaDynRef<'a> {
+impl ReplicaDynRefTrait for ReplicaDynRef<'_> {
     fn to_dyn_ref(&self) -> &dyn Replicate {
         self.inner
     }
@@ -57,13 +57,13 @@ impl DerefMut for ReplicaDynMut<'_> {
     }
 }
 
-impl<'a> ReplicaDynRefTrait for ReplicaDynMut<'a> {
+impl ReplicaDynRefTrait for ReplicaDynMut<'_> {
     fn to_dyn_ref(&self) -> &dyn Replicate {
         self.inner
     }
 }
 
-impl<'a> ReplicaDynMutTrait for ReplicaDynMut<'a> {
+impl ReplicaDynMutTrait for ReplicaDynMut<'_> {
     fn to_dyn_mut(&mut self) -> &mut dyn Replicate {
         self.inner
     }
@@ -89,7 +89,7 @@ impl<'a, R: Replicate> ReplicaRefWrapper<'a, R> {
     }
 }
 
-impl<'a, R: Replicate> Deref for ReplicaRefWrapper<'a, R> {
+impl<R: Replicate> Deref for ReplicaRefWrapper<'_, R> {
     type Target = R;
 
     fn deref(&self) -> &R {
@@ -117,7 +117,7 @@ impl<'a, R: Replicate> ReplicaMutWrapper<'a, R> {
     }
 }
 
-impl<'a, R: Replicate> Deref for ReplicaMutWrapper<'a, R> {
+impl<R: Replicate> Deref for ReplicaMutWrapper<'_, R> {
     type Target = R;
 
     fn deref(&self) -> &R {
@@ -125,7 +125,7 @@ impl<'a, R: Replicate> Deref for ReplicaMutWrapper<'a, R> {
     }
 }
 
-impl<'a, R: Replicate> DerefMut for ReplicaMutWrapper<'a, R> {
+impl<R: Replicate> DerefMut for ReplicaMutWrapper<'_, R> {
     fn deref_mut(&mut self) -> &mut R {
         self.inner.to_mut()
     }
@@ -151,7 +151,7 @@ impl<'a> ReplicaDynRefWrapper<'a> {
     }
 }
 
-impl<'a> Deref for ReplicaDynRefWrapper<'a> {
+impl Deref for ReplicaDynRefWrapper<'_> {
     type Target = dyn Replicate;
 
     fn deref(&self) -> &dyn Replicate {
@@ -179,7 +179,7 @@ impl<'a> ReplicaDynMutWrapper<'a> {
     }
 }
 
-impl<'a> Deref for ReplicaDynMutWrapper<'a> {
+impl Deref for ReplicaDynMutWrapper<'_> {
     type Target = dyn Replicate;
 
     fn deref(&self) -> &dyn Replicate {
@@ -187,7 +187,7 @@ impl<'a> Deref for ReplicaDynMutWrapper<'a> {
     }
 }
 
-impl<'a> DerefMut for ReplicaDynMutWrapper<'a> {
+impl DerefMut for ReplicaDynMutWrapper<'_> {
     fn deref_mut(&mut self) -> &mut dyn Replicate {
         self.inner.to_dyn_mut()
     }

@@ -18,10 +18,10 @@ use crate::{
     WorldRefType,
 };
 
-/// MISSION_TICK_FLOOR Lever 3: per-(entity) update plan entry. Each tuple is
+/// `MISSION_TICK_FLOOR` Lever 3: per-(entity) update plan entry. Each tuple is
 /// `(ComponentKind, kind_bit, DiffMask)`. Ordered by `kind_bit` ascending
 /// (insertion order from `prepare_send_job`'s dirty-word scan). Vec instead of
-/// HashMap: eliminates per-(entity,user,tick) HashMap construction + key-collect
+/// `HashMap`: eliminates per-(entity,user,tick) `HashMap` construction + key-collect
 /// + lookup + remove allocations in the hot `write_update` path.
 ///
 /// The `u16` is the `kind_bit`; the `DiffMask` is the **frozen** per-property
@@ -66,9 +66,9 @@ pub mod bench_write_counters {
     }
 }
 
-/// Pre-ECS-snapshot for UserDependent components (those with EntityProperty fields).
-/// Built once per tick per component — keyed by (GlobalEntity, ComponentKind).
-/// First user to write a UserDependent component reads from ECS and populates this map;
+/// Pre-ECS-snapshot for `UserDependent` components (those with `EntityProperty` fields).
+/// Built once per tick per component — keyed by (`GlobalEntity`, `ComponentKind`).
+/// First user to write a `UserDependent` component reads from ECS and populates this map;
 /// subsequent users serialize from the snapshot, touching ECS zero times.
 pub type SnapshotMap = HashMap<(GlobalEntity, ComponentKind), Box<dyn Replicate>>;
 
@@ -92,7 +92,7 @@ pub(crate) enum UpdateDropReason {
     /// Every planned component kind has since been removed from the entity.
     ///
     /// `write_update` below drops stale kinds on its own, correctly, but not
-    /// for free: the UpdateContinue bit + LocalEntity (~20 bits) are already
+    /// for free: the `UpdateContinue` bit + `LocalEntity` (~20 bits) are already
     /// committed by then and nothing rolls them back. An entity whose planned
     /// kinds are ALL stale therefore contributes pure framing and zero payload,
     /// leaving `has_written` false. Under heavy scope churn enough of those
@@ -412,8 +412,9 @@ impl WorldWriter {
                 }
             }
             EntityCommand::SpawnWithComponents(global_entity, comp_kind_list) => {
-                let Some(world_entity) =
-                    entity_converter.global_entity_to_entity(*global_entity).ok()
+                let Some(world_entity) = entity_converter
+                    .global_entity_to_entity(*global_entity)
+                    .ok()
                 else {
                     EntityMessageType::Noop.ser(writer);
                     if is_writing {
@@ -519,7 +520,7 @@ impl WorldWriter {
 
                 {
                     let mut converter = world_manager.entity_converter_mut(global_world_manager);
-                    for component_kind in comp_kind_list.iter() {
+                    for component_kind in comp_kind_list {
                         world
                             .component_of_kind(&world_entity, *component_kind)
                             .expect("Component does not exist in World")
@@ -564,8 +565,9 @@ impl WorldWriter {
             }
             EntityCommand::InsertComponent(global_entity, component_kind) => {
                 // get world entity
-                let Some(world_entity) =
-                    entity_converter.global_entity_to_entity(*global_entity).ok()
+                let Some(world_entity) = entity_converter
+                    .global_entity_to_entity(*global_entity)
+                    .ok()
                 else {
                     EntityMessageType::Noop.ser(writer);
                     if is_writing {
@@ -582,42 +584,15 @@ impl WorldWriter {
                 // Same split as SpawnWithComponents: `!has_global` is the
                 // legitimate despawn-race Noop; `has_global && !present` is a
                 // needed-set under-supply that would silently drop the insert.
-                let insert_present =
-                    insert_has_global && world.has_component_of_kind(&world_entity, *component_kind);
+                let insert_present = insert_has_global
+                    && world.has_component_of_kind(&world_entity, *component_kind);
                 debug_assert!(
                     !insert_has_global || insert_present,
-                    "InsertComponent: entity {:?} is host-tracked but component {:?} \
+                    "InsertComponent: entity {global_entity:?} is host-tracked but component {component_kind:?} \
                      is missing from the snapshot world — needed-set under-supply \
                      (would silently drop the insert)",
-                    global_entity,
-                    component_kind,
                 );
-                if !insert_present {
-                    // Same terminal-loss warn as SpawnWithComponents: only the
-                    // under-supply case is loud; the `!has_global` despawn race
-                    // is a legitimate quiet Noop.
-                    if is_writing && insert_has_global {
-                        log::warn!(
-                            "InsertComponent for {:?} ({:?}) degraded to a TERMINAL \
-                             Noop: component missing from the snapshot world \
-                             (needed-set or snapshot-registry under-supply) — \
-                             the insert will never reach this peer",
-                            global_entity,
-                            component_kind,
-                        );
-                    }
-                    EntityMessageType::Noop.ser(writer);
-
-                    // if we are actually writing this packet
-                    if is_writing {
-                        // add it to command record
-                        world_manager.record_command_written(
-                            packet_index,
-                            command_id,
-                            EntityMessage::Noop,
-                        );
-                    }
-                } else {
+                if insert_present {
                     EntityMessageType::InsertComponent.ser(writer);
 
                     // get local entity
@@ -649,10 +624,20 @@ impl WorldWriter {
                             EntityMessage::InsertComponent(local_entity, *component_kind),
                         );
                     }
-                }
-            }
-            EntityCommand::RemoveComponent(global_entity, component_kind) => {
-                if !world_manager.has_global_entity(*global_entity) {
+                } else {
+                    // Same terminal-loss warn as SpawnWithComponents: only the
+                    // under-supply case is loud; the `!has_global` despawn race
+                    // is a legitimate quiet Noop.
+                    if is_writing && insert_has_global {
+                        log::warn!(
+                            "InsertComponent for {:?} ({:?}) degraded to a TERMINAL \
+                             Noop: component missing from the snapshot world \
+                             (needed-set or snapshot-registry under-supply) — \
+                             the insert will never reach this peer",
+                            global_entity,
+                            component_kind,
+                        );
+                    }
                     EntityMessageType::Noop.ser(writer);
 
                     // if we are actually writing this packet
@@ -664,7 +649,10 @@ impl WorldWriter {
                             EntityMessage::Noop,
                         );
                     }
-                } else {
+                }
+            }
+            EntityCommand::RemoveComponent(global_entity, component_kind) => {
+                if world_manager.has_global_entity(*global_entity) {
                     EntityMessageType::RemoveComponent.ser(writer);
 
                     // get local entity
@@ -685,6 +673,18 @@ impl WorldWriter {
                             packet_index,
                             command_id,
                             EntityMessage::RemoveComponent(local_entity, *component_kind),
+                        );
+                    }
+                } else {
+                    EntityMessageType::Noop.ser(writer);
+
+                    // if we are actually writing this packet
+                    if is_writing {
+                        // add it to command record
+                        world_manager.record_command_written(
+                            packet_index,
+                            command_id,
+                            EntityMessage::Noop,
                         );
                     }
                 }
@@ -835,12 +835,11 @@ impl WorldWriter {
                         world_manager
                             .entity_converter()
                             .global_entity_to_host_entity(*global_entity)
-                            .map(|he| he.to_remote())
+                            .map(super::local::local_entity::HostEntity::to_remote)
                     })
                     .unwrap_or_else(|_| {
                         panic!(
-                            "SetAuthority: Cannot convert GlobalEntity {:?} to RemoteEntity or HostEntity",
-                            global_entity
+                            "SetAuthority: Cannot convert GlobalEntity {global_entity:?} to RemoteEntity or HostEntity"
                         );
                     });
 
@@ -1152,12 +1151,12 @@ impl WorldWriter {
 
     /// For a given entity, write component value updates into a packet.
     /// Implements two principled serialization paths:
-    /// - PATH A (UserIndependent): components without EntityProperty fields share
-    ///   a CachedComponentUpdate keyed by DiffMask. First user after mutation pays
+    /// - PATH A (UserIndependent): components without `EntityProperty` fields share
+    ///   a `CachedComponentUpdate` keyed by `DiffMask`. First user after mutation pays
     ///   one ECS read + serialize; all others replay the cached bytes.
-    /// - PATH B (UserDependent): components with EntityProperty fields serialize
+    /// - PATH B (UserDependent): components with `EntityProperty` fields serialize
     ///   per-user local entity IDs. ECS is read once per component per tick into
-    ///   snapshot_map; all users serialize from the snapshot, not ECS.
+    ///   `snapshot_map`; all users serialize from the snapshot, not ECS.
     #[allow(clippy::too_many_arguments)]
     fn write_update<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         component_kinds: &ComponentKinds,
@@ -1216,44 +1215,42 @@ impl WorldWriter {
                     // Cache hit: replay stored bytes, zero ECS reads.
                     // Cache miss: one ECS read, one serialize, store for future users/ticks.
                     if let Some(diff_mask_key) = diff_mask.as_key() {
-                        let cached: CachedComponentUpdate =
-                            match gdh.get_wire_cache(entity_idx, kind_bit, diff_mask_key) {
-                                Some(c) => {
-                                    #[cfg(feature = "bench_instrumentation")]
-                                    bench_write_counters::N_PATH_A_CACHE_HITS
-                                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                                    c
-                                }
-                                None => {
-                                    #[cfg(feature = "bench_instrumentation")]
-                                    bench_write_counters::N_PATH_A_CACHE_MISSES
-                                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                                    // Same freeze→transmit window as the entity check in
-                                    // `write_updates`, one level finer: the entity is
-                                    // still alive but THIS component was removed. The
-                                    // planned update has nothing left to serialize, so
-                                    // drop it rather than panicking.
-                                    let Some(component) =
-                                        world.component_of_kind(world_entity, component_kind)
-                                    else {
-                                        written_count += 1;
-                                        continue;
-                                    };
-                                    let mut converter =
-                                        world_manager.entity_converter_mut(global_world_manager);
-                                    let mut temp = BitWriter::new();
-                                    true.ser(&mut temp);
-                                    component_kind.ser(component_kinds, &mut temp);
-                                    component.write_update(&diff_mask, &mut temp, &mut converter);
-                                    let c = CachedComponentUpdate::capture(&temp).expect(
-                                        "component exceeds the CachedComponentUpdate \
-                                         ceiling; impossible after registration check \
-                                         unless max_bit_length() returned the sentinel",
-                                    );
-                                    gdh.set_wire_cache(entity_idx, kind_bit, diff_mask_key, c);
-                                    c
-                                }
+                        let cached: CachedComponentUpdate = if let Some(c) =
+                            gdh.get_wire_cache(entity_idx, kind_bit, diff_mask_key)
+                        {
+                            #[cfg(feature = "bench_instrumentation")]
+                            bench_write_counters::N_PATH_A_CACHE_HITS
+                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            c
+                        } else {
+                            #[cfg(feature = "bench_instrumentation")]
+                            bench_write_counters::N_PATH_A_CACHE_MISSES
+                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            // Same freeze→transmit window as the entity check in
+                            // `write_updates`, one level finer: the entity is
+                            // still alive but THIS component was removed. The
+                            // planned update has nothing left to serialize, so
+                            // drop it rather than panicking.
+                            let Some(component) =
+                                world.component_of_kind(world_entity, component_kind)
+                            else {
+                                written_count += 1;
+                                continue;
                             };
+                            let mut converter =
+                                world_manager.entity_converter_mut(global_world_manager);
+                            let mut temp = BitWriter::new();
+                            true.ser(&mut temp);
+                            component_kind.ser(component_kinds, &mut temp);
+                            component.write_update(&diff_mask, &mut temp, &mut converter);
+                            let c = CachedComponentUpdate::capture(&temp).expect(
+                                "component exceeds the CachedComponentUpdate \
+                                     ceiling; impossible after registration check \
+                                     unless max_bit_length() returned the sentinel",
+                            );
+                            gdh.set_wire_cache(entity_idx, kind_bit, diff_mask_key, c);
+                            c
+                        };
 
                         let mut counter = writer.counter();
                         counter.count_bits(cached.bit_count);
