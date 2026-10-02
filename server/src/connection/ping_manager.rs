@@ -54,7 +54,7 @@ impl PingManager {
             match self.sent_pings.remove(ping_index) {
                 None => {}
                 Some(game_instant) => {
-                    let rtt_millis = time_manager.game_time_since(&game_instant).as_millis();
+                    let rtt_millis = time_manager.game_time_since(game_instant).as_millis();
                     self.process_new_rtt(rtt_millis);
                 }
             }
@@ -82,7 +82,7 @@ impl PingManager {
         sorted[..count].copy_from_slice(&self.rtt_ring[..count]);
         sorted[..count].sort_unstable();
         let idx = ((pct * (count - 1)) / 100).min(count - 1);
-        sorted[idx] as f32
+        f32::from(sorted[idx])
     }
 
     /// Recompute rtt/jitter estimations
@@ -93,7 +93,7 @@ impl PingManager {
         self.rtt_average = (0.9 * self.rtt_average) + (0.1 * rtt_millis_f32);
 
         // Update ring buffer (saturate at u16::MAX ≈ 65s, adequate for any real RTT).
-        let sample = rtt_millis.min(u16::MAX as u32) as u16;
+        let sample = rtt_millis.min(u32::from(u16::MAX)) as u16;
         if self.rtt_ring_count < RTT_RING_SIZE {
             self.rtt_ring[self.rtt_ring_count] = sample;
             self.rtt_ring_count += 1;

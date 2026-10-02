@@ -118,6 +118,7 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
 impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
     /// Awaitable readiness of the recv transport, if event-driven (see
     /// [`crate::transport::PacketReceiver::readiness`]).
+    #[must_use]
     pub fn readiness(&self) -> Option<crate::transport::PacketReadiness> {
         self.recv_io.readiness()
     }
@@ -224,8 +225,7 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                             let Ok(HandshakeHeader::ClientConnectRequest) = handshake_header_result
                             else {
                                 warn!(
-                                    "Server Error: received invalid handshake packet: {:?}",
-                                    handshake_header_result
+                                    "Server Error: received invalid handshake packet: {handshake_header_result:?}"
                                 );
                                 continue;
                             };
@@ -295,7 +295,7 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
         if self.timeout_timer.ringing() {
             self.timeout_timer.reset();
             let mut user_disconnects: Vec<UserKey> = Vec::new();
-            for (_, recv_conn) in self.recv_user_connections.iter() {
+            for recv_conn in self.recv_user_connections.values() {
                 if recv_conn.should_drop() && !recv_conn.manual_disconnect {
                     user_disconnects.push(recv_conn.user_key);
                 }
@@ -318,9 +318,7 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
         header: &StandardHeader,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        if header.packet_type != PacketType::Data {
-            panic!("Server Error: received non-data packet in data packet handler");
-        }
+        assert!(header.packet_type == PacketType::Data, "Server Error: received non-data packet in data packet handler");
 
         let Some(recv_conn) = self.recv_user_connections.get_mut(address) else {
             return Ok(());

@@ -488,7 +488,7 @@ impl DirectScopeRun {
         let server_addr: SocketAddr = "127.0.0.1:54590".parse().unwrap();
         let hub = LocalTransportHub::new(server_addr);
 
-        let mut server = Server::new(mode, direct_server_config(), protocol());
+        let mut server = Server::new(mode, &direct_server_config(), protocol());
         let server_socket = ServerSocket::new(LocalServerSocket::new(hub.clone()), None);
         server.listen(server_socket);
 

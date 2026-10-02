@@ -25,7 +25,7 @@ impl TimeManager {
     /// steps; steady-state operation never approaches this.
     const MAX_CATCHUP_TICKS: u32 = 4;
 
-    /// Create a new TickManager with a given tick interval duration
+    /// Create a new `TickManager` with a given tick interval duration
     pub fn new(tick_interval: Duration) -> Self {
         let start_instant = Instant::now();
         let last_tick_instant = start_instant.clone();
@@ -105,7 +105,7 @@ impl TimeManager {
         GameInstant::new(&self.start_instant)
     }
 
-    pub fn game_time_since(&self, previous_instant: &GameInstant) -> GameDuration {
+    pub fn game_time_since(&self, previous_instant: GameInstant) -> GameDuration {
         self.game_time_now().time_since(previous_instant)
     }
 

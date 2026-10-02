@@ -43,6 +43,37 @@ pub trait WorldRefType<E> {
     ) -> Option<ReplicaDynRefWrapper<'a>>;
 }
 
+/// Blanket `WorldRefType` for shared borrows, so send-path APIs can take
+/// `world: &W` without forcing callers to give up ownership (clippy
+/// `needless_pass_by_value`). Delegates to the owned implementation.
+impl<E, W: WorldRefType<E>> WorldRefType<E> for &W {
+    fn has_entity(&self, world_entity: &E) -> bool {
+        (**self).has_entity(world_entity)
+    }
+    fn entities(&self) -> Vec<E> {
+        (**self).entities()
+    }
+    fn has_component<R: ReplicatedComponent>(&self, world_entity: &E) -> bool {
+        (**self).has_component::<R>(world_entity)
+    }
+    fn has_component_of_kind(&self, world_entity: &E, component_kind: ComponentKind) -> bool {
+        (**self).has_component_of_kind(world_entity, component_kind)
+    }
+    fn component<'a, R: ReplicatedComponent>(
+        &'a self,
+        entity: &E,
+    ) -> Option<ReplicaRefWrapper<'a, R>> {
+        (**self).component::<R>(entity)
+    }
+    fn component_of_kind<'a>(
+        &'a self,
+        entity: &E,
+        component_kind: ComponentKind,
+    ) -> Option<ReplicaDynRefWrapper<'a>> {
+        (**self).component_of_kind(entity, component_kind)
+    }
+}
+
 /// Structures that implement the `WorldMutType` trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep
 /// the `WorldMutType` in-sync with it's own Entities/Components

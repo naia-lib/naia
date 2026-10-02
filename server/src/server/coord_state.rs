@@ -33,7 +33,7 @@ use super::{room_store::RoomStore, user_store::UserStore};
 /// Fields marked with a `// → <step>` comment are migrated to a different
 /// owner in a later sub-commit; their location here is purely transitional.
 pub struct CoordinatorState<E: Copy + Eq + Hash + Send + Sync> {
-    /// Per-user metadata (UserKey ↔ address mapping, disconnect tracking).
+    /// Per-user metadata (`UserKey` ↔ address mapping, disconnect tracking).
     pub(crate) user_store: UserStore,
     /// Per-room metadata.
     pub(crate) room_store: RoomStore,

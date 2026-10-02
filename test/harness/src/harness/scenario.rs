@@ -276,7 +276,7 @@ impl Scenario {
             panic!("server_start() called multiple times");
         }
 
-        let mut server = Server::new(self.server_mode, server_config, protocol);
+        let mut server = Server::new(self.server_mode, &server_config, protocol);
         let server_socket = ServerSocket::new(LocalServerSocket::new(self.hub.clone()), None);
         server.listen(server_socket);
 
@@ -294,7 +294,7 @@ impl Scenario {
         }
 
         let mut server =
-            Server::new_with_protocol_id(self.server_mode, server_config, protocol, protocol_id);
+            Server::new_with_protocol_id(self.server_mode, &server_config, protocol, protocol_id);
         let server_socket = ServerSocket::new(LocalServerSocket::new(self.hub.clone()), None);
         server.listen(server_socket);
 

@@ -20,6 +20,7 @@ impl PacketChannel {
     /// channel is created: the sender pings it on every `send`, and the
     /// receiver exposes it via [`TransportReceiver::readiness`] so the
     /// pipeline recv worker can block event-driven instead of polling.
+    #[must_use]
     pub fn unbounded() -> (Box<dyn TransportSender>, Box<dyn TransportReceiver>) {
         let (data_tx, data_rx) = channel::unbounded();
         // bounded(1) ⇒ at most one buffered "come look" token: a burst of

@@ -59,15 +59,15 @@ pub struct HandshakeManager {
 }
 
 impl Handshaker for HandshakeManager {
-    fn authenticate_user(&mut self, identity_token: &IdentityToken, user_key: &UserKey) {
+    fn authenticate_user(&mut self, identity_token: &IdentityToken, user_key: UserKey) {
         self.authenticated_unidentified_users
-            .insert(identity_token.clone(), *user_key);
+            .insert(identity_token.clone(), user_key);
         self.identity_token_map
-            .insert(*user_key, identity_token.clone());
+            .insert(user_key, identity_token.clone());
     }
 
-    fn delete_user(&mut self, user_key: &UserKey, address_opt: Option<SocketAddr>) {
-        if let Some(identity_token) = self.identity_token_map.remove(user_key) {
+    fn delete_user(&mut self, user_key: UserKey, address_opt: Option<SocketAddr>) {
+        if let Some(identity_token) = self.identity_token_map.remove(&user_key) {
             self.authenticated_unidentified_users
                 .remove(&identity_token);
         }
@@ -172,7 +172,7 @@ impl Handshaker for HandshakeManager {
                     let identify_response = Self::write_identity_response().to_packet();
                     Ok(HandshakeAction::SendPacket(identify_response))
                 } else {
-                    let Ok(id_token) = self.recv_identify_request(reader) else {
+                    let Ok(id_token) = Self::recv_identify_request(reader) else {
                         return Ok(HandshakeAction::None);
                     };
                     let Some(user_key) = self.authenticated_unidentified_users.remove(&id_token)
@@ -182,9 +182,7 @@ impl Handshaker for HandshakeManager {
                         return Ok(HandshakeAction::SendPacket(reject_response));
                     };
                     // Verify identity token exists (but keep it for disconnect verification)
-                    if !self.identity_token_map.contains_key(&user_key) {
-                        panic!("Server Error: Identity Token not found for user_key: {:?}. Shouldn't be possible.", user_key);
-                    }
+                    assert!(self.identity_token_map.contains_key(&user_key), "Server Error: Identity Token not found for user_key: {user_key:?}. Shouldn't be possible.");
 
                     // User is authenticated
                     self.authenticated_and_identified_users
@@ -231,8 +229,7 @@ impl Handshaker for HandshakeManager {
             }
             _ => {
                 warn!(
-                    "Server Error: Unexpected handshake header: {:?} from {}",
-                    handshake_header, address
+                    "Server Error: Unexpected handshake header: {handshake_header:?} from {address}"
                 );
                 Ok(HandshakeAction::None)
             }
@@ -255,7 +252,7 @@ impl Handshaker for HandshakeManager {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
         HandshakeHeader::ServerDisconnect(reason).ser(&mut writer);
-        payload.map(|bytes| bytes.to_vec()).ser(&mut writer);
+        payload.map(<[u8]>::to_vec).ser(&mut writer);
         writer.to_packet()
     }
 }
@@ -344,7 +341,7 @@ impl HandshakeManager {
 
     // Step 1 of Handshake (builds without address validation)
     #[cfg(not(feature = "transport_udp"))]
-    fn recv_identify_request(&mut self, reader: &mut BitReader) -> Result<IdentityToken, SerdeErr> {
+    fn recv_identify_request(reader: &mut BitReader) -> Result<IdentityToken, SerdeErr> {
         IdentityToken::de(reader)
     }
 

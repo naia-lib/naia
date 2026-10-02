@@ -186,7 +186,7 @@ impl SendConnection {
         };
         for (channel_kind, messages) in messages {
             for message in messages {
-                incoming_events.push_message(&user_key, &channel_kind, message);
+                incoming_events.push_message(user_key, &channel_kind, message);
             }
         }
 
@@ -195,16 +195,16 @@ impl SendConnection {
         for (channel_kind, requests) in requests {
             for (local_response_id, wire_nonce, request) in requests {
                 let global_response_id = global_response_manager.create_response_id(
-                    &user_key,
+                    user_key,
                     &channel_kind,
-                    &local_response_id,
+                    local_response_id,
                     wire_nonce,
                 );
-                incoming_events.push_request(&user_key, &channel_kind, global_response_id, request);
+                incoming_events.push_request(user_key, &channel_kind, global_response_id, request);
             }
         }
         for (global_request_id, response) in responses {
-            global_request_manager.receive_response(&global_request_id, response);
+            global_request_manager.receive_response(global_request_id, response);
         }
 
         // Receive World Events
@@ -347,7 +347,7 @@ impl SendConnection {
             false.ser(&mut writer);
 
             let addr = self.address;
-            if io.send_packet(&addr, writer.to_packet()).is_err() {
+            if io.send_packet(&addr, &writer.to_packet()).is_err() {
                 warn!("Server Error: Cannot send ACK-only packet to {}", &addr);
             } else {
                 #[cfg(feature = "e2e_debug")]
@@ -391,7 +391,7 @@ impl SendConnection {
             #[cfg(feature = "bench_instrumentation")]
             let t_io = std::time::Instant::now();
             let addr = self.address;
-            if io.send_packet(&addr, packet).is_err() {
+            if io.send_packet(&addr, &packet).is_err() {
                 warn!("Server Error: Cannot send data packet to {}", &addr);
             } else {
                 self.base.spend_bandwidth(packet_bytes);

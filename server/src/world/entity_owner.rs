@@ -67,12 +67,14 @@ pub enum EntityOwner {
 
 impl EntityOwner {
     /// Returns `true` if this entity is owned by the server.
+    #[must_use]
     pub fn is_server(&self) -> bool {
         matches!(self, EntityOwner::Server)
     }
 
     /// Returns `true` if this entity was spawned by a client (regardless of
     /// its current publication state).
+    #[must_use]
     pub fn is_client(&self) -> bool {
         matches!(
             self,
@@ -86,6 +88,7 @@ impl EntityOwner {
     /// entities are public. [`Client`](EntityOwner::Client) (private),
     /// [`ClientWaiting`](EntityOwner::ClientWaiting), and
     /// [`Local`](EntityOwner::Local) are not.
+    #[must_use]
     pub fn is_public(&self) -> bool {
         matches!(self, EntityOwner::ClientPublic(_) | EntityOwner::Server)
     }

@@ -21,6 +21,7 @@ impl Default for TickBufferMessages {
 
 impl TickBufferMessages {
     /// Creates an empty `TickBufferMessages` container.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             messages: HashMap::new(),
@@ -30,7 +31,7 @@ impl TickBufferMessages {
 
     pub(crate) fn push_message(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         channel_kind: &ChannelKind,
         message: MessageContainer,
     ) {

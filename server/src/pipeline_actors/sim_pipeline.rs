@@ -76,14 +76,14 @@ pub struct PipelinedWorldServer<E: Copy + Eq + Hash + Send + Sync + 'static> {
     recv_slot: Arc<Mutex<Option<RecvHandle<E>>>>,
     /// Park-window slot shared with the send worker.
     send_slot: Arc<Mutex<Option<SendHandle<E>>>>,
-    /// MISSION_PIPELINE_API_BOUNDARY G8 (§2l Decision 1) — the send-shape
+    /// `MISSION_PIPELINE_API_BOUNDARY` G8 (§2l Decision 1) — the send-shape
     /// selector for [`Self::send`]:
     /// - `None` ⇒ **oracle**: `send` transmits the frozen job INLINE on the
     ///   calling thread (the determinism/desync path the moat validates, and
     ///   every synchronous test drive). Main drains the ACK channel itself.
     /// - `Some(tx)` ⇒ **worker-driven production**: `send` publishes the frozen
     ///   `(snapshot, plan)` job here and the send worker transmits it NEXT tick
-    ///   (one-tick lag, MISSION_TICK_FLOOR Lever 3). Main does NOT drain ACKs —
+    ///   (one-tick lag, `MISSION_TICK_FLOOR` Lever 3). Main does NOT drain ACKs —
     ///   the send worker is the single-owner consumer (`runtime.rs`).
     ///
     /// Set by the bevy adapter under `#[cfg(workers_active)]` via
@@ -92,7 +92,7 @@ pub struct PipelinedWorldServer<E: Copy + Eq + Hash + Send + Sync + 'static> {
     /// byte-identical wire content modulo the one-tick scheduling shift
     /// (G9pre §2i).
     send_publisher: Option<super::SnapshotSender<E>>,
-    /// MISSION_PIPELINE_API_BOUNDARY G8b — the recv-shape selector for
+    /// `MISSION_PIPELINE_API_BOUNDARY` G8b — the recv-shape selector for
     /// [`Self::receive`], the exact mirror of [`Self::send_publisher`]:
     /// - `None` ⇒ **oracle**: `receive` drains ONLY a synchronous
     ///   `recv.receive()` on the calling thread (the determinism/desync path and
@@ -110,7 +110,7 @@ pub struct PipelinedWorldServer<E: Copy + Eq + Hash + Send + Sync + 'static> {
     /// application path, so the only difference is WHERE the socket drain happens
     /// (this thread vs the recv worker) — symmetric to the send-shape split.
     recv_subscriber: Option<Receiver<ReceiveOutput<E>>>,
-    /// MISSION_PIPELINE_API_BOUNDARY §2f — the worker-thread runtime, OWNED by
+    /// `MISSION_PIPELINE_API_BOUNDARY` §2f — the worker-thread runtime, OWNED by
     /// the pipelined server (was the bevy adapter's `PluginInternalState.runtime`
     /// until the §2f ownership move). `None` until [`Self::start_workers`] spawns
     /// the threads (the separate spawn step after [`Self::listen`] binds the
@@ -173,7 +173,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         self.protocol_id
     }
 
-    /// MISSION_PIPELINE_API_BOUNDARY G8 (§2l Decision 1) — switch [`Self::send`]
+    /// `MISSION_PIPELINE_API_BOUNDARY` G8 (§2l Decision 1) — switch [`Self::send`]
     /// into **worker-driven production** mode: it will publish the frozen
     /// `(snapshot, plan)` send job to `publisher` (drained by the send worker,
     /// which transmits it next tick — the one-tick lag) instead of transmitting
@@ -190,7 +190,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         self.send_publisher = Some(publisher);
     }
 
-    /// MISSION_PIPELINE_API_BOUNDARY G8b (mirror of [`Self::set_send_publisher`])
+    /// `MISSION_PIPELINE_API_BOUNDARY` G8b (mirror of [`Self::set_send_publisher`])
     /// — switch [`Self::receive`] into **worker-driven production** mode: it will
     /// drain `subscriber` (the recv worker's output channel) before its
     /// synchronous straggler-catch, instead of only doing the synchronous drain.
@@ -592,18 +592,18 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     }
 
     /// Forwards to [`CoordHandle::user_address`].
-    pub fn user_address(&self, user_key: &UserKey) -> Option<SocketAddr> {
+    pub fn user_address(&self, user_key: UserKey) -> Option<SocketAddr> {
         self.coord().user_address(user_key)
     }
 
     /// Forwards to [`CoordHandle::receive_user`].
     pub fn receive_user(&mut self, user_key: UserKey, user_addr: SocketAddr) {
-        self.coord_mut().receive_user(user_key, user_addr)
+        self.coord_mut().receive_user(user_key, user_addr);
     }
 
     /// Forwards to [`CoordHandle::disconnect_user`].
     pub fn disconnect_user(&mut self, user_key: &UserKey) {
-        self.coord_mut().disconnect_user(user_key)
+        self.coord_mut().disconnect_user(user_key);
     }
 
     /// Queue a verified-handshake disconnect without reassembling the split engine.
@@ -631,35 +631,35 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     }
 
     /// Forwards to [`CoordHandle::room_add_user`].
-    pub fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
-        self.coord_mut().room_add_user(room_key, user_key)
+    pub fn room_add_user(&mut self, room_key: RoomKey, user_key: UserKey) {
+        self.coord_mut().room_add_user(room_key, user_key);
     }
 
     /// Forwards to [`CoordHandle::room_remove_user`].
-    pub fn room_remove_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
-        self.coord_mut().room_remove_user(room_key, user_key)
+    pub fn room_remove_user(&mut self, room_key: RoomKey, user_key: UserKey) {
+        self.coord_mut().room_remove_user(room_key, user_key);
     }
 
     /// Forwards to [`CoordHandle::room_add_entity`].
     pub fn room_add_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
-        self.coord_mut().room_add_entity(room_key, world_entity)
+        self.coord_mut().room_add_entity(room_key, world_entity);
     }
 
     /// Forwards to [`CoordHandle::room_remove_entity`].
     pub fn room_remove_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
-        self.coord_mut().room_remove_entity(room_key, world_entity)
+        self.coord_mut().room_remove_entity(room_key, world_entity);
     }
 
     // ── Replication config ──
 
     /// Forwards to [`CoordHandle::enable_entity_replication`].
     pub fn enable_entity_replication(&mut self, world_entity: &E) {
-        self.coord_mut().enable_entity_replication(world_entity)
+        self.coord_mut().enable_entity_replication(world_entity);
     }
 
     /// Forwards to [`CoordHandle::mark_entity_as_static`].
     pub fn mark_entity_as_static(&mut self, world_entity: &E) {
-        self.coord_mut().mark_entity_as_static(world_entity)
+        self.coord_mut().mark_entity_as_static(world_entity);
     }
 
     /// Register an already-spawned entity as static without reassembling the split engine.
@@ -675,7 +675,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_world_manager
             .write()
-            .insert_static_entity_record(&global_entity, EntityOwner::Server);
+            .insert_static_entity_record(global_entity, EntityOwner::Server);
         if idx.is_valid() {
             self.coord()
                 .shared
@@ -686,7 +686,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// Forwards to [`CoordHandle::configure_entity_replication`].
     pub fn configure_entity_replication(&mut self, world_entity: &E, config: ReplicationConfig) {
         self.coord_mut()
-            .configure_entity_replication(world_entity, config)
+            .configure_entity_replication(world_entity, config);
     }
 
     /// Forwards to [`CoordHandle::apply_pending_world_hooks`].
@@ -694,7 +694,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     where
         W: WorldMutType<E>,
     {
-        self.coord().apply_pending_world_hooks(world)
+        self.coord().apply_pending_world_hooks(world);
     }
 
     /// Server takes authority without reassembling the split engine.
@@ -711,7 +711,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_world_manager
             .write()
-            .server_take_authority(&global_entity);
+            .server_take_authority(global_entity);
 
         if let Ok(previous_owner) = result {
             self.coord_mut()
@@ -755,7 +755,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_world_manager
             .write()
-            .server_give_authority_to_client(&global_entity, user_key)?;
+            .server_give_authority_to_client(global_entity, *user_key)?;
         if previous_owner == AuthOwner::Client(*user_key) {
             return Ok(());
         }
@@ -773,7 +773,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .expect("PipelinedWorldServer::entity_give_authority: RecvHandle not in slot")
             .state
             .incoming_world_events
-            .push_auth_grant(user_key, world_entity);
+            .push_auth_grant(*user_key, world_entity);
 
         Ok(())
     }
@@ -781,7 +781,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// Server/client releases authority without reassembling the split engine.
     pub fn entity_release_authority(
         &mut self,
-        origin_user: Option<&UserKey>,
+        origin_user: Option<UserKey>,
         world_entity: &E,
     ) -> Result<(), AuthorityError> {
         let releaser = AuthOwner::from_user_key(origin_user);
@@ -797,7 +797,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_world_manager
             .write()
-            .client_release_authority(&global_entity, &releaser);
+            .client_release_authority(global_entity, &releaser);
         if result.is_ok() {
             self.coord_mut()
                 .state
@@ -832,7 +832,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_world_manager
             .write()
-            .entity_enable_delegation(&global_entity);
+            .entity_enable_delegation(global_entity);
         {
             let entity_map = self.coord().shared.global_entity_map.read();
             world.entity_enable_delegation(
@@ -865,7 +865,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_world_manager
             .write()
-            .pause_entity_replication(&global_entity);
+            .pause_entity_replication(global_entity);
     }
 
     /// Resume replication for an entity without reassembling the split engine.
@@ -884,7 +884,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_world_manager
             .write()
-            .resume_entity_replication(&global_entity);
+            .resume_entity_replication(global_entity);
     }
 
     /// Disable replication for an entity without reassembling the split engine.
@@ -909,7 +909,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_world_manager
             .read()
-            .has_component_record(&global_entity, &component_kind)
+            .has_component_record(global_entity, &component_kind)
         {
             log::warn!(
                 "Attempted to add component `{:?}` to entity `{:?}` that already has it, this can happen if a delegated entity's auth is transferred to the Server before the Server Adapter has been able to process the newly inserted Component. Skipping this action.",
@@ -923,14 +923,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_world_manager
             .write()
-            .insert_component_record(&global_entity, &component_kind);
+            .insert_component_record(global_entity, &component_kind);
         self.coord()
             .shared
             .global_world_manager
             .write()
             .insert_component_diff_handler(
                 &self.coord().shared.component_kinds,
-                &global_entity,
+                global_entity,
                 component,
             );
 
@@ -939,7 +939,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_world_manager
             .read()
-            .entity_is_delegated(&global_entity)
+            .entity_is_delegated(global_entity)
         {
             let accessor = self
                 .coord()
@@ -982,12 +982,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_world_manager
             .write()
-            .remove_component_record(&global_entity, component_kind);
+            .remove_component_record(global_entity, component_kind);
         self.coord()
             .shared
             .global_world_manager
             .write()
-            .remove_component_diff_handler(&global_entity, component_kind);
+            .remove_component_diff_handler(global_entity, component_kind);
     }
 
     /// Stage entity despawn's send-side cleanup after applying coord/global
@@ -1002,7 +1002,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         else {
             return;
         };
-        let entity_idx = Self::entity_global_idx(self.coord(), &global_entity);
+        let entity_idx = Self::entity_global_idx(self.coord(), global_entity);
 
         self.coord_mut()
             .state
@@ -1014,7 +1014,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         self.coord_mut()
             .state
             .room_store
-            .remove_global_entity_from_all_rooms(&global_entity);
+            .remove_global_entity_from_all_rooms(global_entity);
         if entity_idx.is_valid() {
             self.coord().shared.set_idx_to_world(entity_idx, None);
         }
@@ -1032,12 +1032,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_world_manager
             .write()
-            .remove_entity_diff_handlers(&global_entity);
+            .remove_entity_diff_handlers(global_entity);
         self.coord()
             .shared
             .global_world_manager
             .write()
-            .remove_entity_record(&global_entity);
+            .remove_entity_record(global_entity);
         self.coord()
             .shared
             .global_entity_map
@@ -1075,7 +1075,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     /// Record a coord-resident historian snapshot without reassembling the
     /// split engine.
-    pub fn record_historian_tick<W: WorldRefType<E>>(&mut self, world: W, tick: Tick) {
+    pub fn record_historian_tick<W: WorldRefType<E>>(&mut self, world: &W, tick: Tick) {
         let shared = Arc::clone(&self.coord().shared);
         let entity_map = shared.global_entity_map.read();
         let global_world_manager = shared.global_world_manager.read();
@@ -1173,13 +1173,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .resource_registry
             .insert::<R>(global_entity)
         {
-            Self::remove_coord_resource_entity(self.coord_mut(), &global_entity, entity_idx);
+            Self::remove_coord_resource_entity(self.coord_mut(), global_entity, entity_idx);
             world.despawn_entity(&world_entity);
             return Err(error);
         }
 
         let mut component = value;
-        Self::insert_resource_component_record(self.coord_mut(), &global_entity, &mut component);
+        Self::insert_resource_component_record(self.coord_mut(), global_entity, &mut component);
         world.insert_component(&world_entity, component);
 
         let user_keys = self.coord().state.user_store.keys_copied();
@@ -1217,7 +1217,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             Ok(entity) => entity,
             Err(_) => return true,
         };
-        let entity_idx = Self::entity_global_idx(self.coord(), &global_entity);
+        let entity_idx = Self::entity_global_idx(self.coord(), global_entity);
         self.coord_mut()
             .state
             .pending_resource_ops
@@ -1269,7 +1269,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     // ── Coord-resident room/user reads ──
 
     /// Forwards to [`CoordHandle::room_has_user`].
-    pub fn room_has_user(&self, room_key: &RoomKey, user_key: &UserKey) -> bool {
+    pub fn room_has_user(&self, room_key: RoomKey, user_key: UserKey) -> bool {
         self.coord().room_has_user(room_key, user_key)
     }
 
@@ -1389,7 +1389,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// Average RTT to the given user's client, or `None` if not connected.
     /// Reads the coord user address + the parked recv handle's ping manager.
     pub fn rtt(&self, user_key: &UserKey) -> Option<f32> {
-        let addr = self.coord().user_address(user_key)?;
+        let addr = self.coord().user_address(*user_key)?;
         let recv = self.recv_slot.lock();
         let recv = recv.as_ref().expect(
             "PipelinedWorldServer::rtt: RecvHandle not in slot — read between receive() and send()",
@@ -1405,7 +1405,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     /// Average jitter to the given user's client, or `None` if not connected.
     pub fn jitter(&self, user_key: &UserKey) -> Option<f32> {
-        let addr = self.coord().user_address(user_key)?;
+        let addr = self.coord().user_address(*user_key)?;
         let recv = self.recv_slot.lock();
         let recv = recv
             .as_ref()
@@ -1422,7 +1422,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// Per-connection diagnostics for the given user, or `None` if not connected.
     /// Reads the coord user address + both parked recv and send handles.
     pub fn connection_stats(&self, user_key: &UserKey) -> Option<ConnectionStats> {
-        let addr = self.coord().user_address(user_key)?;
+        let addr = self.coord().user_address(*user_key)?;
         let recv = self.recv_slot.lock();
         let recv = recv
             .as_ref()
@@ -1451,7 +1451,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// reads only canonical send-connection membership; if the send handle is
     /// not parked, readiness is false rather than a slot-precondition panic.
     pub fn user_connection_ready(&self, user_key: &UserKey) -> bool {
-        if self.coord().user_address(user_key).is_none() {
+        if self.coord().user_address(*user_key).is_none() {
             return false;
         }
         let send = self.send_slot.lock();
@@ -1461,7 +1461,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         crate::server::world_server::user_connection_ready_impl(
             &self.coord().state.user_store,
             &send.state.send_user_connections,
-            user_key,
+            *user_key,
         )
     }
 
@@ -1540,7 +1540,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_world_manager
             .read()
-            .entity_is_delegated(&global_entity)
+            .entity_is_delegated(global_entity)
     }
 
     /// A [`crate::pipeline_actors::SendStateView`] backed by this server's shared state (coord-resident
@@ -1617,7 +1617,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             &send.state.entity_room_map,
             &coord.state.user_store,
             &coord.state.resource_registry,
-            user_key,
+            *user_key,
             world_entity,
         )
     }
@@ -1750,10 +1750,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     ) -> Result<(), NaiaServerError> {
         let channel_kind = ChannelKind::of::<C>();
         let channel_settings = self.coord().shared.channel_kinds.channel(&channel_kind);
-        if !channel_settings.can_send_to_client() {
-            panic!("Cannot send message to Client on this Channel");
-        }
-        let Some(user) = self.coord().state.user_store.get(user_key) else {
+        assert!(channel_settings.can_send_to_client(), "Cannot send message to Client on this Channel");
+        let Some(user) = self.coord().state.user_store.get(*user_key) else {
             return Err(NaiaServerError::UserNotFound);
         };
         let address = user.address();
@@ -1789,21 +1787,19 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     ) -> Result<ResponseReceiveKey<Q::Response>, NaiaServerError> {
         let channel_kind = ChannelKind::of::<C>();
         let channel_settings = self.coord().shared.channel_kinds.channel(&channel_kind);
-        if !channel_settings.can_request_and_respond() {
-            panic!("Requests can only be sent over Bidirectional, Reliable Channels");
-        }
+        assert!(channel_settings.can_request_and_respond(), "Requests can only be sent over Bidirectional, Reliable Channels");
 
         // Check first: allocating the id before this Err left a row with no
         // request ever sent, unpurged until disconnect. H3: the nonce
         // supply is checked — exhaustion retires the connection rather
         // than aliasing a live nonce, and the nonce names the exchange on
         // the wire (envelope cutover).
-        self.require_live_send_connection(user_key, NaiaServerError::UserNotFound)?;
+        self.require_live_send_connection(*user_key, NaiaServerError::UserNotFound)?;
         let (request_id, nonce) = self
             .coord_mut()
             .state
             .global_request_manager
-            .create_request_id(user_key)
+            .create_request_id(*user_key)
             .map_err(|_| NaiaServerError::RequestNonceExhausted)?;
 
         self.coord_mut().state.pending_outbound_message_ops.push(
@@ -1851,12 +1847,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .coord()
             .state
             .global_response_manager
-            .peek_response_id(&response_key.response_id())
+            .peek_response_id(response_key.response_id())
         else {
             return false;
         };
         if self
-            .require_live_send_connection(&user_key, NaiaServerError::UserNotFound)
+            .require_live_send_connection(user_key, NaiaServerError::UserNotFound)
             .is_err()
         {
             return false;
@@ -1879,7 +1875,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     pub(crate) fn room_broadcast_message(
         &mut self,
         channel_kind: &ChannelKind,
-        room_key: &RoomKey,
+        room_key: RoomKey,
         message_box: Box<dyn Message>,
     ) {
         let user_keys: Vec<UserKey> = self
@@ -1899,9 +1895,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         message_box: Box<dyn Message>,
     ) {
         let channel_settings = self.coord().shared.channel_kinds.channel(&channel_kind);
-        if !channel_settings.can_send_to_client() {
-            panic!("Cannot send message to Client on this Channel");
-        }
+        assert!(channel_settings.can_send_to_client(), "Cannot send message to Client on this Channel");
         self.coord_mut().state.pending_outbound_message_ops.push(
             PendingOutboundMessageOp::Fanout {
                 user_keys,
@@ -1931,7 +1925,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     fn require_live_send_connection(
         &self,
-        user_key: &UserKey,
+        user_key: UserKey,
         missing_user_error: NaiaServerError,
     ) -> Result<(), NaiaServerError> {
         let Some(user) = self.coord().state.user_store.get(user_key) else {
@@ -2097,7 +2091,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         }
     }
 
-    /// The **D0–D9 drain-phase ordering contract** (MISSION_PIPELINE_API_BOUNDARY
+    /// The **D0–D9 drain-phase ordering contract** (`MISSION_PIPELINE_API_BOUNDARY`
     /// §2g, audit N1). This is the single, first-class total order in which
     /// queued mutations and the send job apply — the byte-exactness-critical
     /// sequence that §2e's "queue from any system" ergonomics relocated out of
@@ -2198,7 +2192,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         match publisher {
             // ORACLE shape: inline transmit against the frozen snapshot, on the
             // calling thread (no workers / the synchronous determinism path).
-            None => send.transmit_send_job(snapshot, plan),
+            None => send.transmit_send_job(&snapshot, plan),
             // WORKER-DRIVEN PRODUCTION shape (G8 §2l Decision 1): attach the
             // frozen plan to the snapshot, making it a self-contained send job,
             // and publish it. The send worker drains the latest job, drains the
@@ -2214,7 +2208,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     /// task #13 — publish the coord-side priority writes into the live `send`
     /// layer. The split-engine analog of the resident `run_send_preamble`
-    /// `clone_from` (world_server.rs:1102): without it, coord-side priority
+    /// `clone_from` (`world_server.rs:1102)`: without it, coord-side priority
     /// writes never reach the wire in pipelined mode.
     ///
     /// - **GLOBAL**: wholesale `clone_from` of `global_priority_mirror` → `send`
@@ -2228,7 +2222,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         send.state
             .global_priority
             .clone_from(&coord.state.global_priority_mirror);
-        for (user_key, layer) in coord.state.user_priority_staging.iter_mut() {
+        for (user_key, layer) in &mut coord.state.user_priority_staging {
             if layer.is_empty() {
                 continue;
             }
@@ -2261,13 +2255,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                 .shared
                 .global_world_manager
                 .write()
-                .insert_static_entity_record(&global_entity, EntityOwner::Server)
+                .insert_static_entity_record(global_entity, EntityOwner::Server)
         } else {
             coord
                 .shared
                 .global_world_manager
                 .write()
-                .insert_entity_record(&global_entity, EntityOwner::Server)
+                .insert_entity_record(global_entity, EntityOwner::Server)
         };
         if entity_idx.is_valid() {
             coord
@@ -2279,7 +2273,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     fn remove_coord_resource_entity(
         coord: &mut CoordHandle<E>,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
         entity_idx: GlobalEntityIndex,
     ) {
         if entity_idx.is_valid() {
@@ -2294,12 +2288,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_entity_map
             .write()
-            .despawn_by_global(*global_entity);
+            .despawn_by_global(global_entity);
     }
 
     fn insert_resource_component_record<R: Replicate>(
         coord: &mut CoordHandle<E>,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
         component: &mut R,
     ) {
         let component_kind = component.kind();
@@ -2338,8 +2332,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                 .shared
                 .global_world_manager
                 .read()
-                .get_entity_auth_accessor(*global_entity);
-            component.enable_delegation(&accessor, None)
+                .get_entity_auth_accessor(global_entity);
+            component.enable_delegation(&accessor, None);
         }
     }
 
@@ -2373,8 +2367,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                             .insert(user_key, global_entity, true);
                         send.state.apply_resource_scope_for_user(
                             world,
-                            &user_key,
-                            &global_entity,
+                            user_key,
+                            global_entity,
                             &world_entity,
                         );
                     }
@@ -2388,7 +2382,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                         coord,
                         send,
                         &world_entity,
-                        &global_entity,
+                        global_entity,
                         entity_idx,
                     );
                 }
@@ -2400,7 +2394,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         coord: &mut CoordHandle<E>,
         send: &mut SendHandle<E>,
         world_entity: &E,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
         entity_idx: GlobalEntityIndex,
     ) {
         coord.state.global_priority_mirror.on_despawn(world_entity);
@@ -2419,11 +2413,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(*global_entity)
+                .has_global_entity(global_entity)
             {
                 continue;
             }
-            send_conn.base.world_manager.despawn_entity(*global_entity);
+            send_conn.base.world_manager.despawn_entity(global_entity);
             send_conn.clear_entity_visible(entity_idx);
         }
 
@@ -2438,7 +2432,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                 let _ = coord
                     .state
                     .room_store
-                    .remove_entity(&room_key, world_entity, &*entity_map);
+                    .remove_entity(room_key, world_entity, &*entity_map);
             }
         }
 
@@ -2456,7 +2450,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_entity_map
             .write()
-            .despawn_by_global(*global_entity);
+            .despawn_by_global(global_entity);
     }
 
     /// Phase C / D3 — publish coord-staged lifecycle mutations into
@@ -2473,20 +2467,20 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                     global_entity,
                     component_kind,
                 } => {
-                    Self::apply_lifecycle_insert_component(send, &global_entity, &component_kind);
+                    Self::apply_lifecycle_insert_component(send, global_entity, &component_kind);
                 }
                 PendingLifecycleOp::RemoveComponent {
                     global_entity,
                     component_kind,
                 } => {
-                    Self::apply_lifecycle_remove_component(send, &global_entity, &component_kind);
+                    Self::apply_lifecycle_remove_component(send, global_entity, &component_kind);
                 }
                 PendingLifecycleOp::DespawnEntity {
                     world_entity,
                     global_entity,
                     entity_idx,
                 } => {
-                    Self::apply_lifecycle_despawn(send, &world_entity, &global_entity, entity_idx);
+                    Self::apply_lifecycle_despawn(send, &world_entity, global_entity, entity_idx);
                 }
             }
         }
@@ -2494,48 +2488,48 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     fn apply_lifecycle_insert_component(
         send: &mut SendHandle<E>,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
         component_kind: &ComponentKind,
     ) {
         for send_conn in send.state.send_user_connections.values_mut() {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(*global_entity)
+                .has_global_entity(global_entity)
             {
                 continue;
             }
             send_conn
                 .base
                 .world_manager
-                .insert_component(*global_entity, *component_kind);
+                .insert_component(global_entity, *component_kind);
         }
     }
 
     fn apply_lifecycle_remove_component(
         send: &mut SendHandle<E>,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
         component_kind: &ComponentKind,
     ) {
         for send_conn in send.state.send_user_connections.values_mut() {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(*global_entity)
+                .has_global_entity(global_entity)
             {
                 continue;
             }
             send_conn
                 .base
                 .world_manager
-                .remove_component(*global_entity, *component_kind);
+                .remove_component(global_entity, *component_kind);
         }
     }
 
     fn apply_lifecycle_despawn(
         send: &mut SendHandle<E>,
         world_entity: &E,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
         entity_idx: GlobalEntityIndex,
     ) {
         send.state.global_priority.on_despawn(world_entity);
@@ -2550,11 +2544,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(*global_entity)
+                .has_global_entity(global_entity)
             {
                 continue;
             }
-            send_conn.base.world_manager.despawn_entity(*global_entity);
+            send_conn.base.world_manager.despawn_entity(global_entity);
             send_conn.clear_entity_visible(entity_idx);
         }
 
@@ -2567,12 +2561,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     fn entity_global_idx(
         coord: &CoordHandle<E>,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> GlobalEntityIndex {
         let handler = coord.shared.global_world_manager.read().diff_handler();
         let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
         guard
-            .entity_to_global_idx(*global_entity)
+            .entity_to_global_idx(global_entity)
             .unwrap_or(GlobalEntityIndex::INVALID)
     }
 
@@ -2595,7 +2589,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                         Self::apply_outbound_message_send(
                             coord,
                             send,
-                            &user_key,
+                            user_key,
                             &channel_kind,
                             message.clone(),
                         );
@@ -2608,7 +2602,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                     nonce,
                     message,
                 } => {
-                    let Some(user) = coord.state.user_store.get(&user_key) else {
+                    let Some(user) = coord.state.user_store.get(user_key) else {
                         continue;
                     };
                     let _ = send.state.send_request_container_to_address(
@@ -2629,7 +2623,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                 } => {
                     // User gone: drop the op but KEEP the routing — the caller
                     // was told Sent, and the id must not burn with the op.
-                    let Some(user) = coord.state.user_store.get(&user_key) else {
+                    let Some(user) = coord.state.user_store.get(user_key) else {
                         continue;
                     };
                     // At-most-once: a second op for an already-answered id
@@ -2637,7 +2631,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                     if coord
                         .state
                         .global_response_manager
-                        .peek_response_id(&response_id)
+                        .peek_response_id(response_id)
                         .is_none()
                     {
                         continue;
@@ -2655,7 +2649,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                         coord
                             .state
                             .global_response_manager
-                            .destroy_response_id(&response_id);
+                            .destroy_response_id(response_id);
                     }
                 }
             }
@@ -2665,7 +2659,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     fn apply_outbound_message_send(
         coord: &CoordHandle<E>,
         send: &mut SendHandle<E>,
-        user_key: &UserKey,
+        user_key: UserKey,
         channel_kind: &ChannelKind,
         message: MessageContainer,
     ) {
@@ -2691,19 +2685,19 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                     global_entity,
                     previous_owner,
                 } => {
-                    Self::apply_authority_take(coord, send, &global_entity, previous_owner);
+                    Self::apply_authority_take(coord, send, global_entity, previous_owner);
                 }
                 PendingAuthorityOp::Give {
                     global_entity,
                     target_user,
                 } => {
-                    Self::apply_authority_give(coord, send, &global_entity, &target_user);
+                    Self::apply_authority_give(coord, send, global_entity, target_user);
                 }
                 PendingAuthorityOp::Release { global_entity } => {
-                    Self::send_reset_authority_messages(coord, send, &global_entity);
+                    Self::send_reset_authority_messages(coord, send, global_entity);
                 }
                 PendingAuthorityOp::EnableDelegation { global_entity } => {
-                    Self::apply_enable_delegation_fanout(coord, send, &global_entity);
+                    Self::apply_enable_delegation_fanout(coord, send, global_entity);
                 }
             }
         }
@@ -2712,24 +2706,24 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     fn apply_authority_take(
         coord: &CoordHandle<E>,
         send: &mut SendHandle<E>,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
         previous_owner: AuthOwner,
     ) {
         match previous_owner {
             AuthOwner::Client(prev_holder_key) => {
-                if let Some(user) = coord.state.user_store.get(&prev_holder_key) {
+                if let Some(user) = coord.state.user_store.get(prev_holder_key) {
                     if let Some(send_conn) =
                         send.state.send_user_connections.get_mut(&user.address())
                     {
                         if send_conn
                             .base
                             .world_manager
-                            .has_global_entity(*global_entity)
+                            .has_global_entity(global_entity)
                         {
                             send_conn
                                 .base
                                 .world_manager
-                                .host_send_set_auth(*global_entity, EntityAuthStatus::Denied);
+                                .host_send_set_auth(global_entity, EntityAuthStatus::Denied);
                         }
                     }
                 }
@@ -2742,14 +2736,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                         if !send_conn
                             .base
                             .world_manager
-                            .has_global_entity(*global_entity)
+                            .has_global_entity(global_entity)
                         {
                             continue;
                         }
                         send_conn
                             .base
                             .world_manager
-                            .host_send_set_auth(*global_entity, EntityAuthStatus::Denied);
+                            .host_send_set_auth(global_entity, EntityAuthStatus::Denied);
                     }
                 }
             }
@@ -2760,8 +2754,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     fn apply_authority_give(
         coord: &CoordHandle<E>,
         send: &mut SendHandle<E>,
-        global_entity: &GlobalEntity,
-        target_user: &UserKey,
+        global_entity: GlobalEntity,
+        target_user: UserKey,
     ) {
         for (user_key, user) in coord.state.user_store.iter() {
             let Some(send_conn) = send.state.send_user_connections.get_mut(&user.address()) else {
@@ -2770,12 +2764,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(*global_entity)
+                .has_global_entity(global_entity)
             {
                 continue;
             }
 
-            let new_status = if target_user == user_key {
+            let new_status = if target_user == *user_key {
                 EntityAuthStatus::Granted
             } else {
                 EntityAuthStatus::Denied
@@ -2783,7 +2777,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             send_conn
                 .base
                 .world_manager
-                .host_send_set_auth(*global_entity, new_status);
+                .host_send_set_auth(global_entity, new_status);
             #[cfg(feature = "e2e_debug")]
             if new_status == EntityAuthStatus::Granted {
                 crate::server::world_server::SERVER_SET_AUTH_ENQUEUED
@@ -2797,7 +2791,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     fn apply_enable_delegation_fanout(
         coord: &CoordHandle<E>,
         send: &mut SendHandle<E>,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) {
         for (_user_key, user) in coord.state.user_store.iter() {
             let Some(send_conn) = send.state.send_user_connections.get_mut(&user.address()) else {
@@ -2806,7 +2800,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(*global_entity)
+                .has_global_entity(global_entity)
             {
                 continue;
             }
@@ -2818,7 +2812,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             send_conn.base.world_manager.send_enable_delegation(
                 HostType::Server,
                 false,
-                *global_entity,
+                global_entity,
             );
         }
     }
@@ -2842,13 +2836,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                     Self::apply_scope_ledger_set(
                         coord,
                         send,
-                        &user_key,
+                        user_key,
                         &world_entity,
                         is_contained,
                     );
                 }
                 PendingScopeLedgerOp::RemoveUser { user_key } => {
-                    send.state.entity_scope_map.remove_user(&user_key);
+                    send.state.entity_scope_map.remove_user(user_key);
                 }
                 PendingScopeLedgerOp::DespawnOnNextExit {
                     user_key,
@@ -2863,7 +2857,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                     if let Some(global_entity) = global_entity_opt {
                         send.state
                             .entity_scope_map
-                            .set_despawn_on_next_exit(&user_key, &global_entity);
+                            .set_despawn_on_next_exit(user_key, global_entity);
                     }
                 }
             }
@@ -2873,7 +2867,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     fn apply_scope_ledger_set(
         coord: &mut CoordHandle<E>,
         send: &mut SendHandle<E>,
-        user_key: &UserKey,
+        user_key: UserKey,
         world_entity: &E,
         is_contained: bool,
     ) {
@@ -2898,17 +2892,17 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .shared
             .global_world_manager
             .read()
-            .user_is_authority_holder(user_key, &global_entity);
+            .user_is_authority_holder(user_key, global_entity);
         if !is_contained && is_authority_holder {
-            let releaser = AuthOwner::Client(*user_key);
+            let releaser = AuthOwner::Client(user_key);
             if coord
                 .shared
                 .global_world_manager
                 .write()
-                .client_release_authority(&global_entity, &releaser)
+                .client_release_authority(global_entity, &releaser)
                 .is_ok()
             {
-                Self::send_reset_authority_messages(coord, send, &global_entity);
+                Self::send_reset_authority_messages(coord, send, global_entity);
             }
         }
 
@@ -2917,21 +2911,20 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                 .shared
                 .global_world_manager
                 .read()
-                .entity_replication_config(&global_entity)
-                .map(|c| matches!(c.publicity, Publicity::Private))
-                .unwrap_or(false);
+                .entity_replication_config(global_entity)
+                .is_some_and(|c| matches!(c.publicity, Publicity::Private));
             if is_private {
                 let is_owner = match coord
                     .shared
                     .global_world_manager
                     .read()
-                    .entity_owner(&global_entity)
+                    .entity_owner(global_entity)
                 {
                     Some(
                         EntityOwner::Client(owner_key)
                         | EntityOwner::ClientWaiting(owner_key)
                         | EntityOwner::ClientPublic(owner_key),
-                    ) => owner_key == *user_key,
+                    ) => owner_key == user_key,
                     _ => false,
                 };
                 if !is_owner {
@@ -2942,10 +2935,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
         send.state
             .entity_scope_map
-            .insert(*user_key, global_entity, is_contained);
+            .insert(user_key, global_entity, is_contained);
         coord.shared.scope_change_queue.lock().push_back(
             crate::server::scope_change::ScopeChange::ScopeToggled(
-                *user_key,
+                user_key,
                 global_entity,
                 is_contained,
             ),
@@ -2955,21 +2948,21 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     fn send_reset_authority_messages(
         coord: &CoordHandle<E>,
         send: &mut SendHandle<E>,
-        global_entity: &naia_shared::GlobalEntity,
+        global_entity: naia_shared::GlobalEntity,
     ) {
         for (_user_key, user) in coord.state.user_store.iter() {
             if let Some(send_conn) = send.state.send_user_connections.get_mut(&user.address()) {
                 if !send_conn
                     .base
                     .world_manager
-                    .has_global_entity(*global_entity)
+                    .has_global_entity(global_entity)
                 {
                     continue;
                 }
                 send_conn
                     .base
                     .world_manager
-                    .host_send_set_auth(*global_entity, EntityAuthStatus::Available);
+                    .host_send_set_auth(global_entity, EntityAuthStatus::Available);
             }
         }
     }

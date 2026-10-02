@@ -1,4 +1,4 @@
-//! Cross-half orchestration helpers — Phase B.7 of MISSION_SIM_OWNS_WORLD.
+//! Cross-half orchestration helpers — Phase B.7 of `MISSION_SIM_OWNS_WORLD`.
 //!
 //! Pipeline-mode handles ([`CoordHandle`], [`RecvHandle`], [`SendHandle`])
 //! each own one slice of what `InternalWorldServer` formerly owned monolithically.
@@ -14,7 +14,7 @@
 //! reassembles them into a `InternalWorldServer` via [`InternalWorldServer::from_pipeline_states`],
 //! invokes the caller's closure against the reassembled server, and
 //! re-splits via [`InternalWorldServer::into_pipeline_states`]. The pattern
-//! preserves single-source-of-truth for every InternalWorldServer method body
+//! preserves single-source-of-truth for every `InternalWorldServer` method body
 //! and lets cyberlith systems call the existing `InternalWorldServer` API verbatim
 //! during the B.7 transitional phase.
 //!
@@ -78,7 +78,7 @@ where
     )
 }
 
-/// MISSION_USER_ONLY_SEES_SIM Phase B.2 (2026-05-19) —
+/// `MISSION_USER_ONLY_SEES_SIM` Phase B.2 (2026-05-19) —
 /// pipeline-friendly entry point for `configure_entity_replication`.
 ///
 /// Cyberlith's pre-B.2 wrapper (`server_access::configure_entity_
@@ -124,8 +124,8 @@ where
 /// D.2.4 section):
 ///
 /// 1. The Send-side state machine is read-before-write across multiple
-///    locks (e.g. `unpublish_entity` captures `owner_addr` from sim_handle
-///    BEFORE `gwm.entity_unpublish` transitions ClientPublic → Client).
+///    locks (e.g. `unpublish_entity` captures `owner_addr` from `sim_handle`
+///    BEFORE `gwm.entity_unpublish` transitions `ClientPublic` → Client).
 ///    Splitting capture from mutation across tick boundaries requires
 ///    snapshotting half a dozen pieces of state into the variant
 ///    payload — substantial state-machine surface area to maintain in
@@ -136,7 +136,7 @@ where
 ///    `send_user_connections`: `migrate_entity_remote_to_host` +
 ///    `host_local_enable_delegation` + `host_send_migrate_response`
 ///    must run synchronously so that `MigrateResponse` is the FIRST
-///    message in the new HostEntityChannel sequence (subcommand_id=0).
+///    message in the new `HostEntityChannel` sequence (`subcommand_id=0`).
 ///    Deferring breaks the per-channel sequencing contract.
 ///
 /// 3. `world.entity_publish` / `world.entity_unpublish` /
@@ -244,10 +244,11 @@ where
 /// callers that needed `&mut InternalWorldServer` access alongside `&mut World`
 /// (e.g. `configure_entity_replication`) and so couldn't use the
 /// closure form of `run_with_world_server` — they construct the
-/// InternalWorldServer manually via `InternalWorldServer::from_pipeline_states` and
+/// `InternalWorldServer` manually via `InternalWorldServer::from_pipeline_states` and
 /// must re-package the result via this function (since the
 /// `Arc<ServerShared>` is `pub(crate)` to outside callers, they can't
 /// rebuild `CoordHandle` manually).
+#[must_use]
 pub fn split_world_server<E>(
     ws: InternalWorldServer<E>,
 ) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>)

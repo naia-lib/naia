@@ -55,6 +55,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Default for WorldEvents<E> {
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     /// Construct an empty `WorldEvents<E>`. Used by pipeline-mode
     /// callers building synthetic `ReceiveOutput<E>` values (e.g. tests).
+    #[must_use]
     pub fn new() -> Self {
         Self {
             connections: Vec::new(),
@@ -81,6 +82,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     // Public
 
     /// Returns `true` if no world events are pending.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.empty
     }
@@ -91,12 +93,14 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     }
 
     /// Returns `true` if at least one event of type `V` is pending.
+    #[must_use]
     pub fn has<V: WorldEvent<E>>(&self) -> bool {
         V::has(self)
     }
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     /// Returns `true` if any incoming messages are queued. Prefer `read::<MessageEvent<C,M>>()`.
+    #[must_use]
     pub fn has_messages(&self) -> bool {
         !self.messages.is_empty()
     }
@@ -107,6 +111,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     /// Returns `true` if any incoming requests are queued. Prefer `read::<RequestEvent<C,Q>>()`.
+    #[must_use]
     pub fn has_requests(&self) -> bool {
         !self.requests.is_empty()
     }
@@ -117,6 +122,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
 
     // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     /// Returns `true` if any component-insert events are pending. Prefer `read::<InsertComponentEvent<C>>()`.
+    #[must_use]
     pub fn has_inserts(&self) -> bool {
         !self.inserts.is_empty()
     }
@@ -131,6 +137,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
 
     // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     /// Returns `true` if any component-update events are pending. Prefer `read::<UpdateComponentEvent<C>>()`.
+    #[must_use]
     pub fn has_updates(&self) -> bool {
         !self.updates.is_empty()
     }
@@ -145,6 +152,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
 
     // These method are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     /// Returns `true` if any component-remove events are pending. Prefer `read::<RemoveComponentEvent<C>>()`.
+    #[must_use]
     pub fn has_removes(&self) -> bool {
         !self.removes.is_empty()
     }
@@ -170,18 +178,18 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
 
     // Crate-public
 
-    pub(crate) fn push_connection(&mut self, user_key: &UserKey) {
-        self.connections.push(*user_key);
+    pub(crate) fn push_connection(&mut self, user_key: UserKey) {
+        self.connections.push(user_key);
         self.empty = false;
     }
 
     pub(crate) fn push_disconnection(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         addr: SocketAddr,
         reason: DisconnectReason,
     ) {
-        self.disconnections.push((*user_key, addr, reason));
+        self.disconnections.push((user_key, addr, reason));
         self.empty = false;
     }
 
@@ -192,7 +200,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
 
     pub(crate) fn push_message(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         channel_kind: &ChannelKind,
         message: MessageContainer,
     ) {
@@ -202,7 +210,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
 
     pub(crate) fn push_request(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         channel_kind: &ChannelKind,
         global_response_id: GlobalResponseId,
         request: MessageContainer,
@@ -213,46 +221,46 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
         let channel_map = self.requests.get_mut(channel_kind).unwrap();
         let request_type_id = request.kind();
         let list = channel_map.entry(request_type_id).or_default();
-        list.push((*user_key, global_response_id, request));
+        list.push((user_key, global_response_id, request));
 
         self.empty = false;
     }
 
-    pub(crate) fn push_spawn(&mut self, user_key: &UserKey, world_entity: &E) {
-        self.spawns.push((*user_key, *world_entity));
+    pub(crate) fn push_spawn(&mut self, user_key: UserKey, world_entity: &E) {
+        self.spawns.push((user_key, *world_entity));
         self.empty = false;
     }
 
-    pub(crate) fn push_despawn(&mut self, user_key: &UserKey, world_entity: &E) {
-        self.despawns.push((*user_key, *world_entity));
+    pub(crate) fn push_despawn(&mut self, user_key: UserKey, world_entity: &E) {
+        self.despawns.push((user_key, *world_entity));
         self.empty = false;
     }
 
-    pub(crate) fn push_publish(&mut self, user_key: &UserKey, world_entity: &E) {
-        self.publishes.push((*user_key, *world_entity));
+    pub(crate) fn push_publish(&mut self, user_key: UserKey, world_entity: &E) {
+        self.publishes.push((user_key, *world_entity));
         self.empty = false;
     }
 
-    pub(crate) fn push_unpublish(&mut self, user_key: &UserKey, world_entity: &E) {
-        self.unpublishes.push((*user_key, *world_entity));
+    pub(crate) fn push_unpublish(&mut self, user_key: UserKey, world_entity: &E) {
+        self.unpublishes.push((user_key, *world_entity));
         self.empty = false;
     }
 
     #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
-    pub(crate) fn push_delegate(&mut self, user_key: &UserKey, world_entity: &E) {
-        self.delegates.push((*user_key, *world_entity));
+    pub(crate) fn push_delegate(&mut self, user_key: UserKey, world_entity: &E) {
+        self.delegates.push((user_key, *world_entity));
         self.empty = false;
     }
 
-    pub(crate) fn push_auth_grant(&mut self, user_key: &UserKey, world_entity: &E) {
-        self.auth_grants.push((*user_key, *world_entity));
+    pub(crate) fn push_auth_grant(&mut self, user_key: UserKey, world_entity: &E) {
+        self.auth_grants.push((user_key, *world_entity));
         self.empty = false;
     }
 
     /// Emit when the server rejects a client's authority request (slot already held).
     #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
-    pub(crate) fn push_auth_denied(&mut self, user_key: &UserKey, world_entity: &E) {
-        self.auth_denials.push((*user_key, *world_entity));
+    pub(crate) fn push_auth_denied(&mut self, user_key: UserKey, world_entity: &E) {
+        self.auth_denials.push((user_key, *world_entity));
         self.empty = false;
     }
 
@@ -263,7 +271,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
 
     pub(crate) fn push_insert(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         world_entity: &E,
         component_kind: &ComponentKind,
     ) {
@@ -271,20 +279,20 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
             self.inserts.insert(*component_kind, Vec::new());
         }
         let list = self.inserts.get_mut(component_kind).unwrap();
-        list.push((*user_key, *world_entity));
+        list.push((user_key, *world_entity));
         self.empty = false;
     }
 
     pub(crate) fn push_remove(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         world_entity: &E,
         component: Box<dyn Replicate>,
     ) {
         let component_kind = component.kind();
 
         let list = self.removes.entry(component_kind).or_default();
-        list.push((*user_key, *world_entity, component));
+        list.push((user_key, *world_entity, component));
         self.empty = false;
     }
 
@@ -292,18 +300,18 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     /// hold component data (e.g. when a client-owned entity is despawned by the client).
     pub(crate) fn push_remove_synthetic(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         world_entity: &E,
         component_kind: &ComponentKind,
     ) {
         let list = self.removes_synthetic.entry(*component_kind).or_default();
-        list.push((*user_key, *world_entity));
+        list.push((user_key, *world_entity));
         self.empty = false;
     }
 
     pub(crate) fn push_update(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         world_entity: &E,
         component_kind: &ComponentKind,
     ) {
@@ -311,7 +319,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
             self.updates.insert(*component_kind, Vec::new());
         }
         let list = self.updates.get_mut(component_kind).unwrap();
-        list.push((*user_key, *world_entity));
+        list.push((user_key, *world_entity));
         self.empty = false;
     }
 }
@@ -450,7 +458,7 @@ pub(crate) fn read_messages<M: Message>(
 
 pub(crate) fn push_message_impl(
     messages: &mut MessagesMap,
-    user_key: &UserKey,
+    user_key: UserKey,
     channel_kind: &ChannelKind,
     message: MessageContainer,
 ) {
@@ -460,7 +468,7 @@ pub(crate) fn push_message_impl(
     let channel_map = messages.get_mut(channel_kind).unwrap();
     let message_type_id = message.kind();
     let list = channel_map.entry(message_type_id).or_default();
-    list.push((*user_key, message));
+    list.push((user_key, message));
 }
 
 // Request Event

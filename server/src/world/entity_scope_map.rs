@@ -33,8 +33,8 @@ impl EntityScopeMap {
         }
     }
 
-    pub fn get(&self, user_key: &UserKey, entity: &GlobalEntity) -> Option<&bool> {
-        let key = (*user_key, *entity);
+    pub fn get(&self, user_key: UserKey, entity: GlobalEntity) -> Option<&bool> {
+        let key = (user_key, entity);
 
         self.main_map.get(&key)
     }
@@ -59,21 +59,21 @@ impl EntityScopeMap {
     ///
     /// Idempotent — arming an already-armed pair changes nothing, so a caller
     /// that re-runs its policy every tick cannot stack revocations.
-    pub fn set_despawn_on_next_exit(&mut self, user_key: &UserKey, entity: &GlobalEntity) {
-        self.despawn_on_next_exit.insert((*user_key, *entity));
+    pub fn set_despawn_on_next_exit(&mut self, user_key: UserKey, entity: GlobalEntity) {
+        self.despawn_on_next_exit.insert((user_key, entity));
     }
 
     /// Consumes the override for `(user_key, entity)`, returning whether it
     /// was armed. Called at a scope-exit site: firing disarms.
-    pub fn take_despawn_on_next_exit(&mut self, user_key: &UserKey, entity: &GlobalEntity) -> bool {
-        self.despawn_on_next_exit.remove(&(*user_key, *entity))
+    pub fn take_despawn_on_next_exit(&mut self, user_key: UserKey, entity: GlobalEntity) -> bool {
+        self.despawn_on_next_exit.remove(&(user_key, entity))
     }
 
     /// Disarms the override for `(user_key, entity)` without firing it.
     /// Called at a scope re-entry site — the entity is back in the user's
     /// scope, so the cycle this override belonged to is over.
-    pub fn clear_despawn_on_next_exit(&mut self, user_key: &UserKey, entity: &GlobalEntity) {
-        self.despawn_on_next_exit.remove(&(*user_key, *entity));
+    pub fn clear_despawn_on_next_exit(&mut self, user_key: UserKey, entity: GlobalEntity) {
+        self.despawn_on_next_exit.remove(&(user_key, entity));
     }
 
     /// Returns whether the override is currently armed for `(user_key, entity)`.
@@ -81,37 +81,37 @@ impl EntityScopeMap {
     /// The read surface of the override ledger; the engine itself only ever
     /// consumes (`take_`) or disarms (`clear_`), so this is used by tests.
     #[allow(dead_code)]
-    pub fn has_despawn_on_next_exit(&self, user_key: &UserKey, entity: &GlobalEntity) -> bool {
-        self.despawn_on_next_exit.contains(&(*user_key, *entity))
+    pub fn has_despawn_on_next_exit(&self, user_key: UserKey, entity: GlobalEntity) -> bool {
+        self.despawn_on_next_exit.contains(&(user_key, entity))
     }
 
-    pub fn remove_user(&mut self, user_key: &UserKey) {
-        if let Some(entities) = self.entities_of_user.get(user_key) {
+    pub fn remove_user(&mut self, user_key: UserKey) {
+        if let Some(entities) = self.entities_of_user.get(&user_key) {
             for entity in entities {
                 if let Some(users) = self.users_of_entity.get_mut(entity) {
-                    users.remove(user_key);
-                    self.main_map.remove(&(*user_key, *entity));
+                    users.remove(&user_key);
+                    self.main_map.remove(&(user_key, *entity));
                 }
             }
         }
         self.despawn_on_next_exit
-            .retain(|(user, _)| user != user_key);
+            .retain(|(user, _)| *user != user_key);
 
-        self.entities_of_user.remove(user_key);
+        self.entities_of_user.remove(&user_key);
     }
 
-    pub fn remove_entity(&mut self, entity: &GlobalEntity) {
-        self.despawn_on_next_exit.retain(|(_, ent)| ent != entity);
-        if let Some(users) = self.users_of_entity.get(entity) {
+    pub fn remove_entity(&mut self, entity: GlobalEntity) {
+        self.despawn_on_next_exit.retain(|(_, ent)| *ent != entity);
+        if let Some(users) = self.users_of_entity.get(&entity) {
             for user in users {
                 if let Some(entities) = self.entities_of_user.get_mut(user) {
-                    entities.remove(entity);
-                    self.main_map.remove(&(*user, *entity));
+                    entities.remove(&entity);
+                    self.main_map.remove(&(*user, entity));
                 }
             }
         }
 
-        self.users_of_entity.remove(entity);
+        self.users_of_entity.remove(&entity);
     }
 }
 
@@ -131,16 +131,16 @@ mod despawn_on_next_exit_tests {
         let (u, v) = (UserKey::from_u64(1), UserKey::from_u64(2));
         let (a, b) = (entity(1), entity(2));
 
-        map.set_despawn_on_next_exit(&u, &a);
-        map.set_despawn_on_next_exit(&u, &a);
+        map.set_despawn_on_next_exit(u, a);
+        map.set_despawn_on_next_exit(u, a);
 
-        assert!(map.has_despawn_on_next_exit(&u, &a));
-        assert!(!map.has_despawn_on_next_exit(&v, &a));
-        assert!(!map.has_despawn_on_next_exit(&u, &b));
+        assert!(map.has_despawn_on_next_exit(u, a));
+        assert!(!map.has_despawn_on_next_exit(v, a));
+        assert!(!map.has_despawn_on_next_exit(u, b));
 
         // Idempotent: one arming, one firing.
-        assert!(map.take_despawn_on_next_exit(&u, &a));
-        assert!(!map.take_despawn_on_next_exit(&u, &a));
+        assert!(map.take_despawn_on_next_exit(u, a));
+        assert!(!map.take_despawn_on_next_exit(u, a));
     }
 
     #[test]
@@ -149,13 +149,13 @@ mod despawn_on_next_exit_tests {
         let u = UserKey::from_u64(1);
         let a = entity(1);
 
-        map.set_despawn_on_next_exit(&u, &a);
-        map.clear_despawn_on_next_exit(&u, &a);
-        assert!(!map.has_despawn_on_next_exit(&u, &a));
-        assert!(!map.take_despawn_on_next_exit(&u, &a));
+        map.set_despawn_on_next_exit(u, a);
+        map.clear_despawn_on_next_exit(u, a);
+        assert!(!map.has_despawn_on_next_exit(u, a));
+        assert!(!map.take_despawn_on_next_exit(u, a));
 
         // Clearing an unarmed pair is a no-op, not a panic.
-        map.clear_despawn_on_next_exit(&u, &a);
+        map.clear_despawn_on_next_exit(u, a);
     }
 
     #[test]
@@ -166,13 +166,13 @@ mod despawn_on_next_exit_tests {
 
         map.insert(u, a, true);
         map.insert(v, a, true);
-        map.set_despawn_on_next_exit(&u, &a);
-        map.set_despawn_on_next_exit(&v, &a);
+        map.set_despawn_on_next_exit(u, a);
+        map.set_despawn_on_next_exit(v, a);
 
-        map.remove_user(&u);
+        map.remove_user(u);
 
-        assert!(!map.has_despawn_on_next_exit(&u, &a));
-        assert!(map.has_despawn_on_next_exit(&v, &a));
+        assert!(!map.has_despawn_on_next_exit(u, a));
+        assert!(map.has_despawn_on_next_exit(v, a));
     }
 
     #[test]
@@ -183,20 +183,20 @@ mod despawn_on_next_exit_tests {
 
         map.insert(u, a, true);
         map.insert(u, b, true);
-        map.set_despawn_on_next_exit(&u, &a);
-        map.set_despawn_on_next_exit(&u, &b);
+        map.set_despawn_on_next_exit(u, a);
+        map.set_despawn_on_next_exit(u, b);
 
-        map.remove_entity(&a);
+        map.remove_entity(a);
 
-        assert!(!map.has_despawn_on_next_exit(&u, &a));
-        assert!(map.has_despawn_on_next_exit(&u, &b));
+        assert!(!map.has_despawn_on_next_exit(u, a));
+        assert!(map.has_despawn_on_next_exit(u, b));
     }
 
     #[test]
     fn a_fresh_map_arms_nothing() {
         let mut map = EntityScopeMap::new();
         let u = UserKey::from_u64(1);
-        assert!(!map.has_despawn_on_next_exit(&u, &entity(1)));
-        assert!(!map.take_despawn_on_next_exit(&u, &entity(1)));
+        assert!(!map.has_despawn_on_next_exit(u, entity(1)));
+        assert!(!map.take_despawn_on_next_exit(u, entity(1)));
     }
 }
