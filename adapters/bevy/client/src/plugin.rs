@@ -17,7 +17,7 @@ use super::{
     client::ClientWrapper,
     events::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityAuthDeniedEvent,
-        EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, MessageEvents,
+        EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, LifecycleEvent, MessageEvents,
         PublishEntityEvent, RejectEvent, ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent,
     },
     systems::{
@@ -120,6 +120,7 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
             .add_message::<ServerTickEvent<T>>()
             .add_message::<SpawnEntityEvent<T>>()
             .add_message::<DespawnEntityEvent<T>>()
+            .add_message::<LifecycleEvent<T>>()
             .add_message::<PublishEntityEvent<T>>()
             .add_message::<UnpublishEntityEvent<T>>()
             .add_message::<EntityAuthGrantedEvent<T>>()
