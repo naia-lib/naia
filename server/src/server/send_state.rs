@@ -533,14 +533,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// to get the full must-include set.
     pub fn refresh_needed_entities(&mut self) {
         let needed = &self.shared.needed_entities;
-        needed.clear();
+        let _ = needed.clear();
 
         let handler_arc = self.shared.global_world_manager.read().diff_handler();
         let guard = handler_arc.read().expect("GlobalDiffHandler lock poisoned");
         for send_conn in self.send_user_connections.values() {
             for global_entity in send_conn.base.world_manager.pending_outbound_entities() {
                 if let Some(idx) = guard.entity_to_global_idx(global_entity) {
-                    needed.set_bit(idx.as_usize() as u32);
+                    let _ = needed.set_bit(idx.as_usize() as u32);
                 }
             }
         }
