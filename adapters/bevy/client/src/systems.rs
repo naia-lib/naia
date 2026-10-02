@@ -23,11 +23,13 @@ mod naia_events {
 mod bevy_events {
     pub use crate::events::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityAuthDeniedEvent,
-        EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, MessageEvents,
+        EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, LifecycleEvent, MessageEvents,
         PublishEntityEvent, RejectEvent, RequestEvents, ServerTickEvent, SpawnEntityEvent,
         UnpublishEntityEvent,
     };
 }
+
+use crate::events::lifecycle_messages;
 
 use crate::{
     client::ClientWrapper, component_event_registry::ComponentEventRegistry,
@@ -194,9 +196,9 @@ pub fn translate_world_events<T: Send + Sync + 'static>(world: &mut World) {
                     .unwrap();
 
                 let mut spawned_entities = Vec::new();
-                for (_, entity) in events.read::<naia_events::SpawnEntityEvent>() {
+                for (tick, entity) in events.read::<naia_events::SpawnEntityEvent>() {
                     spawned_entities.push(entity);
-                    event_writer.write(bevy_events::SpawnEntityEvent::<T>::new(entity));
+                    event_writer.write(bevy_events::SpawnEntityEvent::<T>::new(tick, entity));
                 }
                 for entity in spawned_entities {
                     // The entity can already be gone by the time we mark it
@@ -215,8 +217,19 @@ pub fn translate_world_events<T: Send + Sync + 'static>(world: &mut World) {
                 let mut event_writer = world
                     .get_resource_mut::<Messages<bevy_events::DespawnEntityEvent<T>>>()
                     .unwrap();
-                for (_, entity) in events.read::<naia_events::DespawnEntityEvent>() {
-                    event_writer.write(bevy_events::DespawnEntityEvent::<T>::new(entity));
+                for (tick, entity) in events.read::<naia_events::DespawnEntityEvent>() {
+                    event_writer.write(bevy_events::DespawnEntityEvent::<T>::new(tick, entity));
+                }
+            }
+
+            // Lifecycle ordered stream: one message per transition, in the
+            // server's application order across kinds. See LifecycleEvent.
+            if events.has_lifecycle() {
+                let mut event_writer = world
+                    .get_resource_mut::<Messages<bevy_events::LifecycleEvent<T>>>()
+                    .unwrap();
+                for message in lifecycle_messages(events.take_lifecycle()) {
+                    event_writer.write(message);
                 }
             }
 
@@ -373,5 +386,71 @@ mod tests {
             !body.contains("RejectReason::"),
             "the forwarding block must not name a reason constant",
         );
+    }
+
+    /// The spawn/despawn forwarding must bind the tick the low-level event
+    /// carries and hand it to the Bevy wrapper: `for (_, entity)` silently
+    /// drops the observer's timeline position. Sliced the same way as the
+    /// reject test above, so only the forwarding text can satisfy it.
+    #[test]
+    fn lifecycle_forwarding_passes_the_tick_verbatim() {
+        const THIS_FILE: &str = include_str!("systems.rs");
+
+        let spawn = section(
+            THIS_FILE,
+            "// Spawn Entity Event",
+            "// Despawn Entity Event",
+        );
+        assert!(
+            spawn.contains("for (tick, entity)"),
+            "the spawn loop must bind the tick, not discard it",
+        );
+        assert!(
+            spawn.contains("SpawnEntityEvent::<T>::new(tick, entity)"),
+            "the Bevy spawn event must be built with the client's tick",
+        );
+
+        let despawn = section(
+            THIS_FILE,
+            "// Despawn Entity Event",
+            "// Publish Entity Event",
+        );
+        assert!(
+            despawn.contains("for (tick, entity)"),
+            "the despawn loop must bind the tick, not discard it",
+        );
+        assert!(
+            despawn.contains("DespawnEntityEvent::<T>::new(tick, entity)"),
+            "the Bevy despawn event must be built with the client's tick",
+        );
+    }
+
+    /// The ordered lifecycle stream is drained from the same `Events` the
+    /// typed forwards read: if `take_lifecycle` is never called here, the
+    /// cross-kind order never reaches Bevy no matter what the low level
+    /// records.
+    #[test]
+    fn translate_world_events_drains_the_lifecycle_stream() {
+        const THIS_FILE: &str = include_str!("systems.rs");
+
+        assert!(
+            THIS_FILE.contains("take_lifecycle()"),
+            "translate_world_events must drain the lifecycle stream",
+        );
+        assert!(
+            THIS_FILE.contains("lifecycle_messages"),
+            "the drained stream must be translated into Bevy messages",
+        );
+    }
+
+    fn section<'a>(file: &'a str, start_marker: &str, end_marker: &str) -> &'a str {
+        let start = file
+            .find(start_marker)
+            .expect("translate_world_events must keep its forwarding blocks");
+        let body = &file[start..];
+        let end = body
+            .find(end_marker)
+            .expect("translate_world_events must keep its forwarding blocks");
+        &body[..end]
     }
 }

@@ -8,11 +8,13 @@ use bevy_ecs::{
 };
 
 use naia_client::DisconnectReason;
-use naia_client::{shared::GlobalResponseId, Events, NaiaClientError, RejectReason};
+use naia_client::{
+    shared::GlobalResponseId, Events, LifecycleKind, LifecycleOrder, NaiaClientError, RejectReason,
+};
 
 use naia_bevy_shared::{
-    Channel, ChannelKind, Message, MessageContainer, MessageKind, ReplicateBundle, Request,
-    ResponseSendKey, Tick,
+    Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, ReplicateBundle,
+    Request, ResponseSendKey, Tick,
 };
 
 use crate::Replicate;
@@ -253,13 +255,15 @@ impl<T> ServerTickEvent<T> {
 // SpawnEntityEvent
 #[derive(bevy_ecs::message::Message)]
 pub struct SpawnEntityEvent<T> {
+    pub tick: Tick,
     pub entity: Entity,
     phantom_t: PhantomData<T>,
 }
 
 impl<T> SpawnEntityEvent<T> {
-    pub fn new(entity: Entity) -> Self {
+    pub fn new(tick: Tick, entity: Entity) -> Self {
         Self {
+            tick,
             entity,
             phantom_t: PhantomData,
         }
@@ -269,13 +273,15 @@ impl<T> SpawnEntityEvent<T> {
 // DespawnEntityEvent
 #[derive(bevy_ecs::message::Message)]
 pub struct DespawnEntityEvent<T> {
+    pub tick: Tick,
     pub entity: Entity,
     phantom_t: PhantomData<T>,
 }
 
 impl<T> DespawnEntityEvent<T> {
-    pub fn new(entity: Entity) -> Self {
+    pub fn new(tick: Tick, entity: Entity) -> Self {
         Self {
+            tick,
             entity,
             phantom_t: PhantomData,
         }
@@ -284,14 +290,16 @@ impl<T> DespawnEntityEvent<T> {
 
 #[derive(bevy_ecs::message::Message)]
 pub struct InsertComponentEvent<T: Send + Sync + 'static, C: Replicate> {
+    pub tick: Tick,
     pub entity: Entity,
     phantom_t: PhantomData<T>,
     phantom_c: PhantomData<C>,
 }
 
 impl<T: Send + Sync + 'static, C: Replicate> InsertComponentEvent<T, C> {
-    pub fn new(entity: Entity) -> Self {
+    pub fn new(tick: Tick, entity: Entity) -> Self {
         Self {
+            tick,
             entity,
             phantom_t: PhantomData,
             phantom_c: PhantomData,
@@ -337,19 +345,74 @@ impl<T: Send + Sync + 'static, C: Replicate> UpdateComponentEvent<T, C> {
 
 #[derive(bevy_ecs::message::Message)]
 pub struct RemoveComponentEvent<T: Send + Sync + 'static, C: Replicate> {
+    pub tick: Tick,
     pub entity: Entity,
     phantom_t: PhantomData<T>,
     pub component: C,
 }
 
 impl<T: Send + Sync + 'static, C: Replicate> RemoveComponentEvent<T, C> {
-    pub fn new(entity: Entity, component: C) -> Self {
+    pub fn new(tick: Tick, entity: Entity, component: C) -> Self {
         Self {
+            tick,
             entity,
             phantom_t: PhantomData,
             component,
         }
     }
+}
+
+// LifecycleEvent
+/// One entry of the tick-tagged, cross-kind lifecycle stream.
+///
+/// GUARANTEE: messages in this stream arrive in the server's application
+/// order — the order the client applied the transitions. Entries are
+/// ordered by arrival, so each tick's spawn/insert/remove/despawn chain
+/// reads in send order, and a later tick sorts after an earlier one. A
+/// consumer that needs the order ACROSS kinds (an insert followed by a
+/// remove in the same frame) reads this stream; the per-kind wrappers
+/// above group by kind and cannot express that interleave.
+///
+/// `component_kind` is `Some` for inserts and removes, `None` for spawns
+/// and despawns. Payloads (e.g. the removed component value) stay on the
+/// typed wrappers; this stream carries order, tick, and identity.
+#[derive(bevy_ecs::message::Message)]
+pub struct LifecycleEvent<T> {
+    pub tick: Tick,
+    pub kind: LifecycleKind,
+    pub entity: Entity,
+    pub component_kind: Option<ComponentKind>,
+    phantom_t: PhantomData<T>,
+}
+
+impl<T> LifecycleEvent<T> {
+    pub fn new(
+        tick: Tick,
+        kind: LifecycleKind,
+        entity: Entity,
+        component_kind: Option<ComponentKind>,
+    ) -> Self {
+        Self {
+            tick,
+            kind,
+            entity,
+            component_kind,
+            phantom_t: PhantomData,
+        }
+    }
+}
+
+/// Translates one drained low-level lifecycle stream into Bevy messages,
+/// preserving the server's application order entry by entry.
+pub(crate) fn lifecycle_messages<T>(
+    entries: Vec<LifecycleOrder<Entity>>,
+) -> Vec<LifecycleEvent<T>> {
+    entries
+        .into_iter()
+        .map(|entry| {
+            LifecycleEvent::<T>::new(entry.tick, entry.kind, entry.entity, entry.component_kind)
+        })
+        .collect()
 }
 
 // =====================================================================
@@ -528,6 +591,128 @@ mod tests {
             mismatch.reason, auth.reason,
             "the two refusal kinds must stay distinguishable at the Bevy boundary",
         );
+    }
+
+    /// The spawn wrapper must carry the tick it applies to: the observer
+    /// cannot place a spawn on the rollback timeline without it.
+    #[test]
+    fn spawn_entity_event_constructor_carries_tick() {
+        let entity = Entity::from_bits(7);
+        let event = SpawnEntityEvent::<()>::new(20, entity);
+        assert_eq!(event.tick, 20);
+        assert_eq!(event.entity, entity);
+    }
+
+    /// Same for despawns: a tickless despawn cannot retire the entity's
+    /// confirmed history.
+    #[test]
+    fn despawn_entity_event_constructor_carries_tick() {
+        let entity = Entity::from_bits(7);
+        let event = DespawnEntityEvent::<()>::new(21, entity);
+        assert_eq!(event.tick, 21);
+        assert_eq!(event.entity, entity);
+    }
+
+    /// The component wrappers are generic over `C: Replicate`, which has no
+    /// test impl in this crate, so the tick is pinned on the source instead:
+    /// each struct must declare it and take it in its constructor. A
+    /// wrapper that silently dropped the tick would compile downstream and
+    /// misorder the observer, so the text is the contract.
+    #[test]
+    fn component_event_wrappers_declare_tick() {
+        const THIS_FILE: &str = include_str!("events.rs");
+
+        let insert = section(
+            THIS_FILE,
+            "pub struct InsertComponentEvent",
+            "pub struct InsertBundleEvent",
+        );
+        assert!(
+            insert.contains("pub tick: Tick,"),
+            "InsertComponentEvent must carry the tick",
+        );
+        assert!(
+            insert.contains("pub fn new(tick: Tick, entity: Entity)"),
+            "InsertComponentEvent::new must take the tick",
+        );
+
+        let remove = section(
+            THIS_FILE,
+            "pub struct RemoveComponentEvent",
+            "// Replicated Resource Events",
+        );
+        assert!(
+            remove.contains("pub tick: Tick,"),
+            "RemoveComponentEvent must carry the tick",
+        );
+    }
+
+    /// The ordered lifecycle stream must preserve the server's application
+    /// order across kinds: spawn, insert, remove, despawn inside one tick
+    /// come out in that order, and a later tick sorts after.
+    #[test]
+    fn lifecycle_messages_preserve_server_order_across_kinds() {
+        let entity = Entity::from_bits(7);
+        let other = Entity::from_bits(9);
+        let entries = vec![
+            LifecycleOrder {
+                tick: 20,
+                kind: LifecycleKind::Spawn,
+                entity,
+                component_kind: None,
+            },
+            LifecycleOrder {
+                tick: 20,
+                kind: LifecycleKind::Insert,
+                entity,
+                component_kind: None,
+            },
+            LifecycleOrder {
+                tick: 20,
+                kind: LifecycleKind::Remove,
+                entity,
+                component_kind: None,
+            },
+            LifecycleOrder {
+                tick: 21,
+                kind: LifecycleKind::Despawn,
+                entity,
+                component_kind: None,
+            },
+            LifecycleOrder {
+                tick: 22,
+                kind: LifecycleKind::Spawn,
+                entity: other,
+                component_kind: None,
+            },
+        ];
+
+        let messages = lifecycle_messages::<()>(entries);
+
+        assert_eq!(
+            messages
+                .iter()
+                .map(|message| (message.tick, message.kind, message.entity))
+                .collect::<Vec<_>>(),
+            vec![
+                (20, LifecycleKind::Spawn, entity),
+                (20, LifecycleKind::Insert, entity),
+                (20, LifecycleKind::Remove, entity),
+                (21, LifecycleKind::Despawn, entity),
+                (22, LifecycleKind::Spawn, other),
+            ],
+        );
+    }
+
+    fn section<'a>(file: &'a str, start_marker: &str, end_marker: &str) -> &'a str {
+        let start = file
+            .find(start_marker)
+            .expect("lifecycle wrappers must keep their shape");
+        let body = &file[start..];
+        let end = body
+            .find(end_marker)
+            .expect("lifecycle wrappers must keep their shape");
+        &body[..end]
     }
 
     /// A downstream Bevy consumer matches both refusal kinds through the

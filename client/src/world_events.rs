@@ -12,6 +12,43 @@ use crate::NaiaClientError;
 
 type RemovesMap<E> = HashMap<ComponentKind, Vec<(Tick, E, Box<dyn Replicate>)>>;
 
+/// One entry of the cross-kind lifecycle stream: the tick the entry applies
+/// to, what happened, and which entity it happened to.
+///
+/// The per-kind stores (`spawns`, `despawns`, `inserts`, `removes`) group by
+/// kind and cannot express the interleave of a spawn, insert, remove and
+/// despawn that arrive together. This stream records every lifecycle push in
+/// application order, so a consumer can recover the server's order across
+/// kinds: entries appear in the order the client applied them — the
+/// server's message order, so each tick's entries arrive grouped in send
+/// order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LifecycleKind {
+    /// The server spawned a replicated entity on this client.
+    Spawn,
+    /// The server despawned a previously replicated entity.
+    Despawn,
+    /// The server inserted a component on a replicated entity.
+    Insert,
+    /// The server removed a component from a replicated entity.
+    Remove,
+}
+
+/// One ordered lifecycle entry: the tick it applies to, the kind of
+/// lifecycle transition, the entity, and — for inserts and removes — the
+/// component kind. Spawn and despawn entries carry `None`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LifecycleOrder<E> {
+    /// The tick this transition applies to.
+    pub tick: Tick,
+    /// What happened: spawn, despawn, insert, or remove.
+    pub kind: LifecycleKind,
+    /// The entity the transition happened to.
+    pub entity: E,
+    /// The component kind for inserts and removes; `None` otherwise.
+    pub component_kind: Option<ComponentKind>,
+}
+
 /// All events produced in one frame: connections, entity lifecycle, component changes, messages, and errors.
 pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
     connections: Vec<SocketAddr>,
@@ -30,6 +67,7 @@ pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
     inserts: HashMap<ComponentKind, Vec<(Tick, E)>>,
     removes: RemovesMap<E>,
     updates: HashMap<ComponentKind, Vec<(Tick, E)>>,
+    lifecycle: Vec<LifecycleOrder<E>>,
     empty: bool,
 }
 
@@ -58,6 +96,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
             inserts: HashMap::new(),
             removes: HashMap::new(),
             updates: HashMap::new(),
+            lifecycle: Vec::new(),
             empty: true,
         }
     }
@@ -143,6 +182,20 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         }
     }
 
+    // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    /// Takes the cross-kind lifecycle stream in application order; each
+    /// entry carries the tick it applies to. Prefer the typed readers in
+    /// application code; reach for this when the order ACROSS kinds
+    /// matters (e.g. an insert followed by a remove in the same frame).
+    pub fn take_lifecycle(&mut self) -> Vec<LifecycleOrder<E>> {
+        mem::take(&mut self.lifecycle)
+    }
+
+    /// Returns `true` if any lifecycle entries are queued.
+    pub fn has_lifecycle(&self) -> bool {
+        !self.lifecycle.is_empty()
+    }
+
     // Crate-public
 
     pub(crate) fn push_connection(&mut self, socket_addr: &SocketAddr) {
@@ -209,11 +262,23 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
 
     pub(crate) fn push_spawn(&mut self, tick: Tick, world_entity: E) {
         self.spawns.push((tick, world_entity));
+        self.lifecycle.push(LifecycleOrder {
+            tick,
+            kind: LifecycleKind::Spawn,
+            entity: world_entity,
+            component_kind: None,
+        });
         self.empty = false;
     }
 
     pub(crate) fn push_despawn(&mut self, tick: Tick, world_entity: E) {
         self.despawns.push((tick, world_entity));
+        self.lifecycle.push(LifecycleOrder {
+            tick,
+            kind: LifecycleKind::Despawn,
+            entity: world_entity,
+            component_kind: None,
+        });
         self.empty = false;
     }
 
@@ -253,6 +318,12 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
             .or_insert_with(|| Vec::new());
         let list = self.inserts.get_mut(&component_kind).unwrap();
         list.push((tick, world_entity));
+        self.lifecycle.push(LifecycleOrder {
+            tick,
+            kind: LifecycleKind::Insert,
+            entity: world_entity,
+            component_kind: Some(component_kind),
+        });
         self.empty = false;
     }
 
@@ -278,6 +349,12 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         self.removes.entry(component_kind).or_default();
         let list = self.removes.get_mut(&component_kind).unwrap();
         list.push((tick, world_entity, component));
+        self.lifecycle.push(LifecycleOrder {
+            tick,
+            kind: LifecycleKind::Remove,
+            entity: world_entity,
+            component_kind: Some(component_kind),
+        });
         self.empty = false;
     }
 
@@ -298,6 +375,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         self.inserts.clear();
         self.removes.clear();
         self.updates.clear();
+        self.lifecycle.clear();
         self.empty = true;
     }
 }
@@ -652,5 +730,77 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> WorldEvent<E> for RemoveCo
     fn has(events: &Events<E>) -> bool {
         let component_kind: ComponentKind = ComponentKind::of::<C>();
         events.removes.contains_key(&component_kind)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use naia_shared::{Property, Replicate};
+
+    #[derive(Replicate)]
+    struct Probe {
+        value: Property<u8>,
+    }
+
+    impl Probe {
+        fn boxed(value: u8) -> Box<dyn Replicate> {
+            Box::new(Self {
+                value: Property::new_local(value),
+            })
+        }
+    }
+
+    /// The lifecycle stream must preserve the server's application order
+    /// ACROSS kinds: a spawn, insert, remove and despawn that arrive in one
+    /// tick have to come back out in that order, not grouped by kind. The
+    /// per-kind stores cannot express this interleave, so the stream is the
+    /// only record of it.
+    #[test]
+    fn lifecycle_stream_preserves_cross_kind_order_within_one_tick() {
+        let mut events = Events::<u64>::new();
+        events.push_spawn(20, 7);
+        events.push_insert(20, 7, ComponentKind::of::<Probe>());
+        events.push_remove(20, 7, Probe::boxed(9));
+        events.push_despawn(21, 7);
+
+        let stream = events.take_lifecycle();
+
+        assert_eq!(
+            stream
+                .iter()
+                .map(|entry| (entry.tick, entry.kind, entry.entity))
+                .collect::<Vec<_>>(),
+            vec![
+                (20, LifecycleKind::Spawn, 7),
+                (20, LifecycleKind::Insert, 7),
+                (20, LifecycleKind::Remove, 7),
+                (21, LifecycleKind::Despawn, 7),
+            ],
+        );
+    }
+
+    /// Order holds across ticks too: a later tick's spawn sorts after an
+    /// earlier tick's full chain, in arrival order throughout.
+    #[test]
+    fn lifecycle_stream_preserves_order_across_ticks() {
+        let mut events = Events::<u64>::new();
+        events.push_spawn(20, 7);
+        events.push_despawn(21, 7);
+        events.push_spawn(22, 8);
+
+        let stream = events.take_lifecycle();
+
+        assert_eq!(
+            stream
+                .iter()
+                .map(|entry| (entry.tick, entry.kind, entry.entity))
+                .collect::<Vec<_>>(),
+            vec![
+                (20, LifecycleKind::Spawn, 7),
+                (21, LifecycleKind::Despawn, 7),
+                (22, LifecycleKind::Spawn, 8),
+            ],
+        );
     }
 }
