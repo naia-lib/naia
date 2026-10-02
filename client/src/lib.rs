@@ -158,6 +158,7 @@ pub use world::{
 pub use world_events::{
     ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityAuthDeniedEvent,
     EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, Events, InsertComponentEvent,
-    MessageEvent, PublishEntityEvent, RejectEvent, RemoveComponentEvent, RequestEvent,
-    SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent, WorldEvent,
+    LifecycleKind, LifecycleOrder, MessageEvent, PublishEntityEvent, RejectEvent,
+    RemoveComponentEvent, RequestEvent, SpawnEntityEvent, UnpublishEntityEvent,
+    UpdateComponentEvent, WorldEvent,
 };

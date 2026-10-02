@@ -53,19 +53,17 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
             self.bundle_registry.pre_process();
 
             for (kind, ticked_entities) in inserts {
-                // The bevy event types are tickless; strip the naia app-event
-                // ticks at this boundary (tick-forwarding is a follow-up).
-                let entities: Vec<Entity> = ticked_entities
-                    .into_iter()
-                    .map(|(_, entity)| entity)
-                    .collect();
+                // Bundle events stay tickless (kind + entity only); the
+                // component events below carry each insert's tick.
+                let entities: Vec<Entity> =
+                    ticked_entities.iter().map(|(_, entity)| *entity).collect();
                 // trigger bundle events
                 self.bundle_registry
                     .process_inserts(world, &kind, &entities);
 
                 // trigger component events
                 if let Some(component_handler) = self.component_handlers.get_mut(&kind) {
-                    component_handler.handle_inserts(world, entities);
+                    component_handler.handle_inserts(world, ticked_entities);
                 } else {
                     // No event-based handler registered for this kind. This is
                     // routine, NOT an error: a component can be replicated and
@@ -99,22 +97,20 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
                     trace!("No remove event handler for ComponentKind: {:?}", kind);
                     continue;
                 };
-                // The bevy event types are tickless; strip the naia app-event
-                // ticks at this boundary (tick-forwarding is a follow-up).
-                let entities: Vec<(Entity, Box<dyn Replicate>)> = ticked_entities
-                    .into_iter()
-                    .map(|(_, entity, component)| (entity, component))
-                    .collect();
-                handler.handle_removes(world, entities);
+                handler.handle_removes(world, ticked_entities);
             }
         }
     }
 }
 
 trait ComponentEventHandler: Send + Sync {
-    fn handle_inserts(&mut self, world: &mut World, entities: Vec<Entity>);
+    fn handle_inserts(&mut self, world: &mut World, entities: Vec<(Tick, Entity)>);
     fn handle_updates(&mut self, world: &mut World, entities: Vec<(Tick, Entity)>);
-    fn handle_removes(&mut self, world: &mut World, entities: Vec<(Entity, Box<dyn Replicate>)>);
+    fn handle_removes(
+        &mut self,
+        world: &mut World,
+        entities: Vec<(Tick, Entity, Box<dyn Replicate>)>,
+    );
 }
 
 struct ComponentEventHandlerImpl<T: Send + Sync + 'static, R: Replicate> {
@@ -138,8 +134,8 @@ impl<T: Send + Sync + 'static, R: Replicate> ComponentEventHandlerImpl<T, R> {
 impl<T: Send + Sync + 'static, R: Replicate> ComponentEventHandler
     for ComponentEventHandlerImpl<T, R>
 {
-    fn handle_inserts(&mut self, world: &mut World, entities: Vec<Entity>) {
-        for entity in entities {
+    fn handle_inserts(&mut self, world: &mut World, entities: Vec<(Tick, Entity)>) {
+        for (tick, entity) in entities {
             // D13 resource translation: if user registered
             // InsertResourceEvent<T, R> via add_resource_events, route
             // to that stream instead of the component-event stream.
@@ -152,7 +148,7 @@ impl<T: Send + Sync + 'static, R: Replicate> ComponentEventHandler
             }
             world
                 .resource_mut::<Messages<InsertComponentEvent<T, R>>>()
-                .write(InsertComponentEvent::<T, R>::new(entity));
+                .write(InsertComponentEvent::<T, R>::new(tick, entity));
         }
     }
 
@@ -170,8 +166,12 @@ impl<T: Send + Sync + 'static, R: Replicate> ComponentEventHandler
         }
     }
 
-    fn handle_removes(&mut self, world: &mut World, entities: Vec<(Entity, Box<dyn Replicate>)>) {
-        for (entity, boxed_component) in entities {
+    fn handle_removes(
+        &mut self,
+        world: &mut World,
+        entities: Vec<(Tick, Entity, Box<dyn Replicate>)>,
+    ) {
+        for (tick, entity, boxed_component) in entities {
             let boxed_any = boxed_component.copy_to_box().to_boxed_any();
             let component: R = Box::<dyn Any + 'static>::downcast::<R>(boxed_any)
                 .ok()
@@ -185,7 +185,7 @@ impl<T: Send + Sync + 'static, R: Replicate> ComponentEventHandler
             }
             world
                 .resource_mut::<Messages<RemoveComponentEvent<T, R>>>()
-                .write(RemoveComponentEvent::<T, R>::new(entity, component));
+                .write(RemoveComponentEvent::<T, R>::new(tick, entity, component));
         }
     }
 }
