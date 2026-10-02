@@ -12,6 +12,7 @@ pub struct TimeQueue<T: Eq + PartialEq> {
 
 #[allow(clippy::new_without_default)]
 impl<T: Eq + PartialEq> TimeQueue<T> {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             queue: BinaryHeap::default(),
@@ -21,7 +22,11 @@ impl<T: Eq + PartialEq> TimeQueue<T> {
 }
 
 impl<T: Eq + PartialEq> TimeQueue<T> {
-    /// Adds an item to the queue marked by time
+    /// Adds an item to the queue marked by time.
+    ///
+    /// # Panics
+    ///
+    /// Panics once the insertion sequence exhausts `u64` (after 2^64 inserts).
     pub fn add_item(&mut self, instant: Instant, item: T) {
         let sequence = self.next_sequence;
         self.next_sequence = self
@@ -36,6 +41,7 @@ impl<T: Eq + PartialEq> TimeQueue<T> {
     }
 
     /// Returns whether or not there is an item whose time has elapsed on the queue
+    #[must_use]
     pub fn has_item(&self, now: &Instant) -> bool {
         if self.queue.is_empty() {
             return false;
@@ -51,6 +57,7 @@ impl<T: Eq + PartialEq> TimeQueue<T> {
     }
 
     /// Pops an item from the queue if it's time has elapsed
+    #[must_use]
     pub fn pop_item(&mut self, now: &Instant) -> Option<T> {
         if self.has_item(now) {
             if let Some(container) = self.queue.pop() {
@@ -61,16 +68,19 @@ impl<T: Eq + PartialEq> TimeQueue<T> {
     }
 
     /// Peeks at the top level item container on the queue
+    #[must_use]
     pub fn peek_entry(&self) -> Option<&ItemContainer<T>> {
         self.queue.peek()
     }
 
     /// Returns the length of the underlying queue
+    #[must_use]
     pub fn len(&self) -> usize {
         self.queue.len()
     }
 
     /// Checks if the underlying queue is empty
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.queue.is_empty()
     }

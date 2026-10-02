@@ -47,11 +47,10 @@ impl Url {
     /// Returns `original.len()` if there is no path/query/fragment.
     fn authority_end(&self) -> usize {
         let s = self.original.as_str();
-        let after_scheme = s.find("//").map(|i| i + 2).unwrap_or(0);
+        let after_scheme = s.find("//").map_or(0, |i| i + 2);
         s[after_scheme..]
             .find(['/', '?', '#'])
-            .map(|i| after_scheme + i)
-            .unwrap_or(s.len())
+            .map_or(s.len(), |i| after_scheme + i)
     }
 
     pub fn path_segments(&self) -> Option<impl Iterator<Item = &str>> {
@@ -69,7 +68,7 @@ impl Url {
         let s = self.original.as_str();
         s.find('?').and_then(|i| {
             let q = &s[i + 1..];
-            let q = q.find('#').map(|j| &q[..j]).unwrap_or(q);
+            let q = q.find('#').map_or(q, |j| &q[..j]);
             if q.is_empty() {
                 None
             } else {
@@ -92,13 +91,13 @@ impl Url {
 
     pub fn scheme(&self) -> &str {
         let s = self.original.as_str();
-        s.find("://").map(|i| &s[..i]).unwrap_or("")
+        s.find("://").map_or("", |i| &s[..i])
     }
 
     /// Host string (without port), or empty string if not parseable.
     pub fn host_str(&self) -> &str {
         let s = self.original.as_str();
-        let after_scheme = s.find("//").map(|i| i + 2).unwrap_or(0);
+        let after_scheme = s.find("//").map_or(0, |i| i + 2);
         let authority = &s[after_scheme..self.authority_end()];
         // Strip port: find last ':' that is after any ']' (IPv6 bracket close).
         let bracket_end = authority.rfind(']').unwrap_or(0);
@@ -112,7 +111,7 @@ impl Url {
     /// Explicit port from the URL, or `None` if not present.
     pub fn port(&self) -> Option<u16> {
         let s = self.original.as_str();
-        let after_scheme = s.find("//").map(|i| i + 2).unwrap_or(0);
+        let after_scheme = s.find("//").map_or(0, |i| i + 2);
         let authority = &s[after_scheme..self.authority_end()];
         let bracket_end = authority.rfind(']').unwrap_or(0);
         authority[bracket_end..]
@@ -121,28 +120,44 @@ impl Url {
     }
 }
 
+/// Parses and validates a server base URL (`ws://host:port` / `http://host:port`).
+///
+/// # Panics
+///
+/// Panics if the URL carries more than one path segment, a query string, or a
+/// fragment — the signaling base must be a bare authority (plus `/`).
+#[must_use]
 pub fn parse_server_url(server_url_str: &str) -> Url {
     let url = Url {
         original: server_url_str.to_string(),
     };
 
     if let Some(path_segments) = url.path_segments() {
-        if path_segments.count() > 1 {
-            panic!("server_url_str must not include a path (got: {server_url_str:?})");
-        }
+        assert!(
+            path_segments.count() <= 1,
+            "server_url_str must not include a path (got: {server_url_str:?})"
+        );
     }
-    if url.query().is_some() {
-        panic!("server_url_str must not include a query string (got: {server_url_str:?})");
-    }
-    if url.fragment().is_some() {
-        panic!("server_url_str must not include a fragment (got: {server_url_str:?})");
-    }
+    assert!(
+        url.query().is_none(),
+        "server_url_str must not include a query string (got: {server_url_str:?})"
+    );
+    assert!(
+        url.fragment().is_none(),
+        "server_url_str must not include a fragment (got: {server_url_str:?})"
+    );
 
     url
 }
 
 cfg_if! {
     if #[cfg(not(target_arch = "wasm32"))] {
+        /// Resolves a server URL to a socket address via native DNS.
+        ///
+        /// # Panics
+        ///
+        /// Panics if the host does not resolve or resolves to no address.
+        #[must_use]
         pub fn url_to_socket_addr(url: &Url) -> SocketAddr {
             use std::net::ToSocketAddrs;
 
@@ -153,16 +168,17 @@ cfg_if! {
                 _ => 0,
             });
 
-            let addrs: Vec<SocketAddr> = format!("{}:{}", host, port)
+            let addrs: Vec<SocketAddr> = format!("{host}:{port}")
                 .to_socket_addrs()
                 .unwrap_or_else(|err| {
                     panic!("could not resolve {host}:{port} to a SocketAddr: {err:?}");
                 })
                 .collect();
 
-            if addrs.is_empty() {
-                panic!("{host}:{port} resolved to no SocketAddr");
-            }
+            assert!(
+                !addrs.is_empty(),
+                "{host}:{port} resolved to no SocketAddr"
+            );
             addrs[0]
         }
     } else {

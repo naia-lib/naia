@@ -23,6 +23,7 @@ pub struct SocketConfig {
 }
 
 impl SocketConfig {
+<<<<<<< HEAD
     /// Creates a new [`SocketConfig`]
     #[must_use]
     pub fn new(
