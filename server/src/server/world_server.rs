@@ -4683,7 +4683,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 .global_world_manager
                 .read()
                 .entity_owner(global_entity),
-            Some(EntityOwner::Client(_)) | Some(EntityOwner::ClientWaiting(_))
+            Some(EntityOwner::Client(_) | EntityOwner::ClientWaiting(_))
         ) {
             return;
         }

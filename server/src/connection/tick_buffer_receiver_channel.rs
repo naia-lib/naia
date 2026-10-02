@@ -177,10 +177,9 @@ impl IncomingMessages {
                             e.insert(new_message);
 
                             return true;
-                        } else {
-                            // TODO: log hash collisions?
-                            return false;
                         }
+                        // TODO: log hash collisions?
+                        return false;
                     } else if sequence_greater_than(*message_tick, *existing_tick) {
                         // incoming client tick is larger (more in the future) than found tick
                         insert = true;
