@@ -14,7 +14,7 @@ use crate::{messages::channels::senders::channel_sender::ChannelSender, types::M
 /// (re)transmission — never mutating it incrementally — so the view is always in
 /// sequence order by construction, with no sort and no wrap-around hazard. A
 /// message's `last_sent` timestamp is stamped only when it is *actually written*
-/// into a packet (see [`mark_written`](ReliableSender::mark_written)), not when
+/// into a packet (see `mark_written`), not when
 /// it is staged — so a message that doesn't fit the packet (bandwidth/size
 /// truncation) stays "due" and is re-collected next tick instead of having its
 /// resend timer silently reset.

@@ -39,7 +39,7 @@ enum UserMutTarget<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
 
 /// Scoped read-only handle for a connected user.
 ///
-/// Obtained from [`Server::user`]. Lets you inspect the user's network
+/// Obtained from [`crate::Server::user`]. Lets you inspect the user's network
 /// address and room membership without borrowing the server mutably.
 pub struct UserRef<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
     server: UserRefTarget<'s, E>,
@@ -96,7 +96,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserRef<'s, E> {
 
 /// Scoped mutable handle for a connected user.
 ///
-/// Obtained from [`Server::user_mut`]. Lets you move the user between rooms,
+/// Obtained from [`crate::Server::user_mut`]. Lets you move the user between rooms,
 /// read their network address, and queue a disconnect.
 pub struct UserMut<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
     server: UserMutTarget<'s, E>,

@@ -55,7 +55,7 @@ pub struct ServerEntityConverter<E: Copy + Eq + Hash + Send + Sync + 'static> {
 
 impl<E: Copy + Eq + Hash + Send + Sync + 'static> ServerEntityConverter<E> {
     /// Wrap an arbitrary `Arc`-backed converter. The typical
-    /// construction site is [`crate::pipeline_actors::CoordHandle::sim_converter`],
+    /// construction site is `CoordHandle::sim_converter`,
     /// which wraps the shared `Arc<ServerShared<E>>`.
     pub fn from_arc(inner: Arc<dyn EntityAndGlobalEntityConverter<E> + Send + Sync>) -> Self {
         Self { inner }

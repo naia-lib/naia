@@ -207,7 +207,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// Borrow the coordination handle.
     ///
     /// Panics if `coord` is temporarily absent (only during [`Self::tick`] or
-    /// [`Self::with_monolithic_world_server`] — both restore it before returning).
+    /// `with_monolithic_world_server` — both restore it before returning).
     pub fn coord(&self) -> &CoordHandle<E> {
         self.coord
             .as_ref()
@@ -379,7 +379,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// Creates the internal snapshot lag channel (so `send` publishes the frozen
     /// `(snapshot, plan)` job to the send worker — the consumer never authors a
     /// snapshot, §2f), wires the recv worker's output channel into
-    /// [`Self::recv_subscriber`], and spawns the threads around this pipeline's own
+    /// `recv_subscriber`, and spawns the threads around this pipeline's own
     /// slot `Arc`s. `timing` carries the optional per-stage instrumentation hooks
     /// (zero-overhead `None`s for non-bench builds).
     ///
@@ -1543,7 +1543,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .entity_is_delegated(&global_entity)
     }
 
-    /// A [`SendStateView`] backed by this server's shared state (coord-resident
+    /// A [`crate::pipeline_actors::SendStateView`] backed by this server's shared state (coord-resident
     /// `shared` Arc — byte-identical to the resident `from_shared`).
     pub fn send_state_view(&self) -> crate::pipeline_actors::SendStateView<E> {
         crate::pipeline_actors::SendStateView::from_shared(Arc::clone(&self.coord().shared))
@@ -1991,7 +1991,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// adapter) to fan out. Core mutates only `world` (the single entity world,
     /// §2h H3); it routes no events itself.
     ///
-    /// Shape selected by [`Self::recv_subscriber`]:
+    /// Shape selected by `recv_subscriber`:
     /// - `None` (oracle): one synchronous `recv.receive()`.
     /// - `Some` (worker production): drain the recv worker's output channel FIFO,
     ///   then append one synchronous `recv.receive()` straggler-catch. This is the
@@ -2076,7 +2076,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// they are byte-identical (G9pre §2i, empirically incl. the real assembler —
     /// `g9pre_core_assembler_*`).
     ///
-    /// Delegates the load-bearing ordering to [`Self::drain_and_send`] (the
+    /// Delegates the load-bearing ordering to `drain_and_send` (the
     /// D0–D9 drain-phase contract). `world` is the consumer's **live** entity
     /// world; the trimmed `SnapshotWorld` is assembled from it internally — the
     /// consumer never authors a snapshot.

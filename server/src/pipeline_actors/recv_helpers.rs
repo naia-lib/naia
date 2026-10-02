@@ -42,8 +42,8 @@ use crate::{
 /// Connection-lifecycle event surfaced by [`drain_lifecycle`] from a
 /// [`ReceiveOutput`]'s [`crate::WorldEvents`].
 ///
-/// Variant coverage mirrors the three [`crate::WorldEvent`] impls that
-/// [`WorldEvents`] exposes for connection lifecycle: [`ConnectEvent`],
+/// Variant coverage mirrors the three `WorldEvent` impls that
+/// [`crate::WorldEvents`] exposes for connection lifecycle: [`crate::ConnectEvent`],
 /// [`DisconnectEvent`], [`ErrorEvent`].
 #[derive(Debug)]
 pub enum RecvLifecycleEvent {
@@ -105,7 +105,7 @@ where
 /// a single [`TickBufferMessages`] accumulator.
 ///
 /// Iterates `recv_handle.state.recv_user_connections` once, calling
-/// [`crate::connection::RecvConnection::tick_buffer_messages`] per
+/// `RecvConnection::tick_buffer_messages` per
 /// connection. The result is ready to feed into a
 /// [`crate::pipeline_actors::TickMessageRouter::route`] call.
 pub fn drain_tick_buffer<E>(recv_handle: &mut RecvHandle<E>, tick: Tick) -> TickBufferMessages

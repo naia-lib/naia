@@ -578,7 +578,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         self.send_message_container_to_address(address, &ChannelKind::of::<C>(), container)
     }
 
-    /// Channel-erased sibling of [`send_message_to_address`]. Cyberlith's
+    /// Channel-erased sibling of [`Self::send_message_to_address`]. Cyberlith's
     /// generic send paths can call this when they already hold a
     /// `ChannelKind` + `MessageContainer` pair.
     pub fn send_message_container_to_address(
@@ -1676,7 +1676,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// `UserEnteredRoom`, `UserLeftRoom`, `ScopeToggled`) from
     /// `scope_change_queue` and fan them out to user connections.
     ///
-    /// Companion to [`apply_pending_send_preamble`] (which only drains
+    /// Companion to [`Self::apply_pending_send_preamble`] (which only drains
     /// `RoomChange` variants). Together the two methods restore the full
     /// body of the legacy `InternalWorldServer::run_send_preamble` →
     /// `update_entity_scopes` → `drain_scope_change_queue` chain for the
@@ -1693,8 +1693,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// pipeline-mode callers pass the same `SnapshotWorld<E>` they're
     /// about to feed `send_all_packets`.
     ///
-    /// Call between [`apply_pending_send_preamble`] and
-    /// [`send_all_packets`] (or omit; `send_all_packets` auto-calls when
+    /// Call between [`Self::apply_pending_send_preamble`] and
+    /// [`Self::send_all_packets`] (or omit; `send_all_packets` auto-calls when
     /// the per-tick flag isn't set — see backward-compat note on
     /// `scope_changes_done_this_tick`).
     ///

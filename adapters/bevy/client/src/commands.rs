@@ -206,12 +206,11 @@ pub trait ClientCommandsExt {
     ///
     /// The server must have configured the resource with
     /// `ReplicationConfig::delegated()` via
-    /// [`ServerCommandsExt::configure_replicated_resource`]. The server's
+    /// `ServerCommandsExt::configure_replicated_resource`. The server's
     /// response (Granted or Denied) arrives asynchronously as part of the
     /// normal authority-channel flow. Once `Granted`, mutations via
     /// `ResMut<R>` propagate back to the server.
     ///
-    /// [`ServerCommandsExt::configure_replicated_resource`]: naia_bevy_server::ServerCommandsExt::configure_replicated_resource
     fn request_resource_authority<T, R>(&mut self)
     where
         T: Send + Sync + 'static,

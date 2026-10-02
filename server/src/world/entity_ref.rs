@@ -18,7 +18,7 @@ pub(crate) enum EntityRefTarget<'s, E: Copy + Eq + Hash + Send + Sync + 'static>
 
 /// Scoped read-only handle for a server entity.
 ///
-/// Obtained from [`Server::entity`] / [`crate::WorldServer::entity`]. Provides
+/// Obtained from [`crate::Server::entity`] / [`crate::WorldServer::entity`]. Provides
 /// read access to components, replication config, authority status, and
 /// ownership without borrowing the server mutably.
 pub struct EntityRef<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldRefType<E>> {

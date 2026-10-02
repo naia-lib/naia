@@ -242,7 +242,7 @@ impl<'w, T: Send + Sync + 'static> EntityAndGlobalEntityConverter<Entity> for Cl
 /// avatar's command at each tick it changed) before a tick, so a deterministic
 /// re-simulation can re-derive each catch-up tick with that tick's own input, while the
 /// remaining *state* reconciles afterward. `T` is the protocol marker. See
-/// [`naia_shared::LocalWorldManager::take_received_updates_of_kind`].
+/// `LocalWorldManager::take_received_updates_of_kind`.
 pub fn take_received_updates_of_kind<T: Send + Sync + 'static, R: ReplicatedComponent>(
     world: &mut World,
 ) -> Vec<(Tick, Entity, R)> {

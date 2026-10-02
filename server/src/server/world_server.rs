@@ -456,9 +456,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// Maintain connection with a client and read all incoming packet data
     /// (serial-mode wrapper, step 4-F.naia.c.2b).
     ///
-    /// The recv-only socket loop now lives on [`RecvState::receive`];
+    /// The recv-only socket loop now lives on [`crate::RecvState::receive`];
     /// the cross-half decode + per-address drain + command finalization
-    /// lives on [`SendState::process_recv_packets`]. This wrapper glues
+    /// lives on [`crate::SendState::process_recv_packets`]. This wrapper glues
     /// them together with the coordination-stage `drain_pending_handshakes`
     /// step in between (which needs `sim_handle.user_store`).
     pub fn receive_all_packets(&mut self) {
@@ -589,7 +589,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// applies the decoded `EntityEvent`s to `world` and populates
     /// `incoming_world_events` with the resulting Spawn / Insert / Update /
     /// Despawn entries) — and then drains the accumulated world + tick events
-    /// into a [`ReceiveOutput`].
+    /// into a [`crate::ReceiveOutput`].
     ///
     /// Without the `process_all_packets` call, all client-driven world
     /// mutations (delegated spawns, client-authoritative component inserts,
@@ -625,7 +625,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// Receive-only step that skips world mutation.
     ///
     /// Runs [`receive_all_packets`](Self::receive_all_packets) and then drains
-    /// the accumulated world events into a [`ReceiveOutput`].
+    /// the accumulated world events into a [`crate::ReceiveOutput`].
     ///
     /// [`process_all_packets`](Self::process_all_packets) is NOT called here
     /// because it requires a `World` reference. The world-events stream
@@ -1140,13 +1140,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     }
 
     /// MISSION_TICK_FLOOR Lever 3 — TRANSMIT half. Forwards to
-    /// [`SendState::transmit_send_job`].
+    /// [`crate::SendState::transmit_send_job`].
     pub fn transmit_send_job<W: WorldRefType<E> + Sync>(&mut self, world: W, plan: SendPlan) {
         self.send.state.transmit_send_job(world, plan);
     }
 
     /// L3 send-state seam Step 5 — drain the ACK channel on the send side
-    /// (worker-preamble equivalent). Forwards to [`SendState::drain_all_acks`].
+    /// (worker-preamble equivalent). Forwards to [`crate::SendState::drain_all_acks`].
     /// `send_all_packets` calls this internally; callers that drive the lagged
     /// transmit directly (the active send worker, the harness `transmit_and_pump`)
     /// call it before `transmit_send_job`.

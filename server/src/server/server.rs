@@ -181,7 +181,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// Must be called after [`receive_all_packets`](Server::receive_all_packets)
     /// and before [`take_world_events`](Server::take_world_events). Applies
     /// incoming component mutations from client-authoritative entities and
-    /// queues the resulting [`Events`] for the next [`take_world_events`]
+    /// queues the resulting [`Events`] for the next [`take_world_events`](Server::take_world_events)
     /// call.
     ///
     /// [`Events`]: crate::Events

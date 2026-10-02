@@ -809,7 +809,7 @@ impl<'w> Server<'w> {
     /// Internally pulls the `ServerImpl` resource out of `World` via
     /// `resource_scope` (so the caller doesn't need to reach for the
     /// private wrapper), then delegates to
-    /// [`crate::apply_receive_output::apply_receive_output`].
+    /// `apply_receive_output::apply_receive_output`.
     pub fn apply_receive_output(world: &mut World, output: naia_server::ReceiveOutput<Entity>) {
         world.resource_scope(|world, mut server: Mut<ServerImpl>| {
             crate::apply_receive_output::apply_receive_output(world, &mut server, output);
@@ -938,7 +938,7 @@ impl<'w> Server<'w> {
         query.iter(world).next()
     }
 
-    /// G6 — coord-side drain of [`PendingResourceRegistrations`]; call inside the
+    /// G6 — coord-side drain of `PendingResourceRegistrations`; call inside the
     /// park window. For each pending carrier: enable replication, apply the
     /// caller's `config` (policy), add it to `room_key` (policy), then flush the
     /// batched world hooks. Byte-identical to the former hand-rolled

@@ -29,7 +29,7 @@ pub trait ComponentAccess: Send + Sync {
     /// `schedule` instead of the default `Update`. Used by callers (e.g.
     /// cyberlith's Sim SubApp) whose change-tracking must run in a custom
     /// schedule like `SimMain` rather than `Update`. The default impl
-    /// forwards to [`add_systems`] for backward compatibility, which
+    /// forwards to [`Self::add_systems`] for backward compatibility, which
     /// continues to register under `Update`.
     fn add_systems_to_schedule(&self, app: &mut App, schedule: InternedScheduleLabel) {
         // Default implementation: ignore the schedule and use the

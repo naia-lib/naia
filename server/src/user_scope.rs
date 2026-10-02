@@ -19,7 +19,7 @@ enum UserScopeMutTarget<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
 
 /// Scoped read-only handle for a user's fine-grained entity scope.
 ///
-/// Obtained from [`Server::user_scope`]. Fine-grained scope is the second
+/// Obtained from [`crate::Server::user_scope`]. Fine-grained scope is the second
 /// layer of visibility control, layered on top of room membership — an entity
 /// is only replicated to a user if it is both in a shared room **and** in the
 /// user's explicit scope (or if the server uses room-only scoping with no
@@ -57,7 +57,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserScopeRef<'s, E> {
 
 /// Scoped mutable handle for a user's fine-grained entity scope.
 ///
-/// Obtained from [`Server::user_scope_mut`]. Use this to include or exclude
+/// Obtained from [`crate::Server::user_scope_mut`]. Use this to include or exclude
 /// individual entities from a user's view, independently of room membership.
 ///
 /// # Example
