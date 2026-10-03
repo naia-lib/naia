@@ -802,20 +802,28 @@ impl LocalWorldManager {
         //     );
         // }
 
-        // m2 probe (Drake 42808): a same-id retransmit re-read overwrites the
-        // buffered tick while `ReliableReceiver` drops the duplicate content,
-        // so the surviving message is processed under the NEW tick but its
-        // payload (if any) was pushed under the OLD one. Log the re-stamp;
-        // correlate by id with the writer-side expansion probe.
-        if let Some(old_tick) = self.incoming_message_ticks.insert(id, tick) {
-            if old_tick != tick {
-                log::debug!(
-                    "retransmit re-stamp: message id {:?} tick {:?} -> {:?} (msg type {:?})",
-                    id,
-                    old_tick,
-                    tick,
-                    msg.get_type()
-                );
+        // m2 fix (Drake 42808): first stamp wins for a given id. A same-id
+        // retransmit re-read (e.g. an Insert degraded to a payload-less Noop
+        // at retransmit-expansion time) must not re-stamp the buffered tick:
+        // `ReliableReceiver` drops the duplicate content, so the surviving
+        // message would be processed under the NEW tick while its payload (if
+        // any) was pushed under the OLD one — the exact
+        // missing-N/buffered-N-3 panic. The duplicate read still logs for id
+        // correlation with the writer-side expansion probe.
+        match self.incoming_message_ticks.entry(id) {
+            std::collections::hash_map::Entry::Vacant(slot) => {
+                slot.insert(tick);
+            }
+            std::collections::hash_map::Entry::Occupied(slot) => {
+                if *slot.get() != tick {
+                    log::debug!(
+                        "duplicate read ignored for tick: message id {:?} keeps {:?}, retransmit read {:?} (msg type {:?})",
+                        id,
+                        slot.get(),
+                        tick,
+                        msg.get_type()
+                    );
+                }
             }
         }
         self.receiver.buffer_message(id, msg);

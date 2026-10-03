@@ -585,8 +585,9 @@ fn a_received_component_is_buffered_and_then_applied_to_the_world() {
 ///
 /// This test replays exactly that read sequence: Insert#1 at tick 1 with its
 /// payload, then a same-id Noop at tick 4 (the degraded retransmit, which
-/// pushes no payload), then a take. Correct behavior is a clean apply; today
-/// it panics in `process_ready_messages`, which is the red.
+/// pushes no payload), then a take. The insert must apply cleanly under its
+/// tick-1 payload: first stamp wins for the message id, so the degraded
+/// retransmit cannot re-stamp it to tick 4.
 #[test]
 fn a_degraded_retransmit_must_not_restamp_a_buffered_insert() {
     let mut fx = Fixture::client();
