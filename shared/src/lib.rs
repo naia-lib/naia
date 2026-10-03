@@ -247,6 +247,7 @@ pub use world::update::mut_channel::{DirtyNotifier, DirtyQueue, DirtySet};
 pub use world::update::mut_channel::{MutChannelType, MutReceiver};
 #[cfg(feature = "bench_instrumentation")]
 pub use world::update::user_diff_handler::dirty_scan_counters;
+pub use world::update::user_diff_handler::UserDiffHandler;
 pub use world::world_reader::WorldReader;
 #[cfg(feature = "bench_instrumentation")]
 pub use world::world_writer::bench_write_counters;

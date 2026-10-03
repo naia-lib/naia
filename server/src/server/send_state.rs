@@ -28,12 +28,13 @@ use log::warn;
 
 use naia_shared::{
     BigMapKey, BitWriter, Channel, ChannelKind, ComponentKind, ConnectionRequestNonce,
-    EntityAndGlobalEntityConverter, EntityAuthStatus, GlobalEntity, GlobalEntityIndex,
-    GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId,
-    GlobalWorldManagerType, HostType, Instant, LocalEntityAndGlobalEntityConverter,
-    LocalResponseId, Message, MessageContainer, OutgoingPacket, OutgoingPriorityHook,
-    OwnedBitReader, PacketType, Replicate, SendPlan, SendUpdateEvents, Serde, SnapshotMap, Tick,
-    Timer, UpdateKinds, UserPriorityState, WorldMutType, WorldRefType,
+    EntityAndGlobalEntityConverter, EntityAuthStatus, FrozenGlobalDirty, GlobalDiffHandler,
+    GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState,
+    GlobalRequestId, GlobalWorldManagerType, HostType, Instant,
+    LocalEntityAndGlobalEntityConverter, LocalResponseId, Message, MessageContainer,
+    OutgoingPacket, OutgoingPriorityHook, OwnedBitReader, PacketType, Replicate, SendPlan,
+    SendUpdateEvents, Serde, SnapshotMap, Tick, Timer, UpdateKinds, UserDiffHandler,
+    UserPriorityState, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -310,9 +311,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 )
                 .is_err()
             {
-                warn!(
-                    "Server Error: cannot decode tick-buffered messages from {address}"
-                );
+                warn!("Server Error: cannot decode tick-buffered messages from {address}");
                 continue;
             }
 
@@ -366,9 +365,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             std::mem::take(&mut *self.shared.pending_outbound_packets.lock());
         for (address, packet) in pending {
             if self.send_io.send_packet(&address, &packet).is_err() {
-                warn!(
-                    "Server Error: cannot flush queued outbound packet to {address}"
-                );
+                warn!("Server Error: cannot flush queued outbound packet to {address}");
             }
         }
     }
@@ -422,9 +419,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         if io.send_packet(user_address, &writer.to_packet()).is_err() {
             // Heartbeat send failure is not fatal: the connection timeout
             // will detect a persistently dead link when heartbeats stop arriving.
-            warn!(
-                "Server Error: Cannot send heartbeat packet to {user_address}"
-            );
+            warn!("Server Error: Cannot send heartbeat packet to {user_address}");
         }
         send_conn.base.mark_sent();
     }
@@ -537,9 +532,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         for send_conn in self.send_user_connections.values() {
             for global_entity in send_conn.base.world_manager.pending_outbound_entities() {
                 if let Some(idx) = guard.entity_to_global_idx(global_entity) {
-                    let _ = needed.set_bit(
-            u32::try_from(idx.as_usize()).expect("global index fits in u32"),
-        );
+                    let _ = needed
+                        .set_bit(u32::try_from(idx.as_usize()).expect("global index fits in u32"));
                 }
             }
         }
@@ -587,7 +581,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         message: MessageContainer,
     ) -> bool {
         let channel_settings = self.shared.channel_kinds.channel(channel_kind);
-        assert!(channel_settings.can_send_to_client(), "Cannot send message to Client on this Channel");
+        assert!(
+            channel_settings.can_send_to_client(),
+            "Cannot send message to Client on this Channel"
+        );
         let Some(send_conn) = self.send_user_connections.get_mut(address) else {
             return false;
         };
@@ -699,6 +696,109 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// `world` is only consulted by the inline scope-change drain (skipped when
     /// the caller already ran `apply_pending_scope_changes` this tick); Phase 3A
     /// itself reads no world values.
+    /// Collect one entity's dirty component list in `kind_bit` ascending order
+    /// (`dirty_words` iteration is LSB-first = ascending `kind_bit`), applying
+    /// the fast/slow delivery gate and snapshotting each emitted component's
+    /// `DiffMask` into the returned list.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a component kind bit does not fit in `u16`, which cannot
+    /// happen for registered component kinds.
+    fn collect_entity_kinds(
+        send_conn: &SendConnection,
+        guard: &std::sync::RwLockReadGuard<GlobalDiffHandler>,
+        diff: &std::sync::RwLockReadGuard<UserDiffHandler>,
+        frozen_dirty: &FrozenGlobalDirty,
+        global_idx: GlobalEntityIndex,
+        global_entity: GlobalEntity,
+    ) -> UpdateKinds {
+        // Build this entity's component list in kind_bit ascending order
+        // (dirty_words iteration is LSB-first = ascending kind_bit).
+        let mut kinds: UpdateKinds = Vec::new();
+        for (word_idx, dirty_word) in frozen_dirty.dirty_words(global_idx).iter().enumerate() {
+            let mut remaining = *dirty_word;
+            while remaining != 0 {
+                let bit_pos = remaining.trailing_zeros() as usize;
+                remaining &= remaining - 1;
+                let kind_bit =
+                    u16::try_from(word_idx * 64 + bit_pos).expect("component kind bit fits in u16");
+                let Some(component_kind) = guard.kind_for_bit(kind_bit) else {
+                    continue;
+                };
+                #[cfg(feature = "bench_instrumentation")]
+                crate::server::world_server::bench_iris_counters::N_PHASE3_COMPONENT_VISITS
+                    .fetch_add(1, Ordering::Relaxed);
+
+                // Phase H deferred-followup measurement: `force_slow`
+                // skips the single-lookup fast path so every component
+                // pays the 6+-HashMap `is_component_updatable_for_entity`
+                // chain — the A/B isolates the CPU tax of hardening the
+                // gate. Const-false (folded away) outside bench builds.
+                #[cfg(feature = "bench_instrumentation")]
+                let force_slow = crate::server::world_server::bench_iris_counters::FORCE_SLOW_GATE
+                    .load(Ordering::Relaxed);
+                #[cfg(not(feature = "bench_instrumentation"))]
+                let force_slow = false;
+
+                if !force_slow && diff.is_receiver_dirty_and_delivered_fast(global_idx, kind_bit) {
+                    // fast path
+                    #[cfg(feature = "bench_instrumentation")]
+                    {
+                        use crate::server::world_server::bench_iris_counters as bic;
+                        if bic::MEASURE_LEAK.load(Ordering::Relaxed) {
+                            bic::N_FAST_EMIT.fetch_add(1, Ordering::Relaxed);
+                            // Ground-truth: did the fast flag emit a pre-delivery update?
+                            if !send_conn
+                                .base
+                                .world_manager
+                                .is_component_updatable_for_entity(global_entity, component_kind)
+                            {
+                                bic::N_FASTPATH_LEAK.fetch_add(1, Ordering::Relaxed);
+                            }
+                        }
+                    }
+                } else if diff.diff_mask_is_clear_fast(global_idx, kind_bit) {
+                    continue;
+                } else if !send_conn
+                    .base
+                    .world_manager
+                    .is_component_updatable_for_entity(global_entity, component_kind)
+                {
+                    #[cfg(feature = "bench_instrumentation")]
+                    {
+                        use crate::server::world_server::bench_iris_counters as bic;
+                        if bic::MEASURE_LEAK.load(Ordering::Relaxed) {
+                            bic::N_GATE_SUPPRESSED.fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
+                    continue;
+                } else {
+                    // slow-path emit (delivered; fast flag not yet set, or forced-slow)
+                    #[cfg(feature = "bench_instrumentation")]
+                    {
+                        use crate::server::world_server::bench_iris_counters as bic;
+                        if bic::MEASURE_LEAK.load(Ordering::Relaxed) {
+                            bic::N_SLOW_EMIT.fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
+                }
+
+                // MISSION_TICK_FLOOR Lever 3: capture the per-property
+                // mask NOW, then clear the live mask immediately. The
+                // captured (frozen) mask is what the lagged transmit
+                // serializes from.
+                let diff_mask = diff
+                    .diff_mask_snapshot_fast(global_idx, kind_bit)
+                    .unwrap_or_else(|| diff.diff_mask_snapshot(global_entity, component_kind));
+                diff.clear_diff_mask_fast(global_idx, kind_bit);
+
+                kinds.push((component_kind, kind_bit, diff_mask));
+            }
+        }
+        kinds
+    }
+
     pub fn prepare_send_job<W: WorldRefType<E> + Sync>(&mut self, world: &W) -> SendPlan {
         #[cfg(feature = "f3_diag")]
         eprintln!(
@@ -775,99 +875,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     crate::server::world_server::bench_iris_counters::N_PHASE3_ENTITY_VISITS
                         .fetch_add(1, Ordering::Relaxed);
 
-                    // Build this entity's component list in kind_bit ascending order
-                    // (dirty_words iteration is LSB-first = ascending kind_bit).
-                    let mut kinds: UpdateKinds = Vec::new();
-                    for (word_idx, dirty_word) in
-                        frozen_dirty.dirty_words(global_idx).iter().enumerate()
-                    {
-                        let mut remaining = *dirty_word;
-                        while remaining != 0 {
-                            let bit_pos = remaining.trailing_zeros() as usize;
-                            remaining &= remaining - 1;
-                            let kind_bit = u16::try_from(word_idx * 64 + bit_pos)
-            .expect("component kind bit fits in u16");
-                            let Some(component_kind) = guard.kind_for_bit(kind_bit) else {
-                                continue;
-                            };
-                            #[cfg(feature = "bench_instrumentation")]
-                            crate::server::world_server::bench_iris_counters::N_PHASE3_COMPONENT_VISITS
-                                .fetch_add(1, Ordering::Relaxed);
-
-                            // Phase H deferred-followup measurement: `force_slow`
-                            // skips the single-lookup fast path so every component
-                            // pays the 6+-HashMap `is_component_updatable_for_entity`
-                            // chain — the A/B isolates the CPU tax of hardening the
-                            // gate. Const-false (folded away) outside bench builds.
-                            #[cfg(feature = "bench_instrumentation")]
-                            let force_slow =
-                                crate::server::world_server::bench_iris_counters::FORCE_SLOW_GATE
-                                    .load(Ordering::Relaxed);
-                            #[cfg(not(feature = "bench_instrumentation"))]
-                            let force_slow = false;
-
-                            if !force_slow
-                                && diff.is_receiver_dirty_and_delivered_fast(global_idx, kind_bit)
-                            {
-                                // fast path
-                                #[cfg(feature = "bench_instrumentation")]
-                                {
-                                    use crate::server::world_server::bench_iris_counters as bic;
-                                    if bic::MEASURE_LEAK.load(Ordering::Relaxed) {
-                                        bic::N_FAST_EMIT.fetch_add(1, Ordering::Relaxed);
-                                        // Ground-truth: did the fast flag emit a pre-delivery update?
-                                        if !send_conn
-                                            .base
-                                            .world_manager
-                                            .is_component_updatable_for_entity(
-                                                global_entity,
-                                                component_kind,
-                                            )
-                                        {
-                                            bic::N_FASTPATH_LEAK.fetch_add(1, Ordering::Relaxed);
-                                        }
-                                    }
-                                }
-                            } else if diff.diff_mask_is_clear_fast(global_idx, kind_bit) {
-                                continue;
-                            } else if !send_conn
-                                .base
-                                .world_manager
-                                .is_component_updatable_for_entity(global_entity, component_kind)
-                            {
-                                #[cfg(feature = "bench_instrumentation")]
-                                {
-                                    use crate::server::world_server::bench_iris_counters as bic;
-                                    if bic::MEASURE_LEAK.load(Ordering::Relaxed) {
-                                        bic::N_GATE_SUPPRESSED.fetch_add(1, Ordering::Relaxed);
-                                    }
-                                }
-                                continue;
-                            } else {
-                                // slow-path emit (delivered; fast flag not yet set, or forced-slow)
-                                #[cfg(feature = "bench_instrumentation")]
-                                {
-                                    use crate::server::world_server::bench_iris_counters as bic;
-                                    if bic::MEASURE_LEAK.load(Ordering::Relaxed) {
-                                        bic::N_SLOW_EMIT.fetch_add(1, Ordering::Relaxed);
-                                    }
-                                }
-                            }
-
-                            // MISSION_TICK_FLOOR Lever 3: capture the per-property
-                            // mask NOW, then clear the live mask immediately. The
-                            // captured (frozen) mask is what the lagged transmit
-                            // serializes from.
-                            let diff_mask = diff
-                                .diff_mask_snapshot_fast(global_idx, kind_bit)
-                                .unwrap_or_else(|| {
-                                    diff.diff_mask_snapshot(global_entity, component_kind)
-                                });
-                            diff.clear_diff_mask_fast(global_idx, kind_bit);
-
-                            kinds.push((component_kind, kind_bit, diff_mask));
-                        }
-                    }
+                    let kinds = Self::collect_entity_kinds(
+                        send_conn,
+                        &guard,
+                        &diff,
+                        &frozen_dirty,
+                        global_idx,
+                        global_entity,
+                    );
                     if !kinds.is_empty() {
                         events.push((global_entity, global_idx, kinds));
                     }
@@ -958,7 +973,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         let bit_pos = remaining.trailing_zeros() as usize;
                         remaining &= remaining - 1;
                         let kind_bit = u16::try_from(word_idx * 64 + bit_pos)
-            .expect("component kind bit fits in u16");
+                            .expect("component kind bit fits in u16");
                         let Some(component_kind) = guard.kind_for_bit(kind_bit) else {
                             continue;
                         };
@@ -1543,11 +1558,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             .write()
             .migrate_entity_to_server(global_entity);
 
-        if self
-            .entity_scope_map
-            .get(user_key, global_entity)
-            .is_none()
-        {
+        if self.entity_scope_map.get(user_key, global_entity).is_none() {
             self.entity_scope_map.insert(user_key, global_entity, true);
         }
 
@@ -1621,7 +1632,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 .global_world_manager
                 .write()
                 .client_request_authority(global_entity, &requester);
-            assert!(result.is_ok(), 
+            assert!(
+                result.is_ok(),
                 "failed to grant authority of client-owned delegated entity to creating user"
             );
             let user_snapshot: Vec<(UserKey, SocketAddr)> = self
