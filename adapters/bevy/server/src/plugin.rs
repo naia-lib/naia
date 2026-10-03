@@ -335,7 +335,7 @@ impl PluginType for Plugin {
         } else if !self.world_only {
             let server = Server::<Entity>::new(
                 self.server_mode,
-                config.server_config,
+                &config.server_config,
                 config.protocol.into(),
             );
             Some(ServerImpl::full(server))

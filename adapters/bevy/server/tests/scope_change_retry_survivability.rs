@@ -130,7 +130,7 @@ fn synthetic_user_does_not_accrue_retries() {
 
     let room_key = sim_handle.create_room();
     let synthetic_user_key = UserKey::from_u64(1);
-    sim_handle.room_add_user(&room_key, &synthetic_user_key);
+    sim_handle.room_add_user(room_key, synthetic_user_key);
     sim_handle.room_add_entity(&room_key, &entity);
 
     // Empty world — entity is NOT visible in the snapshot world. If

@@ -145,7 +145,7 @@ fn send_all_packets_auto_calls_scope_changes_drain_when_flag_unset() {
     assert!(queue_len(&sim_handle) >= 2);
 
     // Call send_all_packets directly (no preamble, no scope drain).
-    send.send_all_packets(bevy_world.proxy());
+    send.send_all_packets(&bevy_world.proxy());
 
     assert_eq!(
         queue_len(&sim_handle),
@@ -184,7 +184,7 @@ fn apply_pending_scope_changes_is_idempotent_within_one_tick() {
     // Empty-snap send_all_packets — flag set → auto-call SKIPPED →
     // entity-scope variants survive.
     let empty_world = World::new();
-    send.send_all_packets(empty_world.proxy());
+    send.send_all_packets(&empty_world.proxy());
     // The preamble auto-call drains the new RoomChange; the
     // scope-changes auto-call is SKIPPED (flag was set). So the
     // legacy variant survives.
@@ -196,7 +196,7 @@ fn apply_pending_scope_changes_is_idempotent_within_one_tick() {
 
     // Next tick's send_all_packets resets the flag and drains.
     let empty_world2 = World::new();
-    send.send_all_packets(empty_world2.proxy());
+    send.send_all_packets(&empty_world2.proxy());
     assert_eq!(
         queue_len(&sim_handle),
         0,
@@ -221,8 +221,8 @@ fn user_left_room_variant_is_drained() {
     use naia_server::UserKey;
     use naia_shared::BigMapKey;
     let synthetic_user_key = UserKey::from_u64(1);
-    sim_handle.room_add_user(&room_key, &synthetic_user_key);
-    sim_handle.room_remove_user(&room_key, &synthetic_user_key);
+    sim_handle.room_add_user(room_key, synthetic_user_key);
+    sim_handle.room_remove_user(room_key, synthetic_user_key);
     assert!(
         queue_len(&sim_handle) >= 4,
         "add_user + remove_user must push 2 legacy + 2 RoomChange variants",

@@ -244,7 +244,7 @@ impl naia_shared::WorldRefType<u64> for EmptyWorld {
     fn has_component<R: naia_shared::ReplicatedComponent>(&self, _e: &u64) -> bool {
         false
     }
-    fn has_component_of_kind(&self, _e: &u64, _k: &naia_shared::ComponentKind) -> bool {
+    fn has_component_of_kind(&self, _e: &u64, _k: naia_shared::ComponentKind) -> bool {
         false
     }
     fn component<'a, R: naia_shared::ReplicatedComponent>(
@@ -256,7 +256,7 @@ impl naia_shared::WorldRefType<u64> for EmptyWorld {
     fn component_of_kind<'a>(
         &'a self,
         _e: &u64,
-        _k: &naia_shared::ComponentKind,
+        _k: naia_shared::ComponentKind,
     ) -> Option<naia_shared::ReplicaDynRefWrapper<'a>> {
         None
     }
@@ -342,7 +342,7 @@ fn pipeline_recv_send_threads_overlap() {
             // 4-F.naia.h: the real send-half routine now drives the test.
             // `EmptyWorld` is `Sync` (no fields) and works for the zero-
             // client / zero-entity case the test exercises.
-            send_handle.send_all_packets(EmptyWorld);
+            send_handle.send_all_packets(&EmptyWorld);
             let end = Instant::now();
             spans.push((start, end));
         }

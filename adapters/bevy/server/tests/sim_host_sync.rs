@@ -170,7 +170,7 @@ fn handle_direct_insert_matches_legacy() {
                                 continue;
                             }
                             let mut proxy = WorldProxyMut::proxy_mut(sim_app.world_mut());
-                            let Some(mut cm) = proxy.component_mut_of_kind(&e, &kind) else {
+                            let Some(mut cm) = proxy.component_mut_of_kind(&e, kind) else {
                                 continue;
                             };
                             ws.insert_component_worldless(&e, DerefMut::deref_mut(&mut cm));

@@ -89,7 +89,7 @@ impl<'a> ServerExpectCtx<'a> {
     pub fn entities(&self) -> Vec<EntityKey> {
         let (server, registry) = self.scenario.server_and_registry().unwrap();
         let world_ref = self.scenario.server_world_ref();
-        let server_entities = server.entities(world_ref);
+        let server_entities = server.entities(&world_ref);
         server_entities
             .iter()
             .filter_map(|e| registry.entity_key_for_server_entity(e))

@@ -84,7 +84,7 @@ fn consumer_drives_send_in_park_window() {
         if ws.mode() != naia_server::ServerMode::Pipelined {
             return false;
         }
-        ws.send(world.proxy());
+        ws.send(&world.proxy());
         true
     });
     Server::pipeline_unpark(app.world());

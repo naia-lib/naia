@@ -101,9 +101,9 @@ fn sim_converter_global_entity_matches_world_server_for_registered_entities() {
                 e,
             );
             // Round-trip
-            let back_ws = ws.global_entity_to_entity(&from_ws).expect("ws back");
+            let back_ws = ws.global_entity_to_entity(from_ws).expect("ws back");
             let back_sim = sim_converter
-                .global_entity_to_entity(&from_sim)
+                .global_entity_to_entity(from_sim)
                 .expect("sim back");
             assert_eq!(back_ws, back_sim);
             assert_eq!(back_ws, *e);

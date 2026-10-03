@@ -450,7 +450,7 @@ impl BenchWorld {
         let srv_rx = t.elapsed();
 
         let t = StdInstant::now();
-        self.server.send_all_packets(self.server_world.proxy());
+        self.server.send_all_packets(&self.server_world.proxy());
         let srv_tx = t.elapsed();
 
         let t = StdInstant::now();
@@ -647,7 +647,7 @@ impl BenchWorld {
         self.server.receive_all_packets();
         self.server
             .process_all_packets(self.server_world.proxy_mut(), &now);
-        self.server.send_all_packets(self.server_world.proxy());
+        self.server.send_all_packets(&self.server_world.proxy());
 
         // Time only the target client's receive path.
         let (client, world) = &mut self.clients[client_idx];
@@ -1160,5 +1160,5 @@ pub fn advance_tick(
 
     server.receive_all_packets();
     server.process_all_packets(server_world.proxy_mut(), &now);
-    server.send_all_packets(server_world.proxy());
+    server.send_all_packets(&server_world.proxy());
 }

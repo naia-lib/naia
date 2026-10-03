@@ -144,13 +144,13 @@ fn registration_sets_resource_kind_in_protocol() {
     // TestScore was registered as a resource in test_protocol::protocol()
     let kind = naia_shared::ComponentKind::of::<TestScore>();
     assert!(
-        p.resource_kinds.is_resource(&kind),
+        p.resource_kinds.is_resource(kind),
         "TestScore should be marked as a resource kind"
     );
     // Position is a regular component, not a resource.
     let pos_kind = naia_shared::ComponentKind::of::<naia_test_harness::Position>();
     assert!(
-        !p.resource_kinds.is_resource(&pos_kind),
+        !p.resource_kinds.is_resource(pos_kind),
         "Position should NOT be a resource kind"
     );
 }

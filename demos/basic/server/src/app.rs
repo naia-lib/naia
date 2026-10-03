@@ -147,7 +147,7 @@ impl App {
                 }
 
                 // Iterate through Characters, marching them from (0,0) to (20, N)
-                for entity in self.server.entities(self.world.proxy()) {
+                for entity in self.server.entities(&self.world.proxy()) {
                     if let Some(mut character) = self
                         .server
                         .entity_mut(self.world.proxy_mut(), &entity)
@@ -183,7 +183,7 @@ impl App {
                 // VERY IMPORTANT! Calling this actually sends all update data
                 // packets to all Clients that require it. If you don't call this
                 // method, the Server will never communicate with it's connected Clients
-                self.server.send_all_packets(self.world.proxy());
+                self.server.send_all_packets(&self.world.proxy());
 
                 self.tick_count = self.tick_count.wrapping_add(1);
             }

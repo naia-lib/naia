@@ -201,7 +201,7 @@ impl App {
             // VERY IMPORTANT! Calling this actually sends all update data
             // packets to all Clients that require it. If you don't call this
             // method, the Server will never communicate with it's connected Clients
-            self.server.send_all_packets(self.world.proxy());
+            self.server.send_all_packets(&self.world.proxy());
         }
 
         // Error Events
