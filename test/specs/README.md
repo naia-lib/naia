@@ -70,11 +70,9 @@ contract10_delegation_grant
 Specs establish the normative contract that flows downstream:
 
 ```
-specs/contracts/*.md (normative)
+test/specs/contracts/*.md (normative)
     |
-test/E2E_TEST_PLAN.md (test coverage plan)
-    |
-test/tests/*.rs (E2E test implementations)
+test/tests/src/ (E2E test implementations)
     |
 Implementation (production code)
 ```
