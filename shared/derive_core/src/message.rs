@@ -6,6 +6,7 @@ use syn::{
 
 use super::shared::{get_builder_generic_fields, get_generics, get_struct_type, StructType};
 
+#[must_use]
 pub fn message_impl(
     input: DeriveInput,
     shared_crate_name: TokenStream,
@@ -17,7 +18,7 @@ pub fn message_impl(
         return enum_message_impl(
             &input,
             data_enum,
-            shared_crate_name,
+            &shared_crate_name,
             is_fragment,
             is_request,
         );
@@ -160,13 +161,13 @@ fn get_enum_wire_schema_method(
     is_fragment: bool,
     is_request: bool,
 ) -> TokenStream {
-    let fragment_byte = if is_fragment { 1u8 } else { 0u8 };
-    let request_byte = if is_request { 1u8 } else { 0u8 };
+    let fragment_byte = u8::from(is_fragment);
+    let request_byte = u8::from(is_request);
 
     let mut variant_count = 0u32;
     let mut variant_tokens = quote! {};
     for variant in variants {
-        let variant_ordinal = variant.index as u32;
+        let variant_ordinal = u32::from(variant.index);
         let variant_label = variant.name.to_string();
         let payload = match variant.style {
             VariantStyle::Unit => quote! {
@@ -269,15 +270,16 @@ fn get_wire_schema_method(
     is_fragment: bool,
     is_request: bool,
 ) -> TokenStream {
-    let fragment_byte = if is_fragment { 1u8 } else { 0u8 };
-    let request_byte = if is_request { 1u8 } else { 0u8 };
+    let fragment_byte = u8::from(is_fragment);
+    let request_byte = u8::from(is_request);
 
     // Tuple structs are unlabeled (TUPLE node); named and unit structs use
     // the STRUCT node with declaration-order labels.
     let labeled = !matches!(struct_type, StructType::TupleStruct);
-    let tag = match struct_type {
-        StructType::TupleStruct => quote! { SCHEMA_TAG_TUPLE },
-        _ => quote! { SCHEMA_TAG_STRUCT },
+    let tag = if let StructType::TupleStruct = struct_type {
+        quote! { SCHEMA_TAG_TUPLE }
+    } else {
+        quote! { SCHEMA_TAG_STRUCT }
     };
 
     let mut field_count = 0u32;
@@ -336,7 +338,7 @@ fn get_clone_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
                 };
                 output = new_output_result;
             }
-        };
+        }
     }
 
     quote! {
@@ -524,6 +526,7 @@ fn get_bit_length_method(fields: &[Field], struct_type: &StructType) -> TokenStr
     }
 }
 
+#[must_use]
 pub fn get_builder_create_method(builder_name: &Ident, turbofish: &TokenStream) -> TokenStream {
     let builder_new = quote! {
         #builder_name #turbofish::new()
@@ -542,7 +545,7 @@ fn get_fields(input: &DeriveInput) -> Vec<Field> {
     if let Data::Struct(data_struct) = &input.data {
         match &data_struct.fields {
             Fields::Named(fields_named) => {
-                for field in fields_named.named.iter() {
+                for field in &fields_named.named {
                     if let Some(variable_name) = &field.ident {
                         match &field.ty {
                             Type::Path(type_path) => {
@@ -550,19 +553,18 @@ fn get_fields(input: &DeriveInput) -> Vec<Field> {
                                     let property_type = property_seg.ident.clone();
                                     // EntityProperty
                                     if property_type == "EntityProperty" {
-                                        fields.push(Field::entity_property(variable_name.clone()));
-                                        continue;
+                                        fields.push(Field::entity_property(variable_name));
                                         // Property
                                     } else {
                                         fields.push(Field::normal(
-                                            variable_name.clone(),
+                                            variable_name,
                                             field.ty.clone(),
                                         ));
                                     }
                                 }
                             }
                             _ => {
-                                fields.push(Field::normal(variable_name.clone(), field.ty.clone()));
+                                fields.push(Field::normal(variable_name, field.ty.clone()));
                             }
                         }
                     }
@@ -576,10 +578,9 @@ fn get_fields(input: &DeriveInput) -> Vec<Field> {
                             let variable_name =
                                 get_variable_name_for_unnamed_field(index, property_type.span());
                             if property_type == "EntityProperty" {
-                                fields.push(Field::entity_property(variable_name));
-                                continue;
+                                fields.push(Field::entity_property(&variable_name));
                             } else {
-                                fields.push(Field::normal(variable_name, field.ty.clone()))
+                                fields.push(Field::normal(&variable_name, field.ty.clone()));
                             }
                         }
                     }
@@ -594,23 +595,29 @@ fn get_fields(input: &DeriveInput) -> Vec<Field> {
     fields
 }
 
-/// Get the field name as a TokenStream
+/// Get the field name as a `TokenStream`
 fn get_field_name(field: &Field, index: usize, struct_type: &StructType) -> Member {
     match *struct_type {
         StructType::Struct => Member::from(field.variable_name().clone()),
         StructType::TupleStruct => {
             let index = Index {
-                index: index as u32,
+                index: u32::try_from(index).expect("message field index fits in u32"),
                 span: field.variable_name().span(),
             };
             Member::from(index)
         }
-        _ => {
+        StructType::UnitStruct => {
             panic!("The struct should not have any fields")
         }
     }
 }
 
+/// Builds the `new()` constructor on the message builder.
+///
+/// # Panics
+///
+/// Panics if any generic parameter is not a plain type parameter.
+#[must_use]
 pub fn get_builder_new_method(
     typed_generics: &TokenStream,
     builder_name: &Ident,
@@ -622,7 +629,7 @@ pub fn get_builder_new_method(
     } else {
         let mut output = quote! {};
 
-        for param in input_generics.params.iter() {
+        for param in &input_generics.params {
             let GenericParam::Type(type_param) = param else {
                 panic!("Only type parameters are supported for now");
             };
@@ -655,6 +662,7 @@ pub fn get_builder_new_method(
     }
 }
 
+#[must_use]
 pub fn get_builder_read_method(
     struct_name: &Ident,
     fields: &[Field],
@@ -662,7 +670,7 @@ pub fn get_builder_read_method(
     turbofish: &TokenStream,
 ) -> TokenStream {
     let mut field_names = quote! {};
-    for field in fields.iter() {
+    for field in fields {
         let field_name = field.variable_name();
         let new_output_right = quote! {
             #field_name
@@ -675,7 +683,7 @@ pub fn get_builder_read_method(
     }
 
     let mut field_reads = quote! {};
-    for field in fields.iter() {
+    for field in fields {
         let field_name = field.variable_name();
         let new_output_right = match field {
             Field::EntityProperty(_property) => {
@@ -730,13 +738,19 @@ pub fn get_builder_read_method(
     }
 }
 
+/// Builds the `box_clone()` method on the message builder.
+///
+/// # Panics
+///
+/// Panics if any generic parameter is not a plain type parameter.
+#[must_use]
 pub fn get_builder_box_clone_method(input_generics: &Generics) -> TokenStream {
     let fn_impl = if input_generics.gt_token.is_none() {
         quote! { Self }
     } else {
         let mut output = quote! {};
 
-        for param in input_generics.params.iter() {
+        for param in &input_generics.params {
             let GenericParam::Type(type_param) = param else {
                 panic!("Only type parameters are supported for now");
             };
@@ -770,7 +784,7 @@ pub fn get_builder_box_clone_method(input_generics: &Generics) -> TokenStream {
 
 const UNNAMED_FIELD_PREFIX: &str = "unnamed_field_";
 fn get_variable_name_for_unnamed_field(index: usize, span: Span) -> Ident {
-    Ident::new(&format!("{}{}", UNNAMED_FIELD_PREFIX, index), span)
+    Ident::new(&format!("{UNNAMED_FIELD_PREFIX}{index}"), span)
 }
 
 pub struct EntityProperty {
@@ -789,19 +803,22 @@ pub enum Field {
 }
 
 impl Field {
-    pub fn entity_property(variable_name: Ident) -> Self {
+    #[must_use]
+    pub fn entity_property(variable_name: &Ident) -> Self {
         Self::EntityProperty(EntityProperty {
-            variable_name: variable_name.clone(),
+            variable_name: variable_name.to_owned(),
         })
     }
 
-    pub fn normal(variable_name: Ident, field_type: Type) -> Self {
+    #[must_use]
+    pub fn normal(variable_name: &Ident, field_type: Type) -> Self {
         Self::Normal(Normal {
-            variable_name: variable_name.clone(),
+            variable_name: variable_name.to_owned(),
             field_type,
         })
     }
 
+    #[must_use]
     pub fn variable_name(&self) -> &Ident {
         match self {
             Self::EntityProperty(property) => &property.variable_name,
@@ -819,10 +836,8 @@ fn bits_needed_for(variant_count: usize) -> u8 {
     }
     let max_index = variant_count - 1;
     let bits = usize::BITS - max_index.leading_zeros();
-    if bits >= 256 {
-        panic!("cannot encode an enum in more than 255 bits!");
-    }
-    bits as u8
+    assert!(bits < 256, "cannot encode an enum in more than 255 bits!");
+    u8::try_from(bits).expect("enum bit width is below 256")
 }
 
 fn is_entity_property_type(ty: &Type) -> bool {
@@ -865,7 +880,7 @@ fn get_enum_variants(data_enum: &DataEnum) -> Vec<EnumVariant> {
         .enumerate()
         .map(|(i, variant)| {
             let name = variant.ident.clone();
-            let index = i as u16;
+            let index = u16::try_from(i).expect("enum variant index fits in u16");
             let (fields, style) = match &variant.fields {
                 Fields::Unit => (vec![], VariantStyle::Unit),
                 Fields::Named(named) => {
@@ -915,7 +930,7 @@ fn get_enum_variants(data_enum: &DataEnum) -> Vec<EnumVariant> {
 fn enum_message_impl(
     input: &DeriveInput,
     data_enum: &DataEnum,
-    shared_crate_name: TokenStream,
+    shared_crate_name: &TokenStream,
     is_fragment: bool,
     is_request: bool,
 ) -> TokenStream {

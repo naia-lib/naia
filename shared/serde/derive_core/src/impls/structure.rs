@@ -184,12 +184,17 @@ pub fn derive_wire_schema_struct(
 /// Shared entry: emits `impl Serde` (historical) plus `impl WireSchema` from
 /// the same shape, so the two can never drift. Both come from the one parsed
 /// `DeriveInput` the caller hands over.
+///
+/// # Panics
+///
+/// Panics if a named field has no identifier.
 #[allow(clippy::format_push_string)]
+#[must_use]
 pub fn derive_serde_struct(
     struct_: &DataStruct,
     struct_name: &Ident,
     generics: &Generics,
-    serde_crate_name: TokenStream,
+    serde_crate_name: &TokenStream,
 ) -> TokenStream {
     let mut ser_body = quote! {};
     let mut de_body = quote! {};

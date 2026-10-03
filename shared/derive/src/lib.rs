@@ -16,7 +16,7 @@ use syn::parse_macro_input;
 pub fn replicate_derive_shared(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     let shared_crate_name = quote! { naia_shared };
-    replicate_impl(input, shared_crate_name, true).into()
+    replicate_impl(&input, &shared_crate_name, true).into()
 }
 
 // Channel
@@ -26,7 +26,7 @@ pub fn replicate_derive_shared(input: proc_macro::TokenStream) -> proc_macro::To
 pub fn channel_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     let shared_crate_name = quote! { naia_shared };
-    channel_impl(input, shared_crate_name).into()
+    channel_impl(&input, &shared_crate_name).into()
 }
 
 /// Derives the Channel trait for a given struct, internal to naia-shared
@@ -34,7 +34,7 @@ pub fn channel_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 pub fn channel_derive_internal(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     let shared_crate_name = quote! { crate };
-    channel_impl(input, shared_crate_name).into()
+    channel_impl(&input, &shared_crate_name).into()
 }
 
 // Message

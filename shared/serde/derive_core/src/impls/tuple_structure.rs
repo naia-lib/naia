@@ -18,7 +18,7 @@ pub fn derive_wire_schema_tuple_struct(
 
     let mut elem_count = 0u32;
     let mut elem_tokens = quote! {};
-    for field in struct_.fields.iter() {
+    for field in &struct_.fields {
         if let Some(rejection) = reject_unsupported_field_type(&field.ty) {
             return rejection;
         }
@@ -50,11 +50,12 @@ pub fn derive_wire_schema_tuple_struct(
 /// Shared entry: emits `impl Serde` (historical) plus `impl WireSchema` from
 /// the same shape, so the two can never drift.
 #[allow(clippy::format_push_string)]
+#[must_use]
 pub fn derive_serde_tuple_struct(
     struct_: &DataStruct,
     struct_name: &Ident,
     generics: &Generics,
-    serde_crate_name: TokenStream,
+    serde_crate_name: &TokenStream,
 ) -> TokenStream {
     let mut ser_body = quote! {};
     let mut de_body = quote! {};

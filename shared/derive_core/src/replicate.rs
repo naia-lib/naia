@@ -43,22 +43,29 @@ fn is_immutable_attr(input: &DeriveInput) -> bool {
         attr.path().is_ident("replicate")
             && attr
                 .parse_args::<syn::Ident>()
-                .map(|id| id == "immutable")
-                .unwrap_or(false)
+                .is_ok_and(|id| id == "immutable")
     })
 }
 
+/// Derives `Replicate` (plus builder, property enum, and `Named`) for a struct.
+///
+/// # Panics
+///
+/// Panics if the input is not a struct, if a generic parameter is not a
+/// plain type parameter, or if `#[replicate(immutable)]` is combined with
+/// an `EntityProperty` field.
+#[must_use]
 pub fn replicate_impl(
-    input: DeriveInput,
-    shared_crate_name: TokenStream,
+    input: &DeriveInput,
+    shared_crate_name: &TokenStream,
     _auto_emit_bevy_component: bool,
 ) -> TokenStream {
-    let is_immutable = is_immutable_attr(&input);
+    let is_immutable = is_immutable_attr(input);
 
     // Helper Properties
-    let properties = get_properties(&input);
-    let struct_type = get_struct_type(&input);
-    let (untyped_generics, typed_generics, turbofish) = get_generics(&input);
+    let properties = get_properties(input);
+    let struct_type = get_struct_type(input);
+    let (untyped_generics, typed_generics, turbofish) = get_generics(input);
 
     // Names
     let replica_name = input.ident.clone();
@@ -80,22 +87,7 @@ pub fn replicate_impl(
     let builder_name = format_ident!("{}Builder", replica_name);
     let builder_generic_fields = get_builder_generic_fields(&input.generics);
 
-    // Immutability validation: #[replicate(immutable)] permits `Property<T>`
-    // fields (their value is serialized once at spawn/insert to seed each new
-    // observer — the value-carrying seed-only primitive) but still forbids
-    // `EntityProperty`, whose remote-entity relations require the per-field
-    // diff/update machinery that immutable components deliberately skip.
-    if is_immutable {
-        for prop in &properties {
-            if matches!(prop, Property::Entity(_)) {
-                panic!(
-                    "immutable Replicate cannot hold EntityProperty — entity relations require \
-                     diff-tracking, which immutable (seed-only) components skip. Use a plain field \
-                     or Property<T> (compile error from #[replicate(immutable)] validation)"
-                );
-            }
-        }
-    }
+    validate_immutable_properties(is_immutable, &properties);
 
     // Definitions
     let property_enum_definition = get_property_enum_definition(&enum_name, &properties);
@@ -104,34 +96,15 @@ pub fn replicate_impl(
         if len == 0 {
             0_u8
         } else {
-            (((len - 1) / 8) + 1) as u8
+            u8::try_from(((len - 1) / 8) + 1).expect("property count fits in u8")
         }
     };
 
-    let is_immutable_method: TokenStream = if is_immutable {
-        quote! {
-            fn is_immutable(&self) -> bool { true }
-        }
-    } else {
-        quote! {}
-    };
-
-    let builder_is_immutable_method: TokenStream = if is_immutable {
-        quote! {
-            fn is_immutable(&self) -> bool { true }
-        }
-    } else {
-        quote! {}
-    };
-
-    let has_entity_props: bool = properties.iter().any(|p| matches!(p, Property::Entity(_)));
-    let has_entity_properties_method: TokenStream = if has_entity_props {
-        quote! {
-            fn has_entity_properties() -> bool where Self: Sized { true }
-        }
-    } else {
-        quote! {}
-    };
+    let is_immutable_method: TokenStream = get_is_immutable_method(is_immutable);
+    let builder_is_immutable_method: TokenStream =
+        get_builder_is_immutable_method(is_immutable);
+    let has_entity_properties_method: TokenStream =
+        get_has_entity_properties_method(&properties);
 
     let max_bit_length_method: TokenStream = get_max_bit_length_method(&properties);
 
@@ -169,15 +142,8 @@ pub fn replicate_impl(
     let read_apply_field_update_method =
         get_read_apply_field_update_method(&properties, &struct_type);
     let write_method = get_write_method(&properties, &struct_type);
-    let write_update_method: TokenStream = if is_immutable {
-        quote! {
-            fn write_update(&self, _diff_mask: &DiffMask, _writer: &mut dyn BitWrite, _converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) {
-                panic!("write_update called on an immutable component — this is a bug");
-            }
-        }
-    } else {
-        get_write_update_method(&enum_name, &properties, &struct_type)
-    };
+    let write_update_method: TokenStream =
+        get_write_update_method_for(&enum_name, &properties, &struct_type, is_immutable);
     let relations_waiting_method = get_relations_waiting_method(&properties, &struct_type);
     let relations_complete_method = get_relations_complete_method(&properties, &struct_type);
     let wire_schema_method = get_wire_schema_method(&properties);
@@ -287,33 +253,110 @@ pub fn replicate_impl(
     gen
 }
 
-/// Create a variable name for unnamed fields
-fn get_variable_name_for_unnamed_field(index: usize, span: Span) -> Ident {
-    Ident::new(&format!("{}{}", UNNAMED_FIELD_PREFIX, index), span)
+/// Rejects `EntityProperty` fields on `#[replicate(immutable)]` components:
+/// immutable components skip diff-tracking, which entity relations require.
+///
+/// # Panics
+///
+/// Panics if `is_immutable` and any property is an entity property.
+fn validate_immutable_properties(is_immutable: bool, properties: &[Property]) {
+    // Immutability validation: #[replicate(immutable)] permits `Property<T>`
+    // fields (their value is serialized once at spawn/insert to seed each new
+    // observer — the value-carrying seed-only primitive) but still forbids
+    // `EntityProperty`, whose remote-entity relations require the per-field
+    // diff/update machinery that immutable components deliberately skip.
+    if is_immutable {
+        for prop in properties {
+            if matches!(prop, Property::Entity(_)) {
+                panic!(
+                    "immutable Replicate cannot hold EntityProperty — entity relations require \
+                     diff-tracking, which immutable (seed-only) components skip. Use a plain field \
+                     or Property<T> (compile error from #[replicate(immutable)] validation)"
+                );
+            }
+        }
+    }
 }
 
-/// Get the field name as a TokenStream
+fn get_is_immutable_method(is_immutable: bool) -> TokenStream {
+    if is_immutable {
+        quote! {
+            fn is_immutable(&self) -> bool { true }
+        }
+    } else {
+        quote! {}
+    }
+}
+
+fn get_builder_is_immutable_method(is_immutable: bool) -> TokenStream {
+    if is_immutable {
+        quote! {
+            fn is_immutable(&self) -> bool { true }
+        }
+    } else {
+        quote! {}
+    }
+}
+
+fn get_has_entity_properties_method(properties: &[Property]) -> TokenStream {
+    let has_entity_props = properties
+        .iter()
+        .any(|p| matches!(p, Property::Entity(_)));
+    if has_entity_props {
+        quote! {
+            fn has_entity_properties() -> bool where Self: Sized { true }
+        }
+    } else {
+        quote! {}
+    }
+}
+
+fn get_write_update_method_for(
+    enum_name: &Ident,
+    properties: &[Property],
+    struct_type: &StructType,
+    is_immutable: bool,
+) -> TokenStream {
+    if is_immutable {
+        quote! {
+            fn write_update(&self, _diff_mask: &DiffMask, _writer: &mut dyn BitWrite, _converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) {
+                panic!("write_update called on an immutable component — this is a bug");
+            }
+        }
+    } else {
+        get_write_update_method(enum_name, properties, struct_type)
+    }
+}
+
+/// Create a variable name for unnamed fields
+fn get_variable_name_for_unnamed_field(index: usize, span: Span) -> Ident {
+    Ident::new(&format!("{UNNAMED_FIELD_PREFIX}{index}"), span)
+}
+
+/// Get the field name as a `TokenStream`
 fn get_field_name(property: &Property, struct_type: &StructType) -> Member {
     match *struct_type {
         StructType::Struct => Member::from(property.variable_name().clone()),
         StructType::TupleStruct => {
             let index = Index {
-                index: property.index() as u32,
+                index: u32::try_from(property.index())
+                    .expect("property index fits in u32"),
                 span: property.variable_name().span(),
             };
             Member::from(index)
         }
-        _ => {
+        StructType::UnitStruct => {
             panic!("The struct should not have any fields")
         }
     }
 }
 
 impl Property {
-    pub fn normal(index: usize, variable_name: Ident, inner_type: Type) -> Self {
+    #[must_use]
+    pub fn normal(index: usize, variable_name: &Ident, inner_type: Type) -> Self {
         Self::Normal(NormalProperty {
             index,
-            variable_name: variable_name.clone(),
+            variable_name: variable_name.to_owned(),
             inner_type,
             uppercase_variable_name: Ident::new(
                 variable_name.to_string().to_uppercase().as_str(),
@@ -322,10 +365,11 @@ impl Property {
         })
     }
 
-    pub fn entity(index: usize, variable_name: Ident) -> Self {
+    #[must_use]
+    pub fn entity(index: usize, variable_name: &Ident) -> Self {
         Self::Entity(EntityProperty {
             index,
-            variable_name: variable_name.clone(),
+            variable_name: variable_name.to_owned(),
             uppercase_variable_name: Ident::new(
                 variable_name.to_string().to_uppercase().as_str(),
                 Span::call_site(),
@@ -333,13 +377,15 @@ impl Property {
         })
     }
 
-    pub fn nonreplicated(variable_name: Ident, field_type: Type) -> Self {
+    #[must_use]
+    pub fn nonreplicated(variable_name: &Ident, field_type: Type) -> Self {
         Self::NonReplicated(NonReplicatedProperty {
-            variable_name: variable_name.clone(),
+            variable_name: variable_name.to_owned(),
             field_type,
         })
     }
 
+    #[must_use]
     pub fn is_replicated(&self) -> bool {
         match self {
             Self::Normal(_) | Self::Entity(_) => true,
@@ -347,6 +393,7 @@ impl Property {
         }
     }
 
+    #[must_use]
     pub fn variable_name(&self) -> &Ident {
         match self {
             Self::Normal(property) => &property.variable_name,
@@ -355,6 +402,13 @@ impl Property {
         }
     }
 
+    /// Returns the `SCREAMING_SNAKE_CASE` variant name, panicking for
+    /// non-replicated properties which have no enum variant.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the property is non-replicated.
+    #[must_use]
     pub fn uppercase_variable_name(&self) -> &Ident {
         match self {
             Self::Normal(property) => &property.uppercase_variable_name,
@@ -363,6 +417,13 @@ impl Property {
         }
     }
 
+    /// Returns the declaration-order property index, panicking for
+    /// non-replicated properties which have no enum discriminant.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the property is non-replicated.
+    #[must_use]
     pub fn index(&self) -> usize {
         match self {
             Self::Normal(property) => property.index,
@@ -378,18 +439,14 @@ fn get_properties(input: &DeriveInput) -> Vec<Property> {
     if let Data::Struct(data_struct) = &input.data {
         match &data_struct.fields {
             Fields::Named(fields_named) => {
-                for field in fields_named.named.iter() {
+                for field in &fields_named.named {
                     if let Some(variable_name) = &field.ident {
                         if let Type::Path(type_path) = &field.ty {
                             if let Some(property_seg) = type_path.path.segments.first() {
                                 let property_type = property_seg.ident.clone();
                                 // EntityProperty
                                 if property_type == "EntityProperty" {
-                                    fields.push(Property::entity(
-                                        fields.len(),
-                                        variable_name.clone(),
-                                    ));
-                                    continue;
+                                    fields.push(Property::entity(fields.len(), variable_name));
                                 // Property
                                 } else if property_type == "Property" {
                                     if let PathArguments::AngleBracketed(angle_args) =
@@ -400,16 +457,15 @@ fn get_properties(input: &DeriveInput) -> Vec<Property> {
                                         {
                                             fields.push(Property::normal(
                                                 fields.len(),
-                                                variable_name.clone(),
+                                                variable_name,
                                                 inner_type.clone(),
                                             ));
-                                            continue;
                                         }
                                     }
                                 // Non-replicated Property
                                 } else {
                                     fields.push(Property::nonreplicated(
-                                        variable_name.clone(),
+                                        variable_name,
                                         field.ty.clone(),
                                     ));
                                 }
@@ -426,8 +482,7 @@ fn get_properties(input: &DeriveInput) -> Vec<Property> {
                             let variable_name =
                                 get_variable_name_for_unnamed_field(index, property_type.span());
                             if property_type == "EntityProperty" {
-                                fields.push(Property::entity(fields.len(), variable_name));
-                                continue;
+                                fields.push(Property::entity(fields.len(), &variable_name));
                             } else if let PathArguments::AngleBracketed(angle_args) =
                                 &property_seg.arguments
                             {
@@ -436,10 +491,9 @@ fn get_properties(input: &DeriveInput) -> Vec<Property> {
                                 {
                                     fields.push(Property::normal(
                                         fields.len(),
-                                        variable_name,
+                                        &variable_name,
                                         inner_type.clone(),
                                     ));
-                                    continue;
                                 }
                             }
                         }
@@ -500,6 +554,7 @@ fn get_property_enum_definition(enum_name: &Ident, properties: &[Property]) -> T
 /// `Serde`; fewer bounds than the trait method is legal), and no
 /// `impl WireSchema` is emitted, so a type that also derives `Serde` never
 /// sees a duplicate impl.
+#[must_use]
 pub fn get_wire_schema_method(properties: &[Property]) -> TokenStream {
     let mut field_count = 0u32;
     let mut field_tokens = quote! {};
@@ -553,6 +608,7 @@ pub fn get_wire_schema_method(properties: &[Property]) -> TokenStream {
 /// declaration-order discriminants (`property.index()`, matching the
 /// property enum's explicit `= index` values); the mask size reuses the
 /// `diff_mask_size` const emitted for `diff_mask_size(&self)`.
+#[must_use]
 pub fn get_component_facts_method(properties: &[Property], diff_mask_size: u8) -> TokenStream {
     let mut labels: Vec<String> = Vec::new();
     let mut indices: Vec<u8> = Vec::new();
@@ -561,14 +617,14 @@ pub fn get_component_facts_method(properties: &[Property], diff_mask_size: u8) -
         match property {
             Property::Normal(normal) => {
                 labels.push(normal.variable_name.to_string());
-                indices.push(normal.index as u8);
+                indices.push(u8::try_from(normal.index).expect("property index fits in u8"));
             }
             Property::Entity(entity) => {
                 labels.push(entity.variable_name.to_string());
-                indices.push(entity.index as u8);
+                indices.push(u8::try_from(entity.index).expect("property index fits in u8"));
                 entity_labels.push(entity.variable_name.to_string());
             }
-            Property::NonReplicated(_) => continue,
+            Property::NonReplicated(_) => {}
         }
     }
 
@@ -600,6 +656,7 @@ pub fn get_component_facts_method(properties: &[Property], diff_mask_size: u8) -
     }
 }
 
+#[must_use]
 pub fn get_dyn_ref_method() -> TokenStream {
     quote! {
         fn dyn_ref(&self) -> ReplicaDynRef<'_> {
@@ -608,6 +665,7 @@ pub fn get_dyn_ref_method() -> TokenStream {
     }
 }
 
+#[must_use]
 pub fn get_dyn_mut_method() -> TokenStream {
     quote! {
         fn dyn_mut(&mut self) -> ReplicaDynMut<'_> {
@@ -620,7 +678,7 @@ fn get_clone_method(properties: &[Property], struct_type: &StructType) -> TokenS
     let mut output = quote! {};
     let mut entity_property_output = quote! {};
 
-    for property in properties.iter() {
+    for property in properties {
         let field_name = get_field_name(property, struct_type);
         match property {
             Property::Normal(_) => {
@@ -891,6 +949,7 @@ fn get_localize_method(properties: &[Property], struct_type: &StructType) -> Tok
     }
 }
 
+#[must_use]
 pub fn get_new_complete_method(
     enum_name: &Ident,
     properties: &[Property],
@@ -905,111 +964,8 @@ pub fn get_new_complete_method(
     } else {
         quote! { host_owned }
     };
-    let mut args = quote! {};
-    for property in properties.iter() {
-        match property {
-            Property::Normal(property) => {
-                let field_name = &property.variable_name;
-                let field_type = &property.inner_type;
-
-                let new_output_right = quote! {
-                    #field_name: #field_type,
-                };
-
-                let new_output_result = quote! {
-                    #args #new_output_right
-                };
-                args = new_output_result;
-            }
-            Property::NonReplicated(property) => {
-                let field_name = &property.variable_name;
-                let field_type = &property.field_type;
-
-                let new_output_right = quote! {
-                    #field_name: #field_type,
-                };
-
-                let new_output_result = quote! {
-                    #args #new_output_right
-                };
-                args = new_output_result;
-            }
-            Property::Entity(_) => {
-                continue;
-            }
-        };
-    }
-
-    let mut fields = quote! {};
-    for property in properties.iter() {
-        let new_output_right = match property {
-            Property::Normal(property) => {
-                let field_name = &property.variable_name;
-                let field_type = &property.inner_type;
-                let uppercase_variant_name = &property.uppercase_variable_name;
-
-                match *struct_type {
-                    StructType::Struct => {
-                        quote! {
-                            #field_name: Property::<#field_type>::#host_ctor(#field_name, #enum_name::#uppercase_variant_name as u8)
-                        }
-                    }
-                    StructType::TupleStruct => {
-                        quote! {
-                            Property::<#field_type>::#host_ctor(#field_name, #enum_name::#uppercase_variant_name as u8)
-                        }
-                    }
-                    _ => {
-                        quote! {}
-                    }
-                }
-            }
-            Property::Entity(property) => {
-                let field_name = &property.variable_name;
-                let uppercase_variant_name = &property.uppercase_variable_name;
-
-                match *struct_type {
-                    StructType::Struct => {
-                        quote! {
-                             #field_name: EntityProperty::new_for_component(#enum_name::#uppercase_variant_name as u8)
-                        }
-                    }
-                    StructType::TupleStruct => {
-                        quote! {
-                            EntityProperty::new_for_component(#enum_name::#uppercase_variant_name as u8)
-                        }
-                    }
-                    _ => {
-                        quote! {}
-                    }
-                }
-            }
-            Property::NonReplicated(property) => {
-                let field_name = &property.variable_name;
-                match *struct_type {
-                    StructType::Struct => {
-                        quote! {
-                             #field_name
-                        }
-                    }
-                    StructType::TupleStruct => {
-                        quote! {
-                            #field_name
-                        }
-                    }
-                    _ => {
-                        quote! {}
-                    }
-                }
-            }
-        };
-
-        let new_output_result = quote! {
-            #fields
-            #new_output_right,
-        };
-        fields = new_output_result;
-    }
+    let args = get_new_complete_args(properties);
+    let fields = get_new_complete_fields(enum_name, properties, struct_type, &host_ctor);
 
     let fn_inner = match *struct_type {
         StructType::Struct => {
@@ -1040,6 +996,117 @@ pub fn get_new_complete_method(
     }
 }
 
+fn get_new_complete_args(properties: &[Property]) -> TokenStream {
+    let mut args = quote! {};
+    for property in properties {
+        match property {
+            Property::Normal(property) => {
+                let field_name = &property.variable_name;
+                let field_type = &property.inner_type;
+
+                let new_output_right = quote! {
+                    #field_name: #field_type,
+                };
+
+                let new_output_result = quote! {
+                    #args #new_output_right
+                };
+                args = new_output_result;
+            }
+            Property::NonReplicated(property) => {
+                let field_name = &property.variable_name;
+                let field_type = &property.field_type;
+
+                let new_output_right = quote! {
+                    #field_name: #field_type,
+                };
+
+                let new_output_result = quote! {
+                    #args #new_output_right
+                };
+                args = new_output_result;
+            }
+            Property::Entity(_) => {}
+        };
+    }
+    args
+}
+
+fn get_new_complete_fields(
+    enum_name: &Ident,
+    properties: &[Property],
+    struct_type: &StructType,
+    host_ctor: &TokenStream,
+) -> TokenStream {
+    let mut fields = quote! {};
+    for property in properties {
+        let new_output_right = match property {
+            Property::Normal(property) => {
+                let field_name = &property.variable_name;
+                let field_type = &property.inner_type;
+                let uppercase_variant_name = &property.uppercase_variable_name;
+
+                match *struct_type {
+                    StructType::Struct => {
+                        quote! {
+                            #field_name: Property::<#field_type>::#host_ctor(#field_name, #enum_name::#uppercase_variant_name as u8)
+                        }
+                    }
+                    StructType::TupleStruct => {
+                        quote! {
+                            Property::<#field_type>::#host_ctor(#field_name, #enum_name::#uppercase_variant_name as u8)
+                        }
+                    }
+                    StructType::UnitStruct => {
+                        quote! {}
+                    }
+                }
+            }
+            Property::Entity(property) => {
+                let field_name = &property.variable_name;
+                let uppercase_variant_name = &property.uppercase_variable_name;
+
+                match *struct_type {
+                    StructType::Struct => {
+                        quote! {
+                             #field_name: EntityProperty::new_for_component(#enum_name::#uppercase_variant_name as u8)
+                        }
+                    }
+                    StructType::TupleStruct => {
+                        quote! {
+                            EntityProperty::new_for_component(#enum_name::#uppercase_variant_name as u8)
+                        }
+                    }
+                    StructType::UnitStruct => {
+                        quote! {}
+                    }
+                }
+            }
+            Property::NonReplicated(property) => {
+                let field_name = &property.variable_name;
+                match *struct_type {
+                    StructType::Struct | StructType::TupleStruct => {
+                        quote! {
+                             #field_name
+                        }
+                    }
+                    StructType::UnitStruct => {
+                        quote! {}
+                    }
+                }
+            }
+        };
+
+        let new_output_result = quote! {
+            #fields
+            #new_output_right,
+        };
+        fields = new_output_result;
+    }
+    fields
+}
+
+#[must_use]
 pub fn get_builder_create_method(builder_name: &Ident, turbofish: &TokenStream) -> TokenStream {
     let builder_new = quote! {
         #builder_name #turbofish::new()
@@ -1052,6 +1119,7 @@ pub fn get_builder_create_method(builder_name: &Ident, turbofish: &TokenStream) 
     }
 }
 
+#[must_use]
 pub fn get_builder_read_method(
     replica_name: &Ident,
     properties: &[Property],
@@ -1059,7 +1127,7 @@ pub fn get_builder_read_method(
     turbofish: &TokenStream,
 ) -> TokenStream {
     let mut prop_names = quote! {};
-    for property in properties.iter() {
+    for property in properties {
         let field_name = property.variable_name();
         let new_output_right = quote! {
             #field_name
@@ -1072,7 +1140,7 @@ pub fn get_builder_read_method(
     }
 
     let mut prop_reads = quote! {};
-    for property in properties.iter() {
+    for property in properties {
         let field_name = property.variable_name();
         let new_output_right = match property {
             Property::Normal(inner_property) => {
@@ -1133,13 +1201,14 @@ pub fn get_builder_read_method(
     }
 }
 
+#[must_use]
 pub fn get_read_create_update_method(
     replica_name: &Ident,
     properties: &[Property],
     untyped_generics: &TokenStream,
 ) -> TokenStream {
     let mut prop_read_writes = quote! {};
-    for property in properties.iter() {
+    for property in properties {
         let new_output_right = match property {
             Property::Normal(inner_property) => {
                 let field_type = &inner_property.inner_type;
@@ -1164,9 +1233,7 @@ pub fn get_read_create_update_method(
                     }
                 }
             }
-            Property::NonReplicated(_) => {
-                continue;
-            }
+            Property::NonReplicated(_) => {}
         };
 
         let new_output_result = quote! {
@@ -1197,7 +1264,7 @@ fn get_split_update_method(
 ) -> TokenStream {
     let mut output = quote! {};
 
-    for property in properties.iter() {
+    for property in properties {
         let new_output_right = match property {
             Property::Normal(inner_property) => {
                 let field_type = &inner_property.inner_type;
@@ -1211,7 +1278,8 @@ fn get_split_update_method(
                 }
             }
             Property::Entity(inner_property) => {
-                let index = inner_property.index as u8;
+                let index =
+                    u8::try_from(inner_property.index).expect("property index fits in u8");
                 quote! {
                     let should_read = bool::de(reader)?;
                     if should_read {
@@ -1240,9 +1308,7 @@ fn get_split_update_method(
                     }
                 }
             }
-            Property::NonReplicated(_) => {
-                continue;
-            }
+            Property::NonReplicated(_) => {}
         };
 
         let new_output_result = quote! {
@@ -1295,7 +1361,7 @@ fn get_split_update_method(
 fn get_read_apply_update_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
     let mut output = quote! {};
 
-    for property in properties.iter() {
+    for property in properties {
         let field_name = get_field_name(property, struct_type);
         let new_output_right = match property {
             Property::Normal(_) => {
@@ -1312,9 +1378,7 @@ fn get_read_apply_update_method(properties: &[Property], struct_type: &StructTyp
                     }
                 }
             }
-            Property::NonReplicated(_) => {
-                continue;
-            }
+            Property::NonReplicated(_) => {}
         };
 
         let new_output_result = quote! {
@@ -1339,14 +1403,13 @@ fn get_read_apply_field_update_method(
 ) -> TokenStream {
     let mut output = quote! {};
 
-    for property in properties.iter() {
+    for property in properties {
         let field_name = get_field_name(property, struct_type);
         let new_output_right = match property {
-            Property::Normal(_) | Property::NonReplicated(_) => {
-                continue;
-            }
+            Property::Normal(_) | Property::NonReplicated(_) => {}
             Property::Entity(inner_property) => {
-                let index = inner_property.index as u8;
+                let index =
+                    u8::try_from(inner_property.index).expect("property index fits in u8");
                 quote! {
                     #index => {
                         EntityProperty::read(&mut self.#field_name, reader, converter)?;
@@ -1377,7 +1440,7 @@ fn get_read_apply_field_update_method(
 fn get_write_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
     let mut property_writes = quote! {};
 
-    for property in properties.iter() {
+    for property in properties {
         let field_name = get_field_name(property, struct_type);
         let new_output_right = match property {
             Property::Normal(_) => {
@@ -1390,9 +1453,7 @@ fn get_write_method(properties: &[Property], struct_type: &StructType) -> TokenS
                     EntityProperty::write(&self.#field_name, writer, converter);
                 }
             }
-            Property::NonReplicated(_) => {
-                continue;
-            }
+            Property::NonReplicated(_) => {}
         };
 
         let new_output_result = quote! {
@@ -1442,7 +1503,7 @@ fn get_max_bit_length_method(properties: &[Property]) -> TokenStream {
     }
 
     let mut terms = quote! {};
-    for property in properties.iter() {
+    for property in properties {
         let term = match property {
             Property::Normal(property) => {
                 let inner_type = &property.inner_type;
@@ -1457,10 +1518,9 @@ fn get_max_bit_length_method(properties: &[Property]) -> TokenStream {
                     }
                 }
             }
-            // Handled above (whole component is unbounded).
-            Property::Entity(_) => continue,
-            // Never crosses the wire.
-            Property::NonReplicated(_) => continue,
+            // Handled above (whole component is unbounded), and never crosses
+            // the wire: both skip emitting a term.
+            Property::Entity(_) | Property::NonReplicated(_) => continue,
         };
         terms = quote! { #terms #term };
     }
@@ -1482,7 +1542,7 @@ fn get_write_update_method(
 ) -> TokenStream {
     let mut output = quote! {};
 
-    for property in properties.iter() {
+    for property in properties {
         let field_name = get_field_name(property, struct_type);
         let new_output_right = match property {
             Property::Normal(property) => {
@@ -1507,9 +1567,7 @@ fn get_write_update_method(
                     }
                 }
             }
-            Property::NonReplicated(_) => {
-                continue;
-            }
+            Property::NonReplicated(_) => {}
         };
 
         let new_output_result = quote! {
@@ -1575,7 +1633,7 @@ fn get_write_update_method(
 fn get_relations_waiting_method(fields: &[Property], struct_type: &StructType) -> TokenStream {
     let mut body = quote! {};
 
-    for field in fields.iter() {
+    for field in fields {
         if let Property::Entity(_) = field {
             let field_name = get_field_name(field, struct_type);
             let body_add_right = quote! {
@@ -1606,7 +1664,7 @@ fn get_relations_waiting_method(fields: &[Property], struct_type: &StructType) -
 fn get_relations_complete_method(fields: &[Property], struct_type: &StructType) -> TokenStream {
     let mut body = quote! {};
 
-    for field in fields.iter() {
+    for field in fields {
         if let Property::Entity(_) = field {
             let field_name = get_field_name(field, struct_type);
             let body_add_right = quote! {
@@ -1629,13 +1687,19 @@ fn get_relations_complete_method(fields: &[Property], struct_type: &StructType) 
     }
 }
 
+/// Builds the `box_clone()` method on the replicate builder.
+///
+/// # Panics
+///
+/// Panics if any generic parameter is not a plain type parameter.
+#[must_use]
 pub fn get_builder_box_clone_method(input_generics: &Generics) -> TokenStream {
     let fn_impl = if input_generics.gt_token.is_none() {
         quote! { Self }
     } else {
         let mut output = quote! {};
 
-        for param in input_generics.params.iter() {
+        for param in &input_generics.params {
             let GenericParam::Type(type_param) = param else {
                 panic!("Only type parameters are supported for now");
             };

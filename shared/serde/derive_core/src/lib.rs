@@ -8,6 +8,7 @@ pub mod impls;
 
 use syn::{Data, DeriveInput, Fields};
 
+#[must_use]
 pub fn derive_serde_common(
     input: DeriveInput,
     serde_crate_name: proc_macro2::TokenStream,
@@ -16,19 +17,19 @@ pub fn derive_serde_common(
 
     match &input.data {
         Data::Enum(enum_) => {
-            impls::derive_serde_enum(enum_, &input_name, &input.generics, serde_crate_name)
+            impls::derive_serde_enum(enum_, &input_name, &input.generics, &serde_crate_name)
         }
         Data::Struct(struct_) => match struct_.fields {
             Fields::Unit | Fields::Unnamed(_) => impls::derive_serde_tuple_struct(
                 struct_,
                 &input_name,
                 &input.generics,
-                serde_crate_name,
+                &serde_crate_name,
             ),
             Fields::Named(_) => {
-                impls::derive_serde_struct(struct_, &input_name, &input.generics, serde_crate_name)
+                impls::derive_serde_struct(struct_, &input_name, &input.generics, &serde_crate_name)
             }
         },
-        _ => unimplemented!("Only structs and enums are supported"),
+        Data::Union(_) => unimplemented!("Only structs and enums are supported"),
     }
 }

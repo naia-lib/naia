@@ -19,7 +19,7 @@ use syn::parse_macro_input;
 pub fn replicate_derive_bevy(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     let shared_crate_name = quote! { naia_bevy_shared };
-    replicate_impl(input, shared_crate_name, false).into()
+    replicate_impl(&input, &shared_crate_name, false).into()
 }
 
 /// Derives the Message trait for a given struct, for the Bevy adapter
@@ -35,7 +35,7 @@ pub fn message_derive_bevy(input: proc_macro::TokenStream) -> proc_macro::TokenS
 pub fn channel_derive_bevy(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     let shared_crate_name = quote! { naia_bevy_shared };
-    channel_impl(input, shared_crate_name).into()
+    channel_impl(&input, &shared_crate_name).into()
 }
 
 /// Derives the per-marker naia client facet for the Bevy adapter.
@@ -44,7 +44,7 @@ pub fn channel_derive_bevy(input: proc_macro::TokenStream) -> proc_macro::TokenS
 pub fn client_marker_derive_bevy(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     let root = quote! { naia_bevy_client };
-    client_marker_impl(input, root).into()
+    client_marker_impl(&input, &root).into()
 }
 
 /// Derives the Serde trait for a given type, using `naia_bevy_shared::` paths.

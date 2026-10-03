@@ -14,10 +14,8 @@ fn bits_needed_for(variant_count: usize) -> u8 {
     }
     let max_index = variant_count - 1;
     let bits = usize::BITS - max_index.leading_zeros();
-    if bits >= 256 {
-        panic!("cannot encode a number in more than 255 bits!");
-    }
-    bits as u8
+    assert!(bits < 256, "cannot encode a number in more than 255 bits!");
+    u8::try_from(bits).expect("enum bit width is below 256")
 }
 
 /// Derives `WireSchema` for an enum: the real `bits_needed_for` width plus,
@@ -40,7 +38,7 @@ pub fn derive_wire_schema_enum(
     let mut variant_count = 0u32;
     let mut variant_tokens = quote! {};
     for (index, variant) in enum_.variants.iter().enumerate() {
-        let variant_ordinal = index as u32;
+        let variant_ordinal = u32::try_from(index).expect("variant ordinal fits in u32");
         let variant_label = variant.ident.to_string();
         let payload = match &variant.fields {
             Fields::Unit => quote! {
@@ -124,11 +122,12 @@ pub fn derive_wire_schema_enum(
 /// Shared entry: emits `impl Serde` (historical) plus `impl WireSchema` from
 /// the same shape, so the two can never drift.
 #[allow(clippy::format_push_string)]
+#[must_use]
 pub fn derive_serde_enum(
     enum_: &DataEnum,
     enum_name: &Ident,
     generics: &Generics,
-    serde_crate_name: TokenStream,
+    serde_crate_name: &TokenStream,
 ) -> TokenStream {
     let variant_number = enum_.variants.len();
     let bits_needed = bits_needed_for(variant_number);
@@ -167,7 +166,7 @@ pub fn derive_serde_enum(
 fn get_ser_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
     let mut ser = quote! {};
     for (index, variant) in enum_.variants.iter().enumerate() {
-        let variant_index = index as u16;
+        let variant_index = u16::try_from(index).expect("enum variant index fits in u16");
         let variant_name = &variant.ident;
         let base = match &variant.fields {
             Fields::Unit => {
@@ -194,7 +193,7 @@ fn get_ser_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
                     let index = UnsignedInteger::<#bits_needed>::new(#variant_index);
                     index.ser(writer);
                 };
-                for field in fields.named.iter() {
+                for field in &fields.named {
                     let field_name = field
                         .ident
                         .as_ref()
@@ -250,7 +249,7 @@ fn get_de_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
     let mut de = quote! {};
 
     for (index, variant) in enum_.variants.iter().enumerate() {
-        let variant_index = index as u16;
+        let variant_index = u16::try_from(index).expect("enum variant index fits in u16");
         let variant_name = &variant.ident;
         match &variant.fields {
             Fields::Unit => {
@@ -261,7 +260,7 @@ fn get_de_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
             }
             Fields::Named(fields) => {
                 let mut base = quote! {};
-                for field in fields.named.iter() {
+                for field in &fields.named {
                     let field_name = field
                         .ident
                         .as_ref()
@@ -280,7 +279,7 @@ fn get_de_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
             }
             Fields::Unnamed(fields) => {
                 let mut base = quote! {};
-                for _ in fields.unnamed.iter() {
+                for _ in &fields.unnamed {
                     base = quote! {
                         #base
                         Serde::de(reader)?,
@@ -309,7 +308,7 @@ fn get_de_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
 
 fn get_bit_length_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
     let mut bit_length = quote! {};
-    for variant in enum_.variants.iter() {
+    for variant in &enum_.variants {
         let variant_name = &variant.ident;
         let base = match &variant.fields {
             Fields::Unit => {
@@ -334,7 +333,7 @@ fn get_bit_length_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
                 let mut right = quote! {
                     output += <UnsignedInteger::<#bits_needed> as ConstBitLength>::const_bit_length();
                 };
-                for field in fields.named.iter() {
+                for field in &fields.named {
                     let field_name = field
                         .ident
                         .as_ref()
