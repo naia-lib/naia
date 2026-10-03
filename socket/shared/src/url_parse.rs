@@ -235,18 +235,18 @@ mod tests {
     #[test]
     #[should_panic(expected = "http://127.0.0.1:14196/some/path")]
     fn path_rejection_names_the_url() {
-        parse_server_url("http://127.0.0.1:14196/some/path");
+        let _ = parse_server_url("http://127.0.0.1:14196/some/path");
     }
 
     #[test]
     #[should_panic(expected = "http://127.0.0.1:14196/?a=b")]
     fn query_rejection_names_the_url() {
-        parse_server_url("http://127.0.0.1:14196/?a=b");
+        let _ = parse_server_url("http://127.0.0.1:14196/?a=b");
     }
 
     #[test]
     #[should_panic(expected = "http://127.0.0.1:14196/#frag")]
     fn fragment_rejection_names_the_url() {
-        parse_server_url("http://127.0.0.1:14196/#frag");
+        let _ = parse_server_url("http://127.0.0.1:14196/#frag");
     }
 }
