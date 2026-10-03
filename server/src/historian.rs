@@ -36,7 +36,7 @@ pub type EntitySnapshot = HashMap<ComponentKind, Box<dyn Replicate>>;
 ///
 /// // Inside tick processing — call before send_all_packets so the snapshot
 /// // reflects the state *after* mutation but *before* replication sends:
-/// server.record_historian_tick(world, current_tick);
+/// server.record_historian_tick(&world, current_tick);
 ///
 /// // On receiving a fire command with client tick T:
 /// if let Some(historian) = server.historian() {
