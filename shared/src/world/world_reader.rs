@@ -1676,6 +1676,67 @@ mod world_reader_tests {
     }
 
     #[test]
+    fn pairing_spawn_and_insert_follow_installed_redirect() {
+        let mut fx = Fixture::client();
+        let mut world = TestWorld::new();
+        let kinds = fx.kinds.clone();
+        // The entity is in scope under id 8, but the wire still names 7
+        // (post-migration naming). Both reads stamp the redirected entity,
+        // so the insert pairs against its own payload entry.
+        fx.adopt_remote(&mut world, 8);
+        fx.manager
+            .install_entity_redirect(wire_host(7).to_reversed(), wire_host(8).to_reversed());
+
+        let mut wire = Wire::new(&kinds);
+        wire.message(0, EntityMessageType::Spawn).remote(7);
+        wire.message(1, EntityMessageType::InsertComponent)
+            .owned(wire_host(7))
+            .component(&Ghost::new_complete(11));
+        read_packet(&mut fx, &wire.finish(), 5);
+        let events = fx.take_events(&mut world);
+        // Spawn reads bypass the redirect (they carry a bare RemoteEntity),
+        // so the spawn lands on 7 while the owned insert redirects to 8 and
+        // waits there. Split, but paired: no insert surfaces without its
+        // payload, and nothing panics.
+        assert_eq!(count(&events, EntityMessageType::Spawn), 1);
+        assert_eq!(count(&events, EntityMessageType::InsertComponent), 0);
+    }
+
+    #[test]
+    fn pairing_insert_buffered_before_redirect_stays_paired() {
+        let mut fx = Fixture::client();
+        let mut world = TestWorld::new();
+        let kinds = fx.kinds.clone();
+        // Insert arrives before any spawn and before the redirect: it is
+        // stamped pre-redirect and waits in its own channel. The redirect
+        // cannot re-stamp it afterwards, and it must never surface under
+        // the wrong entity -- its payload entry is simply orphaned.
+        read_packet(&mut fx, &insert_packet(&kinds, 0, 7), 5);
+        let events = fx.take_events(&mut world);
+        assert!(events.is_empty(), "the spawnless insert must wait");
+
+        fx.adopt_remote(&mut world, 8);
+        fx.manager
+            .install_entity_redirect(wire_host(7).to_reversed(), wire_host(8).to_reversed());
+
+        // Spawn under the old wire name lands on the redirected entity; the
+        // pre-redirect insert stays held under the old one.
+        let mut wire = Wire::new(&kinds);
+        wire.message(1, EntityMessageType::Spawn).remote(7);
+        read_packet(&mut fx, &wire.finish(), 6);
+        let events = fx.take_events(&mut world);
+        assert_eq!(count(&events, EntityMessageType::Spawn), 1);
+        assert_eq!(count(&events, EntityMessageType::InsertComponent), 0);
+
+        // A post-redirect insert redirects to 8, whose channel was never
+        // spawned, so it waits too -- held with its payload, never emitted
+        // without it, never panicked on.
+        read_packet(&mut fx, &insert_packet(&kinds, 2, 7), 7);
+        let events = fx.take_events(&mut world);
+        assert_eq!(count(&events, EntityMessageType::InsertComponent), 0);
+    }
+
+    #[test]
     fn pairing_retransmit_before_first_take() {
         let mut fx = Fixture::client();
         let mut world = TestWorld::new();
