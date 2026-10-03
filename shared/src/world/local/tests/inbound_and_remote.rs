@@ -570,3 +570,56 @@ fn a_received_component_is_buffered_and_then_applied_to_the_world() {
         "and it should have landed in the world"
     );
 }
+
+/// m2 red (Drake 42808): the client panic `an InsertComponent message must
+/// carry its own ticked payload: missing N ... buffered [(N-3, ...)]`.
+///
+/// Mechanism under test: the server's `ReliableSender` retransmits an unacked
+/// Insert under the SAME message id (`reliable_sender.rs` re-emits
+/// `(*message_index, ...)`); if the component is gone by retransmit time the
+/// writer degrades it to a payload-less Noop. On re-read the receiver drops
+/// the duplicate content (`reliable_receiver.rs` "already received") but
+/// `receiver_buffer_message` unconditionally overwrites the buffered tick, so
+/// the surviving original Insert is processed under the NEW tick while its
+/// only payload sits under the OLD one.
+///
+/// This test replays exactly that read sequence: Insert#1 at tick 1 with its
+/// payload, then a same-id Noop at tick 4 (the degraded retransmit, which
+/// pushes no payload), then a take. Correct behavior is a clean apply; today
+/// it panics in `process_ready_messages`, which is the red.
+#[test]
+fn a_degraded_retransmit_must_not_restamp_a_buffered_insert() {
+    let mut fx = Fixture::client();
+    let mut world = TestWorld::new();
+    let local_entity = fx.adopt_remote(&mut world, 3);
+
+    // Original read at tick 1: Insert#1 plus its inline payload.
+    fx.manager.insert_received_component(
+        1,
+        &local_entity,
+        &ComponentKind::of::<Wraith>(),
+        remote_component(&fx.kinds, &Wraith::new_complete(9)),
+    );
+    fx.manager.receiver_buffer_message(
+        1,
+        1,
+        crate::EntityMessage::InsertComponent(local_entity, ComponentKind::of::<Wraith>()),
+    );
+    // Retransmit read at tick 4: same id degraded to Noop, no payload push —
+    // exactly what `world_reader` does with a degraded retransmit.
+    fx.manager.receiver_buffer_message(1, 4, crate::EntityMessage::Noop);
+    let events = fx.take_events(&mut world);
+
+    assert!(
+        events.iter().any(
+            |e| matches!(e, crate::EntityEvent::InsertComponent(_, _, kind)
+                if *kind == ComponentKind::of::<Wraith>())
+        ),
+        "the tick-1 insert should still apply under its own payload"
+    );
+    assert_eq!(
+        world.value_of::<Wraith>(&3).map(|w| *w.value),
+        Some(9),
+        "and it should have landed in the world"
+    );
+}

@@ -802,7 +802,22 @@ impl LocalWorldManager {
         //     );
         // }
 
-        self.incoming_message_ticks.insert(id, tick);
+        // m2 probe (Drake 42808): a same-id retransmit re-read overwrites the
+        // buffered tick while `ReliableReceiver` drops the duplicate content,
+        // so the surviving message is processed under the NEW tick but its
+        // payload (if any) was pushed under the OLD one. Log the re-stamp;
+        // correlate by id with the writer-side expansion probe.
+        if let Some(old_tick) = self.incoming_message_ticks.insert(id, tick) {
+            if old_tick != tick {
+                log::debug!(
+                    "retransmit re-stamp: message id {:?} tick {:?} -> {:?} (msg type {:?})",
+                    id,
+                    old_tick,
+                    tick,
+                    msg.get_type()
+                );
+            }
+        }
         self.receiver.buffer_message(id, msg);
     }
 

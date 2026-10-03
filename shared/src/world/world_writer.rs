@@ -592,6 +592,19 @@ impl WorldWriter {
                     component_kind,
                 );
                 if !insert_present {
+                    // m2 probe (Drake 42808): a retransmitted Insert that
+                    // degrades to Noop here reuses its CommandId, so the
+                    // reader re-stamps the surviving message (see the
+                    // re-stamp probe in `receiver_buffer_message`) while no
+                    // payload is pushed. Log the expansion for id correlation.
+                    log::debug!(
+                        "InsertComponent degraded to Noop at write time: command id {:?}, packet {:?}, entity {:?}, kind {:?}, had_global_auth_record {}",
+                        command_id,
+                        packet_index,
+                        global_entity,
+                        component_kind,
+                        insert_has_global
+                    );
                     // Same terminal-loss warn as SpawnWithComponents: only the
                     // under-supply case is loud; the `!has_global` despawn race
                     // is a legitimate quiet Noop.
