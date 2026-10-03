@@ -175,7 +175,11 @@ impl Historian {
     // (no float/int conversions exist); the lookback inputs are small
     // in practice and the wrapping tick arithmetic below must keep its
     // exact `as`-cast bit behavior.
-    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
     pub fn snapshot_at_time_ago_ms(
         &self,
         time_ago_ms: u32,
@@ -186,8 +190,8 @@ impl Historian {
             return None;
         }
         let ticks_ago = (time_ago_ms as f32 / tick_duration_ms).round() as u32;
-        let ticks_ago_u16 = u16::try_from(ticks_ago % 65_536)
-            .expect("remainder below 2^16 fits in u16");
+        let ticks_ago_u16 =
+            u16::try_from(ticks_ago % 65_536).expect("remainder below 2^16 fits in u16");
         let target_tick = current_tick.wrapping_sub(ticks_ago_u16);
         // Try exact match first, then fall back to nearest available.
         if let Some(snap) = self.snapshot_at_tick(target_tick) {

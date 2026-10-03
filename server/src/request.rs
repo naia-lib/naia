@@ -382,9 +382,7 @@ mod tests {
 
         let (_, nonce_a) = manager.create_request_id(first).expect("capacity remains");
         let (_, nonce_b) = manager.create_request_id(first).expect("capacity remains");
-        let (_, nonce_other) = manager
-            .create_request_id(second)
-            .expect("capacity remains");
+        let (_, nonce_other) = manager.create_request_id(second).expect("capacity remains");
 
         assert_eq!(nonce_a.value(), 0);
         assert_eq!(nonce_b.value(), 1);

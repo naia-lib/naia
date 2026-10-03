@@ -236,11 +236,7 @@ impl ServerAuthHandler {
     }
 
     /// Check if a user is the authority holder for a specific entity
-    pub(crate) fn user_is_authority_holder(
-        &self,
-        user_key: UserKey,
-        entity: GlobalEntity,
-    ) -> bool {
+    pub(crate) fn user_is_authority_holder(&self, user_key: UserKey, entity: GlobalEntity) -> bool {
         self.entity_auth_map
             .get(&entity)
             .is_some_and(|owner| *owner == AuthOwner::Client(user_key))

@@ -124,8 +124,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         let world_io_sender = self.main.sender_cloned();
         let (to_world_sender, world_io_receiver) = PacketChannel::unbounded();
         self.to_world_sender_opt = Some(to_world_sender);
-        self.world
-            .io_load(world_io_sender, world_io_receiver);
+        self.world.io_load(world_io_sender, world_io_receiver);
     }
 
     /// Returns `true` if the server is bound and listening for connections.
@@ -816,8 +815,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         origin_user: &UserKey,
         world_entity: &E,
     ) -> Result<(), AuthorityError> {
-        self.world
-            .entity_give_authority(origin_user, world_entity)
+        self.world.entity_give_authority(origin_user, world_entity)
     }
 
     /// Updates the [`ReplicationConfig`] for a registered entity.
@@ -1206,8 +1204,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         max_ticks: u16,
         filter: impl IntoIterator<Item = naia_shared::ComponentKind>,
     ) {
-        self.world
-            .enable_historian_filtered(max_ticks, filter);
+        self.world.enable_historian_filtered(max_ticks, filter);
     }
 
     /// Record a snapshot of all replicated component values at the given tick.
@@ -1370,11 +1367,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         message_tick: &Tick,
         message: &M,
     ) -> bool {
-        self.world.inject_tick_buffer_message::<C, M>(
-            user_key,
-            host_tick,
-            message_tick,
-            message,
-        )
+        self.world
+            .inject_tick_buffer_message::<C, M>(user_key, host_tick, message_tick, message)
     }
 }

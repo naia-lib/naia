@@ -475,7 +475,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
                 .workers
                 .lock()
                 .iter()
-                .filter(|w| w.join.as_ref().is_none_or(std::thread::JoinHandle::is_finished))
+                .filter(|w| {
+                    w.join
+                        .as_ref()
+                        .is_none_or(std::thread::JoinHandle::is_finished)
+                })
                 .count();
             let finished = u32::try_from(finished).expect("worker count fits in u32");
             if *g + finished >= expected {
@@ -549,7 +553,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
                 .workers
                 .lock()
                 .iter()
-                .filter(|w| w.join.as_ref().is_none_or(std::thread::JoinHandle::is_finished))
+                .filter(|w| {
+                    w.join
+                        .as_ref()
+                        .is_none_or(std::thread::JoinHandle::is_finished)
+                })
                 .count();
             let finished_unparked =
                 u32::try_from(finished_unparked).expect("worker count fits in u32");
@@ -775,33 +783,33 @@ pub(crate) fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
                 // leaves a buffered token, so the freshly-created future resolves
                 // immediately. The per-tick park-window drain remains the
                 // authoritative safety net (≤1-tick dwell ceiling).
-                    if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
-                        smol::block_on(smol::future::or(readiness.wait(), async {
-                            let _ = park.control_rx.recv().await;
-                        }));
-                    }
-                    // Terminal peer loss (PF1-B): a closed readiness resolves
-                    // instantly every iteration. Exit instead of spinning —
-                    // the deposited handle stays in `recv_slot`, so the
-                    // consumer's park-window drain keeps working after us.
-                    if readiness.is_closed() {
-                        return;
-                    }
-                    // Clear the token(s) that woke us so the next wait starts
-                    // fresh (data is drained by recv.receive() at the loop top).
-                    readiness.drain();
-                    while park.control_rx.try_recv().is_ok() {}
-                // Poll-only transport (raw socket, no awaitable readiness): keep
-                // the bounded condvar poll — park_workers()'s body_sleep_cv wake
-                // still cuts the park barrier; the 100µs bound drains the socket.
-                } else {
-                    let mut g = park.body_sleep_mu.lock();
-                    if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
-                        park.body_sleep_cv
-                            .wait_for(&mut g, Duration::from_micros(100));
-                    }
-                    drop(g);
+                if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
+                    smol::block_on(smol::future::or(readiness.wait(), async {
+                        let _ = park.control_rx.recv().await;
+                    }));
                 }
+                // Terminal peer loss (PF1-B): a closed readiness resolves
+                // instantly every iteration. Exit instead of spinning —
+                // the deposited handle stays in `recv_slot`, so the
+                // consumer's park-window drain keeps working after us.
+                if readiness.is_closed() {
+                    return;
+                }
+                // Clear the token(s) that woke us so the next wait starts
+                // fresh (data is drained by recv.receive() at the loop top).
+                readiness.drain();
+                while park.control_rx.try_recv().is_ok() {}
+            // Poll-only transport (raw socket, no awaitable readiness): keep
+            // the bounded condvar poll — park_workers()'s body_sleep_cv wake
+            // still cuts the park barrier; the 100µs bound drains the socket.
+            } else {
+                let mut g = park.body_sleep_mu.lock();
+                if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
+                    park.body_sleep_cv
+                        .wait_for(&mut g, Duration::from_micros(100));
+                }
+                drop(g);
+            }
         } // end #[cfg(workers_active)]
     }
 }

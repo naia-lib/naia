@@ -530,7 +530,10 @@ impl MainServer {
                                     validate_packet,
                                 )) => {
                                     self.finalize_connection(user_key, &address);
-                                    if self.send_io.send_packet(&address, &validate_packet).is_err()
+                                    if self
+                                        .send_io
+                                        .send_packet(&address, &validate_packet)
+                                        .is_err()
                                     {
                                         // Same rationale as SendPacket above: client retries.
                                         warn!(
@@ -580,9 +583,7 @@ impl MainServer {
                 .collect();
             for (user_key, auth_addr_opt) in timed_out {
                 if let Some(auth_addr) = auth_addr_opt {
-                    warn!(
-                        "pending-auth timeout for {auth_addr}: auto-rejecting after {timeout:?}"
-                    );
+                    warn!("pending-auth timeout for {auth_addr}: auto-rejecting after {timeout:?}");
                     if let Some((auth_sender, _)) = self.auth_io.as_mut() {
                         let _ = auth_sender.reject(&auth_addr, None);
                     }
@@ -591,8 +592,7 @@ impl MainServer {
             }
         }
     }
-    }
-
+}
 
 #[cfg(test)]
 mod pending_auth_capacity_tests {

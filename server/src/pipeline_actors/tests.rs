@@ -2307,7 +2307,15 @@ fn recv_worker_skips_empty_outputs() {
     let t_park = Arc::clone(&park);
     let t_panic = Arc::clone(&test_panic);
     let worker = std::thread::spawn(move || {
-        recv_worker_loop(&t_slot, &t_tx, &t_shutdown, &t_park, None, &timing, &t_panic);
+        recv_worker_loop(
+            &t_slot,
+            &t_tx,
+            &t_shutdown,
+            &t_park,
+            None,
+            &timing,
+            &t_panic,
+        );
     });
     std::thread::sleep(Duration::from_millis(300));
     shutdown.store(true, Ordering::SeqCst);

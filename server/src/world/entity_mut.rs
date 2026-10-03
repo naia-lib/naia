@@ -119,7 +119,10 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldMutType<E>> Entity
         match server {
             EntityMutTarget::Resident(ws) => ws.despawn_entity(world, &entity),
             EntityMutTarget::Pipelined(ps) => {
-                assert!(world.has_entity(&entity), "attempted to de-spawn nonexistent entity");
+                assert!(
+                    world.has_entity(&entity),
+                    "attempted to de-spawn nonexistent entity"
+                );
                 world.despawn_entity(&entity);
                 ps.despawn_entity_worldless(&entity);
             }
@@ -153,7 +156,10 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldMutType<E>> Entity
         match server {
             EntityMutTarget::Resident(ws) => ws.insert_component(world, &entity, component_ref),
             EntityMutTarget::Pipelined(ps) => {
-                assert!(world.has_entity(&entity), "attempted to add component to non-existent entity");
+                assert!(
+                    world.has_entity(&entity),
+                    "attempted to add component to non-existent entity"
+                );
 
                 let mut component = component_ref;
                 let component_kind = component.kind();
@@ -180,7 +186,10 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldMutType<E>> Entity
     /// after construction.
     pub fn remove_component<R: ReplicatedComponent>(&mut self) -> Option<R> {
         // no allow_static_insert exception — removal is never valid
-        assert!(!self.target_entity_is_static(), "Cannot remove_component on a static entity");
+        assert!(
+            !self.target_entity_is_static(),
+            "Cannot remove_component on a static entity"
+        );
         let entity = self.entity;
         let Self { server, world, .. } = self;
         match server {

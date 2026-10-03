@@ -70,7 +70,9 @@ impl UserStore {
     // ── Convenience queries ───────────────────────────────────────────────
 
     pub(crate) fn address(&self, key: UserKey) -> Option<SocketAddr> {
-        self.users.get(&key).map(super::super::user::world_user::WorldUser::address)
+        self.users
+            .get(&key)
+            .map(super::super::user::world_user::WorldUser::address)
     }
 
     pub(crate) fn room_keys_iter(&self, key: UserKey) -> Option<Iter<'_, RoomKey>> {
@@ -78,7 +80,9 @@ impl UserStore {
     }
 
     pub(crate) fn rooms_count(&self, key: UserKey) -> Option<usize> {
-        self.users.get(&key).map(super::super::user::world_user::WorldUser::rooms_count)
+        self.users
+            .get(&key)
+            .map(super::super::user::world_user::WorldUser::rooms_count)
     }
 
     // ── Disconnected-users tracking ───────────────────────────────────────

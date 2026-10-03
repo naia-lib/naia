@@ -76,7 +76,10 @@ pub fn new_io_pair(
 
 impl RecvIo {
     pub fn load(&mut self, packet_receiver: Box<dyn PacketReceiver>) {
-        assert!(self.packet_receiver.is_none(), "Packet receiver already loaded! Cannot do this twice!");
+        assert!(
+            self.packet_receiver.is_none(),
+            "Packet receiver already loaded! Cannot do this twice!"
+        );
         self.packet_receiver = Some(packet_receiver);
     }
 
@@ -150,7 +153,10 @@ impl RecvIo {
 
 impl SendIo {
     pub fn load(&mut self, packet_sender: Box<dyn PacketSender>) {
-        assert!(self.packet_sender.is_none(), "Packet sender already loaded! Cannot do this twice!");
+        assert!(
+            self.packet_sender.is_none(),
+            "Packet sender already loaded! Cannot do this twice!"
+        );
         self.packet_sender = Some(packet_sender);
     }
 
@@ -159,7 +165,10 @@ impl SendIo {
     }
 
     pub fn sender_cloned(&self) -> Box<dyn PacketSender> {
-        assert!(self.packet_sender.is_some(), "Cannot call Server.sender_cloned() until you call Server.listen()!");
+        assert!(
+            self.packet_sender.is_some(),
+            "Cannot call Server.sender_cloned() until you call Server.listen()!"
+        );
         self.packet_sender.as_ref().unwrap().clone()
     }
 

@@ -188,10 +188,7 @@ impl RoomStore {
         }
         (
             ScopeChange::UserLeftRoom(user_key, room_key),
-            RoomChange::UserRemoved {
-                room_key,
-                user_key,
-            },
+            RoomChange::UserRemoved { room_key, user_key },
         )
     }
 

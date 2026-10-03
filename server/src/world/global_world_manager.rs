@@ -74,7 +74,10 @@ impl GlobalWorldManager {
         global_entity: GlobalEntity,
         entity_owner: EntityOwner,
     ) -> GlobalEntityIndex {
-        assert!(!self.entity_records.contains_key(&global_entity), "entity already initialized!");
+        assert!(
+            !self.entity_records.contains_key(&global_entity),
+            "entity already initialized!"
+        );
         self.entity_records
             .insert(global_entity, GlobalEntityRecord::new(entity_owner));
         self.diff_handler
@@ -88,7 +91,10 @@ impl GlobalWorldManager {
         global_entity: GlobalEntity,
         entity_owner: EntityOwner,
     ) -> GlobalEntityIndex {
-        assert!(!self.entity_records.contains_key(&global_entity), "entity already initialized!");
+        assert!(
+            !self.entity_records.contains_key(&global_entity),
+            "entity already initialized!"
+        );
         self.entity_records
             .insert(global_entity, GlobalEntityRecord::new_static(entity_owner));
         self.diff_handler
@@ -152,7 +158,10 @@ impl GlobalWorldManager {
         global_entity: GlobalEntity,
         component_kind: &ComponentKind,
     ) {
-        assert!(self.entity_records.contains_key(&global_entity), "entity does not exist!");
+        assert!(
+            self.entity_records.contains_key(&global_entity),
+            "entity does not exist!"
+        );
         let component_kind_set = &mut self
             .entity_records
             .get_mut(&global_entity)
@@ -200,13 +209,19 @@ impl GlobalWorldManager {
         global_entity: GlobalEntity,
         component_kind: &ComponentKind,
     ) {
-        assert!(self.entity_records.contains_key(&global_entity), "entity does not exist!");
+        assert!(
+            self.entity_records.contains_key(&global_entity),
+            "entity does not exist!"
+        );
         let component_kind_set = &mut self
             .entity_records
             .get_mut(&global_entity)
             .unwrap()
             .component_kinds;
-        assert!(component_kind_set.remove(component_kind), "component does not exist!");
+        assert!(
+            component_kind_set.remove(component_kind),
+            "component does not exist!"
+        );
     }
 
     pub fn remove_component_diff_handler(
@@ -325,7 +340,10 @@ impl GlobalWorldManager {
         let Some(record) = self.entity_records.get_mut(&global_entity) else {
             panic!("entity record does not exist!");
         };
-        assert!(record.replication_config.publicity == Publicity::Public, "Can only enable delegation on an Entity that is Public!");
+        assert!(
+            record.replication_config.publicity == Publicity::Public,
+            "Can only enable delegation on an Entity that is Public!"
+        );
 
         record.replication_config.publicity = Publicity::Delegated;
         self.auth_handler.register_entity(global_entity);
@@ -347,7 +365,10 @@ impl GlobalWorldManager {
         let Some(record) = self.entity_records.get_mut(&global_entity) else {
             panic!("entity record does not exist!");
         };
-        assert!(record.replication_config.publicity == Publicity::Delegated, "Can only disable delegation on an Entity that is Delegated!");
+        assert!(
+            record.replication_config.publicity == Publicity::Delegated,
+            "Can only disable delegation on an Entity that is Delegated!"
+        );
 
         record.replication_config.publicity = Publicity::Public;
         self.auth_handler.deregister_entity(global_entity);

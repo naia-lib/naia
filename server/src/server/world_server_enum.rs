@@ -607,7 +607,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.receive_all_packets(),
             WorldServerImpl::Pipelined(ps) => {
-                ps.with_monolithic_world_server(super::world_server::InternalWorldServer::receive_all_packets);
+                ps.with_monolithic_world_server(
+                    super::world_server::InternalWorldServer::receive_all_packets,
+                );
             }
         }
     }
@@ -626,9 +628,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn take_world_events(&mut self) -> WorldEvents<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.take_world_events(),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_monolithic_world_server(super::world_server::InternalWorldServer::take_world_events)
-            }
+            WorldServerImpl::Pipelined(ps) => ps.with_monolithic_world_server(
+                super::world_server::InternalWorldServer::take_world_events,
+            ),
         }
     }
 
@@ -1101,7 +1103,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.drain_all_acks(),
             WorldServerImpl::Pipelined(ps) => {
-                ps.with_monolithic_world_server(super::world_server::InternalWorldServer::drain_all_acks);
+                ps.with_monolithic_world_server(
+                    super::world_server::InternalWorldServer::drain_all_acks,
+                );
             }
         }
     }

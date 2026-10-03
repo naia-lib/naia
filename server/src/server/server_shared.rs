@@ -238,11 +238,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
     pub(crate) fn set_idx_to_world(&self, idx: GlobalEntityIndex, world_entity: Option<E>) {
         let mut idx_to_world = self.idx_to_world.write();
         let slot = idx.as_usize();
-        assert!(slot < idx_to_world.len(), 
+        assert!(
+            slot < idx_to_world.len(),
             "replicated entity limit exceeded: entity index {} is past \
              ServerConfig::max_replicated_entities ({}). Raise \
              max_replicated_entities, or despawn entities before spawning more.",
-            slot, self.server_config.max_replicated_entities,
+            slot,
+            self.server_config.max_replicated_entities,
         );
         idx_to_world[slot] = world_entity;
     }

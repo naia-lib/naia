@@ -782,7 +782,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     ) -> Result<(), NaiaServerError> {
         let channel_settings = self.shared.channel_kinds.channel(channel_kind);
 
-        assert!(channel_settings.can_send_to_client(), "Cannot send message to Client on this Channel");
+        assert!(
+            channel_settings.can_send_to_client(),
+            "Cannot send message to Client on this Channel"
+        );
 
         let Some(user) = self.sim_handle.state.user_store.get(user_key) else {
             #[cfg(feature = "f3_diag")]
@@ -870,7 +873,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     ) -> Result<GlobalRequestId, NaiaServerError> {
         let channel_settings = self.shared.channel_kinds.channel(channel_kind);
 
-        assert!(channel_settings.can_request_and_respond(), "Requests can only be sent over Bidirectional, Reliable Channels");
+        assert!(
+            channel_settings.can_request_and_respond(),
+            "Requests can only be sent over Bidirectional, Reliable Channels"
+        );
 
         // Check before allocating: every Err below used to leak a request row
         // with no request ever sent, unpurged until disconnect.
@@ -1853,7 +1859,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                     }
                 }
                 Publicity::Delegated => {
-                    assert!(!client_owned, "Client-owned entity should never be delegated");
+                    assert!(
+                        !client_owned,
+                        "Client-owned entity should never be delegated"
+                    );
                     match config.publicity {
                         Publicity::Private => {
                             // delegated -> private
@@ -2068,10 +2077,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     }
 
     #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
-    fn entity_enable_delegation_response(
-        _user_key: UserKey,
-        _global_entity: GlobalEntity,
-    ) {
+    fn entity_enable_delegation_response(_user_key: UserKey, _global_entity: GlobalEntity) {
         // EnableDelegationResponse does NOT send SetAuthority messages.
         // Enabling delegation establishes the delegated-mode baseline as Available (AuthNone) for clients.
         // Any Denied/Granted status changes come ONLY from subsequent authority operations (request/give/take/release).
@@ -2579,7 +2585,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// This will also remove all of the Entity’s Components.
     /// Panics if the Entity does not exist.
     pub(crate) fn despawn_entity<W: WorldMutType<E>>(&mut self, world: &mut W, world_entity: &E) {
-        assert!(world.has_entity(world_entity), "attempted to de-spawn nonexistent entity");
+        assert!(
+            world.has_entity(world_entity),
+            "attempted to de-spawn nonexistent entity"
+        );
 
         // Delete from world
         world.despawn_entity(world_entity);
@@ -2814,7 +2823,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         world_entity: &E,
         mut component: R,
     ) {
-        assert!(world.has_entity(world_entity), "attempted to add component to non-existent entity");
+        assert!(
+            world.has_entity(world_entity),
+            "attempted to add component to non-existent entity"
+        );
 
         let component_kind = component.kind();
 
@@ -3402,7 +3414,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 .global_world_manager
                 .write()
                 .client_request_authority(global_entity, &requester);
-            assert!(result.is_ok(), 
+            assert!(
+                result.is_ok(),
                 "failed to grant authority of client-owned delegated entity to creating user"
             );
 

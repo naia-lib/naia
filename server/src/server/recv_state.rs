@@ -236,7 +236,6 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                                 .pending_outbound_packets
                                 .lock()
                                 .push((address, packet));
-
                         }
                     }
                 }
@@ -313,7 +312,10 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
         header: &StandardHeader,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        assert!(header.packet_type == PacketType::Data, "Server Error: received non-data packet in data packet handler");
+        assert!(
+            header.packet_type == PacketType::Data,
+            "Server Error: received non-data packet in data packet handler"
+        );
 
         let Some(recv_conn) = self.recv_user_connections.get_mut(address) else {
             return Ok(());

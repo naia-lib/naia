@@ -35,11 +35,7 @@ pub fn get_generics(input: &DeriveInput) -> (TokenStream, TokenStream, TokenStre
         #ty_generics
     };
     let turbofish = ty_generics.as_turbofish();
-    (
-        untyped_generics,
-        typed_generics,
-        quote! { #turbofish },
-    )
+    (untyped_generics, typed_generics, quote! { #turbofish })
 }
 
 /// Builds the `{ phantom_T: PhantomData<T>, .. }` tail for a builder struct.

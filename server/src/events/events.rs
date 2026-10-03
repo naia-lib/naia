@@ -36,7 +36,10 @@ impl<E: Hash + Copy + Eq + Sync + Send> From<WorldEvents<E>> for Events<E> {
 
 impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     pub(crate) fn new(mut main_events: MainEvents, mut world_events: WorldEvents<E>) -> Self {
-        assert!(!main_events.has::<ConnectEvent>(), "When using combined Main and World events, MainEvents should not contain ConnectEvent");
+        assert!(
+            !main_events.has::<ConnectEvent>(),
+            "When using combined Main and World events, MainEvents should not contain ConnectEvent"
+        );
 
         // combine error events
         if main_events.has::<ErrorEvent>() {

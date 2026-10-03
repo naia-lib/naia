@@ -1748,7 +1748,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     ) -> Result<(), NaiaServerError> {
         let channel_kind = ChannelKind::of::<C>();
         let channel_settings = self.coord().shared.channel_kinds.channel(&channel_kind);
-        assert!(channel_settings.can_send_to_client(), "Cannot send message to Client on this Channel");
+        assert!(
+            channel_settings.can_send_to_client(),
+            "Cannot send message to Client on this Channel"
+        );
         let Some(user) = self.coord().state.user_store.get(*user_key) else {
             return Err(NaiaServerError::UserNotFound);
         };
@@ -1785,7 +1788,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     ) -> Result<ResponseReceiveKey<Q::Response>, NaiaServerError> {
         let channel_kind = ChannelKind::of::<C>();
         let channel_settings = self.coord().shared.channel_kinds.channel(&channel_kind);
-        assert!(channel_settings.can_request_and_respond(), "Requests can only be sent over Bidirectional, Reliable Channels");
+        assert!(
+            channel_settings.can_request_and_respond(),
+            "Requests can only be sent over Bidirectional, Reliable Channels"
+        );
 
         // Check first: allocating the id before this Err left a row with no
         // request ever sent, unpurged until disconnect. H3: the nonce
@@ -1893,7 +1899,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         message_box: Box<dyn Message>,
     ) {
         let channel_settings = self.coord().shared.channel_kinds.channel(&channel_kind);
-        assert!(channel_settings.can_send_to_client(), "Cannot send message to Client on this Channel");
+        assert!(
+            channel_settings.can_send_to_client(),
+            "Cannot send message to Client on this Channel"
+        );
         self.coord_mut().state.pending_outbound_message_ops.push(
             PendingOutboundMessageOp::Fanout {
                 user_keys,
@@ -2557,10 +2566,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .remove_from_all_rooms(global_entity);
     }
 
-    fn entity_global_idx(
-        coord: &CoordHandle<E>,
-        global_entity: GlobalEntity,
-    ) -> GlobalEntityIndex {
+    fn entity_global_idx(coord: &CoordHandle<E>, global_entity: GlobalEntity) -> GlobalEntityIndex {
         let handler = coord.shared.global_world_manager.read().diff_handler();
         let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
         guard
