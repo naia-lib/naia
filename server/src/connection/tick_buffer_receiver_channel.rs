@@ -37,7 +37,7 @@ impl TickBufferReceiverChannel {
         let message_capacity = u16::try_from(self.settings.message_capacity)
             .expect("message capacity fits in u16");
         self.incoming_messages
-            .insert(host_tick, message_tick, 0, message, message_capacity)
+            .insert(*host_tick, *message_tick, 0, message, message_capacity)
     }
 
     /// Given incoming packet data, read transmitted Messages and store

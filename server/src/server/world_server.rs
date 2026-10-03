@@ -1372,7 +1372,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         let channel_kind = ChannelKind::of::<C>();
         let message_box = M::clone_box(message);
         let container = MessageContainer::new(message_box);
-        let Some(user) = self.sim_handle.state.user_store.get(user_key) else {
+        let Some(user) = self.sim_handle.state.user_store.get(*user_key) else {
             warn!(
                 "inject_tick_buffer_message: user {:?} does not exist",
                 user_key
@@ -5016,7 +5016,7 @@ cfg_if! {
             send_user_connections: &std::collections::HashMap<std::net::SocketAddr, crate::connection::SendConnection>,
             user_key: &UserKey,
         ) -> Vec<LocalEntity> {
-            let user = user_store.get(user_key).expect("User does not exist");
+            let user = user_store.get(*user_key).expect("User does not exist");
             let send_conn = send_user_connections
                 .get(&user.address())
                 .expect("User connection does not exist");
@@ -5030,7 +5030,7 @@ cfg_if! {
             user_key: &UserKey,
             local_entity: &LocalEntity,
         ) -> Option<E> {
-            let user = user_store.get(user_key)?;
+            let user = user_store.get(*user_key)?;
             let send_conn = send_user_connections.get(&user.address())?;
             let converter = send_conn.base.world_manager.entity_converter();
 
@@ -5060,7 +5060,7 @@ cfg_if! {
                 .entity_to_global_entity(world_entity)
                 .ok()?;
 
-            let user = user_store.get(user_key)?;
+            let user = user_store.get(*user_key)?;
             let send_conn = send_user_connections.get(&user.address())?;
             let converter = send_conn.base.world_manager.entity_converter();
             let owned_entity = converter

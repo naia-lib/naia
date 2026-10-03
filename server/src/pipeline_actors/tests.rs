@@ -998,7 +998,7 @@ fn drain_tick_buffer_returns_injected_message_under_test_utils() {
         &recv.state.shared.server_config.connection,
         &recv.state.shared.server_config.ping,
         &address,
-        &user_key,
+        user_key,
         &recv.state.shared.channel_kinds,
         &gwm_guard,
         recv.state.shared.server_config.max_replicated_entities as usize,
