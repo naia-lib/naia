@@ -360,7 +360,7 @@ impl SendConnection {
         }
 
         if has_events || has_messages {
-            if !self.base.can_spend_bandwidth(MTU_SIZE_BYTES as u32) {
+            if !self.base.can_spend_bandwidth(u32::try_from(MTU_SIZE_BYTES).expect("MTU size fits in u32")) {
                 self.base.record_bandwidth_deferred();
                 return false;
             }
@@ -387,7 +387,7 @@ impl SendConnection {
             );
 
             let packet = writer.to_packet();
-            let packet_bytes = packet.slice().len() as u32;
+            let packet_bytes = u32::try_from(packet.slice().len()).expect("packet length fits in u32");
             #[cfg(feature = "bench_instrumentation")]
             let t_io = std::time::Instant::now();
             let addr = self.address;
@@ -634,7 +634,7 @@ impl SendConnection {
         }
 
         if has_events || has_messages {
-            if !self.base.can_spend_bandwidth(MTU_SIZE_BYTES as u32) {
+            if !self.base.can_spend_bandwidth(u32::try_from(MTU_SIZE_BYTES).expect("MTU size fits in u32")) {
                 self.base.record_bandwidth_deferred();
                 *refused_on_bandwidth = true;
                 return None;
@@ -653,7 +653,9 @@ impl SendConnection {
                 snapshot_map,
             );
             let packet = writer.to_packet();
-            self.base.spend_bandwidth(packet.slice().len() as u32);
+            self.base.spend_bandwidth(
+            u32::try_from(packet.slice().len()).expect("packet length fits in u32"),
+        );
             return Some(packet);
         }
 

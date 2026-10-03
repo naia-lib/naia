@@ -176,14 +176,12 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                                 .is_err()
                             {
                                 warn!("Server Error: cannot read malformed packet");
-                                continue;
                             }
                         }
                         PacketType::Heartbeat => {
                             if let Some(recv_conn) = self.recv_user_connections.get_mut(&address) {
                                 recv_conn.process_incoming_header(&header);
                             }
-                            continue;
                         }
                         PacketType::Ping => {
                             // 4-F.naia.c.1: queue the pong response on
@@ -203,7 +201,6 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                             if let Some(recv_conn) = self.recv_user_connections.get_mut(&address) {
                                 recv_conn.process_incoming_header(&header);
                             }
-                            continue;
                         }
                         PacketType::Pong => {
                             if let Some(recv_conn) = self.recv_user_connections.get_mut(&address) {
@@ -218,7 +215,6 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                                     .shared
                                     .set_rtt_avg_ms(recv_conn.ping_manager.rtt_average);
                             }
-                            continue;
                         }
                         PacketType::Handshake => {
                             let handshake_header_result = HandshakeHeader::de(&mut reader);
@@ -241,7 +237,6 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                                 .lock()
                                 .push((address, packet));
 
-                            continue;
                         }
                     }
                 }

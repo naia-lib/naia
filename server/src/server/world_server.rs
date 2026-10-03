@@ -1505,14 +1505,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         let Some(global_entity) = self.sim_handle.state.resource_registry.remove::<R>() else {
             return false;
         };
-        let world_entity = match self
+        let Ok(world_entity) = self
             .shared
             .global_entity_map
             .read()
             .global_entity_to_entity(global_entity)
-        {
-            Ok(e) => e,
-            Err(_) => return true, // registry stale; nothing more to do
+        else {
+            // registry stale; nothing more to do
+            return true;
         };
         // Despawn from inner tracking (scope, priority, replication state)
         self.despawn_entity_worldless(&world_entity);
@@ -2119,14 +2119,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         world: &mut W,
         world_entity: &E,
     ) -> bool {
-        let global_entity = match self
+        let Ok(global_entity) = self
             .shared
             .global_entity_map
             .read()
             .entity_to_global_entity(world_entity)
-        {
-            Ok(ge) => ge,
-            Err(_) => return false,
+        else {
+            return false;
         };
 
         // Only enable delegation for server-owned entities

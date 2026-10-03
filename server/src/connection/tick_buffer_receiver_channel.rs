@@ -34,7 +34,8 @@ impl TickBufferReceiverChannel {
         message_tick: &Tick,
         message: MessageContainer,
     ) -> bool {
-        let message_capacity = self.settings.message_capacity as u16;
+        let message_capacity = u16::try_from(self.settings.message_capacity)
+            .expect("message capacity fits in u16");
         self.incoming_messages
             .insert(host_tick, message_tick, 0, message, message_capacity)
     }
@@ -80,7 +81,9 @@ impl TickBufferReceiverChannel {
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         // read remote tick
-        let remote_tick_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as Tick;
+        let remote_tick_diff =
+            u16::try_from(UnsignedVariableInteger::<3>::de(reader)?.get())
+                .map_err(|_| SerdeErr)?;
         *last_read_tick = last_read_tick.wrapping_sub(remote_tick_diff);
         let remote_tick = *last_read_tick;
 
@@ -90,14 +93,16 @@ impl TickBufferReceiverChannel {
         let mut last_read_message_index: ShortMessageIndex = 0;
         for _ in 0..message_count {
             // read message id diff, add to last read id
-            let id_diff = UnsignedVariableInteger::<2>::de(reader)?.get() as ShortMessageIndex;
+            let id_diff = u8::try_from(UnsignedVariableInteger::<2>::de(reader)?.get())
+            .map_err(|_| SerdeErr)?;
             let message_index: ShortMessageIndex = last_read_message_index + id_diff;
             last_read_message_index = message_index;
 
             // read payload
             let new_message = message_kinds.read(reader, entity_converter)?;
 
-            let message_capacity = self.settings.message_capacity as u16;
+            let message_capacity = u16::try_from(self.settings.message_capacity)
+            .expect("message capacity fits in u16");
 
             if !self.incoming_messages.insert(
                 host_tick,

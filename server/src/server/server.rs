@@ -82,7 +82,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         let mut protocol: Protocol = protocol.into();
         protocol.lock();
         let protocol_id = protocol.protocol_id();
-        Self::new_with_protocol_id(mode, &server_config, protocol, protocol_id)
+        Self::new_with_protocol_id(mode, server_config, protocol, protocol_id)
     }
 
     /// Creates a new server with an explicit drive shape and protocol ID.
@@ -105,7 +105,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
             }
         };
         Self {
-            main: MainServer::new_with_protocol_id(&server_config, protocol, protocol_id),
+            main: MainServer::new_with_protocol_id(server_config, protocol, protocol_id),
             outstanding_main_events: MainEvents::default(),
             world: world_server,
             to_world_sender_opt: None,

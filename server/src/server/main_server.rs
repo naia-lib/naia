@@ -59,7 +59,7 @@ impl MainServer {
         let mut protocol: Protocol = protocol.into();
         protocol.lock();
         let protocol_id = protocol.protocol_id();
-        Self::new_with_protocol_id(&server_config, protocol, protocol_id)
+        Self::new_with_protocol_id(server_config, protocol, protocol_id)
     }
 
     /// Creates a new `MainServer` using a pre-computed protocol ID (used by adapters sharing a protocol).

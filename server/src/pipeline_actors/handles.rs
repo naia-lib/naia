@@ -561,14 +561,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// when a client holds authority). Returns `None` when the entity is
     /// not in the global map.
     pub fn entity_authority_status(&self, world_entity: &E) -> Option<EntityAuthStatus> {
-        let global_entity = match self
+        let Ok(global_entity) = self
             .shared
             .global_entity_map
             .read()
             .entity_to_global_entity(world_entity)
-        {
-            Ok(ge) => ge,
-            Err(_) => return None,
+        else {
+            return None;
         };
         self.shared
             .global_world_manager

@@ -445,7 +445,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
         if self.state() != RuntimeState::Running {
             return;
         }
-        let expected = self.workers.lock().len() as u32;
+        let expected = u32::try_from(self.workers.lock().len()).expect("worker count fits in u32");
         self.park.park.store(true, Ordering::SeqCst);
         // Wake body-sleeping workers via condvar so they loop back to the
         // checkpoint and park immediately. Hold body_sleep_mu while notifying to
@@ -476,7 +476,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
                 .lock()
                 .iter()
                 .filter(|w| w.join.as_ref().is_none_or(std::thread::JoinHandle::is_finished))
-                .count() as u32;
+                .count();
+            let finished = u32::try_from(finished).expect("worker count fits in u32");
             if *g + finished >= expected {
                 break;
             }
@@ -487,7 +488,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
                 .wait_for(&mut g, Duration::from_millis(5));
         }
         if let (Some(f), Some(t)) = (self.timing.record_barrier, t_barrier) {
-            f(t.elapsed().as_nanos() as u64);
+            f(u64::try_from(t.elapsed().as_nanos()).expect("elapsed nanos fit in u64"));
         }
     }
 
@@ -549,7 +550,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
                 .lock()
                 .iter()
                 .filter(|w| w.join.as_ref().is_none_or(std::thread::JoinHandle::is_finished))
-                .count() as u32;
+                .count();
+            let finished_unparked =
+                u32::try_from(finished_unparked).expect("worker count fits in u32");
             // If the only thing keeping the count above 0 would be a worker that
             // has since finished, stop waiting.
             if finished_unparked >= *g {
@@ -724,7 +727,7 @@ pub(crate) fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
             // the worker stuck while `park_workers()` waits for it to reach its
             // checkpoint — a deadlock. A contended slot just produces a 100µs
             // retry.
-            let mut recv = if let Some(h) = recv_slot.try_lock().and_then(|mut g| g.take()) { h } else {
+            let Some(mut recv) = recv_slot.try_lock().and_then(|mut g| g.take()) else {
                 thread::sleep(Duration::from_micros(100));
                 continue;
             };
@@ -732,7 +735,7 @@ pub(crate) fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
             let t_recv = timing.record_recv.map(|_| std::time::Instant::now());
             let output = recv.receive();
             if let (Some(f), Some(t)) = (timing.record_recv, t_recv) {
-                f(t.elapsed().as_nanos() as u64);
+                f(u64::try_from(t.elapsed().as_nanos()).expect("elapsed nanos fit in u64"));
             }
 
             // Re-deposit using try_lock spin (never blocks park checkpoint).
@@ -913,7 +916,7 @@ fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
             // Claim the handle FIRST — before touching the lag buffer — so a
             // failed claim cannot drop a buffered job. try_lock never blocks the
             // park checkpoint.
-            let mut send = if let Some(h) = send_slot.try_lock().and_then(|mut g| g.take()) { h } else {
+            let Some(mut send) = send_slot.try_lock().and_then(|mut g| g.take()) else {
                 thread::sleep(Duration::from_micros(100));
                 continue;
             };
@@ -949,7 +952,7 @@ fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
                     None => send.send_all_packets(&job),
                 }
                 if let (Some(f), Some(t)) = (timing.record_send, t_send) {
-                    f(t.elapsed().as_nanos() as u64);
+                    f(u64::try_from(t.elapsed().as_nanos()).expect("elapsed nanos fit in u64"));
                 }
 
                 // Re-deposit before looping back to the park checkpoint.
@@ -987,7 +990,6 @@ fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
                     }
                     drop(g);
                 }
-                continue;
             }
         }
     }
