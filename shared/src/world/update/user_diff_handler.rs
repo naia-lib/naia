@@ -97,6 +97,8 @@ pub struct UserDiffHandler {
 }
 
 impl UserDiffHandler {
+    /// Creates an empty per-user diff handler, sizing its dense tables from
+    /// `global_world_manager`'s component-kind count.
     pub fn new(global_world_manager: &dyn GlobalWorldManagerType) -> Self {
         // Read the protocol's component-kind count under a brief read
         // guard. Used to size the per-user `DirtyQueue`'s stride and
@@ -151,6 +153,12 @@ impl UserDiffHandler {
     }
 
     // Component Registration
+    /// Registers (`entity`, `component_kind`) for per-user diff tracking,
+    /// allocating its receiver and reverse-lookup entries.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the global diff handler lock is poisoned.
     pub fn register_component(
         &mut self,
         address: &Option<SocketAddr>,
@@ -239,6 +247,8 @@ impl UserDiffHandler {
             .insert((entity, component_kind), (entity_idx, kind_bit));
     }
 
+    /// Deregisters (`entity`, `component_kind`), clearing its mask first so no
+    /// dirty refcount leaks. No-op if the pair was never registered.
     pub fn deregister_component(&mut self, entity: GlobalEntity, component_kind: ComponentKind) {
         let Some((entity_idx, kind_bit)) =
             self.entity_kind_to_key.remove(&(entity, component_kind))
@@ -277,12 +287,19 @@ impl UserDiffHandler {
         }
     }
 
+    /// Returns whether (`entity`, `component`) is currently registered.
     pub fn has_component(&self, entity: GlobalEntity, component: ComponentKind) -> bool {
         self.entity_kind_to_key.contains_key(&(entity, component))
     }
 
     // Diff masks — cold paths resolve via entity_kind_to_key (no RwLock required).
 
+    /// Returns a snapshot of the diff mask for (`entity`, `component_kind`).
+    /// Cold path: resolves via `entity_kind_to_key`, no `RwLock` required.
+    ///
+    /// # Panics
+    ///
+    /// Panics if no receiver is registered for (`entity`, `component_kind`).
     pub fn diff_mask_snapshot(
         &self,
         entity: GlobalEntity,
@@ -300,6 +317,8 @@ impl UserDiffHandler {
         receiver.mask_snapshot()
     }
 
+    /// Returns whether the diff mask for (`entity`, `component_kind`) is clear.
+    /// Unregistered pairs report clear.
     pub fn diff_mask_is_clear(&self, entity: GlobalEntity, component_kind: ComponentKind) -> bool {
         let Some((entity_idx, kind_bit)) = self
             .entity_kind_to_key
@@ -407,6 +426,11 @@ impl UserDiffHandler {
         }
     }
 
+    /// Merges `other_mask` into the diff mask for (`entity`, `component_kind`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if no receiver is registered for (`entity`, `component_kind`).
     pub fn or_diff_mask(
         &self,
         entity: GlobalEntity,
@@ -425,6 +449,11 @@ impl UserDiffHandler {
         receiver.or_mask(other_mask);
     }
 
+    /// Clears the diff mask for (`entity`, `component_kind`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if no receiver is registered for (`entity`, `component_kind`).
     pub fn clear_diff_mask(&self, entity: GlobalEntity, component_kind: ComponentKind) {
         let (entity_idx, kind_bit) = self
             .entity_kind_to_key
