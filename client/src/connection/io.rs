@@ -74,6 +74,15 @@ impl Io {
         self.packet_sender.is_some()
     }
 
+    /// Shuts down the loaded attempt's transport, if any. Safe on an empty
+    /// Io (no attempt to tear down) and safe to repeat: the backend seam is
+    /// idempotent.
+    pub fn shutdown(&mut self) {
+        if let Some(sender) = self.packet_sender.as_mut() {
+            sender.shutdown();
+        }
+    }
+
     pub fn is_authenticated(&self) -> bool {
         self.authenticated
     }

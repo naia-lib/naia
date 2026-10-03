@@ -175,6 +175,13 @@ impl TransportSender for LocalClientTransportSender {
             ClientServerAddr::Finding => TransportServerAddr::Finding,
         }
     }
+
+    fn shutdown(&mut self) {
+        // Documented no-op: the local loopback holds no OS socket, JS peer,
+        // or connection slot. Teardown is the drop itself: replacing Io drops
+        // the mpsc sender, which closes the channel and disconnects the
+        // paired receiver. There is nothing to close eagerly.
+    }
 }
 
 #[derive(Clone)]

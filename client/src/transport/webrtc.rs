@@ -42,6 +42,9 @@ impl TransportSender for PacketSender {
             ServerAddr::Finding => TransportAddr::Finding,
         }
     }
+    fn shutdown(&mut self) {
+        PacketSender::shutdown(self);
+    }
 }
 
 impl TransportReceiver for PacketReceiver {

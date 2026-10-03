@@ -1,8 +1,11 @@
 use naia_socket_shared::{stamp_protocol_id_header, SocketConfig};
 
 use super::{
-    addr_cell::AddrCell, data_channel::DataChannel, data_port::DataPort,
-    identity_receiver::IdentityReceiver, packet_receiver::PlainPacketReceiver,
+    addr_cell::AddrCell,
+    data_channel::{DataChannel, WasmPeerCloser},
+    data_port::DataPort,
+    identity_receiver::IdentityReceiver,
+    packet_receiver::PlainPacketReceiver,
     packet_sender::PacketSender,
 };
 use crate::packet_receiver::PacketReceiver;
@@ -91,12 +94,16 @@ impl Socket {
         let data_port = data_channel.data_port();
         let addr_cell = data_channel.addr_cell();
 
-        let (packet_sender, packet_receiver) = Socket::setup_io(config, &addr_cell, &data_port);
+        // Retain the live peer/channel in the sender: on attempt teardown
+        // the sender's shutdown closes both, so a retried dial never shares
+        // the wire with this attempt's peer.
+        let closer = data_channel.start();
+
+        let (packet_sender, packet_receiver) =
+            Socket::setup_io(config, &addr_cell, &data_port, Some(closer));
 
         // Setup Identity Receiver
         let id_receiver: IdentityReceiver = data_channel.id_receiver();
-
-        data_channel.start();
 
         (id_receiver, packet_sender, packet_receiver)
     }
@@ -108,16 +115,20 @@ impl Socket {
         data_port: &DataPort,
     ) -> (PacketSender, PacketReceiver) {
         let addr_cell = AddrCell::new();
-        Socket::setup_io(config, &addr_cell, data_port)
+        // No peer lives on this path: the DataChannel (and its closer) was
+        // built by the host page, outside this worker. Shutdown still closes
+        // the message port and refuses further sends.
+        Socket::setup_io(config, &addr_cell, data_port, None)
     }
 
     fn setup_io(
         config: &SocketConfig,
         addr_cell: &AddrCell,
         data_port: &DataPort,
+        closer: Option<WasmPeerCloser>,
     ) -> (PacketSender, PacketReceiver) {
         // Setup Packet Sender
-        let packet_sender = PacketSender::new(data_port, addr_cell);
+        let packet_sender = PacketSender::new(data_port, addr_cell, closer);
 
         // Setup Packet Receiver
         let inner_receiver = PlainPacketReceiver::new(data_port, addr_cell);

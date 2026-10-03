@@ -115,6 +115,13 @@ mod inner {
         fn send(&self, payload: &[u8]) -> Result<(), SendError>;
         /// Get the Server's Socket address
         fn server_addr(&self) -> ServerAddr;
+        /// Permanently tears down this attempt's transport: the backend must
+        /// close its live connection (data channel then peer on WebRTC,
+        /// socket slot or disconnect signal elsewhere) so a retried attempt
+        /// never shares the wire with a stale one. Idempotent: repeated calls
+        /// are safe and change nothing after the first. Called once per
+        /// attempt teardown, before the next attempt dials.
+        fn shutdown(&mut self);
     }
 
     /// Owned, cloneable, thread-safe handle for polling raw packets from the server.

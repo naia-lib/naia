@@ -32,6 +32,25 @@ use crate::ServerAddr;
 // FindAddrFuncInner
 pub struct FindAddrFuncInner(pub Box<dyn FnMut(SocketAddr)>);
 
+/// Retained handle to one attempt's live WebRTC objects. `start` hands it
+/// out so the attempt's sender can tear the connection down on retry: without
+/// this the peer survives its attempt (kept alive by forgotten JS closures)
+/// and a retried dial shares the wire with a stale peer.
+#[derive(Clone)]
+pub struct WasmPeerCloser {
+    peer: RtcPeerConnection,
+    channel: RtcDataChannel,
+}
+
+impl WasmPeerCloser {
+    /// Closes the data channel first, then the peer. Either close is safe on
+    /// an already-closed object, so a repeated shutdown changes nothing.
+    pub fn close(self) {
+        self.channel.close();
+        self.peer.close();
+    }
+}
+
 // DataChannel
 pub struct DataChannel {
     server_session_url: String,
@@ -90,7 +109,7 @@ impl DataChannel {
     }
 
     #[allow(unused_must_use)]
-    pub fn start(&self) {
+    pub fn start(&self) -> WasmPeerCloser {
         // Set up Ice Servers from the socket config (defaults to Google's
         // public STUN; override via `SocketConfig.ice_servers`)
         let ice_server_config_urls = Array::new();
@@ -479,8 +498,21 @@ impl DataChannel {
                 // setup main_port onmessage handler
                 let channel_2 = channel.clone();
 
+                // Mirrors the miniquad bridge's "first send readyState": the
+                // served console shows warn-and-above only, and a single line
+                // per connection attempt names the channel state the first
+                // outbound datagram actually met. Logged before the
+                // open-check so a never-open channel still reports itself
+                // instead of dropping silently.
+                let first_send_logged = Rc::new(RefCell::new(false));
+                let first_send_logged_2 = Rc::clone(&first_send_logged);
+
                 let port_onmsg_func: Box<dyn FnMut(MessageEvent)> =
                     Box::new(move |evt: MessageEvent| {
+                        if !*first_send_logged_2.borrow() {
+                            *first_send_logged_2.borrow_mut() = true;
+                            warn!("naia: first send readyState {:?}", channel_2.ready_state());
+                        }
                         if let Ok(uarray) = evt.data().dyn_into::<js_sys::Uint8Array>() {
                             let mut body = vec![0; uarray.length() as usize];
                             uarray.copy_to(&mut body[..]);
@@ -496,6 +528,11 @@ impl DataChannel {
 
                 main_port.set_onmessage(Some(port_onmsg_closure.as_ref().unchecked_ref()));
                 port_onmsg_closure.forget();
+
+                // Hand the live objects to the caller: the attempt's sender
+                // retains this and closes both on shutdown, so a retried
+                // attempt cannot leave a stale peer on the wire.
+                WasmPeerCloser { peer, channel }
             }
             Err(err) => {
                 panic!("error creating new RtcPeerConnection: {err:?}");

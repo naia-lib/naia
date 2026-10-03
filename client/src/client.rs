@@ -2757,6 +2757,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// disconnect event already queued) and `cancel_connect` (nothing was
     /// ever established, so there is nothing else to tear down).
     fn reset_attempt_state(&mut self) {
+        // Tear down the previous attempt's transport BEFORE dropping it: on
+        // WebRTC backends the peer outlives its Io (kept alive by JS
+        // closures), so replacing Io without this leaves a stale peer
+        // gathering and POSTing while the next attempt dials (Drake 42499
+        // s1). Safe on an empty Io and safe to repeat.
+        self.io.shutdown();
         self.io = Io::new(
             &self.client_config.connection.bandwidth_measure_duration,
             &self.protocol.compression,
@@ -3474,6 +3480,8 @@ mod drain_termination_tests {
         fn server_addr(&self) -> ServerAddr {
             dummy_server()
         }
+
+        fn shutdown(&mut self) {}
     }
 
     #[derive(Clone)]
@@ -3604,6 +3612,7 @@ mod handshake_send_accounting_tests {
         fn server_addr(&self) -> ServerAddr {
             ServerAddr::Found("127.0.0.1:9999".parse::<SocketAddr>().unwrap())
         }
+        fn shutdown(&mut self) {}
     }
 
     #[derive(Clone)]
@@ -3806,8 +3815,8 @@ mod typed_refusal_tests {
 mod client_disconnect_tests {
     use std::net::SocketAddr;
     use std::sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc, Mutex,
     };
     use std::time::Duration;
 
@@ -3853,6 +3862,8 @@ mod client_disconnect_tests {
         fn server_addr(&self) -> ServerAddr {
             dummy_server()
         }
+
+        fn shutdown(&mut self) {}
     }
 
     #[derive(Clone)]
@@ -4181,6 +4192,8 @@ mod client_disconnect_tests {
         fn server_addr(&self) -> ServerAddr {
             dummy_server()
         }
+
+        fn shutdown(&mut self) {}
     }
 
     #[cfg(feature = "test_time")]
@@ -4357,6 +4370,8 @@ mod client_disconnect_tests {
         fn server_addr(&self) -> ServerAddr {
             ServerAddr::Finding
         }
+
+        fn shutdown(&mut self) {}
     }
 
     #[cfg(feature = "test_time")]
@@ -4459,6 +4474,168 @@ mod client_disconnect_tests {
         assert!(
             !client.server_disconnect && client.server_disconnect_details.is_none(),
             "cancel must drop stale server-disconnect state with the attempt",
+        );
+    }
+
+    /// One dial attempt's observable transport (Drake 42499 s1). `open` is
+    /// the peer: shutdown must drive it dark. `order` records dials and
+    /// shutdowns across attempts on one shared wire timeline.
+    #[derive(Clone)]
+    struct AttemptWire {
+        order: Arc<Mutex<Vec<&'static str>>>,
+    }
+
+    #[derive(Clone)]
+    struct AttemptSender {
+        wire: AttemptWire,
+        open: Arc<AtomicBool>,
+        shutdown_tag: &'static str,
+    }
+
+    impl AttemptWire {
+        fn record(&self, event: &'static str) {
+            self.order.lock().unwrap().push(event);
+        }
+    }
+
+    impl PacketSender for AttemptSender {
+        fn send(&self, _payload: &[u8]) -> Result<(), SendError> {
+            if self.open.load(Ordering::SeqCst) {
+                Ok(())
+            } else {
+                Err(SendError)
+            }
+        }
+
+        fn server_addr(&self) -> ServerAddr {
+            dummy_server()
+        }
+
+        fn shutdown(&mut self) {
+            // The effect, not a hook record: the peer goes dark, so a send
+            // after shutdown fails. First call wins; repeats change nothing.
+            if self.open.swap(false, Ordering::SeqCst) {
+                self.wire.record(self.shutdown_tag);
+            }
+        }
+    }
+
+    /// A dial that mints a fresh attempt on one shared wire timeline.
+    struct DialSocket {
+        wire: AttemptWire,
+        dial_tag: &'static str,
+        shutdown_tag: &'static str,
+        attempt_open: Arc<AtomicBool>,
+    }
+
+    impl From<DialSocket> for Box<dyn Socket> {
+        fn from(val: DialSocket) -> Self {
+            Box::new(val)
+        }
+    }
+
+    impl Socket for DialSocket {
+        fn connect(
+            self: Box<Self>,
+            _protocol_id: naia_shared::ProtocolId,
+        ) -> (
+            Box<dyn IdentityReceiver>,
+            Box<dyn PacketSender>,
+            Box<dyn PacketReceiver>,
+        ) {
+            self.wire.record(self.dial_tag);
+            (
+                Box::new(OkIdReceiver),
+                Box::new(AttemptSender {
+                    wire: AttemptWire {
+                        order: self.wire.order.clone(),
+                    },
+                    open: self.attempt_open.clone(),
+                    shutdown_tag: self.shutdown_tag,
+                }),
+                Box::new(EmptyReceiver),
+            )
+        }
+
+        fn connect_with_auth(
+            self: Box<Self>,
+            protocol_id: naia_shared::ProtocolId,
+            _auth_bytes: Vec<u8>,
+        ) -> (
+            Box<dyn IdentityReceiver>,
+            Box<dyn PacketSender>,
+            Box<dyn PacketReceiver>,
+        ) {
+            self.connect(protocol_id)
+        }
+
+        fn connect_with_auth_headers(
+            self: Box<Self>,
+            protocol_id: naia_shared::ProtocolId,
+            _auth_headers: Vec<(String, String)>,
+        ) -> (
+            Box<dyn IdentityReceiver>,
+            Box<dyn PacketSender>,
+            Box<dyn PacketReceiver>,
+        ) {
+            self.connect(protocol_id)
+        }
+
+        fn connect_with_auth_and_headers(
+            self: Box<Self>,
+            protocol_id: naia_shared::ProtocolId,
+            _auth_bytes: Vec<u8>,
+            _auth_headers: Vec<(String, String)>,
+        ) -> (
+            Box<dyn IdentityReceiver>,
+            Box<dyn PacketSender>,
+            Box<dyn PacketReceiver>,
+        ) {
+            self.connect(protocol_id)
+        }
+    }
+
+    #[test]
+    fn retry_shuts_down_previous_attempt_before_redial() {
+        // s1 (Drake 42499): abandoning an attempt and dialing again must tear
+        // down the previous attempt's transport first. Otherwise the stale
+        // peer stays live and a second connection shares the wire mid-run.
+        let order = Arc::new(Mutex::new(Vec::new()));
+        let wire = AttemptWire {
+            order: order.clone(),
+        };
+        let a1_open = Arc::new(AtomicBool::new(true));
+        let mut client = idle_client();
+        client.connect(DialSocket {
+            wire: AttemptWire {
+                order: order.clone(),
+            },
+            dial_tag: "dial-a1",
+            shutdown_tag: "shutdown-a1",
+            attempt_open: a1_open.clone(),
+        });
+        assert_eq!(client.connection_status(), ConnectionStatus::Connecting);
+        client.cancel_connect();
+        // Idempotent across repeated resets: a second cancel on the now-idle
+        // client meets an empty Io and must not re-fire the teardown.
+        client.cancel_connect();
+        assert_eq!(client.connection_status(), ConnectionStatus::Disconnected);
+        client.connect(DialSocket {
+            wire,
+            dial_tag: "dial-a2",
+            shutdown_tag: "shutdown-a2",
+            attempt_open: Arc::new(AtomicBool::new(true)),
+        });
+        // EFFECT: the first attempt's transport is dark — a send on it now
+        // fails — and it went dark before the second attempt dialed.
+        assert!(
+            !a1_open.load(Ordering::SeqCst),
+            "abandoned attempt's transport must be shut down on retry",
+        );
+        assert_eq!(
+            *order.lock().unwrap(),
+            vec!["dial-a1", "shutdown-a1", "dial-a2"],
+            "shutdown must fire exactly once, before the redial",
         );
     }
 }

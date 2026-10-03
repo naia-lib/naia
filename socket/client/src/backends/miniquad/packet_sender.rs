@@ -65,4 +65,11 @@ impl PacketSender {
         }
         free_socket(self.socket_id);
     }
+
+    /// Tears down this attempt's connection: closes the JS peer and frees
+    /// this socket's table slot, so a retried attempt never shares the wire
+    /// with a stale one. Idempotent: disconnecting a freed slot is safe.
+    pub fn shutdown(&mut self) {
+        self.disconnect();
+    }
 }

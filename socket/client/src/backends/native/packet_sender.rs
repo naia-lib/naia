@@ -47,4 +47,11 @@ impl PacketSender {
     pub fn disconnect(&mut self) {
         let _ = self.disconnect_channel.blocking_send(());
     }
+
+    /// Tears down this attempt's socket: the disconnect signal stops the
+    /// socket task, and dropping the sender halves closes the OS socket.
+    /// Idempotent: a second signal on a stopped task changes nothing.
+    pub fn shutdown(&mut self) {
+        self.disconnect();
+    }
 }
