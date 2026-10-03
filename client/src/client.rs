@@ -86,6 +86,11 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     /// Whether the first inbound datagram of the current attempt has been
     /// logged; same attempt scope as the send counters.
     handshake_first_inbound_logged: bool,
+    /// Post-Connected liveness watch (Usher 42587 fork (a) markers). Set at
+    /// handshake Connected; counts inbound data + outbound keepalives and
+    /// fires one-shot warn summaries at +30s/+60s so a single probe run
+    /// separates "client stopped sending" from "sent but lost".
+    post_connect_watch: Option<PostConnectWatch>,
     waitlist_messages: VecDeque<(ChannelKind, Box<dyn Message>)>,
     // World
     global_world_manager: GlobalWorldManager,
@@ -108,6 +113,36 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     // resource events and maintain the bevy-Resource side. See
     // `_AGENTS/RESOURCES_PLAN.md` §A1 + `RESOURCES_AUDIT.md`.
     resource_registry: naia_shared::ResourceRegistry,
+}
+
+/// Post-Connected liveness counters for the Usher 42587 fork-(a) markers.
+///
+/// Lives on the client from handshake Connected until disconnect. All
+/// fields are marker-only: they never gate behavior.
+struct PostConnectWatch {
+    connected_at: Instant,
+    data_rx: u64,
+    data_applied: u64,
+    keepalive_sent: u64,
+    last_keepalive_ok: Option<bool>,
+    first_data_warned: bool,
+    summary_30_warned: bool,
+    summary_60_warned: bool,
+}
+
+impl PostConnectWatch {
+    fn new() -> Self {
+        Self {
+            connected_at: Instant::now(),
+            data_rx: 0,
+            data_applied: 0,
+            keepalive_sent: 0,
+            last_keepalive_ok: None,
+            first_data_warned: false,
+            summary_30_warned: false,
+            summary_60_warned: false,
+        }
+    }
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
@@ -179,6 +214,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             incoming_tick_events: TickEvents::new(),
             priority: UserPriorityState::new(),
             resource_registry: naia_shared::ResourceRegistry::new(),
+            post_connect_watch: None,
         }
     }
 
@@ -2316,6 +2352,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                                 "naia: Client: handshake Connected to Server at {:?}",
                                 server_addr
                             );
+                            self.post_connect_watch = Some(PostConnectWatch::new());
+                            warn!("naia: Client post-connect watch started");
                             self.incoming_world_events.push_connection(&server_addr);
 
                             // Stop reading here — any remaining packets in
@@ -2362,13 +2400,35 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     fn maintain_connection(&mut self) {
         // connection already established
 
+        // Post-Connected liveness marker (Usher 42587 fork (a)): one-shot
+        // summaries so a single run separates "stopped sending" from
+        // "sent but lost". No summaries fire if the game stops polling.
+        if let Some(watch) = self.post_connect_watch.as_mut() {
+            let elapsed_secs = watch.connected_at.elapsed(&Instant::now()).as_secs();
+            if elapsed_secs >= 30 && !watch.summary_30_warned {
+                watch.summary_30_warned = true;
+                warn!(
+                    "naia: Client post-connect +30s: data_rx={} data_applied={} keepalive_sent={} last_keepalive_ok={:?}",
+                    watch.data_rx, watch.data_applied, watch.keepalive_sent, watch.last_keepalive_ok
+                );
+            }
+            if elapsed_secs >= 60 && !watch.summary_60_warned {
+                watch.summary_60_warned = true;
+                warn!(
+                    "naia: Client post-connect +60s: data_rx={} data_applied={} keepalive_sent={} last_keepalive_ok={:?}",
+                    watch.data_rx, watch.data_applied, watch.keepalive_sent, watch.last_keepalive_ok
+                );
+            }
+        }
+
+        let watch = &mut self.post_connect_watch;
         let Some(connection) = self.server_connection.as_mut() else {
             panic!("Should have checked for this above");
         };
 
-        Self::handle_heartbeats(connection, &mut self.io);
-        Self::handle_pings(connection, &mut self.io);
-        Self::handle_empty_acks(connection, &mut self.io);
+        Self::handle_heartbeats(connection, &mut self.io, watch);
+        Self::handle_pings(connection, &mut self.io, watch);
+        Self::handle_empty_acks(connection, &mut self.io, watch);
 
         let mut received_any = false;
 
@@ -2455,12 +2515,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         PacketType::Data => {
                             connection.base.mark_should_send_empty_ack();
 
+                            if let Some(w) = watch.as_mut() {
+                                w.data_rx += 1;
+                                if !w.first_data_warned {
+                                    w.first_data_warned = true;
+                                    warn!("naia: Client first post-connect data packet received");
+                                }
+                            }
+
                             if connection
                                 .buffer_data_packet(&server_tick, &mut reader)
                                 .is_err()
                             {
                                 warn!("unable to parse data packet");
                                 continue;
+                            }
+
+                            if let Some(w) = watch.as_mut() {
+                                w.data_applied += 1;
                             }
                         }
                         PacketType::Heartbeat => {
@@ -2510,21 +2582,33 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
     }
 
-    fn handle_heartbeats(connection: &mut Connection, io: &mut Io) {
+    fn handle_heartbeats(
+        connection: &mut Connection,
+        io: &mut Io,
+        watch: &mut Option<PostConnectWatch>,
+    ) {
         // send heartbeats
         if connection.base.should_send_heartbeat() {
-            Self::send_heartbeat_packet(connection, io);
+            Self::send_heartbeat_packet(connection, io, watch);
         }
     }
 
-    fn handle_empty_acks(connection: &mut Connection, io: &mut Io) {
+    fn handle_empty_acks(
+        connection: &mut Connection,
+        io: &mut Io,
+        watch: &mut Option<PostConnectWatch>,
+    ) {
         // send empty acks
         if connection.base.should_send_empty_ack() {
-            Self::send_heartbeat_packet(connection, io);
+            Self::send_heartbeat_packet(connection, io, watch);
         }
     }
 
-    fn send_heartbeat_packet(connection: &mut Connection, io: &mut Io) {
+    fn send_heartbeat_packet(
+        connection: &mut Connection,
+        io: &mut Io,
+        watch: &mut Option<PostConnectWatch>,
+    ) {
         let mut writer = BitWriter::new();
 
         // write header
@@ -2533,17 +2617,30 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .write_header(PacketType::Heartbeat, &mut writer);
 
         // send packet
-        if io.send_packet(writer.to_packet()).is_err() {
+        let send_ok = io.send_packet(writer.to_packet()).is_ok();
+        if !send_ok {
             // Heartbeat send failure is not fatal: the server's connection
             // timeout will fire if heartbeats stop arriving persistently.
             warn!("Client Error: Cannot send heartbeat packet to Server");
         }
+        if let Some(w) = watch.as_mut() {
+            w.keepalive_sent += 1;
+            w.last_keepalive_ok = Some(send_ok);
+        }
         connection.mark_sent();
     }
 
-    fn handle_pings(connection: &mut Connection, io: &mut Io) {
+    fn handle_pings(
+        connection: &mut Connection,
+        io: &mut Io,
+        watch: &mut Option<PostConnectWatch>,
+    ) {
         // send pings
         if connection.time_manager.send_ping(io) {
+            if let Some(w) = watch.as_mut() {
+                w.keepalive_sent += 1;
+                w.last_keepalive_ok = Some(true);
+            }
             connection.mark_sent();
         }
     }

@@ -347,6 +347,7 @@ impl SendConnection {
             false.ser(&mut writer);
 
             let addr = self.address;
+            self.shared.note_outbound_packet();
             if io.send_packet(&addr, writer.to_packet()).is_err() {
                 warn!("Server Error: Cannot send ACK-only packet to {}", &addr);
             } else {
@@ -391,6 +392,7 @@ impl SendConnection {
             #[cfg(feature = "bench_instrumentation")]
             let t_io = std::time::Instant::now();
             let addr = self.address;
+            self.shared.note_outbound_packet();
             if io.send_packet(&addr, packet).is_err() {
                 warn!("Server Error: Cannot send data packet to {}", &addr);
             } else {

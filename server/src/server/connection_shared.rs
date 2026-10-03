@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU64, Ordering};
 
 /// ACK and RTT state that crosses the recv/send boundary.
 ///
@@ -37,6 +37,12 @@ pub struct ConnectionShared {
     /// Provides a thread-safe handshake without needing the coordinator
     /// to reach into `RecvState`.
     pub should_disconnect: AtomicBool,
+    /// Cumulative count of packets handed to the socket for this connection
+    /// (data, ack-only, heartbeat, flushed pong/handshake responses).
+    /// Post-Connected liveness marker (Usher 42587 fork (a)): the send path
+    /// writes, the recv-side timeout sweep reads at the drop decision.
+    /// Monotonic; wraps only after 2^64 packets.
+    pub outbound_packets_sent: AtomicU64,
 }
 
 impl ConnectionShared {
@@ -48,6 +54,7 @@ impl ConnectionShared {
             should_send_empty_ack: AtomicBool::new(false),
             rtt_avg_ms: AtomicU32::new(0_f32.to_bits()),
             should_disconnect: AtomicBool::new(false),
+            outbound_packets_sent: AtomicU64::new(0),
         }
     }
 
@@ -83,6 +90,11 @@ impl ConnectionShared {
         self.rtt_avg_ms.store(rtt.to_bits(), Ordering::Release);
     }
 
+    /// Records one packet handed to the socket for this connection.
+    pub fn note_outbound_packet(&self) {
+        self.outbound_packets_sent.fetch_add(1, Ordering::Relaxed);
+    }
+
     // --- Reader API (send path) ---
 
     /// Returns the remote's latest acknowledged packet sequence number.
@@ -103,6 +115,11 @@ impl ConnectionShared {
     /// Returns the current average round-trip time estimate (in milliseconds).
     pub fn rtt_avg_ms(&self) -> f32 {
         f32::from_bits(self.rtt_avg_ms.load(Ordering::Acquire))
+    }
+
+    /// Returns the cumulative outbound packet count for this connection.
+    pub fn outbound_packets_sent(&self) -> u64 {
+        self.outbound_packets_sent.load(Ordering::Acquire)
     }
 }
 

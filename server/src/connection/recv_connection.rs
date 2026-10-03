@@ -9,7 +9,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use naia_shared::{
-    BaseRecvConnection, ChannelKinds, ConnectionConfig, StandardHeader, Tick, Timer,
+    BaseRecvConnection, ChannelKinds, ConnectionConfig, Instant, StandardHeader, Tick, Timer,
 };
 
 use crate::{
@@ -38,6 +38,10 @@ pub struct RecvConnection {
     /// Fires when no packet has been received within
     /// `disconnection_timeout_duration`.
     pub timeout_timer: Timer,
+    /// Instant of the last inbound packet header. Post-Connected liveness
+    /// marker (Usher 42587 fork (a)): updated alongside `timeout_timer`;
+    /// read at the timeout drop decision to report the silence duration.
+    pub last_inbound_at: Instant,
     /// Shared per-connection state crossing the recv/send boundary.
     pub shared: Arc<ConnectionShared>,
 }
@@ -63,6 +67,7 @@ impl RecvConnection {
             tick_buffer: TickBufferReceiver::new(channel_kinds),
             manual_disconnect: false,
             timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
+            last_inbound_at: Instant::now(),
             shared,
         }
     }
@@ -79,6 +84,7 @@ impl RecvConnection {
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
         self.base.ack_recv.process_incoming_header(header);
         self.timeout_timer.reset();
+        self.last_inbound_at = Instant::now();
         let last_rx = self.base.ack_recv.last_received_packet_index();
         let bits = self.base.ack_recv.ack_bitfield();
         self.shared.set_remote_ack_seq(last_rx);
