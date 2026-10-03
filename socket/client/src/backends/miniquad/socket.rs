@@ -1,4 +1,4 @@
-use naia_socket_shared::{parse_server_url, SocketConfig};
+use naia_socket_shared::{encode_ice_server_urls, parse_server_url, SocketConfig};
 
 use crate::packet_receiver::PacketReceiver;
 
@@ -111,6 +111,7 @@ impl Socket {
                 JsObject::string(server_url.to_string().as_str()),
                 JsObject::string(config.rtc_endpoint_path.as_str()),
                 JsObject::string(auth_str.as_str()),
+                JsObject::string(encode_ice_server_urls(&config.ice_servers).as_str()),
                 JsObject::string(protocol_id),
             );
         }
@@ -160,13 +161,13 @@ mod js_bridge_contract_tests {
     fn the_js_bridge_threads_the_fingerprint_from_the_import_to_the_request() {
         assert!(
             NAIA_SOCKET_JS.contains(
-                "naia_connect = function (socket_id, server_socket_address, rtc_path, auth_str, protocol_id)"
+                "naia_connect = function (socket_id, server_socket_address, rtc_path, auth_str, ice_servers, protocol_id)"
             ),
             "the imported shim must take the fingerprint",
         );
         assert!(
             NAIA_SOCKET_JS.contains(
-                "connect: function (socket_id, server_socket_address, rtc_path, auth_str, protocol_id)"
+                "connect: function (socket_id, server_socket_address, rtc_path, auth_str, ice_servers, protocol_id)"
             ),
             "the connect entry point must take the fingerprint",
         );

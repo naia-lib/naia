@@ -2,15 +2,15 @@ extern crate log;
 
 use std::{cell::RefCell, net::SocketAddr, rc::Rc};
 
-use js_sys::{Array, Object, Reflect};
-use log::info;
+use js_sys::{Array, Date, Object, Reflect};
+use log::{info, warn};
 use tinyjson::JsonValue;
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use web_sys::{
     ErrorEvent, MessageChannel, MessageEvent, ProgressEvent, RtcConfiguration, RtcDataChannel,
     RtcDataChannelInit, RtcDataChannelState, RtcDataChannelType, RtcIceCandidate,
-    RtcIceCandidateInit, RtcIceGatheringState, RtcPeerConnection, RtcSdpType,
-    RtcSessionDescriptionInit, XmlHttpRequest,
+    RtcIceCandidateInit, RtcIceGatheringState, RtcPeerConnection, RtcPeerConnectionIceEvent,
+    RtcSdpType, RtcSessionDescriptionInit, XmlHttpRequest,
 };
 
 /// Bound on ICE gathering before the session offer is POSTed. Gathering that
@@ -20,7 +20,10 @@ use web_sys::{
 /// candidate-probing tail before `complete` fires.
 const ICE_GATHERING_TIMEOUT_MS: i32 = 60_000;
 
-use naia_socket_shared::{parse_server_url, IdentityToken, SocketConfig};
+use naia_socket_shared::{
+    parse_server_url, should_post_session_offer, IdentityToken, SocketConfig,
+    ICE_GATHER_EARLY_POST_MS,
+};
 
 use super::identity_receiver::IdentityReceiver;
 use super::{addr_cell::AddrCell, data_port::DataPort};
@@ -38,6 +41,7 @@ pub struct DataChannel {
     /// [`stamp_protocol_id_header`](naia_socket_shared::stamp_protocol_id_header).
     /// Not an `Option`: there is no session request that omits the fingerprint.
     auth_headers: Vec<(String, String)>,
+    ice_servers: Vec<String>,
     message_channel: MessageChannel,
     addr_cell: AddrCell,
     id_cell: IdentityReceiver,
@@ -57,6 +61,7 @@ impl DataChannel {
             server_session_url: format!("{}{}", server_url, config.rtc_endpoint_path.clone()),
             auth_bytes_opt,
             auth_headers,
+            ice_servers: config.ice_servers.clone(),
             message_channel: MessageChannel::new().expect("can't create message channel"),
             addr_cell: AddrCell::new(),
             id_cell: IdentityReceiver::new(),
@@ -86,9 +91,12 @@ impl DataChannel {
 
     #[allow(unused_must_use)]
     pub fn start(&self) {
-        // Set up Ice Servers
+        // Set up Ice Servers from the socket config (defaults to Google's
+        // public STUN; override via `SocketConfig.ice_servers`)
         let ice_server_config_urls = Array::new();
-        ice_server_config_urls.push(&JsValue::from("stun:stun.l.google.com:19302"));
+        for ice_server in &self.ice_servers {
+            ice_server_config_urls.push(&JsValue::from(ice_server));
+        }
 
         let ice_server_config = Object::new();
         Reflect::set(
@@ -121,6 +129,17 @@ impl DataChannel {
                 let onerror_callback = Closure::wrap(onerror_func);
                 channel.set_onerror(Some(onerror_callback.as_ref().unchecked_ref()));
                 onerror_callback.forget();
+
+                // The open transition is the usable-link moment (Roger 42320:
+                // the channel object exists from connect(), long before
+                // ICE/DTLS completes). Nothing observed it on this backend;
+                // warn! so the served console (warn-and-above) shows it.
+                let onopen_func: Box<dyn FnMut(JsValue)> = Box::new(move |_: JsValue| {
+                    warn!("naia: datachannel onopen");
+                });
+                let onopen_callback = Closure::wrap(onopen_func);
+                channel.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
+                onopen_callback.forget();
 
                 let peer_2 = peer.clone();
                 let addr_cell_2 = self.addr_cell.clone();
@@ -169,6 +188,7 @@ impl DataChannel {
                         let request_func: Box<dyn FnMut(ProgressEvent)> = Box::new(
                             move |_: ProgressEvent| {
                                 let status = request_2.status().unwrap();
+                                warn!("naia: session POST status {}", status);
                                 if status != 200 {
                                     // A rejection may carry a base64-encoded
                                     // message explaining itself
@@ -189,6 +209,13 @@ impl DataChannel {
 
                                     let session_response: JsSessionResponse =
                                         get_session_response(response_string.as_str());
+
+                                    // Length only, never the value: the token
+                                    // is an opaque secret after this hop.
+                                    warn!(
+                                        "naia: session id token len {}",
+                                        session_response.id_token.len()
+                                    );
 
                                     // send the id token to the client
                                     // info!("Sending id token to client: {:?}", auth_header);
@@ -277,16 +304,26 @@ impl DataChannel {
                         request.set_onload(Some(request_callback.as_ref().unchecked_ref()));
                         request_callback.forget();
 
-                        // The offer is worthless without the candidates this
-                        // peer was configured to gather (STUN srflx above),
-                        // and posting it early throws that work away with no
-                        // trickle channel to recover it. Gate the send on
-                        // gathering-complete, with a loud client-side timeout.
-                        // The SDP is read at send time: gathering rewrites
-                        // the local description in place, so a snapshot taken
+                        // The offer is worthless without candidates, and naia's
+                        // signaling is a single POST offer → answer with no
+                        // trickle channel to recover later candidates — so a
+                        // candidate-less early post is never allowed. But
+                        // gating the send on gathering-complete with no bound
+                        // tied to the connection deadline stalls connect for
+                        // ~40 s when a single STUN path is slow (Roger 41874:
+                        // icecandidateerror 701 held `complete` past the 30 s
+                        // deadline despite usable srflx/host candidates from
+                        // ~1 s in). Post on `complete`, or once
+                        // ICE_GATHER_EARLY_POST_MS has passed with at least
+                        // one candidate in hand — whichever comes first. The
+                        // SDP is read at send time: gathering rewrites the
+                        // local description in place, so a snapshot taken
                         // now would post the pre-gathering text.
                         let settled = Rc::new(RefCell::new(false));
+                        let candidate_count = Rc::new(RefCell::new(0u32));
+                        let gather_start_ms = Date::now();
                         let window = web_sys::window().expect("gathering gate needs a window");
+                        let early_window = window.clone();
                         let timeout_cb = Closure::wrap(Box::new({
                             let settled = Rc::clone(&settled);
                             let id_sender = id_sender_3.clone();
@@ -327,6 +364,9 @@ impl DataChannel {
                                 *settled.borrow_mut() = true;
                                 window.clear_timeout_with_handle(timeout_handle);
                                 let offer_sdp = peer.local_description().unwrap().sdp();
+                                // warn!: the served console shows warn-and-above
+                                // only; this is one line per connection attempt.
+                                warn!("naia: session POST send");
                                 request
                                     .send_with_opt_str(Some(offer_sdp.as_str()))
                                     .unwrap_or_else(|err| {
@@ -337,25 +377,70 @@ impl DataChannel {
                                     });
                             }
                         });
-                        if peer_3.ice_gathering_state() == RtcIceGatheringState::Complete {
-                            send_now();
-                        } else {
-                            let state_cb = Closure::wrap(Box::new({
-                                let peer = peer_3.clone();
-                                let send_now = Rc::clone(&send_now);
-                                move || {
-                                    if peer.ice_gathering_state() == RtcIceGatheringState::Complete
-                                    {
-                                        send_now();
-                                    }
+                        // Single decision point for all four wakeups (initial
+                        // state, gathering-state changes, new candidates, and
+                        // the early-post timer below): post on `complete`, or
+                        // once the bounded wait has passed with candidates.
+                        let maybe_post = Rc::new({
+                            let peer = peer_3.clone();
+                            let candidate_count = Rc::clone(&candidate_count);
+                            let send_now = Rc::clone(&send_now);
+                            move || {
+                                let elapsed_ms = Date::now() - gather_start_ms;
+                                if should_post_session_offer(
+                                    peer.ice_gathering_state() == RtcIceGatheringState::Complete,
+                                    *candidate_count.borrow(),
+                                    elapsed_ms,
+                                ) {
+                                    send_now();
                                 }
-                            })
-                                as Box<dyn FnMut()>);
-                            peer_3.set_onicegatheringstatechange(Some(
-                                state_cb.as_ref().unchecked_ref(),
-                            ));
-                            state_cb.forget();
-                        }
+                            }
+                        });
+                        // New candidates feed the gate: a candidate arriving
+                        // after the early-post timer fired still posts, since
+                        // the wait has by then passed with candidates in hand.
+                        let ice_cb = Closure::wrap(Box::new({
+                            let candidate_count = Rc::clone(&candidate_count);
+                            let maybe_post = Rc::clone(&maybe_post);
+                            move |event: RtcPeerConnectionIceEvent| {
+                                if event.candidate().is_some() {
+                                    *candidate_count.borrow_mut() += 1;
+                                }
+                                maybe_post();
+                            }
+                        })
+                            as Box<dyn FnMut(RtcPeerConnectionIceEvent)>);
+                        peer_3.set_onicecandidate(Some(ice_cb.as_ref().unchecked_ref()));
+                        ice_cb.forget();
+                        let state_cb = Closure::wrap(Box::new({
+                            let maybe_post = Rc::clone(&maybe_post);
+                            move || {
+                                maybe_post();
+                            }
+                        })
+                            as Box<dyn FnMut()>);
+                        peer_3
+                            .set_onicegatheringstatechange(Some(state_cb.as_ref().unchecked_ref()));
+                        state_cb.forget();
+                        // Bounded wait: fires once the early-post bound has
+                        // passed. Posts iff candidates arrived by then; with
+                        // zero candidates this is a no-op and the 60 s
+                        // backstop above still reports loudly.
+                        let early_cb = Closure::wrap(Box::new({
+                            let maybe_post = Rc::clone(&maybe_post);
+                            move || {
+                                maybe_post();
+                            }
+                        })
+                            as Box<dyn FnMut()>);
+                        early_window
+                            .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                early_cb.as_ref().unchecked_ref(),
+                                ICE_GATHER_EARLY_POST_MS,
+                            )
+                            .expect("gathering early-post timeout must arm");
+                        early_cb.forget();
+                        maybe_post();
                     });
                     let peer_desc_callback = Closure::wrap(peer_desc_func);
 

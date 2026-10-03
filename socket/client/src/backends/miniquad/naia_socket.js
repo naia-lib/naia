@@ -12,7 +12,7 @@ const naia_socket = {
 
     plugin: function (importObject) {
         importObject.env.naia_is_connected = function (socket_id) { return naia_socket.is_connected(socket_id); };
-        importObject.env.naia_connect = function (socket_id, server_socket_address, rtc_path, auth_str, protocol_id) { return naia_socket.connect(socket_id, server_socket_address, rtc_path, auth_str, protocol_id); };
+        importObject.env.naia_connect = function (socket_id, server_socket_address, rtc_path, auth_str, ice_servers, protocol_id) { return naia_socket.connect(socket_id, server_socket_address, rtc_path, auth_str, ice_servers, protocol_id); };
         importObject.env.naia_disconnect = function (socket_id) { naia_socket.disconnect(socket_id); };
         importObject.env.naia_send = function (socket_id, message) { return naia_socket.send(socket_id, message); };
         importObject.env.naia_create_string = function (buf, max_len) { return naia_socket.js_create_string(buf, max_len); };
@@ -28,27 +28,32 @@ const naia_socket = {
 
     is_connected: function(socket_id) {
         let connection = this.connections[socket_id];
-        if (connection && connection.channel) {
+        // The channel object exists from connect(), long before the link is
+        // usable: only an open data channel reads as connected (Roger 42320).
+        // Presence alone reported true through the whole ICE/DTLS setup
+        // window, promoting a connecting socket to connected.
+        if (connection && connection.channel && connection.channel.readyState === "open") {
             return true;
         } else {
             return false;
         }
     },
 
-    connect: function (socket_id, server_socket_address, rtc_path, auth_str, protocol_id) {
+    connect: function (socket_id, server_socket_address, rtc_path, auth_str, ice_servers, protocol_id) {
         let server_socket_address_string = naia_socket.get_js_object(server_socket_address);
         let rtc_path_string = naia_socket.get_js_object(rtc_path);
         let auth_string = naia_socket.get_js_object(auth_str);
+        let ice_servers_string = naia_socket.get_js_object(ice_servers);
         let protocol_id_string = naia_socket.get_js_object(protocol_id);
         let SESSION_ADDRESS = server_socket_address_string + rtc_path_string;
 
         let peer = new RTCPeerConnection({
             iceServers: [{
-                urls: ["stun:stun.l.google.com:19302"]
+                urls: JSON.parse(ice_servers_string)
             }]
         });
 
-        let connection = { channel: null, peer: peer };
+        let connection = { channel: null, peer: peer, first_send_logged: false };
         naia_socket.connections[socket_id] = connection;
 
         connection.channel = peer.createDataChannel("data", {
@@ -59,6 +64,7 @@ const naia_socket = {
         connection.channel.binaryType = "arraybuffer";
 
         connection.channel.onopen = function() {
+            console.log("naia: datachannel onopen", Date.now());
             connection.channel.onmessage = function(evt) {
                 let array = new Uint8Array(evt.data);
                 wasm_exports.receive(socket_id, naia_socket.js_object(array));
@@ -69,26 +75,32 @@ const naia_socket = {
             naia_socket.error(socket_id, "data channel error", evt.message);
         };
 
-        peer.onicecandidate = function(evt) {
-            if (evt.candidate) {
-                console.log("received ice candidate", evt.candidate);
-            } else {
-                console.log("all local candidates received");
-            }
-        };
+        // Candidate counting and the bounded gather gate live in the offer
+        // block below: registering the counter there (synchronously inside
+        // the setLocalDescription continuation, before gathering can emit)
+        // misses no candidates and keeps one decision point.
 
         peer.createOffer().then(function(offer) {
             return peer.setLocalDescription(offer);
         }).then(function() {
-            // The offer is worthless without the candidates this peer was
-            // configured to gather (STUN srflx above), and posting it early
-            // throws that work away with no trickle channel to recover it.
-            // Gate the send on gathering-complete, with a loud timeout that
-            // reports through the error callback: never an indefinite hang,
-            // never a silent candidate-less offer. The SDP is read at send
-            // time: gathering rewrites the local description in place, so a
-            // snapshot taken now would post the pre-gathering text.
+            // The offer is worthless without candidates, and naia's
+            // signaling is a single POST offer → answer with no trickle
+            // channel to recover later candidates — so a candidate-less
+            // early post is never allowed. But gating the send on
+            // gathering-complete with no bound tied to the connection
+            // deadline stalls connect for ~40 s when a single STUN path is
+            // slow (Roger 41874: icecandidateerror 701 held `complete` past
+            // the 30 s deadline despite usable srflx/host candidates from
+            // ~1 s in). Post on `complete`, or once 10000 ms have passed
+            // with at least one candidate in hand — whichever comes first
+            // (parity with the wasm_bindgen backend and
+            // ICE_GATHER_EARLY_POST_MS in naia-socket-shared; keep the bound
+            // in sync). The SDP is read at send time: gathering rewrites
+            // the local description in place, so a snapshot taken now would
+            // post the pre-gathering text.
             let settled = false;
+            let candidateCount = 0;
+            const gatherStartMs = Date.now();
             // Sized generously: typical networks complete in a few seconds,
             // but constrained ones were measured at ~40s of candidate-probing
             // tail before "complete" fires.
@@ -99,13 +111,26 @@ const naia_socket = {
             }, 60000);
             function maybe_post_offer() {
                 if (settled) return;
-                if (peer.iceGatheringState !== "complete") return;
+                const complete = peer.iceGatheringState === "complete";
+                const elapsedMs = Date.now() - gatherStartMs;
+                if (!complete && !(elapsedMs >= 10000 && candidateCount >= 1)) return;
                 settled = true;
                 clearTimeout(timer);
+                clearTimeout(earlyTimer);
                 post_offer();
             }
+            peer.onicecandidate = function(evt) {
+                if (evt.candidate) {
+                    candidateCount += 1;
+                    console.log("received ice candidate", evt.candidate);
+                } else {
+                    console.log("all local candidates received");
+                }
+                maybe_post_offer();
+            };
             function post_offer() {
             let request = new XMLHttpRequest();
+            console.log("naia: session POST send", Date.now(), SESSION_ADDRESS);
             request.open("POST", SESSION_ADDRESS);
             if (auth_string.length > 0) {
                 request.setRequestHeader("Authorization", auth_string);
@@ -115,8 +140,12 @@ const naia_socket = {
             // so there is no "connect without it" path here either.
             request.setRequestHeader("x-naia-protocol-id", protocol_id_string);
             request.onload = function() {
+                console.log("naia: session POST status", request.status);
                 if (request.status === 200) {
                     let response = JSON.parse(request.responseText);
+                    // Shape only, never the value: the id is an auth secret.
+                    let id_length = (typeof response.id === "string") ? response.id.length : -1;
+                    console.log("naia: session id", typeof response.id, id_length);
 
                     wasm_exports.receive_id(socket_id, naia_socket.js_object(response.id));
 
@@ -155,6 +184,15 @@ const naia_socket = {
             request.send(peer.localDescription.sdp);
             }
             peer.onicegatheringstatechange = maybe_post_offer;
+            // Bounded wait: fires once the early-post bound has passed.
+            // Posts iff candidates arrived by then; with zero candidates
+            // this is a no-op and the 60 s backstop above still reports
+            // loudly. A candidate arriving after this timer fired still
+            // posts via onicecandidate, since the wait has by then passed
+            // with candidates in hand.
+            let earlyTimer = setTimeout(function() {
+                maybe_post_offer();
+            }, 10000);
             maybe_post_offer();
         }).catch(function(err) {
             naia_socket.error(socket_id, "error during 'createOffer'", err);
@@ -198,6 +236,10 @@ const naia_socket = {
     send_u8_array: function (socket_id, str) {
         let connection = this.connections[socket_id];
         if (connection && connection.channel) {
+            if (!connection.first_send_logged) {
+                connection.first_send_logged = true;
+                console.log("naia: first send readyState", connection.channel.readyState);
+            }
             try {
                 connection.channel.send(str);
                 return true;

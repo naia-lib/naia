@@ -44,7 +44,7 @@ pub trait CommandsExt<'a> {
 
     /// Marks the entity as static — no diff-tracking after initial replication.
     ///
-    /// Must be called after [`enable_replication`] on the same entity.
+    /// Must be called after [`CommandsExt::enable_replication`] on the same entity.
     /// `enable_replication` registers the entity synchronously; `as_static`
     /// queues a deferred command that converts the record to static before
     /// the first game tick runs.

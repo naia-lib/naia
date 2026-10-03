@@ -461,6 +461,8 @@ impl HandshakeManager {
 mod tests {
     use std::net::SocketAddr;
 
+    use naia_shared::BigMapKey;
+
     use super::*;
 
     fn addr() -> SocketAddr {
@@ -545,6 +547,47 @@ mod tests {
                 assert_eq!(reject_reason_of(&packet), RejectReason::Auth)
             }
             _ => panic!("unknown token must be auth-rejected with a packet"),
+        }
+    }
+
+    /// A client retransmit of identify after a dropped server response must
+    /// be answered again, never rejected. The client resends every
+    /// send_handshake_interval over an unreliable channel, so the first
+    /// response is routinely lost; the retry finds the connection finalized
+    /// and must observe it as acknowledged.
+    #[cfg(not(feature = "transport_udp"))]
+    #[test]
+    fn duplicate_identify_after_finalize_resends_response() {
+        let mut manager = HandshakeManager::new(server_pid());
+        let token = IdentityToken::generate();
+        let user_key = UserKey::from_u64(7);
+        manager.authenticate_user(&token, &user_key);
+        let bytes = inbound(
+            &HandshakeHeader::ClientIdentifyRequest(server_pid()),
+            Some(&token),
+        );
+        match maintain(&mut manager, &bytes) {
+            Ok(HandshakeAction::FinalizeConnection(finalized_key, _)) => {
+                assert_eq!(finalized_key, user_key)
+            }
+            _ => panic!("first identify must finalize the connection"),
+        }
+        // The response was dropped on the wire; the client's retransmit
+        // arrives with the connection already finalized.
+        let mut reader = BitReader::new(&bytes);
+        match manager.maintain_handshake(&addr(), &mut reader, true) {
+            Ok(HandshakeAction::SendPacket(packet)) => {
+                let mut reader = BitReader::new(packet.slice());
+                StandardHeader::de(&mut reader).expect("response must parse");
+                assert!(
+                    matches!(
+                        HandshakeHeader::de(&mut reader),
+                        Ok(HandshakeHeader::ServerIdentifyResponse)
+                    ),
+                    "duplicate identify must resend the identify response"
+                );
+            }
+            _ => panic!("duplicate identify must resend the response, never reject"),
         }
     }
 }

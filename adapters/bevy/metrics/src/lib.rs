@@ -1,7 +1,7 @@
 //! Bevy plugins for naia game networking metrics.
 //!
-//! Add [`NaiaServerMetricsPlugin`] to your Bevy [`App`] and naia's network
-//! health data is emitted automatically each tick via the [`metrics`] crate
+//! Add `NaiaServerMetricsPlugin` to your Bevy [`App`](bevy_app::App) and naia's network
+//! health data is emitted automatically each tick via the `metrics` crate
 //! facade.
 //!
 //! # Setup
@@ -23,8 +23,8 @@
 //!
 //! # Features
 //!
-//! Enable `server` for [`NaiaServerMetricsPlugin`]; `client` for
-//! [`NaiaClientMetricsPlugin`]. Both can be enabled simultaneously for
+//! Enable `server` for `NaiaServerMetricsPlugin`; `client` for
+//! `NaiaClientMetricsPlugin`. Both can be enabled simultaneously for
 //! listen-server setups.
 
 cfg_if::cfg_if! {

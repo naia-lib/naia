@@ -30,7 +30,7 @@ js-sys = { version = "0.3.64", optional = true  }
 web_sys = { version = "0.3.64", package = "web-sys", features = [
     "RtcDataChannel", "RtcDataChannelInit", "RtcDataChannelType", "MessageChannel", "MessagePort",
     "RtcIceCandidate", "RtcIceCandidateInit", "RtcConfiguration", "RtcDataChannelState", "RtcIceGatheringState",
-    "RtcPeerConnection", "RtcSdpType",  "RtcSessionDescription", "RtcSessionDescriptionInit",
+    "RtcPeerConnection", "RtcPeerConnectionIceEvent", "RtcSdpType",  "RtcSessionDescription", "RtcSessionDescriptionInit",
     "XmlHttpRequest", "XmlHttpRequestEventTarget", "MessageEvent", "ProgressEvent", "ErrorEvent", "Blob", "Window" ], optional = true  }
 tinyjson = { version = "2.3", optional = true }
 miniquad = { version = "0.3", features = ["log-impl"], optional = true }

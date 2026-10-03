@@ -27,10 +27,6 @@ impl ChannelTickBufferSender {
 
     pub fn collect_messages(&mut self, client_sending_tick: &Tick, server_receivable_tick: &Tick) {
         if sequence_greater_than(*client_sending_tick, self.last_sent) || self.never_sent {
-            // Remove messages that would never be able to reach the Server
-            self.sending_messages
-                .pop_back_until_excluding(server_receivable_tick);
-
             self.last_sent = *client_sending_tick;
             self.never_sent = true;
 
@@ -46,6 +42,17 @@ impl ChannelTickBufferSender {
             // whose gap is ~2 ticks). Sending each message the tick it becomes
             // individually reachable is timing-robust and the server de-dups by
             // (tick, message_index), so the extra retransmits are harmless.
+            //
+            // This move runs BEFORE the prune below. A message the window
+            // jumps past (receivable >= tick) in the same collect where
+            // sending reaches it must still be written to outgoing first: pruning
+            // first discards the never-sent message as "already simulated"
+            // before any packet carries it, and the server applies zero actions
+            // (Usher 42181). A lower move bound of (receivable, sending] would
+            // not save it — when receivable has already reached the message's
+            // tick that interval is empty. Moved messages leave `sending_messages`
+            // on prune but stay in `outgoing_messages` until written, so each
+            // message is queued exactly once.
             for (message_tick, message_map) in self.sending_messages.iter() {
                 if sequence_greater_than(*message_tick, *client_sending_tick) {
                     continue;
@@ -54,6 +61,10 @@ impl ChannelTickBufferSender {
                 let messages = message_map.collect_messages();
                 self.outgoing_messages.push_back((*message_tick, messages));
             }
+
+            // Remove messages that would never be able to reach the Server.
+            self.sending_messages
+                .pop_back_until_excluding(server_receivable_tick);
         }
     }
 
@@ -337,5 +348,68 @@ impl OutgoingMessages {
 
     pub fn iter(&self) -> impl Iterator<Item = &(Tick, MessageMap)> {
         self.buffer.iter()
+    }
+}
+
+#[cfg(test)]
+mod channel_tick_buffer_sender_tests {
+    use super::*;
+    use naia_shared::Message;
+
+    #[derive(Message)]
+    struct ProbeMessage {
+        value: u8,
+    }
+
+    fn probe_container() -> MessageContainer {
+        MessageContainer::new(Box::new(ProbeMessage { value: 7 }))
+    }
+
+    /// Prune-then-move drops a message the window jumps past before it is
+    /// ever sent (Mercer 42178, Usher 42181): stamped at T while sending is
+    /// still behind T, then receivable jumps past T in the same collect
+    /// where sending reaches T. The prune runs first and discards the
+    /// never-sent message as "already simulated", so no packet ever carries
+    /// it and the server applies zero actions. Move-then-prune writes it to
+    /// outgoing exactly once instead.
+    #[test]
+    fn a_message_overtaken_by_the_window_is_still_sent_exactly_once() {
+        let mut sender = ChannelTickBufferSender::new(TickBufferSettings::default());
+
+        sender.send_message(&188, probe_container());
+
+        // Sending has not reached the message yet: nothing moves, and the
+        // prune (receivable 186) keeps it.
+        sender.collect_messages(&187, &186);
+        assert!(
+            !sender.has_messages(),
+            "nothing is reachable yet, so outgoing must stay empty",
+        );
+
+        // Sending reaches 188 in the same collect where receivable jumps
+        // past it (186 -> 188).
+        sender.collect_messages(&188, &188);
+
+        // RED before move-then-prune: the prune discarded the never-sent
+        // 188 message, so outgoing is empty. GREEN after: it was moved to
+        // outgoing first, exactly once.
+        assert!(
+            sender.has_messages(),
+            "the 188 message must reach outgoing even though receivable jumped past it",
+        );
+        assert_eq!(
+            sender.outgoing_messages.len(),
+            1,
+            "the message must be written to outgoing exactly once",
+        );
+        assert_eq!(sender.outgoing_messages.front().unwrap().0, 188);
+
+        // A further collect must not duplicate it.
+        sender.collect_messages(&188, &188);
+        assert_eq!(
+            sender.outgoing_messages.len(),
+            1,
+            "a repeat collect must not re-queue the message",
+        );
     }
 }

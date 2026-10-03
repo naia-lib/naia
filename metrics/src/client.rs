@@ -4,7 +4,7 @@ use naia_shared::ConnectionStats;
 /// Emit the five client-side connection gauges.
 ///
 /// The client has exactly one connection, so no label is needed.
-/// Call once per tick after [`Client::send_all_packets`].
+/// Call once per tick after `Client::send_all_packets`.
 pub fn emit_client_connection_stats(stats: &ConnectionStats) {
     metrics::gauge!(names::CLIENT_CONN_RTT_MS).set(stats.rtt_ms as f64);
     metrics::gauge!(names::CLIENT_CONN_RTT_P99_MS).set(stats.rtt_p99_ms as f64);

@@ -66,6 +66,7 @@ extern "C" {
         server_socket_address: JsObject,
         rtc_path: JsObject,
         auth_str: JsObject,
+        ice_servers: JsObject,
         protocol_id: JsObject,
     );
     pub fn naia_disconnect(socket_id: u32);
@@ -90,7 +91,15 @@ pub extern "C" fn receive_id(socket_id: u32, id_token: JsObject) {
     if let Some(table) = table_mut() {
         if let Some(state) = table.get_mut(SocketId(socket_id)) {
             if let Some(id_cell) = &mut state.id_cell {
-                *id_cell = IdentityToken::from_signaling_string(&id_token_string);
+                let decoded = IdentityToken::from_signaling_string(&id_token_string);
+                // Outcome only, never the token: the signaling string is an
+                // auth secret. Connection-phase logging for the handshake
+                // diagnosis (Usher 42357).
+                log::info!(
+                    "miniquad socket: signaling identity decode ok={}",
+                    decoded.is_some()
+                );
+                *id_cell = decoded;
             }
         }
     }

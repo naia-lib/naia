@@ -21,7 +21,7 @@
 //! }
 //! ```
 //!
-//! For Bevy apps, use [`naia-bevy-metrics`] instead — it handles emission
+//! For Bevy apps, use `naia-bevy-metrics` instead — it handles emission
 //! automatically via a plugin.
 
 mod client;

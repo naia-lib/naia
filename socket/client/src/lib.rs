@@ -92,6 +92,12 @@ mod miniquad_js_bridge_host_oracle {
     /// oracle.
     const MINIQUAD_SHARED_RS: &str = include_str!("backends/miniquad/shared.rs");
 
+    /// The Rust caller. It owns `SocketConfig` at the `connect` entry point,
+    /// so it is the half that must thread the configured list into the
+    /// bridge call -- the oracle pins that threading here rather than
+    /// trusting the call site by inspection.
+    const MINIQUAD_SOCKET_RS: &str = include_str!("backends/miniquad/socket.rs");
+
     /// The per-socket state. Each socket owns its queues and cells here, so
     /// the oracles below can pin what each socket -- not the process --
     /// holds.
@@ -155,9 +161,9 @@ mod miniquad_js_bridge_host_oracle {
     ///
     /// `extern "C" fn naia_connect` in `shared.rs`, the import-object binding,
     /// the JS `connect` definition and the call the binding forwards to must all
-    /// name the same five parameters in the same order: the socket id first
-    /// (naia-lib/naia#193), then the fingerprint last. Removing the fifth
-    /// argument or moving it reds here, at the Rust/JS contract itself -- not
+    /// name the same six parameters in the same order: the socket id first
+    /// (naia-lib/naia#193), then the fingerprint last. Removing an argument
+    /// or moving it reds here, at the Rust/JS contract itself -- not
     /// later as an unrelated link failure or a silently misaligned argument in a
     /// browser.
     #[test]
@@ -173,6 +179,7 @@ mod miniquad_js_bridge_host_oracle {
             "server_socket_address",
             "rtc_path",
             "auth_str",
+            "ice_servers",
             "protocol_id",
         ];
 
@@ -199,7 +206,36 @@ mod miniquad_js_bridge_host_oracle {
         assert_eq!(
             js_binding.last().map(String::as_str),
             Some("protocol_id"),
-            "the fingerprint must be the fifth argument, not an optional trailing extra",
+            "the fingerprint must be the sixth and last argument, not an optional trailing extra",
+        );
+    }
+
+    /// The ICE server list must cross the bridge as live configuration, not
+    /// sit hardcoded in the JavaScript. The JS half used to build its
+    /// `RTCPeerConnection` with a STUN literal while the wbindgen backend
+    /// read `SocketConfig.ice_servers`: two sources for one config, so an
+    /// egress-policy override reached one backend and silently missed the
+    /// other. The list now crosses as the fifth bridge argument -- a JSON
+    /// array string the JS half parses into `iceServers` -- and the literal
+    /// must be gone from the shipped JavaScript: the default lives only in
+    /// `DEFAULT_ICE_SERVER_URL` on the Rust side.
+    #[test]
+    fn the_js_bridge_builds_its_ice_servers_from_the_configured_list() {
+        assert!(
+            NAIA_SOCKET_JS.contains("naia_socket.get_js_object(ice_servers)"),
+            "the configured server list must be unwrapped through the same JsObject bridge as every other argument",
+        );
+        assert!(
+            NAIA_SOCKET_JS.contains("JSON.parse("),
+            "the configured server list must be parsed from its JSON bridge encoding",
+        );
+        assert!(
+            !NAIA_SOCKET_JS.contains("stun:stun.l.google.com:19302"),
+            "no STUN literal may remain in the shipped JavaScript: the default lives in DEFAULT_ICE_SERVER_URL",
+        );
+        assert!(
+            MINIQUAD_SOCKET_RS.contains("config.ice_servers"),
+            "the Rust half must thread SocketConfig.ice_servers into the bridge call",
         );
     }
 
@@ -334,6 +370,7 @@ mod miniquad_js_bridge_host_oracle {
             "server_socket_address",
             "rtc_path",
             "auth_str",
+            "ice_servers",
             "protocol_id",
         ];
 
@@ -451,21 +488,34 @@ mod miniquad_js_bridge_host_oracle {
         }
     }
 
-    /// The session offer must wait for ICE gathering. Posting the local
+    /// The session offer must not post candidate-less, and must not wait on
+    /// gathering-complete past the bounded wait. Posting the local
     /// description the moment `setLocalDescription` resolves throws away the
     /// STUN srflx candidates the peer was configured to gather, and the
-    /// session protocol has no trickle channel to recover them. The single
-    /// send site must therefore sit behind the gathering-complete gate, with
-    /// a loud timeout that errors instead of hanging or posting early.
+    /// session protocol has no trickle channel to recover them — but gating
+    /// the send on `complete` with no bound tied to the connection deadline
+    /// stalls connect for ~40 s on one slow STUN path (Roger 41874). The
+    /// single send site must therefore sit behind the shared gate: post on
+    /// `complete`, or once the bounded wait has passed with at least one
+    /// candidate in hand, with a loud timeout that errors instead of hanging
+    /// or posting early.
     #[test]
-    fn the_offer_post_waits_for_gathering_complete() {
+    fn the_offer_posts_on_complete_or_bounded_wait_with_candidates() {
         assert!(
             NAIA_SOCKET_JS.contains("peer.onicegatheringstatechange = maybe_post_offer"),
-            "the JS bridge must arm the gathering-complete gate before posting",
+            "the JS bridge must arm the gather gate before posting",
         );
         assert!(
-            NAIA_SOCKET_JS.contains("if (peer.iceGatheringState !== \"complete\") return;"),
-            "the gate must refuse to post until gathering is complete",
+            NAIA_SOCKET_JS.contains("candidateCount += 1"),
+            "the gate must count candidates as they arrive",
+        );
+        assert!(
+            NAIA_SOCKET_JS.contains("elapsedMs >= 10000 && candidateCount >= 1"),
+            "the gate must release the post once the bounded wait passes with candidates",
+        );
+        assert!(
+            NAIA_SOCKET_JS.contains("peer.iceGatheringState === \"complete\""),
+            "the gate must still post immediately on gathering-complete",
         );
         assert_eq!(
             NAIA_SOCKET_JS.matches("request.send(").count(),
@@ -480,20 +530,29 @@ mod miniquad_js_bridge_host_oracle {
     }
 
     /// Same gate on the wasm_bindgen half, pinned through the same strings:
-    /// both halves report the identical timeout message, so a divergence in
-    /// either repair reds here instead of shipping two behaviors.
+    /// both halves post on `complete` or the bounded wait with candidates,
+    /// and both report the identical timeout message, so a divergence in
+    /// either repair reds here instead of shipping two behaviors. The bound
+    /// itself is decided once, in naia-socket-shared (`should_post_session_offer`
+    /// + `ICE_GATHER_EARLY_POST_MS`), and covered by host unit tests there;
+    /// this oracle pins that both halves actually call through to it.
     #[test]
     fn the_wasm_backend_gates_its_offer_the_same_way() {
         assert!(
-            WASM_DATA_CHANNEL_RS
-                .matches("RtcIceGatheringState::Complete")
-                .count()
-                >= 2,
-            "the wasm half must check gathering-complete on both the fast path and the event path",
+            WASM_DATA_CHANNEL_RS.contains("should_post_session_offer"),
+            "the wasm half must decide through the shared gather gate",
+        );
+        assert!(
+            WASM_DATA_CHANNEL_RS.contains("set_onicecandidate"),
+            "the wasm half must count candidates as they arrive",
         );
         assert!(
             WASM_DATA_CHANNEL_RS.contains("set_onicegatheringstatechange"),
-            "the wasm half must arm the gathering-complete event",
+            "the wasm half must arm the gathering-state event",
+        );
+        assert!(
+            WASM_DATA_CHANNEL_RS.contains("ICE_GATHER_EARLY_POST_MS"),
+            "the wasm half must arm the bounded early-post wait",
         );
         assert!(
             WASM_DATA_CHANNEL_RS.contains("session offer never posted"),
@@ -502,6 +561,75 @@ mod miniquad_js_bridge_host_oracle {
         assert!(
             WASM_DATA_CHANNEL_RS.contains("ICE_GATHERING_TIMEOUT_MS"),
             "the wasm half must bound its gathering wait",
+        );
+    }
+
+    /// The wasm half observes the channel-open transition (Roger 42320):
+    /// the channel object exists from connect(), so only onopen marks the
+    /// usable link. The served game runs this backend and its console shows
+    /// warn-and-above, hence the warn! marker with the naia: capture prefix.
+    #[test]
+    fn the_wasm_backend_observes_the_channel_open_transition() {
+        assert!(
+            WASM_DATA_CHANNEL_RS.contains("set_onopen"),
+            "the wasm half must arm the channel-open event",
+        );
+        assert!(
+            WASM_DATA_CHANNEL_RS.contains("naia: datachannel onopen"),
+            "the open marker must carry the naia: capture prefix",
+        );
+    }
+
+    /// Connected means the data channel is open, not merely created (Roger
+    /// 42320).
+    ///
+    /// `connect` builds the `RTCDataChannel` object synchronously, long
+    /// before ICE/DTLS completes and `onopen` fires. Reading mere presence
+    /// as connected promoted a connecting socket through the whole setup
+    /// window; only `readyState === "open"` is the usable link.
+    #[test]
+    fn is_connected_requires_an_open_datachannel() {
+        let start = NAIA_SOCKET_JS
+            .find("is_connected: function(socket_id)")
+            .expect("the JS bridge must define is_connected");
+        let end = NAIA_SOCKET_JS[start..]
+            .find("\n    },")
+            .expect("is_connected must be closed")
+            + start;
+        let body = &NAIA_SOCKET_JS[start..end];
+        assert!(
+            body.contains("readyState"),
+            "is_connected must consult the channel readyState, not just the channel object",
+        );
+        assert!(
+            body.contains("connection.channel.readyState === \"open\""),
+            "only an open data channel reads as connected",
+        );
+    }
+
+    /// The connection-phase markers Drake's fresh-stack probe reports on.
+    /// Permanent info-level console lines, one per phase transition: POST
+    /// send time, POST status, id shape (type + length, never the value --
+    /// the id is an auth secret), datachannel open time, and the readyState
+    /// at the first send attempt. Removing or renaming one blinds the
+    /// handshake-phase diagnosis this bridge exists to support.
+    #[test]
+    fn the_js_bridge_logs_the_connection_phase_markers() {
+        for marker in [
+            "naia: session POST send",
+            "naia: session POST status",
+            "naia: session id",
+            "naia: datachannel onopen",
+            "naia: first send readyState",
+        ] {
+            assert!(
+                NAIA_SOCKET_JS.contains(marker),
+                "the JS bridge must log the `{marker}` connection-phase marker",
+            );
+        }
+        assert!(
+            NAIA_SOCKET_JS.contains("typeof response.id"),
+            "the id must be logged by shape (typeof), never by value",
         );
     }
 
