@@ -54,9 +54,13 @@ pub fn run(cmd: TracesCommand) -> Result<()> {
 
 /// Directory where golden trace JSON files are stored.
 fn golden_dir() -> PathBuf {
-    // Locate relative to CARGO_MANIFEST_DIR (test/spec_tool/) → test/golden_traces/
+    // Locate relative to CARGO_MANIFEST_DIR (tools/spec_tool/) → test/golden_traces/
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    Path::new(manifest_dir).join("..").join("golden_traces")
+    Path::new(manifest_dir)
+        .join("..")
+        .join("..")
+        .join("test")
+        .join("golden_traces")
 }
 
 fn golden_path(key: &str) -> PathBuf {
