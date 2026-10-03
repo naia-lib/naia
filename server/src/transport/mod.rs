@@ -143,7 +143,7 @@ mod inner {
         /// Awaitable readiness, for transports that can signal it cheaply.
         ///
         /// `Some` ⇒ this transport pings a readiness channel on every
-        /// inbound packet (in-process [`PacketChannel`]); a consumer may
+        /// inbound packet (in-process [`PacketChannel`](crate::transport::PacketChannel)); a consumer may
         /// block on [`PacketReadiness::wait`] instead of polling
         /// `receive()`. `None` (the default) ⇒ poll-only — raw blocking
         /// socket transports (UDP/WebRTC) have no awaitable readiness

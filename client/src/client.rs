@@ -75,6 +75,17 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     /// consulted only while the handshake is in flight, never once
     /// `server_connection` exists.
     handshake_timeout: Timer,
+    /// Counts handshake-packet send failures within the current attempt so
+    /// the first success can report how lossy the path was. Reset with the
+    /// attempt, alongside the two first-event flags below. Connection-phase
+    /// logging for the handshake diagnosis (Usher 42357).
+    handshake_failed_sends: u32,
+    /// Whether the first-success line has fired for the current attempt;
+    /// reset with the attempt so each dial reports its own handshake once.
+    handshake_first_send_logged: bool,
+    /// Whether the first inbound datagram of the current attempt has been
+    /// logged; same attempt scope as the send counters.
+    handshake_first_inbound_logged: bool,
     waitlist_messages: VecDeque<(ChannelKind, Box<dyn Message>)>,
     // World
     global_world_manager: GlobalWorldManager,
@@ -152,6 +163,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             server_disconnect: false,
             server_disconnect_details: None,
             handshake_timeout: Timer::new(client_config.connection.disconnection_timeout_duration),
+            handshake_failed_sends: 0,
+            handshake_first_send_logged: false,
+            handshake_first_inbound_logged: false,
             waitlist_messages: VecDeque::new(),
             // World
             global_world_manager,
@@ -186,9 +200,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ///
     /// Must be called before [`connect`](Client::connect) if the server
     /// requires authentication. The server receives this as an
-    /// [`AuthEvent`] in its connection handler.
-    ///
-    /// [`AuthEvent`]: naia_server::events::AuthEvent
+    /// `AuthEvent` in its connection handler.
     pub fn auth<M: Message>(&mut self, auth: M) {
         // get auth bytes
         let mut bit_writer = BitWriter::new();
@@ -221,7 +233,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Panics if the client has already initiated a connection. Check
     /// [`connection_status`](Client::connection_status) before calling.
     ///
-    /// [`ConnectionEvent`]: crate::events::ConnectionEvent
+    /// [`ConnectionEvent`]: crate::ConnectEvent
     pub fn connect<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
         if !self.is_disconnected() {
             panic!("Client has already initiated a connection, cannot initiate a new one. TIP: Check client.is_disconnected() before calling client.connect()");
@@ -328,7 +340,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ///
     /// Panics if the client is not currently connected.
     ///
-    /// [`DisconnectionEvent`]: crate::events::DisconnectionEvent
+    /// [`DisconnectionEvent`]: crate::DisconnectEvent
     pub fn disconnect(&mut self) {
         if !self.is_connected() {
             panic!("Trying to disconnect Client which is not connected yet!")
@@ -387,7 +399,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Must be called after [`receive_all_packets`](Client::receive_all_packets)
     /// and before [`take_world_events`](Client::take_world_events). Applies
     /// server-replicated entity spawn/update/despawn events and queues them
-    /// for the next [`take_world_events`] call.
+    /// for the next [`take_world_events`](Client::take_world_events) call.
     pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
         // all other operations
         if self.is_disconnecting() {
@@ -525,10 +537,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             );
         } else if self.io.is_loaded() {
             if let Some(outgoing_packet) = self.handshake_manager.send() {
-                if self.io.send_packet(outgoing_packet).is_err() {
-                    // Single handshake send failure is not fatal: the handshake
-                    // manager retries on the next tick until the server responds.
-                    warn!("Client Error: Cannot send handshake packet to Server");
+                match self.io.send_packet(outgoing_packet) {
+                    Ok(()) => {
+                        if !self.handshake_first_send_logged {
+                            self.handshake_first_send_logged = true;
+                            warn!(
+                                "naia: Client: first handshake packet sent to Server \
+                                 (failed sends before it in this attempt: {})",
+                                self.handshake_failed_sends
+                            );
+                        }
+                        self.handshake_failed_sends = 0;
+                    }
+                    Err(_) => {
+                        self.handshake_failed_sends += 1;
+                        // Single handshake send failure is not fatal: the handshake
+                        // manager retries on the next tick until the server responds.
+                        warn!("Client Error: Cannot send handshake packet to Server");
+                    }
                 }
             }
         }
@@ -692,7 +718,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// the server's original request. Returns `true` on success; `false` if
     /// the key is no longer valid (e.g. the connection was dropped).
     ///
-    /// [`RequestEvent`]: crate::events::RequestEvent
+    /// [`RequestEvent`]: crate::RequestEvent
     pub fn send_response<S: Response>(
         &mut self,
         response_key: &ResponseSendKey<S>,
@@ -1283,8 +1309,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// [`entity_mut(...).request_authority()`](crate::EntityMut::request_authority)
     /// instead.
     ///
-    /// [`EntityAuthGrantedEvent`]: crate::events::EntityAuthGrantedEvent
-    /// [`EntityAuthDeniedEvent`]: crate::events::EntityAuthDeniedEvent
+    /// [`EntityAuthGrantedEvent`]: crate::EntityAuthGrantedEvent
+    /// [`EntityAuthDeniedEvent`]: crate::EntityAuthDeniedEvent
     pub fn entity_request_authority(&mut self, world_entity: &E) -> Result<(), AuthorityError> {
         self.check_client_authoritative_allowed();
 
@@ -1720,7 +1746,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// changed) BEFORE ticking its simulation — so a client-confirmed re-simulation
     /// can re-derive every tick in a catch-up batch with that tick's own input —
     /// then reconcile the remaining *state* afterward (the input-early / state-late
-    /// split). See [`LocalWorldManager::take_received_updates_of_kind`].
+    /// split). See [`take_received_updates_of_kind`](Client::take_received_updates_of_kind).
     pub fn take_received_updates_of_kind<R: ReplicatedComponent, W: WorldMutType<E>>(
         &mut self,
         mut world: W,
@@ -2262,6 +2288,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         loop {
             match self.io.recv_reader() {
                 Ok(Some(mut reader)) => {
+                    if !self.handshake_first_inbound_logged {
+                        self.handshake_first_inbound_logged = true;
+                        warn!("naia: Client: first inbound server datagram during handshake");
+                    }
                     // The server is alive: a full silence window with no
                     // inbound traffic is the only thing that may end the
                     // attempt, so any packet re-arms the give-up timer.
@@ -2280,6 +2310,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             self.on_connect();
 
                             let server_addr = self.server_address_unwrapped();
+                            warn!(
+                                "naia: Client: handshake Connected to Server at {:?}",
+                                server_addr
+                            );
                             self.incoming_world_events.push_connection(&server_addr);
 
                             // Stop reading here — any remaining packets in
@@ -2635,6 +2669,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.server_disconnect_details = None;
         // A rung give-up timer must not leak into the next attempt either.
         self.handshake_timeout.reset();
+        // Same for the phase-logging attempt scope: the next dial reports
+        // its own first send, first inbound datagram, and failure count.
+        self.handshake_failed_sends = 0;
+        self.handshake_first_send_logged = false;
+        self.handshake_first_inbound_logged = false;
     }
 
     fn server_address_unwrapped(&self) -> SocketAddr {
@@ -3370,6 +3409,146 @@ mod drain_termination_tests {
     }
 }
 
+// ---- Handshake send accounting (Usher 42357): failed handshake sends are
+// counted per attempt so the first success can report how lossy the path
+// was; the success resets the counter for the attempt.
+#[cfg(test)]
+mod handshake_send_accounting_tests {
+    use std::net::SocketAddr;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    use naia_shared::{
+        ComponentKind, IdentityToken, Protocol, ReplicaDynRefWrapper, ReplicaRefWrapper,
+        ReplicatedComponent, WorldRefType,
+    };
+
+    use crate::transport::{
+        IdentityReceiver, IdentityReceiverResult, PacketReceiver, PacketSender, RecvError,
+        SendError, ServerAddr,
+    };
+
+    use super::*;
+
+    /// Empty world: the handshake send branch never touches it, but the
+    /// `send_all_packets` bound still needs a value.
+    struct StubWorld;
+
+    impl WorldRefType<u64> for StubWorld {
+        fn has_entity(&self, _world_entity: &u64) -> bool {
+            false
+        }
+        fn entities(&self) -> Vec<u64> {
+            Vec::new()
+        }
+        fn has_component<R: ReplicatedComponent>(&self, _world_entity: &u64) -> bool {
+            false
+        }
+        fn has_component_of_kind(
+            &self,
+            _world_entity: &u64,
+            _component_kind: &ComponentKind,
+        ) -> bool {
+            false
+        }
+        fn component<'a, R: ReplicatedComponent>(
+            &'a self,
+            _entity: &u64,
+        ) -> Option<ReplicaRefWrapper<'a, R>> {
+            None
+        }
+        fn component_of_kind<'a>(
+            &'a self,
+            _entity: &u64,
+            _component_kind: &ComponentKind,
+        ) -> Option<ReplicaDynRefWrapper<'a>> {
+            None
+        }
+    }
+
+    #[derive(Clone)]
+    struct OkIdReceiver;
+
+    impl IdentityReceiver for OkIdReceiver {
+        fn receive(&mut self) -> IdentityReceiverResult {
+            IdentityReceiverResult::Success(IdentityToken::generate())
+        }
+    }
+
+    /// Fails the first two sends, then succeeds: the attempt must report
+    /// exactly the failures that preceded its first success.
+    struct FailTwiceSender {
+        attempts: AtomicUsize,
+    }
+
+    impl PacketSender for FailTwiceSender {
+        fn send(&self, _payload: &[u8]) -> Result<(), SendError> {
+            if self.attempts.fetch_add(1, Ordering::SeqCst) < 2 {
+                Err(SendError)
+            } else {
+                Ok(())
+            }
+        }
+        fn server_addr(&self) -> ServerAddr {
+            ServerAddr::Found("127.0.0.1:9999".parse::<SocketAddr>().unwrap())
+        }
+    }
+
+    #[derive(Clone)]
+    struct QuietReceiver;
+
+    impl PacketReceiver for QuietReceiver {
+        fn receive(&mut self) -> Result<Option<&[u8]>, RecvError> {
+            Ok(None)
+        }
+        fn server_addr(&self) -> ServerAddr {
+            ServerAddr::Found("127.0.0.1:9999".parse::<SocketAddr>().unwrap())
+        }
+    }
+
+    #[test]
+    fn handshake_send_failures_are_counted_until_the_first_success() {
+        // Zero send interval so consecutive pump calls each attempt a send
+        // without waiting out the production 250 ms spacing.
+        let config = ClientConfig {
+            send_handshake_interval: Duration::ZERO,
+            ..Default::default()
+        };
+        let mut client = Client::<u64>::new(config, Protocol::builder().build());
+        client.io.load(
+            Box::new(OkIdReceiver),
+            Box::new(FailTwiceSender {
+                attempts: AtomicUsize::new(0),
+            }),
+            Box::new(QuietReceiver),
+        );
+        client
+            .handshake_manager
+            .set_identity_token(IdentityToken::generate());
+
+        client.send_all_packets(StubWorld);
+        client.send_all_packets(StubWorld);
+        assert_eq!(
+            client.handshake_failed_sends, 2,
+            "the two failed sends must be counted before the first success",
+        );
+        assert!(
+            !client.handshake_first_send_logged,
+            "no success yet, so the first-success line must not have fired",
+        );
+
+        client.send_all_packets(StubWorld);
+        assert!(
+            client.handshake_first_send_logged,
+            "the first successful send must fire the once-per-attempt line",
+        );
+        assert_eq!(
+            client.handshake_failed_sends, 0,
+            "the first success resets the attempt counter",
+        );
+    }
+}
+
 // ---- N1-b remainder (27202/4): the client's send path must refuse with a
 // typed variant when no connection exists, like every other send_request arm.
 #[cfg(test)]
@@ -3761,6 +3940,7 @@ mod client_disconnect_tests {
     }
 
     /// A bare keep-alive, the way the server's heartbeat task emits it.
+    #[cfg(feature = "test_time")]
     fn heartbeat_packet() -> Vec<u8> {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::Heartbeat, 0, 0, 0).ser(&mut writer);
@@ -3834,11 +4014,13 @@ mod client_disconnect_tests {
 
     /// A sender that keeps every payload, so keep-alive tests can inspect
     /// what the client actually emitted while silent.
+    #[cfg(feature = "test_time")]
     #[derive(Clone)]
     struct CapturingSender {
         sent: Arc<std::sync::Mutex<Vec<Vec<u8>>>>,
     }
 
+    #[cfg(feature = "test_time")]
     impl PacketSender for CapturingSender {
         fn send(&self, payload: &[u8]) -> Result<(), SendError> {
             self.sent.lock().unwrap().push(payload.to_vec());
@@ -3939,12 +4121,14 @@ mod client_disconnect_tests {
     /// A receiver that delivers exactly one undecodable packet, then
     /// silence: the peer is alive (bytes arrive) but says nothing the
     /// handshake can use. Proves heard traffic re-arms the give-up timer.
+    #[cfg(feature = "test_time")]
     #[derive(Clone)]
     struct OnceReceiver {
         packet: Vec<u8>,
         live: bool,
     }
 
+    #[cfg(feature = "test_time")]
     impl PacketReceiver for OnceReceiver {
         fn receive(&mut self) -> Result<Option<&[u8]>, RecvError> {
             if self.live {
@@ -4009,9 +4193,11 @@ mod client_disconnect_tests {
 
     /// A sender whose transport never learned the peer address: the dial
     /// target never resolved to a socket address.
+    #[cfg(feature = "test_time")]
     #[derive(Clone)]
     struct FindingSender;
 
+    #[cfg(feature = "test_time")]
     impl PacketSender for FindingSender {
         fn send(&self, _payload: &[u8]) -> Result<(), SendError> {
             Ok(())

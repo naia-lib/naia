@@ -10,7 +10,7 @@ use crate::PipelinedWorldServer;
 
 /// Opaque handle to a room on the server.
 ///
-/// Obtained from [`Server::create_room`] and used to reference the room in
+/// Obtained from [`Server::create_room`](crate::Server::create_room) and used to reference the room in
 /// subsequent API calls. `RoomKey` values are stable for the lifetime of the
 /// room and may be stored freely.
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
@@ -143,7 +143,7 @@ enum RoomMutTarget<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
 
 /// Scoped read-only handle for a server room.
 ///
-/// Obtained from [`Server::room`]. Lets you inspect membership (users and
+/// Obtained from [`Server::room`](crate::Server::room). Lets you inspect membership (users and
 /// entities) without borrowing the server mutably.
 pub struct RoomRef<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
     server: RoomRefTarget<'s, E>,
@@ -226,7 +226,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> RoomRef<'s, E> {
 
 /// Scoped mutable handle for a server room.
 ///
-/// Obtained from [`Server::room_mut`]. Lets you add/remove users and entities,
+/// Obtained from [`Server::room_mut`](crate::Server::room_mut). Lets you add/remove users and entities,
 /// broadcast messages, and destroy the room.
 pub struct RoomMut<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
     server: RoomMutTarget<'s, E>,

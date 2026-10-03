@@ -174,7 +174,7 @@ impl BitWrite for BitWriter {
 ///
 /// Unlike [`BitWriter`] (which has a fixed MTU-sized stack buffer and panics on
 /// overflow), this type grows as needed and can hold arbitrarily large payloads.
-/// Used by [`naia_shared`] to serialize request/response bodies before wrapping
+/// Used by `naia_shared` to serialize request/response bodies before wrapping
 /// them in a `RequestOrResponse` message that is then fragmented by the normal
 /// reliable-channel fragmenter.
 pub struct VecBitWriter {

@@ -1,10 +1,8 @@
 /// The authority origin of a client-tracked entity.
 ///
 /// The client assigns an owner to every entity it knows about. This mirrors
-/// the server-side [`EntityOwner`] but uses only the variants observable from
+/// the server-side `EntityOwner` but uses only the variants observable from
 /// the client's perspective.
-///
-/// [`EntityOwner`]: naia_server::EntityOwner
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum EntityOwner {
     /// Originated on the server and replicated to this client.
@@ -18,9 +16,9 @@ pub enum EntityOwner {
     Server,
     /// Spawned by this client.
     ///
-    /// While [`Private`](naia_shared::Publicity::Private) the entity is
+    /// While `Private` the entity is
     /// only visible to the owning client. After the client publishes it
-    /// ([`Public`](naia_shared::Publicity::Public)) it replicates to peers
+    /// (`Public`) it replicates to peers
     /// in the same room and scope.
     Client,
     /// A local-only entity that is never replicated to the server.

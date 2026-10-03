@@ -9,23 +9,25 @@ use naia_shared::IdentityToken;
 use crate::{TestEntity, TestWorld};
 
 type Client = NaiaClient<TestEntity>;
+type SharedIdentityToken = Arc<Mutex<Option<IdentityToken>>>;
+type SharedRejectionCode = Arc<Mutex<Option<(u16, Option<Vec<u8>>)>>>;
 
 pub(crate) struct ClientState {
     client: Client,
     world: TestWorld,
     user_key_opt: Option<UserKey>,
     /// Shared handle to the identity token received from the server
-    identity_token: Arc<Mutex<Option<IdentityToken>>>,
+    identity_token: SharedIdentityToken,
     /// Shared handle to the rejection code (if any) returned by the handshake
-    rejection_code: Arc<Mutex<Option<(u16, Option<Vec<u8>>)>>>,
+    rejection_code: SharedRejectionCode,
 }
 
 impl ClientState {
     pub(crate) fn new(
         client: Client,
         world: TestWorld,
-        identity_token: Arc<Mutex<Option<IdentityToken>>>,
-        rejection_code: Arc<Mutex<Option<(u16, Option<Vec<u8>>)>>>,
+        identity_token: SharedIdentityToken,
+        rejection_code: SharedRejectionCode,
     ) -> Self {
         Self {
             client,

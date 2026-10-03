@@ -19,6 +19,28 @@ pub struct ReliableReceiver<M> {
     max_receive_window: Option<u16>,
 }
 
+/// Outcome of buffering one read message.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum BufferOutcome {
+    /// First sight of this id: content buffered.
+    Buffered,
+    /// Same id re-read with richer content (placeholder degraded write
+    /// upgraded back to real content on retransmit): the delivered content
+    /// is the new one, and its tick is the new read's tick.
+    ReplacedUpgrade,
+    /// Same id re-read with no richer content: dropped.
+    IgnoredDuplicate,
+}
+
+/// Messages that can degrade to a placeholder on the wire (a retransmit
+/// expanding after its data vanished is written as a payload-less Noop) and
+/// upgrade back on a later retransmit. The receiver must deliver the richest
+/// content seen per id, never strand an upgrade behind a placeholder.
+pub trait UpgradableMessage {
+    /// Whether this content is a placeholder carrying no payload.
+    fn is_placeholder(&self) -> bool;
+}
+
 impl<M> ReliableReceiver<M> {
     /// Creates a receiver with no receive window -- it will buffer up to half the
     /// index space on demand. Prefer [`with_window`](Self::with_window).
@@ -40,7 +62,14 @@ impl<M> ReliableReceiver<M> {
         }
     }
 
-    pub(crate) fn buffer_message(&mut self, message_index: MessageIndex, message: M) {
+    pub(crate) fn buffer_message(
+        &mut self,
+        message_index: MessageIndex,
+        message: M,
+    ) -> BufferOutcome
+    where
+        M: UpgradableMessage,
+    {
         // moving from oldest incoming message to newest
         // compare existing slots and see if the message_index has been instantiated
         // already if it has, put the message into the slot
@@ -50,7 +79,7 @@ impl<M> ReliableReceiver<M> {
 
         if sequence_less_than(message_index, self.oldest_received_message_index) {
             // already moved sliding window past this message id
-            return;
+            return BufferOutcome::IgnoredDuplicate;
         }
 
         // Enforce the receive window before the slot-filling loop below, because
@@ -80,7 +109,7 @@ impl<M> ReliableReceiver<M> {
                     "reliable channel: message index {} is {} ahead of the oldest outstanding index {} (window {}); dropping. An honest peer cannot exceed the window -- this indicates a misbehaving or hostile peer.",
                     message_index, indices_ahead, self.oldest_received_message_index, window
                 );
-                return;
+                return BufferOutcome::IgnoredDuplicate;
             }
         }
 
@@ -88,16 +117,45 @@ impl<M> ReliableReceiver<M> {
 
         loop {
             let mut should_push_message = false;
+            // Immutable pre-probe: the record borrow must end before the
+            // upgrade path below touches `incoming_messages`.
+            let duplicate_read = matches!(
+                self.record.get(current_index),
+                Some((old_message_index, true)) if *old_message_index == message_index
+            );
+            if duplicate_read {
+                // Same id re-read. A placeholder may upgrade to real content
+                // on retransmit: deliver the richest content per id, never
+                // strand an upgrade.
+                match self
+                    .incoming_messages
+                    .iter_mut()
+                    .find(|(id, _)| *id == message_index)
+                {
+                    Some((_, buffered))
+                        if buffered.is_placeholder() && !message.is_placeholder() =>
+                    {
+                        *buffered = message;
+                        return BufferOutcome::ReplacedUpgrade;
+                    }
+                    None if !message.is_placeholder() => {
+                        // The old content was already taken; the upgrade
+                        // still has to be delivered.
+                        self.incoming_messages.push((message_index, message));
+                        self.clear_old_messages();
+                        return BufferOutcome::ReplacedUpgrade;
+                    }
+                    _ => {
+                        // already received this message
+                        return BufferOutcome::IgnoredDuplicate;
+                    }
+                }
+            }
             if current_index < self.record.len() {
                 if let Some((old_message_index, old_message)) = self.record.get_mut(current_index) {
-                    if *old_message_index == message_index {
-                        if !(*old_message) {
-                            *old_message = true;
-                            should_push_message = true;
-                        } else {
-                            // already received this message
-                            return;
-                        }
+                    if *old_message_index == message_index && !(*old_message) {
+                        *old_message = true;
+                        should_push_message = true;
                     }
                 }
             } else {
@@ -117,7 +175,7 @@ impl<M> ReliableReceiver<M> {
             if should_push_message {
                 self.incoming_messages.push((message_index, message));
                 self.clear_old_messages();
-                return;
+                return BufferOutcome::Buffered;
             }
 
             current_index += 1;
@@ -148,7 +206,24 @@ impl<M> ReliableReceiver<M> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ReliableReceiver, MAX_RECEIVE_WINDOW};
+    use super::{ReliableReceiver, UpgradableMessage, MAX_RECEIVE_WINDOW};
+
+    /// Test integers are never placeholders.
+    impl UpgradableMessage for u8 {
+        fn is_placeholder(&self) -> bool {
+            false
+        }
+    }
+    impl UpgradableMessage for u16 {
+        fn is_placeholder(&self) -> bool {
+            false
+        }
+    }
+    impl UpgradableMessage for u32 {
+        fn is_placeholder(&self) -> bool {
+            false
+        }
+    }
 
     /// The record grows one slot per index between the oldest outstanding index
     /// and the incoming one, and `message_index` is read off the wire. Without a

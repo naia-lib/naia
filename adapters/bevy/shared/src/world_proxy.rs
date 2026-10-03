@@ -136,7 +136,7 @@ impl<'w> WorldMut<'w> {
     /// Access the raw bevy [`World`].
     ///
     /// Used by `naia-bevy-server` extension methods on
-    /// [`naia_server::TickCtx<'_, Entity, WorldMut<'_>>`] that need bevy
+    /// `naia_server::TickCtx<'_, Entity, WorldMut<'_>>` that need bevy
     /// primitives not reachable through [`naia_shared::WorldMutType`]
     /// (e.g., draining `Messages<HostSyncEvent>`).
     pub fn bevy_world_mut(&mut self) -> &mut World {

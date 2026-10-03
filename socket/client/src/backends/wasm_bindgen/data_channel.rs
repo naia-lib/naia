@@ -3,7 +3,7 @@ extern crate log;
 use std::{cell::RefCell, net::SocketAddr, rc::Rc};
 
 use js_sys::{Array, Date, Object, Reflect};
-use log::info;
+use log::{info, warn};
 use tinyjson::JsonValue;
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use web_sys::{
@@ -130,6 +130,17 @@ impl DataChannel {
                 channel.set_onerror(Some(onerror_callback.as_ref().unchecked_ref()));
                 onerror_callback.forget();
 
+                // The open transition is the usable-link moment (Roger 42320:
+                // the channel object exists from connect(), long before
+                // ICE/DTLS completes). Nothing observed it on this backend;
+                // warn! so the served console (warn-and-above) shows it.
+                let onopen_func: Box<dyn FnMut(JsValue)> = Box::new(move |_: JsValue| {
+                    warn!("naia: datachannel onopen");
+                });
+                let onopen_callback = Closure::wrap(onopen_func);
+                channel.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
+                onopen_callback.forget();
+
                 let peer_2 = peer.clone();
                 let addr_cell_2 = self.addr_cell.clone();
                 let addr_func_2 = self.find_addr_func.clone();
@@ -177,6 +188,7 @@ impl DataChannel {
                         let request_func: Box<dyn FnMut(ProgressEvent)> = Box::new(
                             move |_: ProgressEvent| {
                                 let status = request_2.status().unwrap();
+                                warn!("naia: session POST status {}", status);
                                 if status != 200 {
                                     // A rejection may carry a base64-encoded
                                     // message explaining itself
@@ -197,6 +209,13 @@ impl DataChannel {
 
                                     let session_response: JsSessionResponse =
                                         get_session_response(response_string.as_str());
+
+                                    // Length only, never the value: the token
+                                    // is an opaque secret after this hop.
+                                    warn!(
+                                        "naia: session id token len {}",
+                                        session_response.id_token.len()
+                                    );
 
                                     // send the id token to the client
                                     // info!("Sending id token to client: {:?}", auth_header);
@@ -345,6 +364,9 @@ impl DataChannel {
                                 *settled.borrow_mut() = true;
                                 window.clear_timeout_with_handle(timeout_handle);
                                 let offer_sdp = peer.local_description().unwrap().sdp();
+                                // warn!: the served console shows warn-and-above
+                                // only; this is one line per connection attempt.
+                                warn!("naia: session POST send");
                                 request
                                     .send_with_opt_str(Some(offer_sdp.as_str()))
                                     .unwrap_or_else(|err| {

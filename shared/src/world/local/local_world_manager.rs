@@ -122,7 +122,7 @@ use crate::world::sync::RemoteEntityChannel;
 use crate::world::update::entity_update_manager::EntityUpdateManager;
 use crate::world::update::retransmit_ledger::RetransmitLedger;
 use crate::{
-    messages::channels::receivers::reliable_receiver::ReliableReceiver,
+    messages::channels::receivers::reliable_receiver::{BufferOutcome, ReliableReceiver},
     sequence_list::SequenceList,
     types::{HostType, PacketIndex},
     world::{
@@ -802,8 +802,38 @@ impl LocalWorldManager {
         //     );
         // }
 
-        self.incoming_message_ticks.insert(id, tick);
-        self.receiver.buffer_message(id, msg);
+        // m2 fix (Drake 42808): first stamp wins for a given id, and the
+        // upgrade-hole fix below it: a same-id retransmit re-read either
+        // keeps the old tick (duplicate content dropped) or takes the new
+        // tick (placeholder upgraded to real content, whose payload was
+        // pushed under the new tick). The log lines correlate by id with
+        // the writer-side expansion probe.
+        let msg_type = msg.get_type();
+        match self.receiver.buffer_message(id, msg) {
+            BufferOutcome::Buffered => {
+                self.incoming_message_ticks.entry(id).or_insert(tick);
+            }
+            BufferOutcome::ReplacedUpgrade => {
+                self.incoming_message_ticks.insert(id, tick);
+                log::debug!(
+                    "upgrade delivered: message id {:?} now tick {:?} (msg type {:?})",
+                    id,
+                    tick,
+                    msg_type
+                );
+            }
+            BufferOutcome::IgnoredDuplicate => {
+                if self.incoming_message_ticks.get(&id) != Some(&tick) {
+                    log::debug!(
+                        "duplicate read ignored for tick: message id {:?} keeps {:?}, retransmit read {:?} (msg type {:?})",
+                        id,
+                        self.incoming_message_ticks.get(&id),
+                        tick,
+                        msg_type
+                    );
+                }
+            }
+        }
     }
 
     pub(crate) fn insert_received_component(

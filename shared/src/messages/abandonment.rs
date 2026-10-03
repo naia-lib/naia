@@ -92,6 +92,11 @@ impl NonceAllocator {
     /// spent. Checked increment: `u64::MAX` is issued once, then the
     /// allocator is exhausted rather than wrapping to zero and aliasing a
     /// live nonce.
+    ///
+    /// Named `next`, not `next_nonce`: it is public API called from the
+    /// client and server request paths, and it returns `Result`, so it
+    /// cannot implement `Iterator`.
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Result<ConnectionRequestNonce, NonceExhaustion> {
         if self.exhausted {
             return Err(NonceExhaustion);

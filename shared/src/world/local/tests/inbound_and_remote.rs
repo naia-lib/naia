@@ -78,7 +78,7 @@ impl Fixture {
     fn take_events(&mut self, world: &mut TestWorld) -> Vec<crate::EntityEvent> {
         let mut spawner = TestSpawner::new();
         let now = crate::Instant::now();
-        let kinds = std::mem::replace(&mut self.kinds, ComponentKinds::new());
+        let kinds = std::mem::take(&mut self.kinds);
         let events =
             self.manager
                 .take_incoming_events(&mut spawner, &self.gwm, &kinds, world, &now);
@@ -563,6 +563,103 @@ fn a_received_component_is_buffered_and_then_applied_to_the_world() {
                 if *kind == ComponentKind::of::<Wraith>())
         ),
         "the buffered component should surface as an insert event"
+    );
+    assert_eq!(
+        world.value_of::<Wraith>(&3).map(|w| *w.value),
+        Some(9),
+        "and it should have landed in the world"
+    );
+}
+
+/// m2 red (Drake 42808): the client panic `an InsertComponent message must
+/// carry its own ticked payload: missing N ... buffered [(N-3, ...)]`.
+///
+/// Mechanism under test: the server's `ReliableSender` retransmits an unacked
+/// Insert under the SAME message id (`reliable_sender.rs` re-emits
+/// `(*message_index, ...)`); if the component is gone by retransmit time the
+/// writer degrades it to a payload-less Noop. On re-read the receiver drops
+/// the duplicate content (`reliable_receiver.rs` "already received") but
+/// `receiver_buffer_message` unconditionally overwrites the buffered tick, so
+/// the surviving original Insert is processed under the NEW tick while its
+/// only payload sits under the OLD one.
+///
+/// This test replays exactly that read sequence: Insert#1 at tick 1 with its
+/// payload, then a same-id Noop at tick 4 (the degraded retransmit, which
+/// pushes no payload), then a take. The insert must apply cleanly under its
+/// tick-1 payload: first stamp wins for the message id, so the degraded
+/// retransmit cannot re-stamp it to tick 4.
+#[test]
+fn a_degraded_retransmit_must_not_restamp_a_buffered_insert() {
+    let mut fx = Fixture::client();
+    let mut world = TestWorld::new();
+    let local_entity = fx.adopt_remote(&mut world, 3);
+
+    // Original read at tick 1: Insert#1 plus its inline payload.
+    fx.manager.insert_received_component(
+        1,
+        &local_entity,
+        &ComponentKind::of::<Wraith>(),
+        remote_component(&fx.kinds, &Wraith::new_complete(9)),
+    );
+    fx.manager.receiver_buffer_message(
+        1,
+        1,
+        crate::EntityMessage::InsertComponent(local_entity, ComponentKind::of::<Wraith>()),
+    );
+    // Retransmit read at tick 4: same id degraded to Noop, no payload push —
+    // exactly what `world_reader` does with a degraded retransmit.
+    fx.manager.receiver_buffer_message(1, 4, crate::EntityMessage::Noop);
+    let events = fx.take_events(&mut world);
+
+    assert!(
+        events.iter().any(
+            |e| matches!(e, crate::EntityEvent::InsertComponent(_, _, kind)
+                if *kind == ComponentKind::of::<Wraith>())
+        ),
+        "the tick-1 insert should still apply under its own payload"
+    );
+    assert_eq!(
+        world.value_of::<Wraith>(&3).map(|w| *w.value),
+        Some(9),
+        "and it should have landed in the world"
+    );
+}
+
+/// Upgrade hole (m2 follow-up): the first write of a command degrades to a
+/// payload-less Noop (component absent at expansion time) and its packet is
+/// read at tick 1; the unacked command is then retransmitted under the SAME
+/// id as a full Insert at tick 4 (component back) with its inline payload.
+/// The reliable receiver must not drop the upgrade as a duplicate of the
+/// Noop: the insert has to apply. Today the content is dropped, the payload
+/// lingers, and the insert is terminally lost — which is the red.
+#[test]
+fn a_retransmitted_upgrade_must_not_be_dropped_as_duplicate() {
+    let mut fx = Fixture::client();
+    let mut world = TestWorld::new();
+    let local_entity = fx.adopt_remote(&mut world, 3);
+
+    // First read at tick 1: Noop#1, the degraded first write. No payload.
+    fx.manager.receiver_buffer_message(1, 1, crate::EntityMessage::Noop);
+    // Retransmit read at tick 4: same id as a full Insert with its payload.
+    fx.manager.insert_received_component(
+        4,
+        &local_entity,
+        &ComponentKind::of::<Wraith>(),
+        remote_component(&fx.kinds, &Wraith::new_complete(9)),
+    );
+    fx.manager.receiver_buffer_message(
+        1,
+        4,
+        crate::EntityMessage::InsertComponent(local_entity, ComponentKind::of::<Wraith>()),
+    );
+    let events = fx.take_events(&mut world);
+
+    assert!(
+        events.iter().any(
+            |e| matches!(e, crate::EntityEvent::InsertComponent(_, _, kind)
+                if *kind == ComponentKind::of::<Wraith>())
+        ),
+        "the tick-4 upgrade insert should apply, not die as a duplicate"
     );
     assert_eq!(
         world.value_of::<Wraith>(&3).map(|w| *w.value),

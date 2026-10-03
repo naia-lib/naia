@@ -315,7 +315,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     ) {
         self.inserts
             .entry(component_kind)
-            .or_insert_with(|| Vec::new());
+            .or_default();
         let list = self.inserts.get_mut(&component_kind).unwrap();
         list.push((tick, world_entity));
         self.lifecycle.push(LifecycleOrder {

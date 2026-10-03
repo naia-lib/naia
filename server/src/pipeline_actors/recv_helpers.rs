@@ -4,7 +4,7 @@
 //! Two pieces:
 //! - [`RecvLifecycleEvent`] + [`drain_lifecycle`] — translate the
 //!   connect/disconnect/error variants from a [`ReceiveOutput`]'s
-//!   [`WorldEvents`] into a single plain-data enum the Recv SubApp can
+//!   [`WorldEvents`](crate::events::world_events::WorldEvents) into a single plain-data enum the Recv SubApp can
 //!   route to its `PendingSimControl` / `PendingSendControl` buffers
 //!   without needing to import every individual event type.
 //! - [`drain_tick_buffer`] — fold every recv connection's pending
@@ -20,7 +20,7 @@
 //! # Scope note
 //!
 //! Auth-phase events (`AuthEvent`) live on [`crate::MainEvents`] —
-//! a separate channel from [`WorldEvents`] — and are NOT surfaced by
+//! a separate channel from [`WorldEvents`](crate::events::world_events::WorldEvents) — and are NOT surfaced by
 //! [`drain_lifecycle`]. Cyberlith's Recv SubApp reads them directly
 //! from the auth receiver / `RecvHandle` machinery during the
 //! handshake-acceptance phase, not from this helper. This helper only
@@ -40,10 +40,10 @@ use crate::{
 };
 
 /// Connection-lifecycle event surfaced by [`drain_lifecycle`] from a
-/// [`ReceiveOutput`]'s [`crate::WorldEvents`].
+/// [`ReceiveOutput`]'s [`WorldEvents`](crate::events::world_events::WorldEvents).
 ///
-/// Variant coverage mirrors the three [`crate::WorldEvent`] impls that
-/// [`WorldEvents`] exposes for connection lifecycle: [`ConnectEvent`],
+/// Variant coverage mirrors the three `WorldEvent` impls that
+/// [`WorldEvents`](crate::events::world_events::WorldEvents) exposes for connection lifecycle: [`ConnectEvent`],
 /// [`DisconnectEvent`], [`ErrorEvent`].
 #[derive(Debug)]
 pub enum RecvLifecycleEvent {
@@ -105,7 +105,7 @@ where
 /// a single [`TickBufferMessages`] accumulator.
 ///
 /// Iterates `recv_handle.state.recv_user_connections` once, calling
-/// [`crate::connection::RecvConnection::tick_buffer_messages`] per
+/// `RecvConnection::tick_buffer_messages` per
 /// connection. The result is ready to feed into a
 /// [`crate::pipeline_actors::TickMessageRouter::route`] call.
 pub fn drain_tick_buffer<E>(recv_handle: &mut RecvHandle<E>, tick: Tick) -> TickBufferMessages

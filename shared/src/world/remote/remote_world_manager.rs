@@ -388,14 +388,27 @@ impl RemoteWorldManager {
                     // Consume this tick's own payload: inserts are never
                     // collapsed, so match the exact (tick, entity, kind) entry.
                     // A missing payload is a programming error, never a guess.
-                    let position = incoming_components
-                        .iter()
-                        .position(|(entry_tick, entry_entity, entry_kind, _)| {
+                    let position = incoming_components.iter().position(
+                        |(entry_tick, entry_entity, entry_kind, _)| {
                             *entry_tick == tick
                                 && *entry_entity == local_entity
                                 && *entry_kind == component_kind
-                        })
-                        .expect("an InsertComponent message must carry its own ticked payload");
+                        },
+                    );
+                    let Some(position) = position else {
+                        let buffered: Vec<(Tick, OwnedLocalEntity, ComponentKind)> =
+                            incoming_components
+                                .iter()
+                                .map(|(entry_tick, entry_entity, entry_kind, _)| {
+                                    (*entry_tick, *entry_entity, *entry_kind)
+                                })
+                                .collect();
+                        panic!(
+                            "an InsertComponent message must carry its own ticked payload: \
+                             missing (tick {tick:?}, entity {local_entity:?}, kind {component_kind:?}); \
+                             buffered payload keys: {buffered:?}"
+                        );
+                    };
                     let (_, _, _, component) = incoming_components.remove(position);
 
                     if local_entity_map.contains_remote_entity(&remote_entity) {
@@ -457,6 +470,9 @@ impl RemoteWorldManager {
         }
     }
 
+    /// Eight params mirror the per-message apply context 1:1; bundling them
+    /// would churn the insert path's call sites for style alone.
+    #[allow(clippy::too_many_arguments)]
     fn process_insert<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         tick: Tick,
@@ -489,6 +505,8 @@ impl RemoteWorldManager {
         }
     }
 
+    /// Same shape as `process_insert` above; same reason for the allow.
+    #[allow(clippy::too_many_arguments)]
     fn finish_insert<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         tick: Tick,

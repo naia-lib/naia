@@ -118,10 +118,16 @@ impl Handshaker for HandshakeManager {
                         // User is authenticated and identified
                         self.authenticated_and_identified_users
                             .insert(*address, user_key);
-                    } else {
-                        // commented out because it's pretty common to get multiple ClientChallengeRequest which would trigger this
-                        //warn!("Server Error: User not authenticated for: {:?}, with token: {}", address, identity_token);
-
+                    } else if !self
+                        .authenticated_and_identified_users
+                        .contains_key(address)
+                    {
+                        // Unknown retry: never authenticated and never
+                        // finalized — stay silent as before. A retry for an
+                        // already-finalized address falls through and gets
+                        // the response re-sent below: the client retransmits
+                        // over an unreliable channel, so the first response
+                        // is routinely lost.
                         return Ok(HandshakeAction::None);
                     }
 
@@ -177,6 +183,16 @@ impl Handshaker for HandshakeManager {
                     };
                     let Some(user_key) = self.authenticated_unidentified_users.remove(&id_token)
                     else {
+                        // Duplicate of a consumed identify for an address
+                        // that already finalized: resend the response without
+                        // re-finalizing (finalize emits a downstream
+                        // connection event and must run exactly once).
+                        // Anything else is still an Auth reject.
+                        if self.authenticated_and_identified_users.contains_key(address) {
+                            let identify_response =
+                                Self::write_identity_response().to_packet();
+                            return Ok(HandshakeAction::SendPacket(identify_response));
+                        }
                         let reject_response =
                             Self::write_reject_response(RejectReason::Auth).to_packet();
                         return Ok(HandshakeAction::SendPacket(reject_response));
@@ -461,6 +477,8 @@ impl HandshakeManager {
 mod tests {
     use std::net::SocketAddr;
 
+    use naia_shared::BigMapKey;
+
     use super::*;
 
     fn addr() -> SocketAddr {
@@ -545,6 +563,133 @@ mod tests {
                 assert_eq!(reject_reason_of(&packet), RejectReason::Auth)
             }
             _ => panic!("unknown token must be auth-rejected with a packet"),
+        }
+    }
+
+    /// A client retransmit of identify after a dropped server response must
+    /// be answered again, never rejected. The client resends every
+    /// send_handshake_interval over an unreliable channel, so the first
+    /// response is routinely lost; the retry finds the connection finalized
+    /// and must observe it as acknowledged.
+    #[cfg(not(feature = "transport_udp"))]
+    #[test]
+    fn duplicate_identify_after_finalize_resends_response() {
+        let mut manager = HandshakeManager::new(server_pid());
+        let token = IdentityToken::generate();
+        let user_key = UserKey::from_u64(7);
+        manager.authenticate_user(&token, &user_key);
+        let bytes = inbound(
+            &HandshakeHeader::ClientIdentifyRequest(server_pid()),
+            Some(&token),
+        );
+        match maintain(&mut manager, &bytes) {
+            Ok(HandshakeAction::FinalizeConnection(finalized_key, _)) => {
+                assert_eq!(finalized_key, user_key)
+            }
+            _ => panic!("first identify must finalize the connection"),
+        }
+        // The response was dropped on the wire; the client's retransmit
+        // arrives with the connection already finalized.
+        let mut reader = BitReader::new(&bytes);
+        match manager.maintain_handshake(&addr(), &mut reader, true) {
+            Ok(HandshakeAction::SendPacket(packet)) => {
+                let mut reader = BitReader::new(packet.slice());
+                StandardHeader::de(&mut reader).expect("response must parse");
+                assert!(
+                    matches!(
+                        HandshakeHeader::de(&mut reader),
+                        Ok(HandshakeHeader::ServerIdentifyResponse)
+                    ),
+                    "duplicate identify must resend the identify response"
+                );
+            }
+            _ => panic!("duplicate identify must resend the response, never reject"),
+        }
+    }
+
+    /// A duplicate identify that arrives while the transport holds no
+    /// connection record must still be answered, never Auth-rejected. The
+    /// token was consumed by the first pass, but the user is finalized; a
+    /// reject here kills a live handshake the client is still retrying.
+    /// Re-sends the response without re-finalizing (finalize emits a
+    /// connection event downstream and must run exactly once).
+    #[cfg(not(feature = "transport_udp"))]
+    #[test]
+    fn duplicate_identify_without_connection_resends_response() {
+        let mut manager = HandshakeManager::new(server_pid());
+        let token = IdentityToken::generate();
+        let user_key = UserKey::from_u64(7);
+        manager.authenticate_user(&token, &user_key);
+        let bytes = inbound(
+            &HandshakeHeader::ClientIdentifyRequest(server_pid()),
+            Some(&token),
+        );
+        match maintain(&mut manager, &bytes) {
+            Ok(HandshakeAction::FinalizeConnection(finalized_key, _)) => {
+                assert_eq!(finalized_key, user_key)
+            }
+            _ => panic!("first identify must finalize the connection"),
+        }
+        // Same bytes again, transport still holding no connection record.
+        let mut reader = BitReader::new(&bytes);
+        match manager.maintain_handshake(&addr(), &mut reader, false) {
+            Ok(HandshakeAction::SendPacket(packet)) => {
+                let mut reader = BitReader::new(packet.slice());
+                StandardHeader::de(&mut reader).expect("response must parse");
+                assert!(
+                    matches!(
+                        HandshakeHeader::de(&mut reader),
+                        Ok(HandshakeHeader::ServerIdentifyResponse)
+                    ),
+                    "duplicate identify must resend the identify response, never reject"
+                );
+            }
+            _ => panic!("duplicate identify must resend the response, never reject"),
+        }
+    }
+
+    /// Challenge request bytes: header, timestamp, then token — the exact
+    /// layout `recv_challenge_request` reads.
+    #[cfg(feature = "transport_udp")]
+    fn challenge_inbound(
+        timestamp: u64,
+        token: &IdentityToken,
+    ) -> Vec<u8> {
+        let mut writer = BitWriter::new();
+        HandshakeHeader::ClientChallengeRequest(server_pid()).ser(&mut writer);
+        timestamp.ser(&mut writer);
+        token.ser(&mut writer);
+        writer.to_packet().slice().to_vec()
+    }
+
+    /// A client retransmit of the challenge request after a dropped server
+    /// response must be answered with the identical response bytes, never
+    /// silence. The first pass consumes the token; the retry must observe
+    /// the finalized user and re-derive the (timestamp-deterministic)
+    /// response instead of returning None.
+    #[cfg(feature = "transport_udp")]
+    #[test]
+    fn duplicate_challenge_resends_response() {
+        let mut manager = HandshakeManager::new(server_pid());
+        let token = IdentityToken::generate();
+        let user_key = UserKey::from_u64(7);
+        manager.authenticate_user(&token, &user_key);
+        let bytes = challenge_inbound(12345, &token);
+        let first = match maintain(&mut manager, &bytes) {
+            Ok(HandshakeAction::SendPacket(packet)) => packet,
+            _ => panic!("first challenge must send the challenge response"),
+        };
+        // The response was dropped on the wire; the client retransmits the
+        // identical request bytes.
+        match maintain(&mut manager, &bytes) {
+            Ok(HandshakeAction::SendPacket(packet)) => {
+                assert_eq!(
+                    packet.slice(),
+                    first.slice(),
+                    "duplicate challenge must resend the identical response bytes"
+                );
+            }
+            _ => panic!("duplicate challenge must resend the response, never go silent"),
         }
     }
 }

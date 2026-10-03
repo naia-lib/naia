@@ -535,7 +535,7 @@ mod miniquad_js_bridge_host_oracle {
     /// either repair reds here instead of shipping two behaviors. The bound
     /// itself is decided once, in naia-socket-shared (`should_post_session_offer`
     /// + `ICE_GATHER_EARLY_POST_MS`), and covered by host unit tests there;
-    /// this oracle pins that both halves actually call through to it.
+    ///   this oracle pins that both halves actually call through to it.
     #[test]
     fn the_wasm_backend_gates_its_offer_the_same_way() {
         assert!(
@@ -561,6 +561,75 @@ mod miniquad_js_bridge_host_oracle {
         assert!(
             WASM_DATA_CHANNEL_RS.contains("ICE_GATHERING_TIMEOUT_MS"),
             "the wasm half must bound its gathering wait",
+        );
+    }
+
+    /// The wasm half observes the channel-open transition (Roger 42320):
+    /// the channel object exists from connect(), so only onopen marks the
+    /// usable link. The served game runs this backend and its console shows
+    /// warn-and-above, hence the warn! marker with the naia: capture prefix.
+    #[test]
+    fn the_wasm_backend_observes_the_channel_open_transition() {
+        assert!(
+            WASM_DATA_CHANNEL_RS.contains("set_onopen"),
+            "the wasm half must arm the channel-open event",
+        );
+        assert!(
+            WASM_DATA_CHANNEL_RS.contains("naia: datachannel onopen"),
+            "the open marker must carry the naia: capture prefix",
+        );
+    }
+
+    /// Connected means the data channel is open, not merely created (Roger
+    /// 42320).
+    ///
+    /// `connect` builds the `RTCDataChannel` object synchronously, long
+    /// before ICE/DTLS completes and `onopen` fires. Reading mere presence
+    /// as connected promoted a connecting socket through the whole setup
+    /// window; only `readyState === "open"` is the usable link.
+    #[test]
+    fn is_connected_requires_an_open_datachannel() {
+        let start = NAIA_SOCKET_JS
+            .find("is_connected: function(socket_id)")
+            .expect("the JS bridge must define is_connected");
+        let end = NAIA_SOCKET_JS[start..]
+            .find("\n    },")
+            .expect("is_connected must be closed")
+            + start;
+        let body = &NAIA_SOCKET_JS[start..end];
+        assert!(
+            body.contains("readyState"),
+            "is_connected must consult the channel readyState, not just the channel object",
+        );
+        assert!(
+            body.contains("connection.channel.readyState === \"open\""),
+            "only an open data channel reads as connected",
+        );
+    }
+
+    /// The connection-phase markers Drake's fresh-stack probe reports on.
+    /// Permanent info-level console lines, one per phase transition: POST
+    /// send time, POST status, id shape (type + length, never the value --
+    /// the id is an auth secret), datachannel open time, and the readyState
+    /// at the first send attempt. Removing or renaming one blinds the
+    /// handshake-phase diagnosis this bridge exists to support.
+    #[test]
+    fn the_js_bridge_logs_the_connection_phase_markers() {
+        for marker in [
+            "naia: session POST send",
+            "naia: session POST status",
+            "naia: session id",
+            "naia: datachannel onopen",
+            "naia: first send readyState",
+        ] {
+            assert!(
+                NAIA_SOCKET_JS.contains(marker),
+                "the JS bridge must log the `{marker}` connection-phase marker",
+            );
+        }
+        assert!(
+            NAIA_SOCKET_JS.contains("typeof response.id"),
+            "the id must be logged by shape (typeof), never by value",
         );
     }
 

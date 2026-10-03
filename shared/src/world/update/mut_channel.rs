@@ -413,7 +413,7 @@ impl MutChannel {
 // `Arc` is retained only because each user clones the same receiver via
 // `MutChannelData::new_receiver`, so the inner mask must be shared. The
 // notifier is `Arc<OnceLock<...>>` for the same reason.
-/// Per-user receiver that accumulates dirty bits for a single component and notifies the user's [`DirtySet`] on first mutation.
+/// Per-user receiver that accumulates dirty bits for a single component and notifies the user's `DirtySet` on first mutation.
 #[derive(Clone)]
 pub struct MutReceiver {
     mask: Arc<AtomicDiffMask>,

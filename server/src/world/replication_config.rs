@@ -85,10 +85,9 @@ impl ReplicationConfig {
     /// [`Despawn`](ScopeExit::Despawn) scope-exit.
     ///
     /// Marks the entity as open for client authority requests. Clients may
-    /// call [`entity_request_authority`] to request ownership; the server
+    /// call `entity_request_authority` to request ownership; the server
     /// grants or denies via an event.
     ///
-    /// [`entity_request_authority`]: naia_client::Client::entity_request_authority
     pub const fn delegated() -> Self {
         Self {
             publicity: Publicity::Delegated,

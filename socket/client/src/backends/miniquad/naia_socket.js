@@ -28,7 +28,11 @@ const naia_socket = {
 
     is_connected: function(socket_id) {
         let connection = this.connections[socket_id];
-        if (connection && connection.channel) {
+        // The channel object exists from connect(), long before the link is
+        // usable: only an open data channel reads as connected (Roger 42320).
+        // Presence alone reported true through the whole ICE/DTLS setup
+        // window, promoting a connecting socket to connected.
+        if (connection && connection.channel && connection.channel.readyState === "open") {
             return true;
         } else {
             return false;
@@ -49,7 +53,7 @@ const naia_socket = {
             }]
         });
 
-        let connection = { channel: null, peer: peer };
+        let connection = { channel: null, peer: peer, first_send_logged: false };
         naia_socket.connections[socket_id] = connection;
 
         connection.channel = peer.createDataChannel("data", {
@@ -60,6 +64,7 @@ const naia_socket = {
         connection.channel.binaryType = "arraybuffer";
 
         connection.channel.onopen = function() {
+            console.log("naia: datachannel onopen", Date.now());
             connection.channel.onmessage = function(evt) {
                 let array = new Uint8Array(evt.data);
                 wasm_exports.receive(socket_id, naia_socket.js_object(array));
@@ -125,6 +130,7 @@ const naia_socket = {
             };
             function post_offer() {
             let request = new XMLHttpRequest();
+            console.log("naia: session POST send", Date.now(), SESSION_ADDRESS);
             request.open("POST", SESSION_ADDRESS);
             if (auth_string.length > 0) {
                 request.setRequestHeader("Authorization", auth_string);
@@ -134,8 +140,12 @@ const naia_socket = {
             // so there is no "connect without it" path here either.
             request.setRequestHeader("x-naia-protocol-id", protocol_id_string);
             request.onload = function() {
+                console.log("naia: session POST status", request.status);
                 if (request.status === 200) {
                     let response = JSON.parse(request.responseText);
+                    // Shape only, never the value: the id is an auth secret.
+                    let id_length = (typeof response.id === "string") ? response.id.length : -1;
+                    console.log("naia: session id", typeof response.id, id_length);
 
                     wasm_exports.receive_id(socket_id, naia_socket.js_object(response.id));
 
@@ -226,6 +236,10 @@ const naia_socket = {
     send_u8_array: function (socket_id, str) {
         let connection = this.connections[socket_id];
         if (connection && connection.channel) {
+            if (!connection.first_send_logged) {
+                connection.first_send_logged = true;
+                console.log("naia: first send readyState", connection.channel.readyState);
+            }
             try {
                 connection.channel.send(str);
                 return true;

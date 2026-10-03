@@ -4,7 +4,7 @@ use naia_shared::{OwnedBitReader, Tick};
 
 use crate::events::world_events::WorldEvents;
 
-/// Decoded receive-phase output returned by [`InternalWorldServer::receive`].
+/// Decoded receive-phase output returned by [`InternalWorldServer::receive`](crate::InternalWorldServer::receive).
 ///
 /// Contains everything accumulated during the recv phase in plain-data form
 /// that can cross thread boundaries, for use in the pipeline coordinator.
@@ -28,7 +28,7 @@ pub struct ReceiveOutput<E: Copy + Eq + Hash + Send + Sync> {
 
     /// Server ticks that fired during this receive phase.
     ///
-    /// Populated by [`InternalWorldServer::receive`] via `take_tick_events`. The
+    /// Populated by [`InternalWorldServer::receive`](crate::InternalWorldServer::receive) via `take_tick_events`. The
     /// pipeline coordinator uses these to drive simulation work; the bevy
     /// adapter's `apply_receive_output` fires one `TickEvent` per entry.
     pub pending_ticks: Vec<Tick>,
