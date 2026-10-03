@@ -1416,4 +1416,288 @@ mod world_reader_tests {
             "there is not even a continue bit to read, so this must be an error"
         );
     }
+
+    // -- insert/payload pairing probes (Usher 42273) ------------------------
+    //
+    // Gate-24 hit `an InsertComponent message must carry its own ticked
+    // payload` in the client during session replication. The manager matches
+    // each processed insert against an exact `(tick, entity, kind)` payload
+    // entry pushed at wire-read time, so a hit means an insert was emitted
+    // with no matching entry. Each probe below drives real bytes through
+    // `WorldReader` in one adversarial packet interleaving (takes between
+    // packets, exactly like the client pump) and then takes events: a probe
+    // that panics at the expect names the interleaving that reproduces the
+    // gate-24 mechanism. A passing probe rules its interleaving out.
+
+    /// One packet at `tick`, asserting the cursor landed on the sentinel.
+    /// Unlike `read_ok` this stamps the packet tick the live path stamps.
+    fn read_packet(fx: &mut Fixture, bytes: &[u8], tick: Tick) {
+        let magic = fx
+            .read(bytes, tick)
+            .expect("a well-formed packet should parse");
+        assert_eq!(
+            magic, MAGIC,
+            "the reader consumed the wrong number of bits from the packet"
+        );
+    }
+
+    fn insert_packet(kinds: &ComponentKinds, id: MessageIndex, entity: u32) -> Box<[u8]> {
+        let mut wire = Wire::new(kinds);
+        wire.message(id, EntityMessageType::InsertComponent)
+            .owned(wire_host(entity))
+            .component(&Ghost::new_complete(11));
+        wire.finish()
+    }
+
+    fn count(events: &[EntityEvent], ty: EntityMessageType) -> usize {
+        events.iter().filter(|e| e.to_type() == Some(ty)).count()
+    }
+
+    #[test]
+    fn pairing_retransmit_same_id_newer_tick_then_fresh_traffic() {
+        let mut fx = Fixture::client();
+        let mut world = TestWorld::new();
+        let kinds = fx.kinds.clone();
+
+        // Packet at tick 10: spawn + first insert.
+        let mut wire = Wire::new(&kinds);
+        wire.message(0, EntityMessageType::Spawn).remote(7);
+        wire.message(1, EntityMessageType::InsertComponent)
+            .owned(wire_host(7))
+            .component(&Ghost::new_complete(11));
+        read_packet(&mut fx, &wire.finish(), 10);
+        let events = fx.take_events(&mut world);
+        assert_eq!(count(&events, EntityMessageType::Spawn), 1);
+        assert_eq!(count(&events, EntityMessageType::InsertComponent), 1);
+
+        // Packet at tick 12: retransmit of message 1 (same id, newer tick).
+        // The reliable receiver drops the duplicate; no event must surface,
+        // and above all the expect must not fire.
+        let mut wire = Wire::new(&kinds);
+        wire.message(1, EntityMessageType::InsertComponent)
+            .owned(wire_host(7))
+            .component(&Ghost::new_complete(11));
+        read_packet(&mut fx, &wire.finish(), 12);
+        let events = fx.take_events(&mut world);
+        assert!(
+            events.is_empty(),
+            "a duplicate retransmit must not surface a second insert"
+        );
+
+        // Packet at tick 13: fresh remove + re-insert under new ids.
+        let mut wire = Wire::new(&kinds);
+        wire.message(2, EntityMessageType::RemoveComponent)
+            .owned(wire_host(7))
+            .kind::<Ghost>();
+        wire.message(3, EntityMessageType::InsertComponent)
+            .owned(wire_host(7))
+            .component(&Ghost::new_complete(13));
+        read_packet(&mut fx, &wire.finish(), 13);
+        let events = fx.take_events(&mut world);
+        assert_eq!(count(&events, EntityMessageType::RemoveComponent), 1);
+        assert_eq!(count(&events, EntityMessageType::InsertComponent), 1);
+    }
+
+    #[test]
+    fn pairing_bundle_then_standalone_same_kind_then_remove() {
+        let mut fx = Fixture::client();
+        let mut world = TestWorld::new();
+        let kinds = fx.kinds.clone();
+
+        // Scope-entry bundle at tick 3.
+        let mut wire = Wire::new(&kinds);
+        wire.message(0, EntityMessageType::SpawnWithComponents)
+            .owned(wire_host(7))
+            .u8(1)
+            .component(&Ghost::new_complete(11));
+        read_packet(&mut fx, &wire.finish(), 3);
+        let events = fx.take_events(&mut world);
+        assert_eq!(count(&events, EntityMessageType::Spawn), 1);
+        assert_eq!(count(&events, EntityMessageType::InsertComponent), 1);
+
+        // Same tick, standalone insert of the same kind under a new id. The
+        // component channel holds it (already inserted).
+        read_packet(&mut fx, &insert_packet(&kinds, 1, 7), 3);
+        let events = fx.take_events(&mut world);
+        assert!(
+            events.is_empty(),
+            "the redundant same-tick insert must stay held"
+        );
+
+        // A remove does NOT release the held insert: the component channel
+        // processes strictly in id order, and the redundant insert at the
+        // front stays blocked (already inserted), so the remove behind it
+        // waits too. Both stay buffered; nothing surfaces, nothing panics.
+        let mut wire = Wire::new(&kinds);
+        wire.message(2, EntityMessageType::RemoveComponent)
+            .owned(wire_host(7))
+            .kind::<Ghost>();
+        read_packet(&mut fx, &wire.finish(), 4);
+        let events = fx.take_events(&mut world);
+        assert!(
+            events.is_empty(),
+            "the remove must wait behind the blocked redundant insert"
+        );
+
+        // Despawn clears the stalled component channel; the held messages are
+        // dropped with their payload entries orphaned, and the despawn itself
+        // surfaces normally.
+        let mut wire = Wire::new(&kinds);
+        wire.message(3, EntityMessageType::Despawn)
+            .owned(wire_host(7));
+        read_packet(&mut fx, &wire.finish(), 5);
+        let events = fx.take_events(&mut world);
+        assert_eq!(count(&events, EntityMessageType::Despawn), 1);
+        assert_eq!(count(&events, EntityMessageType::InsertComponent), 0);
+    }
+
+    #[test]
+    fn pairing_toggle_storm_with_takes_between_packets() {
+        let mut fx = Fixture::client();
+        let mut world = TestWorld::new();
+        let kinds = fx.kinds.clone();
+
+        // 3 inserts, 2 removes, 1 spawn, no panic at the expect.
+        let mut wire = Wire::new(&kinds);
+        wire.message(0, EntityMessageType::Spawn).remote(7);
+        read_packet(&mut fx, &wire.finish(), 1);
+        let mut inserts = 0;
+        let mut removes = 0;
+        let mut spawns = 0;
+        let events = fx.take_events(&mut world);
+        spawns += count(&events, EntityMessageType::Spawn);
+        for (id, tick) in [(1, 2), (2, 3), (3, 4), (4, 5), (5, 6)] {
+            if id % 2 == 1 {
+                read_packet(&mut fx, &insert_packet(&kinds, id, 7), tick);
+            } else {
+                let mut wire = Wire::new(&kinds);
+                wire.message(id, EntityMessageType::RemoveComponent)
+                    .owned(wire_host(7))
+                    .kind::<Ghost>();
+                read_packet(&mut fx, &wire.finish(), tick);
+            }
+            let events = fx.take_events(&mut world);
+            inserts += count(&events, EntityMessageType::InsertComponent);
+            removes += count(&events, EntityMessageType::RemoveComponent);
+        }
+        assert_eq!(spawns, 1);
+        assert_eq!(inserts, 3, "every insert read must surface exactly once");
+        assert_eq!(removes, 2, "every remove read must surface exactly once");
+    }
+
+    #[test]
+    fn pairing_despawn_respawn_reuses_entity_id() {
+        let mut fx = Fixture::client();
+        let mut world = TestWorld::new();
+        let kinds = fx.kinds.clone();
+
+        let mut wire = Wire::new(&kinds);
+        wire.message(0, EntityMessageType::Spawn).remote(7);
+        read_packet(&mut fx, &wire.finish(), 1);
+        read_packet(&mut fx, &insert_packet(&kinds, 1, 7), 1);
+        let events = fx.take_events(&mut world);
+        assert_eq!(count(&events, EntityMessageType::InsertComponent), 1);
+
+        let mut wire = Wire::new(&kinds);
+        wire.message(2, EntityMessageType::Despawn)
+            .owned(wire_host(7));
+        read_packet(&mut fx, &wire.finish(), 2);
+        let events = fx.take_events(&mut world);
+        assert_eq!(count(&events, EntityMessageType::Despawn), 1);
+
+        let mut wire = Wire::new(&kinds);
+        wire.message(3, EntityMessageType::Spawn).remote(7);
+        read_packet(&mut fx, &wire.finish(), 3);
+        read_packet(&mut fx, &insert_packet(&kinds, 4, 7), 3);
+        let events = fx.take_events(&mut world);
+        assert_eq!(count(&events, EntityMessageType::Spawn), 1);
+        assert_eq!(count(&events, EntityMessageType::InsertComponent), 1);
+    }
+
+    #[test]
+    fn pairing_two_entities_same_tick_same_kind_plus_retransmit() {
+        let mut fx = Fixture::client();
+        let mut world = TestWorld::new();
+        let kinds = fx.kinds.clone();
+
+        let mut wire = Wire::new(&kinds);
+        wire.message(0, EntityMessageType::Spawn).remote(7);
+        wire.message(1, EntityMessageType::Spawn).remote(8);
+        wire.message(2, EntityMessageType::InsertComponent)
+            .owned(wire_host(7))
+            .component(&Ghost::new_complete(11));
+        wire.message(3, EntityMessageType::InsertComponent)
+            .owned(wire_host(8))
+            .component(&Ghost::new_complete(22));
+        read_packet(&mut fx, &wire.finish(), 5);
+        let events = fx.take_events(&mut world);
+        assert_eq!(count(&events, EntityMessageType::Spawn), 2);
+        assert_eq!(count(&events, EntityMessageType::InsertComponent), 2);
+
+        // Retransmit of entity 7's insert under its original id, newer tick.
+        let mut wire = Wire::new(&kinds);
+        wire.message(2, EntityMessageType::InsertComponent)
+            .owned(wire_host(7))
+            .component(&Ghost::new_complete(11));
+        read_packet(&mut fx, &wire.finish(), 7);
+        let events = fx.take_events(&mut world);
+        assert!(events.is_empty(), "the retransmit must stay dropped");
+
+        // Fresh remove on entity 7 pairs against its own fresh payload.
+        let mut wire = Wire::new(&kinds);
+        wire.message(4, EntityMessageType::RemoveComponent)
+            .owned(wire_host(7))
+            .kind::<Ghost>();
+        read_packet(&mut fx, &wire.finish(), 8);
+        let events = fx.take_events(&mut world);
+        assert_eq!(count(&events, EntityMessageType::RemoveComponent), 1);
+    }
+
+    #[test]
+    fn pairing_insert_arrives_before_its_spawn() {
+        let mut fx = Fixture::client();
+        let mut world = TestWorld::new();
+        let kinds = fx.kinds.clone();
+
+        // Insert under id 1 while id 0 is still missing: the reliable
+        // receiver holds it, so the take must surface nothing (and panic on
+        // nothing).
+        read_packet(&mut fx, &insert_packet(&kinds, 1, 7), 10);
+        let events = fx.take_events(&mut world);
+        assert!(events.is_empty(), "the gap-held insert must wait");
+
+        // The spawn fills the gap; both surface together, paired.
+        let mut wire = Wire::new(&kinds);
+        wire.message(0, EntityMessageType::Spawn).remote(7);
+        read_packet(&mut fx, &wire.finish(), 11);
+        let events = fx.take_events(&mut world);
+        assert_eq!(count(&events, EntityMessageType::Spawn), 1);
+        assert_eq!(count(&events, EntityMessageType::InsertComponent), 1);
+    }
+
+    #[test]
+    fn pairing_retransmit_before_first_take() {
+        let mut fx = Fixture::client();
+        let mut world = TestWorld::new();
+        let kinds = fx.kinds.clone();
+
+        // Two reads, no take between: original at tick 10, retransmit of the
+        // same id at tick 12. The single emission stamps the latest parse
+        // tick; the older duplicate payload entry must simply be left over,
+        // never consumed twice and never panicked on.
+        let mut wire = Wire::new(&kinds);
+        wire.message(0, EntityMessageType::Spawn).remote(7);
+        wire.message(1, EntityMessageType::InsertComponent)
+            .owned(wire_host(7))
+            .component(&Ghost::new_complete(11));
+        read_packet(&mut fx, &wire.finish(), 10);
+        let mut wire = Wire::new(&kinds);
+        wire.message(1, EntityMessageType::InsertComponent)
+            .owned(wire_host(7))
+            .component(&Ghost::new_complete(11));
+        read_packet(&mut fx, &wire.finish(), 12);
+        let events = fx.take_events(&mut world);
+        assert_eq!(count(&events, EntityMessageType::Spawn), 1);
+        assert_eq!(count(&events, EntityMessageType::InsertComponent), 1);
+    }
 }
