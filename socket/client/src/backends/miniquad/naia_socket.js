@@ -69,26 +69,32 @@ const naia_socket = {
             naia_socket.error(socket_id, "data channel error", evt.message);
         };
 
-        peer.onicecandidate = function(evt) {
-            if (evt.candidate) {
-                console.log("received ice candidate", evt.candidate);
-            } else {
-                console.log("all local candidates received");
-            }
-        };
+        // Candidate counting and the bounded gather gate live in the offer
+        // block below: registering the counter there (synchronously inside
+        // the setLocalDescription continuation, before gathering can emit)
+        // misses no candidates and keeps one decision point.
 
         peer.createOffer().then(function(offer) {
             return peer.setLocalDescription(offer);
         }).then(function() {
-            // The offer is worthless without the candidates this peer was
-            // configured to gather (STUN srflx above), and posting it early
-            // throws that work away with no trickle channel to recover it.
-            // Gate the send on gathering-complete, with a loud timeout that
-            // reports through the error callback: never an indefinite hang,
-            // never a silent candidate-less offer. The SDP is read at send
-            // time: gathering rewrites the local description in place, so a
-            // snapshot taken now would post the pre-gathering text.
+            // The offer is worthless without candidates, and naia's
+            // signaling is a single POST offer → answer with no trickle
+            // channel to recover later candidates — so a candidate-less
+            // early post is never allowed. But gating the send on
+            // gathering-complete with no bound tied to the connection
+            // deadline stalls connect for ~40 s when a single STUN path is
+            // slow (Roger 41874: icecandidateerror 701 held `complete` past
+            // the 30 s deadline despite usable srflx/host candidates from
+            // ~1 s in). Post on `complete`, or once 10000 ms have passed
+            // with at least one candidate in hand — whichever comes first
+            // (parity with the wasm_bindgen backend and
+            // ICE_GATHER_EARLY_POST_MS in naia-socket-shared; keep the bound
+            // in sync). The SDP is read at send time: gathering rewrites
+            // the local description in place, so a snapshot taken now would
+            // post the pre-gathering text.
             let settled = false;
+            let candidateCount = 0;
+            const gatherStartMs = Date.now();
             // Sized generously: typical networks complete in a few seconds,
             // but constrained ones were measured at ~40s of candidate-probing
             // tail before "complete" fires.
@@ -99,11 +105,23 @@ const naia_socket = {
             }, 60000);
             function maybe_post_offer() {
                 if (settled) return;
-                if (peer.iceGatheringState !== "complete") return;
+                const complete = peer.iceGatheringState === "complete";
+                const elapsedMs = Date.now() - gatherStartMs;
+                if (!complete && !(elapsedMs >= 10000 && candidateCount >= 1)) return;
                 settled = true;
                 clearTimeout(timer);
+                clearTimeout(earlyTimer);
                 post_offer();
             }
+            peer.onicecandidate = function(evt) {
+                if (evt.candidate) {
+                    candidateCount += 1;
+                    console.log("received ice candidate", evt.candidate);
+                } else {
+                    console.log("all local candidates received");
+                }
+                maybe_post_offer();
+            };
             function post_offer() {
             let request = new XMLHttpRequest();
             request.open("POST", SESSION_ADDRESS);
@@ -155,6 +173,15 @@ const naia_socket = {
             request.send(peer.localDescription.sdp);
             }
             peer.onicegatheringstatechange = maybe_post_offer;
+            // Bounded wait: fires once the early-post bound has passed.
+            // Posts iff candidates arrived by then; with zero candidates
+            // this is a no-op and the 60 s backstop above still reports
+            // loudly. A candidate arriving after this timer fired still
+            // posts via onicecandidate, since the wait has by then passed
+            // with candidates in hand.
+            let earlyTimer = setTimeout(function() {
+                maybe_post_offer();
+            }, 10000);
             maybe_post_offer();
         }).catch(function(err) {
             naia_socket.error(socket_id, "error during 'createOffer'", err);

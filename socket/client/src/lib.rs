@@ -451,21 +451,34 @@ mod miniquad_js_bridge_host_oracle {
         }
     }
 
-    /// The session offer must wait for ICE gathering. Posting the local
+    /// The session offer must not post candidate-less, and must not wait on
+    /// gathering-complete past the bounded wait. Posting the local
     /// description the moment `setLocalDescription` resolves throws away the
     /// STUN srflx candidates the peer was configured to gather, and the
-    /// session protocol has no trickle channel to recover them. The single
-    /// send site must therefore sit behind the gathering-complete gate, with
-    /// a loud timeout that errors instead of hanging or posting early.
+    /// session protocol has no trickle channel to recover them — but gating
+    /// the send on `complete` with no bound tied to the connection deadline
+    /// stalls connect for ~40 s on one slow STUN path (Roger 41874). The
+    /// single send site must therefore sit behind the shared gate: post on
+    /// `complete`, or once the bounded wait has passed with at least one
+    /// candidate in hand, with a loud timeout that errors instead of hanging
+    /// or posting early.
     #[test]
-    fn the_offer_post_waits_for_gathering_complete() {
+    fn the_offer_posts_on_complete_or_bounded_wait_with_candidates() {
         assert!(
             NAIA_SOCKET_JS.contains("peer.onicegatheringstatechange = maybe_post_offer"),
-            "the JS bridge must arm the gathering-complete gate before posting",
+            "the JS bridge must arm the gather gate before posting",
         );
         assert!(
-            NAIA_SOCKET_JS.contains("if (peer.iceGatheringState !== \"complete\") return;"),
-            "the gate must refuse to post until gathering is complete",
+            NAIA_SOCKET_JS.contains("candidateCount += 1"),
+            "the gate must count candidates as they arrive",
+        );
+        assert!(
+            NAIA_SOCKET_JS.contains("elapsedMs >= 10000 && candidateCount >= 1"),
+            "the gate must release the post once the bounded wait passes with candidates",
+        );
+        assert!(
+            NAIA_SOCKET_JS.contains("peer.iceGatheringState === \"complete\""),
+            "the gate must still post immediately on gathering-complete",
         );
         assert_eq!(
             NAIA_SOCKET_JS.matches("request.send(").count(),
@@ -480,20 +493,29 @@ mod miniquad_js_bridge_host_oracle {
     }
 
     /// Same gate on the wasm_bindgen half, pinned through the same strings:
-    /// both halves report the identical timeout message, so a divergence in
-    /// either repair reds here instead of shipping two behaviors.
+    /// both halves post on `complete` or the bounded wait with candidates,
+    /// and both report the identical timeout message, so a divergence in
+    /// either repair reds here instead of shipping two behaviors. The bound
+    /// itself is decided once, in naia-socket-shared (`should_post_session_offer`
+    /// + `ICE_GATHER_EARLY_POST_MS`), and covered by host unit tests there;
+    /// this oracle pins that both halves actually call through to it.
     #[test]
     fn the_wasm_backend_gates_its_offer_the_same_way() {
         assert!(
-            WASM_DATA_CHANNEL_RS
-                .matches("RtcIceGatheringState::Complete")
-                .count()
-                >= 2,
-            "the wasm half must check gathering-complete on both the fast path and the event path",
+            WASM_DATA_CHANNEL_RS.contains("should_post_session_offer"),
+            "the wasm half must decide through the shared gather gate",
+        );
+        assert!(
+            WASM_DATA_CHANNEL_RS.contains("set_onicecandidate"),
+            "the wasm half must count candidates as they arrive",
         );
         assert!(
             WASM_DATA_CHANNEL_RS.contains("set_onicegatheringstatechange"),
-            "the wasm half must arm the gathering-complete event",
+            "the wasm half must arm the gathering-state event",
+        );
+        assert!(
+            WASM_DATA_CHANNEL_RS.contains("ICE_GATHER_EARLY_POST_MS"),
+            "the wasm half must arm the bounded early-post wait",
         );
         assert!(
             WASM_DATA_CHANNEL_RS.contains("session offer never posted"),
