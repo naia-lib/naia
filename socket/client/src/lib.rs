@@ -92,6 +92,12 @@ mod miniquad_js_bridge_host_oracle {
     /// oracle.
     const MINIQUAD_SHARED_RS: &str = include_str!("backends/miniquad/shared.rs");
 
+    /// The Rust caller. It owns `SocketConfig` at the `connect` entry point,
+    /// so it is the half that must thread the configured list into the
+    /// bridge call -- the oracle pins that threading here rather than
+    /// trusting the call site by inspection.
+    const MINIQUAD_SOCKET_RS: &str = include_str!("backends/miniquad/socket.rs");
+
     /// The per-socket state. Each socket owns its queues and cells here, so
     /// the oracles below can pin what each socket -- not the process --
     /// holds.
@@ -155,9 +161,9 @@ mod miniquad_js_bridge_host_oracle {
     ///
     /// `extern "C" fn naia_connect` in `shared.rs`, the import-object binding,
     /// the JS `connect` definition and the call the binding forwards to must all
-    /// name the same five parameters in the same order: the socket id first
-    /// (naia-lib/naia#193), then the fingerprint last. Removing the fifth
-    /// argument or moving it reds here, at the Rust/JS contract itself -- not
+    /// name the same six parameters in the same order: the socket id first
+    /// (naia-lib/naia#193), then the fingerprint last. Removing an argument
+    /// or moving it reds here, at the Rust/JS contract itself -- not
     /// later as an unrelated link failure or a silently misaligned argument in a
     /// browser.
     #[test]
@@ -173,6 +179,7 @@ mod miniquad_js_bridge_host_oracle {
             "server_socket_address",
             "rtc_path",
             "auth_str",
+            "ice_servers",
             "protocol_id",
         ];
 
@@ -199,7 +206,36 @@ mod miniquad_js_bridge_host_oracle {
         assert_eq!(
             js_binding.last().map(String::as_str),
             Some("protocol_id"),
-            "the fingerprint must be the fifth argument, not an optional trailing extra",
+            "the fingerprint must be the sixth and last argument, not an optional trailing extra",
+        );
+    }
+
+    /// The ICE server list must cross the bridge as live configuration, not
+    /// sit hardcoded in the JavaScript. The JS half used to build its
+    /// `RTCPeerConnection` with a STUN literal while the wbindgen backend
+    /// read `SocketConfig.ice_servers`: two sources for one config, so an
+    /// egress-policy override reached one backend and silently missed the
+    /// other. The list now crosses as the fifth bridge argument -- a JSON
+    /// array string the JS half parses into `iceServers` -- and the literal
+    /// must be gone from the shipped JavaScript: the default lives only in
+    /// `DEFAULT_ICE_SERVER_URL` on the Rust side.
+    #[test]
+    fn the_js_bridge_builds_its_ice_servers_from_the_configured_list() {
+        assert!(
+            NAIA_SOCKET_JS.contains("naia_socket.get_js_object(ice_servers)"),
+            "the configured server list must be unwrapped through the same JsObject bridge as every other argument",
+        );
+        assert!(
+            NAIA_SOCKET_JS.contains("JSON.parse("),
+            "the configured server list must be parsed from its JSON bridge encoding",
+        );
+        assert!(
+            !NAIA_SOCKET_JS.contains("stun:stun.l.google.com:19302"),
+            "no STUN literal may remain in the shipped JavaScript: the default lives in DEFAULT_ICE_SERVER_URL",
+        );
+        assert!(
+            MINIQUAD_SOCKET_RS.contains("config.ice_servers"),
+            "the Rust half must thread SocketConfig.ice_servers into the bridge call",
         );
     }
 
@@ -334,6 +370,7 @@ mod miniquad_js_bridge_host_oracle {
             "server_socket_address",
             "rtc_path",
             "auth_str",
+            "ice_servers",
             "protocol_id",
         ];
 

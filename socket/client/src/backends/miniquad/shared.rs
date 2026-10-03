@@ -66,6 +66,7 @@ extern "C" {
         server_socket_address: JsObject,
         rtc_path: JsObject,
         auth_str: JsObject,
+        ice_servers: JsObject,
         protocol_id: JsObject,
     );
     pub fn naia_disconnect(socket_id: u32);

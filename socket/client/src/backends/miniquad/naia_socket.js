@@ -12,7 +12,7 @@ const naia_socket = {
 
     plugin: function (importObject) {
         importObject.env.naia_is_connected = function (socket_id) { return naia_socket.is_connected(socket_id); };
-        importObject.env.naia_connect = function (socket_id, server_socket_address, rtc_path, auth_str, protocol_id) { return naia_socket.connect(socket_id, server_socket_address, rtc_path, auth_str, protocol_id); };
+        importObject.env.naia_connect = function (socket_id, server_socket_address, rtc_path, auth_str, ice_servers, protocol_id) { return naia_socket.connect(socket_id, server_socket_address, rtc_path, auth_str, ice_servers, protocol_id); };
         importObject.env.naia_disconnect = function (socket_id) { naia_socket.disconnect(socket_id); };
         importObject.env.naia_send = function (socket_id, message) { return naia_socket.send(socket_id, message); };
         importObject.env.naia_create_string = function (buf, max_len) { return naia_socket.js_create_string(buf, max_len); };
@@ -35,16 +35,17 @@ const naia_socket = {
         }
     },
 
-    connect: function (socket_id, server_socket_address, rtc_path, auth_str, protocol_id) {
+    connect: function (socket_id, server_socket_address, rtc_path, auth_str, ice_servers, protocol_id) {
         let server_socket_address_string = naia_socket.get_js_object(server_socket_address);
         let rtc_path_string = naia_socket.get_js_object(rtc_path);
         let auth_string = naia_socket.get_js_object(auth_str);
+        let ice_servers_string = naia_socket.get_js_object(ice_servers);
         let protocol_id_string = naia_socket.get_js_object(protocol_id);
         let SESSION_ADDRESS = server_socket_address_string + rtc_path_string;
 
         let peer = new RTCPeerConnection({
             iceServers: [{
-                urls: ["stun:stun.l.google.com:19302"]
+                urls: JSON.parse(ice_servers_string)
             }]
         });
 

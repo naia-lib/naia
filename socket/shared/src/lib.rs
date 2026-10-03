@@ -39,7 +39,7 @@ pub use protocol_id_header::{
     stamp_protocol_id_header, PROTOCOL_ID_HEADER, PROTOCOL_ID_HEADER_VALUE_LEN,
     PROTOCOL_MISMATCH_STATUS,
 };
-pub use socket_config::{SocketConfig, DEFAULT_ICE_SERVER_URL};
+pub use socket_config::{encode_ice_server_urls, SocketConfig, DEFAULT_ICE_SERVER_URL};
 pub use time_queue::TimeQueue;
 pub use url_parse::{parse_server_url, url_to_socket_addr};
 
