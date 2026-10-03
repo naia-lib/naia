@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 description = "Spec tool for Naia: golden-trace record/check and scenario verification"
 
 [[bin]]
-name = "naia_spec_tool"
+name = "naia-spec-tool"
 path = "src/main.rs"
 
 [dependencies]
