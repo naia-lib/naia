@@ -17,6 +17,7 @@ extern crate cfg_if;
 pub mod link_condition_logic;
 
 mod backends;
+mod gather_gate;
 mod identity_token;
 mod link_conditioner_config;
 mod protocol_id_header;
@@ -31,13 +32,14 @@ mod url_parse;
 ))]
 pub use backends::monotonic_now_ms;
 pub use backends::{Instant, Random};
+pub use gather_gate::{should_post_session_offer, ICE_GATHER_EARLY_POST_MS};
 pub use identity_token::*;
 pub use link_conditioner_config::LinkConditionerConfig;
 pub use protocol_id_header::{
     stamp_protocol_id_header, PROTOCOL_ID_HEADER, PROTOCOL_ID_HEADER_VALUE_LEN,
     PROTOCOL_MISMATCH_STATUS,
 };
-pub use socket_config::SocketConfig;
+pub use socket_config::{SocketConfig, DEFAULT_ICE_SERVER_URL};
 pub use time_queue::TimeQueue;
 pub use url_parse::{parse_server_url, url_to_socket_addr};
 
