@@ -165,8 +165,6 @@ jobs:
             naia-demo-world,
             naia-empty-world,
             naia-serde,
-            naia-test,
-            naia-parse,
             naia-derive,
           ]
     runs-on: ubuntu-latest
