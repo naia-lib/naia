@@ -564,6 +564,22 @@ mod miniquad_js_bridge_host_oracle {
         );
     }
 
+    /// The wasm half observes the channel-open transition (Roger 42320):
+    /// the channel object exists from connect(), so only onopen marks the
+    /// usable link. The served game runs this backend and its console shows
+    /// warn-and-above, hence the warn! marker with the naia: capture prefix.
+    #[test]
+    fn the_wasm_backend_observes_the_channel_open_transition() {
+        assert!(
+            WASM_DATA_CHANNEL_RS.contains("set_onopen"),
+            "the wasm half must arm the channel-open event",
+        );
+        assert!(
+            WASM_DATA_CHANNEL_RS.contains("naia: datachannel onopen"),
+            "the open marker must carry the naia: capture prefix",
+        );
+    }
+
     /// Connected means the data channel is open, not merely created (Roger
     /// 42320).
     ///

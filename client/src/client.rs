@@ -543,8 +543,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     Ok(()) => {
                         if !self.handshake_first_send_logged {
                             self.handshake_first_send_logged = true;
-                            info!(
-                                "Client: first handshake packet sent to Server \
+                            warn!(
+                                "naia: Client: first handshake packet sent to Server \
                                  (failed sends before it in this attempt: {})",
                                 self.handshake_failed_sends
                             );
@@ -2292,7 +2292,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 Ok(Some(mut reader)) => {
                     if !self.handshake_first_inbound_logged {
                         self.handshake_first_inbound_logged = true;
-                        info!("Client: first inbound server datagram during handshake");
+                        warn!("naia: Client: first inbound server datagram during handshake");
                     }
                     // The server is alive: a full silence window with no
                     // inbound traffic is the only thing that may end the
@@ -2312,7 +2312,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             self.on_connect();
 
                             let server_addr = self.server_address_unwrapped();
-                            info!("Client: handshake Connected to Server at {:?}", server_addr);
+                            warn!(
+                                "naia: Client: handshake Connected to Server at {:?}",
+                                server_addr
+                            );
                             self.incoming_world_events.push_connection(&server_addr);
 
                             // Stop reading here — any remaining packets in
