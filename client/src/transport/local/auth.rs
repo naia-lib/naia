@@ -95,13 +95,17 @@ impl PendingRequest {
     }
 }
 
+/// Auth rejection recorded by the server side and read by the client side:
+/// an HTTP-ish status code plus an optional opaque reason payload.
+pub(crate) type SharedRejectionCode = Arc<Mutex<Option<(u16, Option<Vec<u8>>)>>>;
+
 // ClientAuthIo - encapsulates all client auth logic
 pub(crate) struct ClientAuthIo {
     auth_responses_rx: Option<mpsc::Receiver<Vec<u8>>>,
     addr_cell: LocalAddrCell,
     pending_req_opt: Option<PendingRequest>,
     identity_token: Arc<Mutex<Option<IdentityToken>>>,
-    rejection_code: Arc<Mutex<Option<(u16, Option<Vec<u8>>)>>>,
+    rejection_code: SharedRejectionCode,
 }
 
 impl ClientAuthIo {
@@ -109,7 +113,7 @@ impl ClientAuthIo {
         auth_responses_rx: mpsc::Receiver<Vec<u8>>,
         addr_cell: LocalAddrCell,
         identity_token: Arc<Mutex<Option<IdentityToken>>>,
-        rejection_code: Arc<Mutex<Option<(u16, Option<Vec<u8>>)>>>,
+        rejection_code: SharedRejectionCode,
     ) -> Self {
         Self {
             auth_responses_rx: Some(auth_responses_rx),
