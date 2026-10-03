@@ -23,7 +23,7 @@ pub struct Socket {
 }
 
 impl Socket {
-    /// Returns a new ServerSocket, listening at the given socket address
+    /// Returns a new `ServerSocket`, listening at the given socket address
     pub async fn listen(
         server_addrs: ServerAddrs,
         config: SocketConfig,

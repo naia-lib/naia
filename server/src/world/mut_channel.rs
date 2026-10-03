@@ -4,11 +4,11 @@ use naia_shared::{MutChannelType, MutReceiver};
 
 /// Server-side mut channel data.
 ///
-/// Phase 8.1 Stage D (2026-04-25) — split storage into a HashMap (for
+/// Phase 8.1 Stage D (2026-04-25) — split storage into a `HashMap` (for
 /// idempotent `new_receiver` lookup) plus a `Vec<MutReceiver>` (for the
 /// hot-path `send` walk). The `Vec` is contiguous memory, so the
 /// per-mutation fan-out is a tight cache-friendly loop instead of a
-/// HashMap iteration. Concurrency: send is single-threaded today
+/// `HashMap` iteration. Concurrency: send is single-threaded today
 /// (`world_server::send_all_packets`); if parallel-per-user packet
 /// build is ever wanted, swap in an SPSC queue per slot.
 pub struct MutChannelData {

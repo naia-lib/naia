@@ -1,5 +1,5 @@
 //! Bevy `Resource` wrapper around [`naia_server::pipeline_actors::ServerEntityConverter`]
-//! for MISSION_USER_ONLY_SEES_SIM Phase B.1 (2026-05-19).
+//! for `MISSION_USER_ONLY_SEES_SIM` Phase B.1 (2026-05-19).
 //!
 //! Sim systems install the [`ServerEntityConverter`] Resource on cyberlith's Sim
 //! Bevy world so per-tick code that needs to set an `EntityProperty`
@@ -39,6 +39,7 @@ pub struct ServerEntityConverter {
 impl ServerEntityConverter {
     /// Construct from a [`CoordHandle`] (which holds the shared
     /// `Arc<ServerShared<Entity>>` backing the converter).
+    #[must_use]
     pub fn from_coord(sim_handle: &CoordHandle<Entity>) -> Self {
         Self {
             inner: sim_handle.entity_converter(),
@@ -46,12 +47,14 @@ impl ServerEntityConverter {
     }
 
     /// Borrow as a `&dyn EntityAndGlobalEntityConverter<Entity>`.
+    #[must_use]
     pub fn as_dyn(&self) -> &dyn EntityAndGlobalEntityConverter<Entity> {
         self.inner.as_dyn()
     }
 }
 
 impl EntityAndGlobalEntityConverter<Entity> for ServerEntityConverter {
+#[allow(clippy::trivially_copy_pass_by_ref)] // H3: kept by-ref to match the trait declaration; an impl follows the shape of its trait.
     fn global_entity_to_entity(
         &self,
         global_entity: &GlobalEntity,
@@ -59,6 +62,7 @@ impl EntityAndGlobalEntityConverter<Entity> for ServerEntityConverter {
         self.inner.global_entity_to_entity(global_entity)
     }
 
+#[allow(clippy::trivially_copy_pass_by_ref)] // H3: kept by-ref to match the trait declaration; an impl follows the shape of its trait.
     fn entity_to_global_entity(
         &self,
         world_entity: &Entity,

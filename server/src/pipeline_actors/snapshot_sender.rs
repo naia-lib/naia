@@ -16,13 +16,13 @@
 //!
 //! # Why this is a facade, not an embedded Send worker
 //!
-//! Per cyberlith `_AGENTS/GAME_CELL_PIPELINING_TARGET.md` §3.1, SubApp
+//! Per cyberlith `_AGENTS/GAME_CELL_PIPELINING_TARGET.md` §3.1, `SubApp`
 //! ownership lives on the consumer's orchestrator (Coord). Naia
 //! spawning an internal Send worker would conflict with cyberlith's
 //! `pipelined_recv.rs`-style orchestration. Instead this commit ships
 //! the consumer-facing API shape (the Sim Resource + `send`) and a
 //! matching `take_latest()` for the Send-side consumer to drain.
-//! Cyberlith's Send SubApp wiring becomes:
+//! Cyberlith's Send `SubApp` wiring becomes:
 //!
 //! ```ignore
 //! // On Sim:
@@ -51,7 +51,7 @@ use naia_shared::SnapshotWorld;
 /// [`SnapshotSender::pair`] (which
 /// returns a `(SnapshotSender<E>, SnapshotReceiver<E>)` matched pair).
 /// The matching [`SnapshotReceiver`] lives wherever the Send-side
-/// `send_all_packets` runs (typically a Send SubApp).
+/// `send_all_packets` runs (typically a Send `SubApp`).
 pub struct SnapshotSender<E: Copy + Eq + Hash + Send + Sync + 'static> {
     slot: Arc<Mutex<Option<SnapshotWorld<E>>>>,
 }
@@ -66,6 +66,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Clone for SnapshotSender<E> {
 
 impl<E: Copy + Eq + Hash + Send + Sync + 'static> SnapshotSender<E> {
     /// Construct a matched sender/receiver pair.
+    #[must_use]
     pub fn pair() -> (Self, SnapshotReceiver<E>) {
         let slot = Arc::new(Mutex::new(None));
         (
@@ -87,6 +88,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SnapshotSender<E> {
 
     /// Returns `true` if a snapshot has been published and not yet
     /// drained. Useful for telemetry; not load-bearing for correctness.
+    #[must_use]
     pub fn has_pending(&self) -> bool {
         self.slot.lock().is_some()
     }
@@ -110,6 +112,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SnapshotReceiver<E> {
     /// Take the latest pending snapshot, leaving the slot empty.
     /// Returns `None` if no snapshot has been published since the last
     /// drain.
+    #[must_use]
     pub fn take_latest(&self) -> Option<SnapshotWorld<E>> {
         self.slot.lock().take()
     }
@@ -117,6 +120,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SnapshotReceiver<E> {
     /// `true` if a snapshot has been published and not yet drained. Used by
     /// the send worker's flush-park drain to decide when the publish queue is
     /// empty (not load-bearing for the normal lagged path).
+    #[must_use]
     pub fn has_pending(&self) -> bool {
         self.slot.lock().is_some()
     }

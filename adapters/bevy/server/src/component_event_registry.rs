@@ -51,8 +51,8 @@ impl ComponentEventRegistry {
                 if let Some(handler) = self.component_handlers.get_mut(&kind) {
                     handler.handle_inserts(world, entities);
                 } else {
-                    warn!("No insert event handler for ComponentKind: {:?}", kind);
-                };
+                    warn!("No insert event handler for ComponentKind: {kind:?}");
+                }
             }
         }
 
@@ -63,8 +63,8 @@ impl ComponentEventRegistry {
                 if let Some(handler) = self.component_handlers.get_mut(&kind) {
                     handler.handle_updates(world, entities);
                 } else {
-                    warn!("No update event handler for ComponentKind: {:?}", kind);
-                };
+                    warn!("No update event handler for ComponentKind: {kind:?}");
+                }
             }
         }
 
@@ -75,8 +75,8 @@ impl ComponentEventRegistry {
                 if let Some(handler) = self.component_handlers.get_mut(&kind) {
                     handler.handle_removes(world, entities);
                 } else {
-                    warn!("No remove event handler for ComponentKind: {:?}", kind);
-                };
+                    warn!("No remove event handler for ComponentKind: {kind:?}");
+                }
             }
         }
     }
@@ -187,9 +187,9 @@ impl<R: Replicate> ComponentEventHandler for ComponentEventHandlerImpl<R> {
 
 /// True iff `entity` is the hidden entity for a Replicated Resource.
 /// Looks up via `ServerImpl::is_resource_entity`.
+#[allow(clippy::trivially_copy_pass_by_ref)] // H3: kept by-ref to match the trait declaration; an impl follows the shape of its trait.
 fn is_resource_entity(world: &World, entity: &Entity) -> bool {
     world
         .get_resource::<ServerImpl>()
-        .map(|s| s.is_resource_entity(entity))
-        .unwrap_or(false)
+        .is_some_and(|s| s.is_resource_entity(entity))
 }

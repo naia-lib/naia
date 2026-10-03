@@ -13,7 +13,7 @@ pub enum NaiaClientSocketError {
 impl fmt::Display for NaiaClientSocketError {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            NaiaClientSocketError::Message(msg) => write!(f, "Naia Client Socket Error: {}", msg),
+            NaiaClientSocketError::Message(msg) => write!(f, "Naia Client Socket Error: {msg}"),
             NaiaClientSocketError::SendError => write!(f, "Naia Client Socket Send Error"),
         }
     }

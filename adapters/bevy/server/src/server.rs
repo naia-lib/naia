@@ -137,7 +137,7 @@ impl ServerImpl {
     pub(crate) fn entity_authority_status<W: WorldRefType<Entity>>(
         &self,
         world: W,
-        entity: &Entity,
+        entity: Entity,
     ) -> Option<EntityAuthStatus> {
         if !world.has_entity(entity) {
             return None;
@@ -151,7 +151,7 @@ impl ServerImpl {
     pub(crate) fn entity_owner<W: WorldRefType<Entity>>(
         &self,
         world: W,
-        entity: &Entity,
+        entity: Entity,
     ) -> EntityOwner {
         match self {
             Self::Full(server) => server.entity(world, entity).owner(),
@@ -162,20 +162,20 @@ impl ServerImpl {
     pub(crate) fn configure_entity_replication<W: WorldMutType<Entity>>(
         &mut self,
         world: &mut W,
-        world_entity: &Entity,
+        world_entity: Entity,
         config: ReplicationConfig,
     ) {
         match self {
             Self::Full(server) => {
-                server.configure_entity_replication::<W>(world, world_entity, config)
+                server.configure_entity_replication::<W>(world, world_entity, config);
             }
             Self::WorldOnly(server) => {
-                server.configure_entity_replication::<W>(world, world_entity, config)
+                server.configure_entity_replication::<W>(world, world_entity, config);
             }
         }
     }
 
-    pub(crate) fn mark_entity_as_static(&mut self, entity: &Entity) {
+    pub(crate) fn mark_entity_as_static(&mut self, entity: Entity) {
         match self {
             Self::Full(server) => server.mark_entity_as_static(entity),
             Self::WorldOnly(server) => server.mark_entity_as_static(entity),
@@ -184,7 +184,7 @@ impl ServerImpl {
 
     pub(crate) fn insert_component_worldless(
         &mut self,
-        entity: &Entity,
+        entity: Entity,
         component: &mut dyn Replicate,
     ) {
         match self {
@@ -195,7 +195,7 @@ impl ServerImpl {
 
     pub(crate) fn remove_component_worldless(
         &mut self,
-        entity: &Entity,
+        entity: Entity,
         component_kind: &ComponentKind,
     ) {
         match self {
@@ -204,7 +204,7 @@ impl ServerImpl {
         }
     }
 
-    pub(crate) fn despawn_entity_worldless(&mut self, entity: &Entity) {
+    pub(crate) fn despawn_entity_worldless(&mut self, entity: Entity) {
         match self {
             Self::Full(server) => server.despawn_entity_worldless(entity),
             Self::WorldOnly(server) => server.despawn_entity_worldless(entity),
@@ -227,7 +227,7 @@ impl ServerImpl {
         }
     }
 
-    pub(crate) fn is_resource_entity(&self, entity: &Entity) -> bool {
+    pub(crate) fn is_resource_entity(&self, entity: Entity) -> bool {
         match self {
             Self::Full(server) => server.is_resource_entity(entity),
             Self::WorldOnly(server) => server.is_resource_entity(entity),
@@ -314,7 +314,7 @@ pub struct Server<'w> {
     server_impl: ResMut<'w, ServerImpl>,
 }
 
-impl<'w> Server<'w> {
+impl Server<'_> {
     // Public Methods //
 
     //// Connections ////
@@ -323,11 +323,12 @@ impl<'w> Server<'w> {
         self.server_impl.listen(socket);
     }
 
+    #[must_use]
     pub fn is_listening(&self) -> bool {
         self.server_impl.is_listening()
     }
 
-    pub fn accept_connection(&mut self, user_key: &UserKey) {
+    pub fn accept_connection(&mut self, user_key: UserKey) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(_server) => {
                 panic!("WorldOnly Servers do not support this function")
@@ -336,7 +337,7 @@ impl<'w> Server<'w> {
         }
     }
 
-    pub fn reject_connection(&mut self, user_key: &UserKey) {
+    pub fn reject_connection(&mut self, user_key: UserKey) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(_server) => {
                 panic!("WorldOnly Servers do not support this function")
@@ -346,6 +347,7 @@ impl<'w> Server<'w> {
     }
 
     // Config
+    #[must_use]
     pub fn socket_config(&self) -> &SocketConfig {
         match &*self.server_impl {
             ServerImpl::WorldOnly(_server) => {
@@ -358,7 +360,7 @@ impl<'w> Server<'w> {
     //// Messages ////
     pub fn send_message<C: Channel, M: Message>(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         message: &M,
     ) -> Result<(), NaiaServerError> {
         match &mut *self.server_impl {
@@ -385,7 +387,7 @@ impl<'w> Server<'w> {
     /// Requests ///
     pub fn send_request<C: Channel, Q: Request>(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         request: &Q,
     ) -> Result<ResponseReceiveKey<Q::Response>, NaiaServerError> {
         match &mut *self.server_impl {
@@ -431,6 +433,7 @@ impl<'w> Server<'w> {
 
     //// Updates ////
 
+    #[must_use]
     pub fn scope_checks_pending(&self) -> Vec<(RoomKey, UserKey, Entity)> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.scope_checks_pending(),
@@ -454,41 +457,45 @@ impl<'w> Server<'w> {
 
     //// Users ////
 
-    pub fn user_exists(&self, user_key: &UserKey) -> bool {
+    #[must_use]
+    pub fn user_exists(&self, user_key: UserKey) -> bool {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_exists(user_key),
             ServerImpl::Full(server) => server.user_exists(user_key),
         }
     }
 
-    pub fn user(&'_ self, user_key: &UserKey) -> UserRef<'_, Entity> {
+    #[must_use]
+    pub fn user(&'_ self, user_key: UserKey) -> UserRef<'_, Entity> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user(user_key),
             ServerImpl::Full(server) => server.user(user_key),
         }
     }
 
-    pub fn user_opt(&'_ self, user_key: &UserKey) -> Option<UserRef<'_, Entity>> {
+    #[must_use]
+    pub fn user_opt(&'_ self, user_key: UserKey) -> Option<UserRef<'_, Entity>> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_opt(user_key),
             ServerImpl::Full(server) => server.user_opt(user_key),
         }
     }
 
-    pub fn user_mut(&'_ mut self, user_key: &UserKey) -> UserMut<'_, Entity> {
+    pub fn user_mut(&'_ mut self, user_key: UserKey) -> UserMut<'_, Entity> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_mut(user_key),
             ServerImpl::Full(server) => server.user_mut(user_key),
         }
     }
 
-    pub fn user_mut_opt(&'_ mut self, user_key: &UserKey) -> Option<UserMut<'_, Entity>> {
+    pub fn user_mut_opt(&'_ mut self, user_key: UserKey) -> Option<UserMut<'_, Entity>> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_mut_opt(user_key),
             ServerImpl::Full(server) => server.user_mut_opt(user_key),
         }
     }
 
+    #[must_use]
     pub fn user_keys(&self) -> Vec<UserKey> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_keys(),
@@ -496,6 +503,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    #[must_use]
     pub fn users_count(&self) -> usize {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.users_count(),
@@ -503,6 +511,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    #[must_use]
     pub fn user_count(&self) -> usize {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_count(),
@@ -510,6 +519,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    #[must_use]
     pub fn entity_count(&self) -> usize {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.entity_count(),
@@ -517,14 +527,15 @@ impl<'w> Server<'w> {
         }
     }
 
-    pub fn user_scope(&'_ self, user_key: &UserKey) -> UserScopeRef<'_, Entity> {
+    #[must_use]
+    pub fn user_scope(&'_ self, user_key: UserKey) -> UserScopeRef<'_, Entity> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_scope(user_key),
             ServerImpl::Full(server) => server.user_scope(user_key),
         }
     }
 
-    pub fn user_scope_mut(&'_ mut self, user_key: &UserKey) -> UserScopeMut<'_, Entity> {
+    pub fn user_scope_mut(&'_ mut self, user_key: UserKey) -> UserScopeMut<'_, Entity> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_scope_mut(user_key),
             ServerImpl::Full(server) => server.user_scope_mut(user_key),
@@ -533,6 +544,7 @@ impl<'w> Server<'w> {
 
     //// Priority ////
 
+    #[must_use]
     pub fn global_entity_priority(&self, entity: Entity) -> EntityPriorityRef<'_, Entity> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.global_entity_priority(entity),
@@ -547,9 +559,10 @@ impl<'w> Server<'w> {
         }
     }
 
+    #[must_use]
     pub fn user_entity_priority(
         &self,
-        user_key: &UserKey,
+        user_key: UserKey,
         entity: Entity,
     ) -> EntityPriorityRef<'_, Entity> {
         match &*self.server_impl {
@@ -560,7 +573,7 @@ impl<'w> Server<'w> {
 
     pub fn user_entity_priority_mut(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         entity: Entity,
     ) -> EntityPriorityMut<'_, Entity> {
         match &mut *self.server_impl {
@@ -578,27 +591,30 @@ impl<'w> Server<'w> {
         }
     }
 
-    pub fn room_exists(&self, room_key: &RoomKey) -> bool {
+    #[must_use]
+    pub fn room_exists(&self, room_key: RoomKey) -> bool {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.room_exists(room_key),
             ServerImpl::Full(server) => server.room_exists(room_key),
         }
     }
 
-    pub fn room(&'_ self, room_key: &RoomKey) -> RoomRef<'_, Entity> {
+    #[must_use]
+    pub fn room(&'_ self, room_key: RoomKey) -> RoomRef<'_, Entity> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.room(room_key),
             ServerImpl::Full(server) => server.room(room_key),
         }
     }
 
-    pub fn room_mut(&'_ mut self, room_key: &RoomKey) -> RoomMut<'_, Entity> {
+    pub fn room_mut(&'_ mut self, room_key: RoomKey) -> RoomMut<'_, Entity> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.room_mut(room_key),
             ServerImpl::Full(server) => server.room_mut(room_key),
         }
     }
 
+    #[must_use]
     pub fn room_keys(&self) -> Vec<RoomKey> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.room_keys(),
@@ -606,6 +622,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    #[must_use]
     pub fn rooms_count(&self) -> usize {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.rooms_count(),
@@ -613,6 +630,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    #[must_use]
     pub fn room_count(&self) -> usize {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.room_count(),
@@ -622,6 +640,7 @@ impl<'w> Server<'w> {
 
     //// Ticks ////
 
+    #[must_use]
     pub fn current_tick(&self) -> Tick {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.current_tick(),
@@ -629,6 +648,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    #[must_use]
     pub fn average_tick_duration(&self) -> Duration {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.average_tick_duration(),
@@ -638,21 +658,24 @@ impl<'w> Server<'w> {
 
     //// Network Conditions ////
 
-    pub fn jitter(&self, user_key: &UserKey) -> Option<f32> {
+    #[must_use]
+    pub fn jitter(&self, user_key: UserKey) -> Option<f32> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.jitter(user_key),
             ServerImpl::Full(server) => server.jitter(user_key),
         }
     }
 
-    pub fn rtt(&self, user_key: &UserKey) -> Option<f32> {
+    #[must_use]
+    pub fn rtt(&self, user_key: UserKey) -> Option<f32> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.rtt(user_key),
             ServerImpl::Full(server) => server.rtt(user_key),
         }
     }
 
-    pub fn connection_stats(&self, user_key: &UserKey) -> Option<ConnectionStats> {
+    #[must_use]
+    pub fn connection_stats(&self, user_key: UserKey) -> Option<ConnectionStats> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.connection_stats(user_key),
             ServerImpl::Full(server) => server.connection_stats(user_key),
@@ -673,6 +696,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    #[must_use]
     pub fn historian(&self) -> Option<&Historian> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.historian(),
@@ -682,42 +706,42 @@ impl<'w> Server<'w> {
 
     // Entity Replication
 
-    pub(crate) fn enable_replication(&mut self, entity: &Entity) {
+    pub(crate) fn enable_replication(&mut self, entity: Entity) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.enable_entity_replication(entity),
             ServerImpl::Full(server) => server.enable_entity_replication(entity),
         }
     }
 
-    pub(crate) fn disable_replication(&mut self, entity: &Entity) {
+    pub(crate) fn disable_replication(&mut self, entity: Entity) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.disable_entity_replication(entity),
             ServerImpl::Full(server) => server.disable_entity_replication(entity),
         }
     }
 
-    pub(crate) fn pause_replication(&mut self, entity: &Entity) {
+    pub(crate) fn pause_replication(&mut self, entity: Entity) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.pause_entity_replication(entity),
             ServerImpl::Full(server) => server.pause_entity_replication(entity),
         }
     }
 
-    pub(crate) fn resume_replication(&mut self, entity: &Entity) {
+    pub(crate) fn resume_replication(&mut self, entity: Entity) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.resume_entity_replication(entity),
             ServerImpl::Full(server) => server.resume_entity_replication(entity),
         }
     }
 
-    pub(crate) fn replication_config(&self, entity: &Entity) -> Option<ReplicationConfig> {
+    pub(crate) fn replication_config(&self, entity: Entity) -> Option<ReplicationConfig> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.entity_replication_config(entity),
             ServerImpl::Full(server) => server.entity_replication_config(entity),
         }
     }
 
-    pub fn entity_take_authority(&mut self, entity: &Entity) {
+    pub fn entity_take_authority(&mut self, entity: Entity) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => {
                 let _ = server.entity_take_authority(entity);
@@ -728,7 +752,7 @@ impl<'w> Server<'w> {
         }
     }
 
-    pub(crate) fn entity_give_authority(&mut self, entity: &Entity, user_key: &UserKey) {
+    pub(crate) fn entity_give_authority(&mut self, entity: Entity, user_key: UserKey) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => {
                 let _ = server.entity_give_authority(user_key, entity);
@@ -739,7 +763,7 @@ impl<'w> Server<'w> {
         }
     }
 
-    pub(crate) fn entity_authority_status(&self, _entity: &Entity) -> Option<EntityAuthStatus> {
+    pub(crate) fn entity_authority_status(&self, _entity: Entity) -> Option<EntityAuthStatus> {
         todo!("entity_authority_status requires world access; use ServerImpl directly in exclusive systems")
     }
 
@@ -756,6 +780,7 @@ impl<'w> Server<'w> {
 
     /// True iff a Replicated Resource of type `R` is currently inserted
     /// on this server.
+    #[must_use]
     pub fn has_resource<R: ReplicatedResource>(&self) -> bool {
         self.server_impl.has_resource::<R>()
     }
@@ -766,24 +791,28 @@ impl<'w> Server<'w> {
     /// access resource state through `Res<R>` — under bevy 0.19 the
     /// carrier entity-component aliases `Res<R>` (one storage cell), so
     /// no mirror system is involved.
+    #[must_use]
     pub fn resource_entity<R: ReplicatedResource>(&self) -> Option<Entity> {
         self.server_impl.resource_entity::<R>()
     }
 
     /// True iff `entity` is the hidden entity for any Replicated
     /// Resource. Used by the event-emission filter (D13) to suppress
-    /// SpawnEntityEvent / component events for resource entities.
-    pub fn is_resource_entity(&self, entity: &Entity) -> bool {
+    /// `SpawnEntityEvent` / component events for resource entities.
+    #[must_use]
+    pub fn is_resource_entity(&self, entity: Entity) -> bool {
         self.server_impl.is_resource_entity(entity)
     }
 
     /// Number of currently-inserted resources.
+    #[must_use]
     pub fn resources_count(&self) -> usize {
         self.server_impl.resources_count()
     }
 
     /// Server-side authority status for resource `R`. `None` if not
     /// inserted or not delegable.
+    #[must_use]
     pub fn resource_authority_status<R: ReplicatedResource>(&self) -> Option<EntityAuthStatus> {
         self.server_impl.resource_authority_status::<R>()
     }
@@ -948,7 +977,7 @@ impl<'w> Server<'w> {
     pub fn pipeline_drain_resource_registrations(
         main_world: &mut World,
         sim_world: &mut World,
-        room_key: &RoomKey,
+        room_key: RoomKey,
         config: ReplicationConfig,
     ) {
         let pending: Vec<Entity> = sim_world
@@ -970,7 +999,7 @@ impl<'w> Server<'w> {
     }
 
     /// G6 (single-world) — coordinator + entities share ONE `World`
-    /// (MISSION_SINGLE_WORLD_CELL). Byte-identical to the two-world
+    /// (`MISSION_SINGLE_WORLD_CELL`). Byte-identical to the two-world
     /// [`Self::pipeline_drain_resource_registrations`]: same
     /// `enable → configure → room_add → apply_pending_world_hooks` sequence in the
     /// same order, with the same deferred Send-side `ConfigureReplication`
@@ -983,7 +1012,7 @@ impl<'w> Server<'w> {
     /// the park window. No-op early-return when the outbox is empty.
     pub fn pipeline_drain_resource_registrations_single(
         world: &mut World,
-        room_key: &RoomKey,
+        room_key: RoomKey,
         config: ReplicationConfig,
     ) {
         let pending: Vec<Entity> = world
@@ -1036,7 +1065,7 @@ impl<'w> Server<'w> {
     }
 
     /// G6b (single-world) — coordinator + entities share ONE `World`
-    /// (MISSION_SINGLE_WORLD_CELL). Byte-identical to the two-world
+    /// (`MISSION_SINGLE_WORLD_CELL`). Byte-identical to the two-world
     /// [`Self::pipeline_drain_host_sync`]: lift the `ServerImpl` out, take the
     /// handles, drain `Messages<HostSyncEvent>` via the same in-place core, and
     /// restore — wrapped in the same `catch_unwind` so a mid-drain panic still
@@ -1072,7 +1101,7 @@ impl<'w> Server<'w> {
     pub fn pipeline_drain_scope_authority_ops(
         main_world: &mut World,
         sim_world: &mut World,
-        room_key: &RoomKey,
+        room_key: RoomKey,
     ) {
         let ops: Vec<PipelineScopeAuthorityOp> = sim_world
             .get_resource_mut::<PendingScopeAuthorityOps>()
@@ -1104,7 +1133,7 @@ impl<'w> Server<'w> {
     }
 
     /// G5b (single-world) — coordinator + entities share ONE `World`
-    /// (MISSION_SINGLE_WORLD_CELL). Byte-identical to the two-world
+    /// (`MISSION_SINGLE_WORLD_CELL`). Byte-identical to the two-world
     /// [`Self::pipeline_drain_scope_authority_ops`]: extract the
     /// [`PendingScopeAuthorityOps`] queue, then run the same two-phase drain
     /// (all `RoomAdd`s first, then authority ops in queue order) against the
@@ -1114,7 +1143,7 @@ impl<'w> Server<'w> {
     /// `world_only_resource_scope`, the coord borrow never aliases it. No-op
     /// early-return when the queue is empty. Call inside the park window, BEFORE
     /// the host-sync drain.
-    pub fn pipeline_drain_scope_authority_ops_single(world: &mut World, room_key: &RoomKey) {
+    pub fn pipeline_drain_scope_authority_ops_single(world: &mut World, room_key: RoomKey) {
         let ops: Vec<PipelineScopeAuthorityOp> = world
             .get_resource_mut::<PendingScopeAuthorityOps>()
             .map(|mut q| std::mem::take(&mut q.0))
@@ -1157,7 +1186,7 @@ impl<'w> Server<'w> {
         world
             .resource::<ServerImpl>()
             .as_world_server()
-            .is_some_and(|ws| ws.is_running())
+            .is_some_and(naia_server::WorldServer::is_running)
     }
 
     /// Test/dev hook: request that the pipeline workers panic on their next
@@ -1172,7 +1201,8 @@ impl<'w> Server<'w> {
     }
 }
 
-impl<'w> EntityAndGlobalEntityConverter<Entity> for Server<'w> {
+impl EntityAndGlobalEntityConverter<Entity> for Server<'_> {
+#[allow(clippy::trivially_copy_pass_by_ref)] // H3: kept by-ref to match the trait declaration; an impl follows the shape of its trait.
     fn global_entity_to_entity(
         &self,
         global_entity: &GlobalEntity,
@@ -1183,6 +1213,7 @@ impl<'w> EntityAndGlobalEntityConverter<Entity> for Server<'w> {
         }
     }
 
+#[allow(clippy::trivially_copy_pass_by_ref)] // H3: kept by-ref to match the trait declaration; an impl follows the shape of its trait.
     fn entity_to_global_entity(
         &self,
         entity: &Entity,

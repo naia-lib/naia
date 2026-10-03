@@ -35,7 +35,7 @@ impl BundleEventRegistry {
         let bundle_id = self.next_bundle_id();
 
         // add components to map
-        for kind in components.iter() {
+        for kind in &components {
             if !self.components_to_bundle_ids.contains_key(kind) {
                 self.components_to_bundle_ids.insert(*kind, HashSet::new());
             }
@@ -82,7 +82,7 @@ impl BundleEventRegistry {
 
                 // check if all components are present
                 let mut all_components_present = true;
-                for kind in bundle_info.kinds.iter() {
+                for kind in &bundle_info.kinds {
                     if !world.proxy().has_component_of_kind(entity, kind) {
                         all_components_present = false;
                         break;

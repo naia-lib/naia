@@ -52,6 +52,7 @@ pub struct ServerPluginConfig {
 }
 
 impl ServerPluginConfig {
+    #[must_use]
     pub fn new(server_config: ServerConfig, protocol: Protocol, topology: Topology) -> Self {
         Self {
             server_config,
@@ -90,6 +91,7 @@ impl SimIntegrationConfig {
         self
     }
 
+    #[must_use]
     pub fn skip_host_sync(mut self, skip: bool) -> Self {
         self.skip_host_sync_change_tracking = skip;
         self
@@ -146,7 +148,7 @@ pub struct Plugin {
     /// [`crate::PipelineConfig::with_schedule`] for custom schedules like
     /// cyberlith Sim's `SimMain`.
     change_detection_schedule: Option<InternedScheduleLabel>,
-    /// MISSION_USER_ONLY_SEES_SIM Phase D: when `true`,
+    /// `MISSION_USER_ONLY_SEES_SIM` Phase D: when `true`,
     /// `Topology::WorldProxied(DriveShape::Pipelined(_))` builds the pipeline,
     /// stores it inside the unified
     /// `ServerImpl::WorldOnly(WorldServer)` resource (§2f), installs the
@@ -156,11 +158,11 @@ pub struct Plugin {
     full_pipelining: bool,
     /// When `true`, `build` SKIPS registering the per-`Replicate` host-sync
     /// change-tracking systems (`WorldData::add_systems[_to_schedule]`). Set
-    /// by config. MISSION_OVERLAP_FRONTIER T2 — lets an app
+    /// by config. `MISSION_OVERLAP_FRONTIER` T2 — lets an app
     /// whose world hosts no replicated entities (cyberlith base game cell's
     /// main world) drop ~2 no-op change-tracking systems per component type.
     skip_host_sync_change_tracking: bool,
-    /// MISSION_PIPELINE_API_BOUNDARY G8 (§2l) — when `true`, `install_full_pipelining`
+    /// `MISSION_PIPELINE_API_BOUNDARY` G8 (§2l) — when `true`, `install_full_pipelining`
     /// registers the adapter-driven park-window bracket in the `ReceivePackets`
     /// / `SendPackets` sets (see [`crate::PipelineConfig::drive_bracket_in_update`]).
     /// Set only by `Topology::WorldProxied(DriveShape::Pipelined(_))`.
@@ -169,6 +171,7 @@ pub struct Plugin {
 
 impl Plugin {
     /// Creates the plugin from an explicit topology and drive shape.
+    #[must_use]
     pub fn new(config: ServerPluginConfig) -> Self {
         let ServerPluginConfig {
             server_config,

@@ -30,14 +30,14 @@ pub struct UserScopeRef<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserScopeRef<'s, E> {
-    pub(crate) fn new(server: &'s InternalWorldServer<E>, key: &UserKey) -> Self {
+    pub(crate) fn new(server: &'s InternalWorldServer<E>, key: UserKey) -> Self {
         Self {
             server: UserScopeRefTarget::Resident(server),
             key: *key,
         }
     }
 
-    pub(crate) fn with_pipeline(server: &'s PipelinedWorldServer<E>, key: &UserKey) -> Self {
+    pub(crate) fn with_pipeline(server: &'s PipelinedWorldServer<E>, key: UserKey) -> Self {
         Self {
             server: UserScopeRefTarget::Pipelined(server),
             key: *key,
@@ -47,9 +47,9 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserScopeRef<'s, E> {
     /// Returns `true` if the entity is currently in this user's explicit scope.
     pub fn has(&self, world_entity: &E) -> bool {
         match &self.server {
-            UserScopeRefTarget::Resident(ws) => ws.user_scope_has_entity(&self.key, world_entity),
+            UserScopeRefTarget::Resident(ws) => ws.user_scope_has_entity(elf.key, world_entity),
             UserScopeRefTarget::Pipelined(ps) => {
-                ps.user_scope_has_entity_ref(&self.key, world_entity)
+                ps.user_scope_has_entity_ref(elf.key, world_entity)
             }
         }
     }
@@ -74,14 +74,14 @@ pub struct UserScopeMut<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserScopeMut<'s, E> {
-    pub(crate) fn new(server: &'s mut InternalWorldServer<E>, key: &UserKey) -> Self {
+    pub(crate) fn new(server: &'s mut InternalWorldServer<E>, key: UserKey) -> Self {
         Self {
             server: UserScopeMutTarget::Resident(server),
             key: *key,
         }
     }
 
-    pub(crate) fn with_pipeline(server: &'s mut PipelinedWorldServer<E>, key: &UserKey) -> Self {
+    pub(crate) fn with_pipeline(server: &'s mut PipelinedWorldServer<E>, key: UserKey) -> Self {
         Self {
             server: UserScopeMutTarget::Pipelined(server),
             key: *key,
@@ -91,9 +91,9 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserScopeMut<'s, E> {
     /// Returns `true` if the entity is currently in this user's explicit scope.
     pub fn has(&self, world_entity: &E) -> bool {
         match &self.server {
-            UserScopeMutTarget::Resident(ws) => ws.user_scope_has_entity(&self.key, world_entity),
+            UserScopeMutTarget::Resident(ws) => ws.user_scope_has_entity(elf.key, world_entity),
             UserScopeMutTarget::Pipelined(ps) => {
-                ps.user_scope_has_entity_ref(&self.key, world_entity)
+                ps.user_scope_has_entity_ref(elf.key, world_entity)
             }
         }
     }
@@ -105,10 +105,10 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserScopeMut<'s, E> {
     pub fn include(&mut self, world_entity: &E) -> &mut Self {
         match &mut self.server {
             UserScopeMutTarget::Resident(ws) => {
-                ws.user_scope_set_entity(&self.key, world_entity, true)
+                ws.user_scope_set_entity(elf.key, world_entity, true);
             }
             UserScopeMutTarget::Pipelined(ps) => {
-                ps.user_scope_set_entity(&self.key, world_entity, true)
+                ps.user_scope_set_entity(elf.key, world_entity, true);
             }
         }
         self
@@ -121,10 +121,10 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserScopeMut<'s, E> {
     pub fn exclude(&mut self, world_entity: &E) -> &mut Self {
         match &mut self.server {
             UserScopeMutTarget::Resident(ws) => {
-                ws.user_scope_set_entity(&self.key, world_entity, false)
+                ws.user_scope_set_entity(elf.key, world_entity, false);
             }
             UserScopeMutTarget::Pipelined(ps) => {
-                ps.user_scope_set_entity(&self.key, world_entity, false)
+                ps.user_scope_set_entity(elf.key, world_entity, false);
             }
         }
         self
@@ -173,10 +173,10 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserScopeMut<'s, E> {
     pub fn despawn_on_next_exit(&mut self, world_entity: &E) -> &mut Self {
         match &mut self.server {
             UserScopeMutTarget::Resident(ws) => {
-                ws.user_scope_despawn_on_next_exit(&self.key, world_entity)
+                ws.user_scope_despawn_on_next_exit(elf.key, world_entity);
             }
             UserScopeMutTarget::Pipelined(ps) => {
-                ps.user_scope_despawn_on_next_exit(&self.key, world_entity)
+                ps.user_scope_despawn_on_next_exit(elf.key, world_entity);
             }
         }
         self
@@ -187,8 +187,8 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserScopeMut<'s, E> {
     /// Equivalent to calling `exclude` on every entity currently included.
     pub fn clear(&mut self) -> &mut Self {
         match &mut self.server {
-            UserScopeMutTarget::Resident(ws) => ws.user_scope_remove_user(&self.key),
-            UserScopeMutTarget::Pipelined(ps) => ps.user_scope_remove_user(&self.key),
+            UserScopeMutTarget::Resident(ws) => ws.user_scope_remove_user(elf.key),
+            UserScopeMutTarget::Pipelined(ps) => ps.user_scope_remove_user(elf.key),
         }
         self
     }

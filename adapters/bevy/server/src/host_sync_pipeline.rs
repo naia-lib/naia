@@ -9,7 +9,7 @@
 //! `ServerImpl` does not exist; the equivalent drain runs against the
 //! three pipeline handles directly.
 //!
-//! MISSION_USER_ONLY_SEES_SIM Phase D.3b.2 (2026-05-19): this helper no
+//! `MISSION_USER_ONLY_SEES_SIM` Phase D.3b.2 (2026-05-19): this helper no
 //! longer reassembles a `WorldServer` via `run_with_world_server`. The
 //! `is_listening` guard reads `SendHandle::is_listening`, the auth gate
 //! reads `CoordHandle::entity_authority_status`, and the insert / remove /
@@ -132,7 +132,7 @@ pub(crate) fn drain_host_sync_in_place(
                     };
                     send.insert_component_worldless(
                         &entity,
-                        DerefMut::deref_mut(&mut component_mut),
+                        &mut **&mut component_mut,
                     );
                 }
                 // bevy 0.19: if this is a ReplicatedResource carrier

@@ -13,6 +13,7 @@ pub struct WorldUser {
 
 impl WorldUser {
     /// Creates a new `WorldUser` registered at the given data-channel address.
+    #[must_use]
     pub fn new(address: SocketAddr) -> Self {
         Self {
             data_addr: address,
@@ -21,18 +22,19 @@ impl WorldUser {
     }
 
     /// Returns the user's data-channel socket address.
+    #[must_use]
     pub fn address(&self) -> SocketAddr {
         self.data_addr
     }
 
     // Rooms
 
-    pub(crate) fn cache_room(&mut self, room_key: &RoomKey) {
+    pub(crate) fn cache_room(&mut self, room_key: RoomKey) {
         self.rooms_cache.insert(*room_key);
     }
 
-    pub(crate) fn uncache_room(&mut self, room_key: &RoomKey) {
-        self.rooms_cache.remove(room_key);
+    pub(crate) fn uncache_room(&mut self, room_key: RoomKey) {
+        self.rooms_cache.remove(&&room_key);
     }
 
     pub(crate) fn room_keys(&self) -> &HashSet<RoomKey> {

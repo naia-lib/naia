@@ -11,6 +11,7 @@ pub enum ServerAddr {
 
 impl ServerAddr {
     /// Returns `true` if the server's socket address has been resolved.
+    #[must_use]
     pub fn is_found(&self) -> bool {
         match self {
             ServerAddr::Found(_) => true,

@@ -33,16 +33,16 @@ impl UserStore {
 
     // ── Core map access ──────────────────────────────────────────────────
 
-    pub(crate) fn get(&self, key: &UserKey) -> Option<&WorldUser> {
-        self.users.get(key)
+    pub(crate) fn get(&self, key: UserKey) -> Option<&WorldUser> {
+        self.users.get(&&key)
     }
 
-    pub(crate) fn get_mut(&mut self, key: &UserKey) -> Option<&mut WorldUser> {
-        self.users.get_mut(key)
+    pub(crate) fn get_mut(&mut self, key: UserKey) -> Option<&mut WorldUser> {
+        self.users.get_mut(&&key)
     }
 
-    pub(crate) fn contains(&self, key: &UserKey) -> bool {
-        self.users.contains_key(key)
+    pub(crate) fn contains(&self, key: UserKey) -> bool {
+        self.users.contains_key(&&key)
     }
 
     pub(crate) fn insert(&mut self, key: UserKey, user: WorldUser) {
@@ -51,8 +51,8 @@ impl UserStore {
 
     /// Remove the `WorldUser` record. Does NOT touch `disconnected_users`
     /// (that entry is removed in `take_disconnected` at handshake time).
-    pub(crate) fn remove(&mut self, key: &UserKey) -> Option<WorldUser> {
-        self.users.remove(key)
+    pub(crate) fn remove(&mut self, key: UserKey) -> Option<WorldUser> {
+        self.users.remove(&&key)
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -69,16 +69,16 @@ impl UserStore {
 
     // ── Convenience queries ───────────────────────────────────────────────
 
-    pub(crate) fn address(&self, key: &UserKey) -> Option<SocketAddr> {
-        self.users.get(key).map(|u| u.address())
+    pub(crate) fn address(&self, key: UserKey) -> Option<SocketAddr> {
+        self.users.get(&&key).map(super::super::user::world_user::WorldUser::address)
     }
 
-    pub(crate) fn room_keys_iter(&self, key: &UserKey) -> Option<Iter<'_, RoomKey>> {
-        self.users.get(key).map(|u| u.room_keys().iter())
+    pub(crate) fn room_keys_iter(&self, key: UserKey) -> Option<Iter<'_, RoomKey>> {
+        self.users.get(&&key).map(|u| u.room_keys().iter())
     }
 
-    pub(crate) fn rooms_count(&self, key: &UserKey) -> Option<usize> {
-        self.users.get(key).map(|u| u.rooms_count())
+    pub(crate) fn rooms_count(&self, key: UserKey) -> Option<usize> {
+        self.users.get(&&key).map(super::super::user::world_user::WorldUser::rooms_count)
     }
 
     // ── Disconnected-users tracking ───────────────────────────────────────

@@ -13,7 +13,7 @@
 //! - **`build_snapshot`** — the normal (dirty-trim) path.  Calls
 //!   `send_state_view.needed_live_and_snapshot_entries()` to get only the
 //!   entities / component-pairs the next `send_all_packets` actually needs.
-//!   This is the production-fast path (MISSION_SNAPSHOT_DIRTY_TRIM).
+//!   This is the production-fast path (`MISSION_SNAPSHOT_DIRTY_TRIM`).
 //!
 //! - **`build_snapshot_full`** — the full-scope path.  Calls
 //!   `send_state_view.live_entities()` + `send_state_view.required_snapshot_entries()`

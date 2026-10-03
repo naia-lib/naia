@@ -91,6 +91,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     ///
     /// Bevy and macroquad adapters use this to inject a pre-computed ID.
     /// Prefer [`new`](Server::new) in application code.
+    #[must_use]
     pub fn new_with_protocol_id(
         mode: ServerMode,
         server_config: ServerConfig,
@@ -149,14 +150,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
 
         // handle connects
         for user_key in main_events.read::<ConnectEvent>() {
-            let user_address = self.main_server.user_address(&user_key).unwrap();
+            let user_address = self.main_server.user_address(ser_key).unwrap();
             self.world_server.receive_user(user_key, user_address);
         }
 
         // handle queued disconnects (from verified disconnect handshake packets)
         for user_key in main_events.read::<crate::events::main_events::QueuedDisconnectEvent>() {
             self.world_server.user_queue_disconnect(
-                &user_key,
+                ser_key,
                 naia_shared::DisconnectReason::ClientDisconnected,
             );
         }
@@ -204,13 +205,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         let mut main_events = self.main_server.receive();
 
         for user_key in main_events.read::<ConnectEvent>() {
-            let user_address = self.main_server.user_address(&user_key).unwrap();
+            let user_address = self.main_server.user_address(ser_key).unwrap();
             self.world_server.receive_user(user_key, user_address);
         }
 
         for user_key in main_events.read::<crate::events::main_events::QueuedDisconnectEvent>() {
             self.world_server.user_queue_disconnect(
-                &user_key,
+                ser_key,
                 naia_shared::DisconnectReason::ClientDisconnected,
             );
         }
@@ -244,12 +245,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
             for (user_key, addr, reason) in world_events.read::<DisconnectEvent>() {
                 let payload = self.pending_disconnect_payloads.remove(&user_key);
                 self.main_server
-                    .disconnect_user(&user_key, reason, payload.as_deref());
+                    .disconnect_user(ser_key, reason, payload.as_deref());
                 disconnects.push((user_key, addr, reason));
             }
             // put back into world events
             for (user_key, addr, reason) in disconnects {
-                world_events.push_disconnection(&user_key, addr, reason);
+                world_events.push_disconnection(ser_key, addr, reason);
             }
         }
 
@@ -279,7 +280,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// replication occurs.
     ///
     /// [`ConnectEvent`]: crate::ConnectEvent
-    pub fn accept_connection(&mut self, user_key: &UserKey) {
+    pub fn accept_connection(&mut self, user_key: UserKey) {
         self.main_server.accept_connection(user_key);
     }
 
@@ -289,7 +290,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// client receives a rejection response and the handshake is terminated.
     ///
     /// [`ConnectEvent`]: crate::ConnectEvent
-    pub fn reject_connection(&mut self, user_key: &UserKey) {
+    pub fn reject_connection(&mut self, user_key: UserKey) {
         self.main_server.reject_connection(user_key);
     }
 
@@ -305,7 +306,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// cannot be resolved.
     ///
     /// The client sees the message on its `RejectEvent`.
-    pub fn reject_connection_with<M: Message>(&mut self, user_key: &UserKey, message: M) {
+    pub fn reject_connection_with<M: Message>(&mut self, user_key: UserKey, message: M) {
         self.main_server.reject_connection_with(user_key, message);
     }
 
@@ -327,7 +328,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// sends no message.
     ///
     /// [`DisconnectReason::Kicked`]: naia_shared::DisconnectReason::Kicked
-    pub fn disconnect_user_with<M: Message>(&mut self, user_key: &UserKey, message: M) {
+    pub fn disconnect_user_with<M: Message>(&mut self, user_key: UserKey, message: M) {
         let container = MessageContainer::new(Box::new(message));
         let mut writer = BitWriter::new();
         container.write(
@@ -357,7 +358,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// [`Protocol`]: naia_shared::Protocol
     pub fn send_message<C: Channel, M: Message>(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         message: &M,
     ) -> Result<(), NaiaServerError> {
         self.world_server.send_message::<C, M>(user_key, message)
@@ -385,7 +386,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// Returns [`NaiaServerError::UserNotFound`] if `user_key` is invalid.
     pub fn send_request<C: Channel, Q: Request>(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         request: &Q,
     ) -> Result<ResponseReceiveKey<Q::Response>, NaiaServerError> {
         self.world_server.send_request::<C, Q>(user_key, request)
@@ -497,14 +498,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         self.world_server.send(world);
     }
 
-    /// MISSION_PIPELINE_API_BOUNDARY G7: a [`crate::pipeline_actors::SendStateView`]
+    /// `MISSION_PIPELINE_API_BOUNDARY` G7: a [`crate::pipeline_actors::SendStateView`]
     /// backed by this server's shared state — drives the core registry-free
     /// snapshot assembler. See [`crate::InternalWorldServer::send_state_view`].
     pub fn send_state_view(&self) -> crate::pipeline_actors::SendStateView<E> {
         self.world_server.send_state_view()
     }
 
-    /// MISSION_TICK_FLOOR Lever 3 — PREPARE half (test/diagnostic + active
+    /// `MISSION_TICK_FLOOR` Lever 3 — PREPARE half (test/diagnostic + active
     /// freeze point). Build the self-contained per-user [`naia_shared::SendPlan`]
     /// at the freeze point: capture each component's frozen `DiffMask` and clear
     /// the live per-user mask. The transmit half then serializes it without
@@ -517,7 +518,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         self.world_server.prepare_send_job(world)
     }
 
-    /// MISSION_TICK_FLOOR Lever 3 — TRANSMIT half. Serialize + send a prepared
+    /// `MISSION_TICK_FLOOR` Lever 3 — TRANSMIT half. Serialize + send a prepared
     /// [`naia_shared::SendPlan`] against the snapshot `world`, reading zero live
     /// per-user diff state. See [`crate::InternalWorldServer::transmit_send_job`].
     pub fn transmit_send_job<W: WorldRefType<E> + Sync>(
@@ -665,7 +666,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// Returns `true` if the resource is present and was reconfigured;
     /// `false` if `R` is not currently inserted.
     ///
-    /// Per D2 / D3 of RESOURCES_PLAN: server-authoritative is the
+    /// Per D2 / D3 of `RESOURCES_PLAN`: server-authoritative is the
     /// default; opt into delegation via this method (typically called
     /// immediately after `insert_resource`).
     pub fn configure_resource<W: WorldMutType<E>, R: ReplicatedComponent>(
@@ -812,7 +813,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// instead.
     pub fn entity_give_authority(
         &mut self,
-        origin_user: &UserKey,
+        origin_user: UserKey,
         world_entity: &E,
     ) -> Result<(), AuthorityError> {
         self.world_server
@@ -922,7 +923,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
 
     /// Returns `true` if the given user key corresponds to a currently
     /// connected user.
-    pub fn user_exists(&self, user_key: &UserKey) -> bool {
+    pub fn user_exists(&self, user_key: UserKey) -> bool {
         self.main_server.user_exists(user_key)
     }
 
@@ -932,7 +933,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     ///
     /// Panics if the user does not exist. Use [`user_opt`](Self::user_opt) if the
     /// key may be stale (e.g., stored across a disconnect event).
-    pub fn user(&'_ self, user_key: &UserKey) -> UserRef<'_, E> {
+    pub fn user(&'_ self, user_key: UserKey) -> UserRef<'_, E> {
         if self.user_exists(user_key) {
             return self.world_server.user(user_key);
         }
@@ -940,7 +941,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     }
 
     /// Returns `Some(UserRef)` if the user exists, `None` if the key is stale.
-    pub fn user_opt(&'_ self, user_key: &UserKey) -> Option<UserRef<'_, E>> {
+    pub fn user_opt(&'_ self, user_key: UserKey) -> Option<UserRef<'_, E>> {
         if self.user_exists(user_key) {
             self.world_server.user_opt(user_key)
         } else {
@@ -954,7 +955,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     ///
     /// Panics if the user does not exist. Use [`user_mut_opt`](Self::user_mut_opt) if the
     /// key may be stale.
-    pub fn user_mut(&'_ mut self, user_key: &UserKey) -> UserMut<'_, E> {
+    pub fn user_mut(&'_ mut self, user_key: UserKey) -> UserMut<'_, E> {
         if self.user_exists(user_key) {
             return self.world_server.user_mut(user_key);
         }
@@ -962,7 +963,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     }
 
     /// Returns `Some(UserMut)` if the user exists, `None` if the key is stale.
-    pub fn user_mut_opt(&'_ mut self, user_key: &UserKey) -> Option<UserMut<'_, E>> {
+    pub fn user_mut_opt(&'_ mut self, user_key: UserKey) -> Option<UserMut<'_, E>> {
         if self.user_exists(user_key) {
             self.world_server.user_mut_opt(user_key)
         } else {
@@ -992,7 +993,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
 
     /// Returns the socket address of the user, or `None` if the user is not
     /// found or the handshake is not yet complete.
-    pub fn user_address(&self, user_key: &UserKey) -> Option<std::net::SocketAddr> {
+    pub fn user_address(&self, user_key: UserKey) -> Option<std::net::SocketAddr> {
         self.main_server.user_address(user_key)
     }
 
@@ -1001,7 +1002,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// Use this to query whether a specific entity is currently included in
     /// the user's scope. For mutation use
     /// [`user_scope_mut`](Server::user_scope_mut).
-    pub fn user_scope(&'_ self, user_key: &UserKey) -> UserScopeRef<'_, E> {
+    pub fn user_scope(&'_ self, user_key: UserKey) -> UserScopeRef<'_, E> {
         self.world_server.user_scope(user_key)
     }
 
@@ -1010,7 +1011,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// Call [`include`](crate::UserScopeMut::include) or
     /// [`exclude`](crate::UserScopeMut::exclude) to control which entities
     /// replicate to this user within their shared rooms.
-    pub fn user_scope_mut(&'_ mut self, user_key: &UserKey) -> UserScopeMut<'_, E> {
+    pub fn user_scope_mut(&'_ mut self, user_key: UserKey) -> UserScopeMut<'_, E> {
         self.world_server.user_scope_mut(user_key)
     }
 
@@ -1037,14 +1038,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     ///
     /// Per-user priority overrides the global priority for a specific client,
     /// allowing differential update rates across users for the same entity.
-    pub fn user_entity_priority(&self, user_key: &UserKey, entity: E) -> EntityPriorityRef<'_, E> {
+    pub fn user_entity_priority(&self, user_key: UserKey, entity: E) -> EntityPriorityRef<'_, E> {
         self.world_server.user_entity_priority(user_key, entity)
     }
 
     /// Returns a mutable handle to the per-user priority state for the entity.
     pub fn user_entity_priority_mut(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         entity: E,
     ) -> EntityPriorityMut<'_, E> {
         self.world_server.user_entity_priority_mut(user_key, entity)
@@ -1064,7 +1065,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     }
 
     /// Returns `true` if the given room key corresponds to an existing room.
-    pub fn room_exists(&self, room_key: &RoomKey) -> bool {
+    pub fn room_exists(&self, room_key: RoomKey) -> bool {
         self.world_server.room_exists(room_key)
     }
 
@@ -1073,7 +1074,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// # Panics
     ///
     /// Panics if the room does not exist.
-    pub fn room(&'_ self, room_key: &RoomKey) -> RoomRef<'_, E> {
+    pub fn room(&'_ self, room_key: RoomKey) -> RoomRef<'_, E> {
         self.world_server.room(room_key)
     }
 
@@ -1082,7 +1083,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// # Panics
     ///
     /// Panics if the room does not exist.
-    pub fn room_mut(&'_ mut self, room_key: &RoomKey) -> RoomMut<'_, E> {
+    pub fn room_mut(&'_ mut self, room_key: RoomKey) -> RoomMut<'_, E> {
         self.world_server.room_mut(room_key)
     }
 
@@ -1155,25 +1156,25 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
 
     /// Returns the average round-trip time (milliseconds) to the given user's
     /// client, or `None` if not yet measured.
-    pub fn rtt(&self, user_key: &UserKey) -> Option<f32> {
+    pub fn rtt(&self, user_key: UserKey) -> Option<f32> {
         self.world_server.rtt(user_key)
     }
 
     /// Returns the average jitter (milliseconds) measured for the given user's
     /// connection, or `None` if not yet measured.
-    pub fn jitter(&self, user_key: &UserKey) -> Option<f32> {
+    pub fn jitter(&self, user_key: UserKey) -> Option<f32> {
         self.world_server.jitter(user_key)
     }
 
     /// Returns a snapshot of per-connection diagnostics for the given user, or
     /// `None` if the user is not connected. Includes RTT (average, p50, p99),
     /// jitter, packet-loss fraction, and send/recv bandwidth in kbps.
-    pub fn connection_stats(&self, user_key: &UserKey) -> Option<ConnectionStats> {
+    pub fn connection_stats(&self, user_key: UserKey) -> Option<ConnectionStats> {
         self.world_server.connection_stats(user_key)
     }
 
     /// Whether the user's canonical send-side connection is materialized.
-    pub fn user_connection_ready(&self, user_key: &UserKey) -> bool {
+    pub fn user_connection_ready(&self, user_key: UserKey) -> bool {
         self.world_server.user_connection_ready(user_key)
     }
 
@@ -1258,11 +1259,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
 }
 
 impl<E: Hash + Copy + Eq + Sync + Send + 'static> EntityAndGlobalEntityConverter<E> for Server<E> {
+#[allow(clippy::trivially_copy_pass_by_ref)] // H3: kept by-ref to match the trait declaration; an impl follows the shape of its trait.
     fn global_entity_to_entity(
         &self,
         global_entity: &GlobalEntity,
     ) -> Result<E, EntityDoesNotExistError> {
-        self.world_server.global_entity_to_entity(global_entity)
+        self.world_server.global_entity_to_entity(**global_entity)
     }
 
     fn entity_to_global_entity(
@@ -1288,7 +1290,7 @@ cfg_if! {
             /// # Panics
             ///
             /// Panics if the user does not exist.
-            pub fn local_entities(&self, user_key: &UserKey) -> Vec<LocalEntity> {
+            pub fn local_entities(&self, user_key: UserKey) -> Vec<LocalEntity> {
                 self.world_server.local_entities(user_key)
             }
 
@@ -1302,7 +1304,7 @@ cfg_if! {
             pub fn local_entity<W: WorldRefType<E>>(
                 &self,
                 world: W,
-                user_key: &UserKey,
+                user_key: UserKey,
                 local_entity: &LocalEntity,
             ) -> Option<EntityRef<'_, E, W>> {
                 self.world_server.local_entity(world, user_key, local_entity)
@@ -1318,7 +1320,7 @@ cfg_if! {
             pub fn local_entity_mut<W: WorldMutType<E>>(
                 &mut self,
                 world: W,
-                user_key: &UserKey,
+                user_key: UserKey,
                 local_entity: &LocalEntity,
             ) -> Option<EntityMut<'_, E, W>> {
                 self.world_server.local_entity_mut(world, user_key, local_entity)
@@ -1364,7 +1366,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     #[doc(hidden)]
     pub fn inject_tick_buffer_message<C: Channel, M: Message>(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         host_tick: &Tick,
         message_tick: &Tick,
         message: &M,

@@ -12,6 +12,7 @@ pub struct TimeQueue<T: Eq + PartialEq> {
 
 #[allow(clippy::new_without_default)]
 impl<T: Eq + PartialEq> TimeQueue<T> {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             queue: BinaryHeap::default(),
@@ -36,6 +37,7 @@ impl<T: Eq + PartialEq> TimeQueue<T> {
     }
 
     /// Returns whether or not there is an item whose time has elapsed on the queue
+    #[must_use]
     pub fn has_item(&self, now: &Instant) -> bool {
         if self.queue.is_empty() {
             return false;
@@ -61,16 +63,19 @@ impl<T: Eq + PartialEq> TimeQueue<T> {
     }
 
     /// Peeks at the top level item container on the queue
+    #[must_use]
     pub fn peek_entry(&self) -> Option<&ItemContainer<T>> {
         self.queue.peek()
     }
 
     /// Returns the length of the underlying queue
+    #[must_use]
     pub fn len(&self) -> usize {
         self.queue.len()
     }
 
     /// Checks if the underlying queue is empty
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.queue.is_empty()
     }

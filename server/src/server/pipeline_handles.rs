@@ -75,6 +75,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RecvHandle<E> {
     /// Consume this handle and return the inner `RecvState<E>` —
     /// used by `InternalWorldServer::from_pipeline_states` for serial-mode
     /// reassembly until 4-F's coordinator runs the recv thread directly.
+    #[must_use]
     pub fn into_state(self) -> RecvState<E> {
         self.state
     }
@@ -83,6 +84,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RecvHandle<E> {
     /// recv worker extracts this once at spawn to block on packet arrival
     /// instead of polling. `None` for poll-only socket transports. See
     /// [`crate::transport::PacketReceiver::readiness`].
+    #[must_use]
     pub fn readiness(&self) -> Option<crate::transport::PacketReadiness> {
         self.state.readiness()
     }
@@ -120,15 +122,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> RecvHandle<E> {
     /// Mirrors `InternalWorldServer::receive_tick_buffer_messages` (`world_server.rs:825`),
     /// whose body reads exclusively from `self.recv.recv_user_connections`.
     /// Exposed on [`RecvHandle`] so cyberlith's per-tick decoder (moving
-    /// off main onto Recv per MISSION_SIM_OWNS_WORLD D.5e.1+.2) can run
-    /// without InternalWorldServer reassembly.
+    /// off main onto Recv per `MISSION_SIM_OWNS_WORLD` D.5e.1+.2) can run
+    /// without `InternalWorldServer` reassembly.
     pub fn receive_tick_buffer_messages(
         &mut self,
         tick: &Tick,
     ) -> crate::connection::tick_buffer_messages::TickBufferMessages {
         let mut tick_buffer_messages =
             crate::connection::tick_buffer_messages::TickBufferMessages::new();
-        for (_user_address, recv_conn) in self.state.recv_user_connections.iter_mut() {
+        for recv_conn in self.state.recv_user_connections.values_mut() {
             recv_conn.tick_buffer_messages(tick, &mut tick_buffer_messages);
         }
         tick_buffer_messages
@@ -193,6 +195,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// Consume this handle and return the inner `SendState<E>` —
     /// used by `InternalWorldServer::from_pipeline_states` for serial-mode
     /// reassembly until 4-F's coordinator runs the send thread directly.
+    #[must_use]
     pub fn into_state(self) -> SendState<E> {
         self.state
     }
@@ -246,7 +249,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state.send_all_packets(world);
     }
 
-    /// MISSION_TICK_FLOOR Lever 3 — PREPARE half. Build the self-contained
+    /// `MISSION_TICK_FLOOR` Lever 3 — PREPARE half. Build the self-contained
     /// per-user `SendPlan` at the freeze point (captures the frozen
     /// `DiffMask`s + clears the live per-user masks). On the active path the
     /// cyberlith pipeline calls this on MAIN inside the park window; the send
@@ -258,7 +261,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state.prepare_send_job(world)
     }
 
-    /// MISSION_TICK_FLOOR Lever 3 — TRANSMIT half. Serialize + send a previously
+    /// `MISSION_TICK_FLOOR` Lever 3 — TRANSMIT half. Serialize + send a previously
     /// prepared `SendPlan`, reading zero live per-user diff state. Called by
     /// the active send worker (lagged) and by the synchronous oracle.
     pub fn transmit_send_job<W: WorldRefType<E> + Sync>(
@@ -281,7 +284,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// C.6 prep — run the per-tick send preamble on `SendState` alone,
     /// without needing a world snapshot or a reassembled `InternalWorldServer`.
     ///
-    /// Cyberlith's Send SubApp calls this from its `ApplyExtract` phase
+    /// Cyberlith's Send `SubApp` calls this from its `ApplyExtract` phase
     /// (after extract delivers the inbound `SnapshotWorld<E>` from Sim,
     /// before serialization runs in `SerializePackets`). The subsequent
     /// `send_all_packets` invocation detects that the preamble already
@@ -294,7 +297,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state.apply_pending_send_preamble();
     }
 
-    /// MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20) — recompute the cross-thread
+    /// `MISSION_SNAPSHOT_DIRTY_TRIM` (2026-05-20) — recompute the cross-thread
     /// `needed_entities` set from every connection's in-flight value-reading
     /// commands. Call AFTER [`apply_pending_scope_changes`](Self::apply_pending_scope_changes) and BEFORE the
     /// Sim-side `SnapshotWorld` build that reads
@@ -304,7 +307,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state.refresh_needed_entities();
     }
 
-    /// MISSION_PIPELINE_API_BOUNDARY G7 (audit #4) — has the D8 send-prep
+    /// `MISSION_PIPELINE_API_BOUNDARY` G7 (audit #4) — has the D8 send-prep
     /// sub-order (`apply_pending_send_preamble` + `apply_pending_scope_changes`)
     /// already run this tick? Used by the `drain_and_send` `debug_assert` to
     /// machine-pin that the snapshot build (D9) never precedes send-prep (D8).
@@ -347,7 +350,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state.apply_pending_scope_changes(world);
     }
 
-    /// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — drain the
+    /// `MISSION_USER_ONLY_SEES_SIM` Phase D.2.2 (2026-05-19) — drain the
     /// pending World-side `configure_entity_replication` hook ops onto
     /// `world`, installing per-component diff mutators against the
     /// (already-transitioned) gwm.
@@ -377,6 +380,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// Pipeline-mode `is_listening`. Forwards to `SendState::is_listening`
     /// (`send_io.is_loaded()`). Used by the host-sync drain's "skip while
     /// not listening" guard, mirroring `InternalWorldServer::is_listening`.
+    #[must_use]
     pub fn is_listening(&self) -> bool {
         self.state.is_listening()
     }
@@ -418,7 +422,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     }
 
     /// C.6 prep — send a message to the user at `address` without
-    /// reassembling the InternalWorldServer.
+    /// reassembling the `InternalWorldServer`.
     ///
     /// Cyberlith pattern:
     /// ```ignore
@@ -441,7 +445,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state.send_message_to_address::<C, M>(address, message)
     }
 
-    /// MISSION_USER_ONLY_SEES_SIM Phase B.3 (2026-05-19) — convenience
+    /// `MISSION_USER_ONLY_SEES_SIM` Phase B.3 (2026-05-19) — convenience
     /// wrapper that resolves `user_key → SocketAddr` via the supplied
     /// `CoordHandle` and forwards to [`send_message_to_address`](Self::send_message_to_address).
     ///
@@ -451,7 +455,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// ```
     ///
     /// Returns `false` if either:
-    /// - the `user_key` is unknown to sim_handle's `user_store` (user never
+    /// - the `user_key` is unknown to `sim_handle`'s `user_store` (user never
     ///   joined or was already removed), OR
     /// - no send connection exists at the resolved address (user
     ///   disconnected between the lookup and this call).
@@ -470,7 +474,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     pub fn send_message_to_user<C: naia_shared::Channel, M: naia_shared::Message>(
         &mut self,
         sim_handle: &crate::pipeline_actors::CoordHandle<E>,
-        user_key: &UserKey,
+        user_key: UserKey,
         message: &M,
     ) -> bool {
         let Some(address) = sim_handle.user_address(user_key) else {
@@ -497,6 +501,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// the relocated `SendState::scope_checks_cache`. Cyberlith's
     /// `run_scope_policy` system reads this each tick to decide which
     /// per-user / per-entity scope decisions to recompute.
+    #[must_use]
     pub fn scope_checks_pending(&self) -> Vec<(RoomKey, UserKey, E)> {
         self.state.scope_checks_cache.pending_slice().to_vec()
     }
@@ -521,11 +526,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     ///
     /// `global_entity` is provided directly (not `world_entity`) so the
     /// call doesn't depend on the cyberlith-side world-entity ↔
-    /// global-entity mapping (the Send SubApp can resolve via its
+    /// global-entity mapping (the Send `SubApp` can resolve via its
     /// `SendReplMap` if needed before calling).
     pub fn user_scope_set_global_entity(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         global_entity: naia_shared::GlobalEntity,
         is_contained: bool,
     ) {
@@ -555,12 +560,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// [`user_scope_set_global_entity`]: Self::user_scope_set_global_entity
     pub fn user_scope_despawn_on_next_exit_global(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         global_entity: naia_shared::GlobalEntity,
     ) {
         self.state
             .entity_scope_map
-            .set_despawn_on_next_exit(user_key, &global_entity);
+            .set_despawn_on_next_exit(user_key, lobal_entity);
     }
 
     /// Set a per-user explicit scope bit for `world_entity`.
@@ -572,7 +577,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// global-entity-keyed setter.
     ///
     /// Mirrors `InternalWorldServer::UserScopeMut::include / exclude` ergonomics
-    /// for the Send SubApp world (where bevy entities are the natural
+    /// for the Send `SubApp` world (where bevy entities are the natural
     /// key but the cross-half scope queue is keyed by `GlobalEntity`).
     /// Used by cyberlith D.5b's send-side `static_tile_scope_policy`.
     ///
@@ -581,7 +586,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// `global_entity_map` (in which case the call is a no-op).
     pub fn user_scope_set_entity(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         world_entity: &E,
         is_contained: bool,
     ) -> bool {
@@ -625,7 +630,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     // `self.state.entity_scope_map` / `self.state.entity_room_map` /
     // `self.state.user_room_map` (SendState send-side mirrors).
 
-    /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.4 (2026-05-19) — query
+    /// `MISSION_USER_ONLY_SEES_SIM` Phase D.3b.4 (2026-05-19) — query
     /// whether `world_entity` is currently in-scope for `user_key`.
     ///
     /// Mirrors `InternalWorldServer::user_scope_has_entity` but operates against
@@ -647,7 +652,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// entity map.
     pub fn user_scope_has_entity(
         &self,
-        user_key: &UserKey,
+        user_key: UserKey,
         world_entity: &E,
         is_resource: bool,
     ) -> bool {
@@ -670,7 +675,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
             .shared
             .global_world_manager
             .read()
-            .entity_replication_config(&global_entity)
+            .entity_replication_config(lobal_entity)
         {
             matches!(config.publicity, Publicity::Private)
         } else {
@@ -687,7 +692,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
             .shared
             .global_world_manager
             .read()
-            .entity_owner(&global_entity)
+            .entity_owner(lobal_entity)
         {
             owner_key == *user_key
         } else {
@@ -703,7 +708,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         }
 
         // Check explicit include/exclude.
-        if let Some(in_scope) = self.state.entity_scope_map.get(user_key, &global_entity) {
+        if let Some(in_scope) = self.state.entity_scope_map.get(user_key, lobal_entity) {
             if *in_scope {
                 // [entity-scopes-09]: explicit include() cannot bypass the
                 // room gate for server-owned non-resource entities that have
@@ -711,7 +716,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
                 let entity_is_roomless = self
                     .state
                     .entity_room_map
-                    .entity_get_rooms(&global_entity)
+                    .entity_get_rooms(lobal_entity)
                     .is_none();
                 if entity_is_roomless {
                     let server_owned = self
@@ -719,9 +724,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
                         .shared
                         .global_world_manager
                         .read()
-                        .entity_owner(&global_entity)
-                        .map(|o| o.is_server())
-                        .unwrap_or(false);
+                        .entity_owner(lobal_entity)
+                        .is_some_and(|o| o.is_server());
                     if server_owned && !is_resource {
                         return false;
                     }
@@ -731,10 +735,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         }
 
         // Default: in-scope if user and entity share a room.
-        let Some(entity_rooms) = self.state.entity_room_map.entity_get_rooms(&global_entity) else {
+        let Some(entity_rooms) = self.state.entity_room_map.entity_get_rooms(lobal_entity) else {
             return false;
         };
-        let Some(user_rooms) = self.state.user_room_map.get(user_key) else {
+        let Some(user_rooms) = self.state.user_room_map.get(&&user_key) else {
             return false;
         };
         entity_rooms.intersection(user_rooms).next().is_some()

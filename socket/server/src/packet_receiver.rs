@@ -30,8 +30,9 @@ impl PacketReceiver {
         }
     }
 
-    /// Creates a PacketReceiver, conditioned or not depending on the config
+    /// Creates a `PacketReceiver`, conditioned or not depending on the config
     #[allow(clippy::type_complexity)]
+    #[must_use]
     pub fn new(
         channel_receiver: Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
         conditioner_config: &Option<LinkConditionerConfig>,
@@ -73,7 +74,7 @@ pub struct PlainPacketReceiver {
 }
 
 impl PlainPacketReceiver {
-    /// Creates a new PlainPacketReceiver
+    /// Creates a new `PlainPacketReceiver`
     #[allow(clippy::type_complexity)]
     pub fn new(
         channel_receiver: Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,

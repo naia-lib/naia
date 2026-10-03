@@ -12,8 +12,9 @@ pub struct PacketSender {
 }
 
 impl PacketSender {
-    /// Create a new PacketSender, if supplied with the Server's address & a
+    /// Create a new `PacketSender`, if supplied with the Server's address & a
     /// reference back to the parent Socket
+    #[must_use]
     pub fn new(
         server_addr: AddrCell,
         sender_channel: UnboundedSender<Box<[u8]>>,
@@ -36,10 +37,12 @@ impl PacketSender {
     }
 
     /// Get the Server's Socket address
+    #[must_use]
     pub fn server_addr(&self) -> ServerAddr {
         self.server_addr.get()
     }
 
+    #[must_use]
     pub fn connected(&self) -> bool {
         !self.sender_channel.is_closed()
     }

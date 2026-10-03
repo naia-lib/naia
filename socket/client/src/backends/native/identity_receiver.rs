@@ -8,15 +8,16 @@ use webrtc_unreliable_client::SessionError;
 
 use crate::IdentityReceiverResult;
 
-/// Handles receiving an IdentityToken from the Server through a given Client Socket
+/// Handles receiving an `IdentityToken` from the Server through a given Client Socket
 #[derive(Clone)]
 pub struct IdentityReceiver {
     receiver_channel: Arc<Mutex<oneshot::Receiver<Result<String, SessionError>>>>,
 }
 
 impl IdentityReceiver {
-    /// Create a new IdentityReceiver, if supplied with the Server's address & a
+    /// Create a new `IdentityReceiver`, if supplied with the Server's address & a
     /// reference back to the parent Socket
+    #[must_use]
     pub fn new(receiver_channel: oneshot::Receiver<Result<String, SessionError>>) -> Self {
         Self {
             receiver_channel: Arc::new(Mutex::new(receiver_channel)),
@@ -64,7 +65,7 @@ fn decode_reject_payload(body: &str) -> Option<Vec<u8>> {
     match base64::decode(trimmed) {
         Ok(bytes) => Some(bytes),
         Err(e) => {
-            log::warn!("Rejection response carried an undecodable body: {:?}", e);
+            log::warn!("Rejection response carried an undecodable body: {e:?}");
             None
         }
     }

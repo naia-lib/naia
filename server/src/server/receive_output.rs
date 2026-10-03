@@ -61,6 +61,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ReceiveOutput<E> {
     /// Returns true if this `ReceiveOutput` contains no events, ticks,
     /// received addresses, or pending data packets. An empty output is
     /// safe to skip in the cross-half orchestration pipeline.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.pending_ticks.is_empty()
             && self.received_addresses.is_empty()

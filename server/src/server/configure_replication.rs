@@ -1,4 +1,4 @@
-//! MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — deferred
+//! `MISSION_USER_ONLY_SEES_SIM` Phase D.2.2 (2026-05-19) — deferred
 //! `configure_entity_replication` op model.
 //!
 //! `InternalWorldServer::configure_entity_replication` (`world_server.rs:1423`)
@@ -58,7 +58,7 @@ use crate::UserKey;
 pub(crate) enum ConfigureSendOp<E> {
     /// `unpublish_entity` non-owner despawn + owner-targeted
     /// `send_unpublish`. `owner_addr` is captured BEFORE
-    /// `gwm.entity_unpublish` transitions ClientPublic → Client, so the
+    /// `gwm.entity_unpublish` transitions `ClientPublic` → Client, so the
     /// drain can address the formerly-owning connection even though gwm
     /// has already moved on.
     Unpublish {
@@ -93,7 +93,7 @@ pub(crate) enum ConfigureSendOp<E> {
     /// `enable_delegation_client_owned_entity`'s protocol-ordered Send
     /// sequence: `entity_scope_map` seed, `migrate_entity_remote_to_host`,
     /// `host_local_enable_delegation`, `host_send_migrate_response`
-    /// (reserved at subcommand_id=0 via D.2.3's `reserve_first_command`),
+    /// (reserved at `subcommand_id=0` via D.2.3's `reserve_first_command`),
     /// then the in-scope `host_send_set_auth` fan-out. Also pushes the
     /// World hooks for this path (publish-race + enable-delegation) in
     /// legacy order, because whether the Client→ClientPublic race-path

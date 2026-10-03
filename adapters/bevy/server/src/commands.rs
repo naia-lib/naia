@@ -90,7 +90,7 @@ pub trait CommandsExt<'a> {
     fn give_authority(
         &'a mut self,
         server: &mut Server,
-        user_key: &UserKey,
+        user_key: UserKey,
     ) -> &'a mut EntityCommands<'a>;
 
     /// Reclaims server authority over this entity, revoking any client grant.
@@ -150,6 +150,7 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
         server.replication_config(&self.id())
     }
 
+#[allow(clippy::trivially_copy_pass_by_ref)] // H3: kept by-ref to match the trait declaration; an impl follows the shape of its trait.
     fn give_authority(
         &'a mut self,
         server: &mut Server,
@@ -230,7 +231,7 @@ pub trait ServerCommandsExt {
     fn configure_replicated_resource<R: ReplicatedResource>(&mut self, config: ReplicationConfig);
 }
 
-impl<'w, 's> ServerCommandsExt for Commands<'w, 's> {
+impl ServerCommandsExt for Commands<'_, '_> {
     fn replicate_resource<R: ReplicatedResource>(&mut self, value: R) {
         let value_cell = parking_lot::Mutex::new(Some(value));
         self.queue(WorldOpCommand::new(move |world| {

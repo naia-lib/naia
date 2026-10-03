@@ -15,6 +15,7 @@ pub struct MainUser {
 
 impl MainUser {
     /// Creates a new `MainUser` pending auth, registered at the given auth-channel address.
+    #[must_use]
     pub fn new(auth_addr: SocketAddr) -> Self {
         Self {
             auth_addr: Some(auth_addr),
@@ -25,16 +26,19 @@ impl MainUser {
 
     /// Returns `true` if the data-channel address has been assigned (handshake complete).
     /// Returns `true` if the data-channel address has been assigned (handshake complete).
+    #[must_use]
     pub fn has_address(&self) -> bool {
         self.data_addr.is_some()
     }
 
     /// Returns the data-channel socket address; panics if not yet assigned.
+    #[must_use]
     pub fn address(&self) -> SocketAddr {
         self.data_addr.unwrap()
     }
 
     /// Returns the data-channel socket address if assigned, or `None` if still pending.
+    #[must_use]
     pub fn address_opt(&self) -> Option<SocketAddr> {
         self.data_addr
     }
@@ -67,17 +71,19 @@ pub struct MainUserRef<'s> {
 }
 
 impl<'s> MainUserRef<'s> {
-    pub(crate) fn new(server: &'s MainServer, key: &UserKey) -> Self {
+    pub(crate) fn new(server: &'s MainServer, key: UserKey) -> Self {
         Self { server, key: *key }
     }
 
     /// Returns the [`UserKey`] identifying this user.
+    #[must_use]
     pub fn key(&self) -> UserKey {
         self.key
     }
 
     /// Returns the user's socket address; panics if the user is no longer connected.
+    #[must_use]
     pub fn address(&self) -> SocketAddr {
-        self.server.user_address(&self.key).unwrap()
+        self.server.user_address(elf.key).unwrap()
     }
 }

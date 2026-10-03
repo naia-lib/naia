@@ -31,7 +31,7 @@
 //! continue to function. A consumer wanting the new facade installs a
 //! `EventReceiver<E>` on Sim, and calls
 //! [`EventReceiver::push_from_receive_output`] with each tick's
-//! `ReceiveOutput<E>` (from whichever SubApp it has access to). The
+//! `ReceiveOutput<E>` (from whichever `SubApp` it has access to). The
 //! Messages population is independent.
 //!
 //! # Why this is a facade, not an embedded worker
@@ -143,13 +143,14 @@ struct EventReceiverInner<E: Copy + Eq + Hash + Send + Sync + 'static> {
     despawns: Mutex<Vec<RecvDespawnEntityEvent<E>>>,
     publishes: Mutex<Vec<RecvPublishEntityEvent<E>>>,
     unpublishes: Mutex<Vec<RecvUnpublishEntityEvent<E>>>,
-    /// Erased message storage — keyed by (ChannelKind, MessageKind).
+    /// Erased message storage — keyed by (`ChannelKind`, `MessageKind`).
     /// Drained by `drain_messages::<C, M>`.
     messages: Mutex<Vec<(ChannelKind, MessageKind, UserKey, MessageContainer)>>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync + 'static> EventReceiver<E> {
     /// Construct a fresh receiver.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             inner: Arc::new(EventReceiverInner {
@@ -173,7 +174,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> EventReceiver<E> {
     /// Consumes `output` (same semantics as
     /// `apply_receive_output_pipeline`); pre-existing Messages-based
     /// consumers should keep using `apply_receive_output_pipeline`
-    /// directly and call this in parallel from the same SubApp.
+    /// directly and call this in parallel from the same `SubApp`.
     ///
     /// `sim_handle` is needed for the same resource-entity filter
     /// `apply_receive_output_pipeline` applies (Spawn / Despawn of
@@ -278,41 +279,49 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> EventReceiver<E> {
     }
 
     /// Drain all queued connect events.
+    #[must_use]
     pub fn drain_connect_events(&self) -> Vec<RecvConnectEvent> {
         std::mem::take(&mut *self.inner.connects.lock())
     }
 
     /// Drain all queued disconnect events.
+    #[must_use]
     pub fn drain_disconnect_events(&self) -> Vec<RecvDisconnectEvent> {
         std::mem::take(&mut *self.inner.disconnects.lock())
     }
 
     /// Drain all queued error events.
+    #[must_use]
     pub fn drain_error_events(&self) -> Vec<RecvErrorEvent> {
         std::mem::take(&mut *self.inner.errors.lock())
     }
 
     /// Drain all queued tick events.
+    #[must_use]
     pub fn drain_tick_events(&self) -> Vec<RecvTickEvent> {
         std::mem::take(&mut *self.inner.ticks.lock())
     }
 
     /// Drain all queued client-owned entity-spawn events.
+    #[must_use]
     pub fn drain_spawn_entity_events(&self) -> Vec<RecvSpawnEntityEvent<E>> {
         std::mem::take(&mut *self.inner.spawns.lock())
     }
 
     /// Drain all queued entity-despawn events.
+    #[must_use]
     pub fn drain_despawn_entity_events(&self) -> Vec<RecvDespawnEntityEvent<E>> {
         std::mem::take(&mut *self.inner.despawns.lock())
     }
 
     /// Drain all queued entity-publish events.
+    #[must_use]
     pub fn drain_publish_entity_events(&self) -> Vec<RecvPublishEntityEvent<E>> {
         std::mem::take(&mut *self.inner.publishes.lock())
     }
 
     /// Drain all queued entity-unpublish events.
+    #[must_use]
     pub fn drain_unpublish_entity_events(&self) -> Vec<RecvUnpublishEntityEvent<E>> {
         std::mem::take(&mut *self.inner.unpublishes.lock())
     }
@@ -398,7 +407,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> EventReceiver<E> {
             .push(RecvUnpublishEntityEvent { user_key, entity });
     }
 
-    /// Push the entries of a (channel_kind, message_kind) entry into
+    /// Push the entries of a (`channel_kind`, `message_kind`) entry into
     /// the erased messages buffer. `MessageContainer` is Arc-internal
     /// so cloning is cheap.
     pub fn push_message(
@@ -417,6 +426,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> EventReceiver<E> {
     /// Drain all messages of type `M` received on channel `C`. Other
     /// channel/message combinations are left in the buffer for their
     /// own type-specific drainers.
+    #[must_use]
     pub fn drain_messages<C: Channel, M: Message>(&self) -> Vec<(UserKey, M)> {
         let want_channel = ChannelKind::of::<C>();
         let want_message = MessageKind::of::<M>();

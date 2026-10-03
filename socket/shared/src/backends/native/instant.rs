@@ -8,6 +8,7 @@ pub struct Instant {
 
 impl Instant {
     /// Creates an Instant from the moment the method is called
+    #[must_use]
     pub fn now() -> Self {
         Self {
             inner: std::time::Instant::now(),
@@ -15,15 +16,18 @@ impl Instant {
     }
 
     /// Returns time elapsed since the Instant
+    #[must_use]
     pub fn elapsed(&self, now: &Self) -> Duration {
         now.inner - self.inner
     }
 
     /// Returns time until the Instant occurs
+    #[must_use]
     pub fn until(&self, now: &Self) -> Duration {
         self.inner.duration_since(now.inner())
     }
 
+    #[must_use]
     pub fn is_after(&self, other: &Self) -> bool {
         self.inner > other.inner
     }
@@ -39,6 +43,7 @@ impl Instant {
     }
 
     /// Returns inner Instant implementation
+    #[must_use]
     pub fn inner(&self) -> std::time::Instant {
         self.inner
     }

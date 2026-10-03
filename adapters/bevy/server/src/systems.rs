@@ -74,8 +74,7 @@ pub fn emit_initial_component_inserts(world: &mut World) {
             for kind in &kinds {
                 let present = world_data
                     .component_access(kind)
-                    .map(|accessor| accessor.component(world, &entity).is_some())
-                    .unwrap_or(false);
+                    .is_some_and(|accessor| accessor.component(world, &entity).is_some());
                 if present {
                     events.write(HostSyncEvent::Insert(host_id, entity, *kind));
                 }
@@ -113,7 +112,7 @@ pub fn world_to_host_sync(world: &mut World) {
                     };
                     server.insert_component_worldless(
                         &entity,
-                        DerefMut::deref_mut(&mut component_mut),
+                        &mut **&mut component_mut,
                     );
                 }
                 HostSyncEvent::Remove(_host_id, entity, component_kind) => {

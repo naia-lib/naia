@@ -59,6 +59,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> From<&mut Events<E>> for AuthEvents {
 }
 
 impl AuthEvents {
+    #[must_use]
     pub fn read<M: Message>(&self) -> Vec<(UserKey, M)> {
         let message_kind = MessageKind::of::<M>();
 
@@ -92,12 +93,14 @@ impl MessageEvents {
     /// The resulting `MessageEvents` is byte-identical to
     /// `MessageEvents::from(&mut events)` against the same input.
     #[doc(hidden)]
+    #[must_use]
     pub fn from_inner(
         inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
     ) -> Self {
         Self { inner }
     }
 
+    #[must_use]
     pub fn read<C: Channel, M: Message>(&self) -> Vec<(UserKey, M)> {
         let channel_kind = ChannelKind::of::<C>();
         if let Some(message_map) = self.inner.get(&channel_kind) {
@@ -142,6 +145,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> From<&mut Events<E>> for RequestEvents {
 }
 
 impl RequestEvents {
+    #[must_use]
     pub fn read<C: Channel, Q: Request>(&self) -> Vec<(UserKey, ResponseSendKey<Q::Response>, Q)> {
         let channel_kind = ChannelKind::of::<C>();
         let Some(request_map) = self.inner.get(&channel_kind) else {
@@ -194,6 +198,7 @@ pub struct InsertComponentEvent<C: Replicate> {
 }
 
 impl<C: Replicate> InsertComponentEvent<C> {
+    #[must_use]
     pub fn new(user_key: UserKey, entity: Entity) -> Self {
         Self {
             user_key,
@@ -211,6 +216,7 @@ pub struct InsertBundleEvent<B: ReplicateBundle> {
 }
 
 impl<B: ReplicateBundle> InsertBundleEvent<B> {
+    #[must_use]
     pub fn new(user_key: UserKey, entity: Entity) -> Self {
         Self {
             user_key,
@@ -228,6 +234,7 @@ pub struct UpdateComponentEvent<C: Replicate> {
 }
 
 impl<C: Replicate> UpdateComponentEvent<C> {
+    #[must_use]
     pub fn new(user_key: UserKey, entity: Entity) -> Self {
         Self {
             user_key,
@@ -274,6 +281,7 @@ pub struct InsertResourceEvent<R: Replicate> {
 }
 
 impl<R: Replicate> InsertResourceEvent<R> {
+    #[must_use]
     pub fn new(user_key: UserKey) -> Self {
         Self {
             user_key,
@@ -292,6 +300,7 @@ pub struct UpdateResourceEvent<R: Replicate> {
 }
 
 impl<R: Replicate> UpdateResourceEvent<R> {
+    #[must_use]
     pub fn new(user_key: UserKey) -> Self {
         Self {
             user_key,

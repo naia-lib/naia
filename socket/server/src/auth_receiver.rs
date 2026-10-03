@@ -13,8 +13,9 @@ pub struct AuthReceiver {
 }
 
 impl AuthReceiver {
-    /// Creates a new AuthReceiver
+    /// Creates a new `AuthReceiver`
     #[allow(clippy::type_complexity)]
+    #[must_use]
     pub fn new(
         channel_receiver: Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
     ) -> Self {

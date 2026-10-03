@@ -224,7 +224,7 @@ pub fn apply_receive_output(
     });
 }
 
-/// Phase B.7 (MISSION_SIM_OWNS_WORLD) sibling of `apply_receive_output`
+/// Phase B.7 (`MISSION_SIM_OWNS_WORLD`) sibling of `apply_receive_output`
 /// for the three-handle pipeline architecture.
 ///
 /// Same event-emission body as `apply_receive_output`, byte-for-byte,
@@ -469,20 +469,20 @@ pub fn apply_receive_output_pipeline_with_event_receiver(
         sim_handle,
         sim_receiver,
         output,
-    )
+    );
 }
 
 /// Dual-target variant of [`apply_receive_output_pipeline_with_event_receiver`].
 ///
 /// When the consumer hosts replicated entities on a world OTHER than the
 /// coordinator world (e.g. cyberlith's editor cells, whose client-published
-/// entities live on the Sim SubApp world), pass that world as `entity_world`.
+/// entities live on the Sim `SubApp` world), pass that world as `entity_world`.
 /// The fan-out then splits by scope:
 ///
 /// - **`entity_world`** receives everything entity-scoped: the
 ///   Spawn/Despawn/Publish/Unpublish `Messages<X>` buffers, the
-///   `ClientOwned`/`HostOwned` marker mutations (Delegate / AuthGrant /
-///   AuthReset arms), the `SpawnEntityEvent` `has_entity` existence check,
+///   `ClientOwned`/`HostOwned` marker mutations (Delegate / `AuthGrant` /
+///   `AuthReset` arms), the `SpawnEntityEvent` `has_entity` existence check,
 ///   and the `ComponentEventRegistry::receive_events` tail (so
 ///   `InsertComponentEvent<C>` / `UpdateComponentEvent<C>` /
 ///   `RemoveComponentEvent<C>` fire into `entity_world`'s buffers — which

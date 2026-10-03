@@ -14,8 +14,9 @@ pub struct PlainPacketReceiver {
 }
 
 impl PlainPacketReceiver {
-    /// Create a new PacketReceiver, if supplied with the Server's address & a
+    /// Create a new `PacketReceiver`, if supplied with the Server's address & a
     /// reference back to the parent Socket
+    #[must_use]
     pub fn new(server_addr: AddrCell, receiver_channel: UnboundedReceiver<Box<[u8]>>) -> Self {
         PlainPacketReceiver {
             server_addr,
@@ -38,6 +39,7 @@ impl PlainPacketReceiver {
     }
 
     /// Get the Server's Socket address
+    #[must_use]
     pub fn server_addr(&self) -> ServerAddr {
         self.server_addr.get()
     }

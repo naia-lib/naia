@@ -90,7 +90,7 @@ fn send_connection_readiness_is_pure_and_tracks_materialization() {
     assert!(!crate::server::world_server::user_connection_ready_impl(
         &sim.state.user_store,
         &send.state.send_user_connections,
-        &user_key,
+        user_key,
     ));
 
     let gwm = send.state.shared.global_world_manager.read();
@@ -111,7 +111,7 @@ fn send_connection_readiness_is_pure_and_tracks_materialization() {
     assert!(crate::server::world_server::user_connection_ready_impl(
         &sim.state.user_store,
         &send.state.send_user_connections,
-        &user_key,
+        user_key,
     ));
 }
 
@@ -169,7 +169,7 @@ fn pipelined_send_message_fails_before_materialization_and_after_disconnect() {
     server.receive_user(user_key, address);
 
     assert!(matches!(
-        server.send_message::<TestServerChannel, _>(&user_key, &message),
+        server.send_message::<TestServerChannel, _>(user_key, &message),
         Err(NaiaServerError::UserNotFound)
     ));
 
@@ -190,7 +190,7 @@ fn pipelined_send_message_fails_before_materialization_and_after_disconnect() {
 
     assert!(
         server
-            .send_message::<TestServerChannel, _>(&user_key, &message)
+            .send_message::<TestServerChannel, _>(user_key, &message)
             .is_ok(),
         "materialized send connection must accept the message"
     );
@@ -200,7 +200,7 @@ fn pipelined_send_message_fails_before_materialization_and_after_disconnect() {
     server.restore_handles(coord, recv, send);
 
     assert!(matches!(
-        server.send_message::<TestServerChannel, _>(&user_key, &message),
+        server.send_message::<TestServerChannel, _>(user_key, &message),
         Err(NaiaServerError::UserNotFound)
     ));
 }
@@ -229,7 +229,7 @@ fn pipelined_send_request_returns_user_not_found_without_live_connection() {
     server.receive_user(user_key, address);
 
     assert!(matches!(
-        server.send_request::<TestRequestChannel, _>(&user_key, &request),
+        server.send_request::<TestRequestChannel, _>(user_key, &request),
         Err(NaiaServerError::UserNotFound)
     ));
 
@@ -250,7 +250,7 @@ fn pipelined_send_request_returns_user_not_found_without_live_connection() {
 
     assert!(
         server
-            .send_request::<TestRequestChannel, _>(&user_key, &request)
+            .send_request::<TestRequestChannel, _>(user_key, &request)
             .is_ok(),
         "materialized send connection must accept the request"
     );
@@ -260,7 +260,7 @@ fn pipelined_send_request_returns_user_not_found_without_live_connection() {
     server.restore_handles(coord, recv, send);
 
     assert!(matches!(
-        server.send_request::<TestRequestChannel, _>(&user_key, &request),
+        server.send_request::<TestRequestChannel, _>(user_key, &request),
         Err(NaiaServerError::UserNotFound)
     ));
 }
@@ -290,7 +290,7 @@ fn resident_send_request_returns_user_not_found_without_live_connection() {
     server.receive_user(user_key, address);
 
     assert!(matches!(
-        server.send_request::<TestRequestChannel, _>(&user_key, &request),
+        server.send_request::<TestRequestChannel, _>(user_key, &request),
         Err(NaiaServerError::UserNotFound)
     ));
 
@@ -318,7 +318,7 @@ fn resident_send_request_returns_user_not_found_without_live_connection() {
 
     assert!(
         server
-            .send_request::<TestRequestChannel, _>(&user_key, &request)
+            .send_request::<TestRequestChannel, _>(user_key, &request)
             .is_ok(),
         "materialized send connection must accept the request"
     );
@@ -326,7 +326,7 @@ fn resident_send_request_returns_user_not_found_without_live_connection() {
     server.send.state.send_user_connections.remove(&address);
 
     assert!(matches!(
-        server.send_request::<TestRequestChannel, _>(&user_key, &request),
+        server.send_request::<TestRequestChannel, _>(user_key, &request),
         Err(NaiaServerError::UserNotFound)
     ));
 }
@@ -381,13 +381,13 @@ fn resident_send_request_returns_message_queue_full_when_channel_queue_fills() {
         .insert(address, send_conn);
 
     assert!(server
-        .send_request::<TestRequestChannel, _>(&user_key, &request)
+        .send_request::<TestRequestChannel, _>(user_key, &request)
         .is_ok());
     assert!(server
-        .send_request::<TestRequestChannel, _>(&user_key, &request)
+        .send_request::<TestRequestChannel, _>(user_key, &request)
         .is_ok());
     assert!(matches!(
-        server.send_request::<TestRequestChannel, _>(&user_key, &request),
+        server.send_request::<TestRequestChannel, _>(user_key, &request),
         Err(NaiaServerError::MessageQueueFull)
     ));
 }
@@ -418,7 +418,7 @@ fn pipelined_send_request_leaves_no_row_without_live_connection() {
     server.receive_user(user_key, address);
 
     assert!(matches!(
-        server.send_request::<TestRequestChannel, _>(&user_key, &request),
+        server.send_request::<TestRequestChannel, _>(user_key, &request),
         Err(NaiaServerError::UserNotFound)
     ));
 
@@ -457,7 +457,7 @@ fn resident_send_request_leaves_no_row_without_live_connection() {
     server.receive_user(user_key, address);
 
     assert!(matches!(
-        server.send_request::<TestRequestChannel, _>(&user_key, &request),
+        server.send_request::<TestRequestChannel, _>(user_key, &request),
         Err(NaiaServerError::UserNotFound)
     ));
     assert_eq!(
@@ -519,13 +519,13 @@ fn resident_send_request_queue_full_leaves_no_row() {
         .insert(address, send_conn);
 
     assert!(server
-        .send_request::<TestRequestChannel, _>(&user_key, &request)
+        .send_request::<TestRequestChannel, _>(user_key, &request)
         .is_ok());
     assert!(server
-        .send_request::<TestRequestChannel, _>(&user_key, &request)
+        .send_request::<TestRequestChannel, _>(user_key, &request)
         .is_ok());
     assert!(matches!(
-        server.send_request::<TestRequestChannel, _>(&user_key, &request),
+        server.send_request::<TestRequestChannel, _>(user_key, &request),
         Err(NaiaServerError::MessageQueueFull)
     ));
     assert_eq!(
@@ -565,9 +565,9 @@ fn pipelined_send_response_without_live_connection_keeps_routing_for_retry() {
     // Register the response routing as an incoming request would.
     let (mut coord, recv, send) = server.take_handles();
     let global_id = coord.state.global_response_manager.create_response_id(
-        &user_key,
+        user_key,
         &ChannelKind::of::<TestRequestChannel>(),
-        &LocalRequestId::from(1u16).receive_from_remote(),
+        LocalRequestId::from(1u16).receive_from_remote(),
         naia_shared::ConnectionRequestNonce::from_wire(1),
     );
     server.restore_handles(coord, recv, send);
@@ -583,7 +583,7 @@ fn pipelined_send_response_without_live_connection_keeps_routing_for_retry() {
     let still_routable = coord
         .state
         .global_response_manager
-        .peek_response_id(&global_id)
+        .peek_response_id(global_id)
         .is_some();
     server.restore_handles(coord, recv, send);
     assert!(
@@ -645,9 +645,9 @@ fn resident_send_response_without_live_connection_keeps_routing_for_retry() {
         .state
         .global_response_manager
         .create_response_id(
-            &user_key,
+            user_key,
             &ChannelKind::of::<TestRequestChannel>(),
-            &LocalRequestId::from(1u16).receive_from_remote(),
+            LocalRequestId::from(1u16).receive_from_remote(),
             naia_shared::ConnectionRequestNonce::from_wire(1),
         );
 
@@ -660,7 +660,7 @@ fn resident_send_response_without_live_connection_keeps_routing_for_retry() {
             .sim_handle
             .state
             .global_response_manager
-            .peek_response_id(&global_id)
+            .peek_response_id(global_id)
             .is_some(),
         "refused send_response must keep the routing"
     );
@@ -741,9 +741,9 @@ fn pipelined_send_response_user_gone_before_drain_keeps_routing_for_retry() {
     // Register the response routing as an incoming request would.
     let (mut coord, recv, send) = server.take_handles();
     let global_id = coord.state.global_response_manager.create_response_id(
-        &user_key,
+        user_key,
         &ChannelKind::of::<TestRequestChannel>(),
-        &LocalRequestId::from(1u16).receive_from_remote(),
+        LocalRequestId::from(1u16).receive_from_remote(),
         naia_shared::ConnectionRequestNonce::from_wire(1),
     );
     server.restore_handles(coord, recv, send);
@@ -756,7 +756,7 @@ fn pipelined_send_response_user_gone_before_drain_keeps_routing_for_retry() {
     );
 
     // Disconnect lands before the D6 drain: the op is dropped undelivered.
-    server.coord_mut().state.user_store.remove(&user_key);
+    server.coord_mut().state.user_store.remove(user_key);
     let world = naia_shared::SnapshotWorld::<u64>::new();
     server.send(&world);
 
@@ -765,7 +765,7 @@ fn pipelined_send_response_user_gone_before_drain_keeps_routing_for_retry() {
     let still_routable = coord
         .state
         .global_response_manager
-        .peek_response_id(&global_id)
+        .peek_response_id(global_id)
         .is_some();
     server.restore_handles(coord, recv, send);
     assert!(
@@ -818,9 +818,9 @@ fn pipelined_send_response_delivered_drain_destroys_routing() {
 
     let (mut coord, recv, send) = server.take_handles();
     let global_id = coord.state.global_response_manager.create_response_id(
-        &user_key,
+        user_key,
         &ChannelKind::of::<TestRequestChannel>(),
-        &LocalRequestId::from(1u16).receive_from_remote(),
+        LocalRequestId::from(1u16).receive_from_remote(),
         naia_shared::ConnectionRequestNonce::from_wire(1),
     );
     server.restore_handles(coord, recv, send);
@@ -836,7 +836,7 @@ fn pipelined_send_response_delivered_drain_destroys_routing() {
     let still_routable = coord
         .state
         .global_response_manager
-        .peek_response_id(&global_id)
+        .peek_response_id(global_id)
         .is_some();
     server.restore_handles(coord, recv, send);
     assert!(
@@ -876,10 +876,10 @@ fn drain_lifecycle_translates_connect_disconnect_error() {
     // (pub(crate) APIs reachable from in-crate tests). This mirrors what
     // the recv loop does when handshake completion / disconnect / decode
     // error fires.
-    output.world_events.push_connection(&user_a);
+    output.world_events.push_connection(user_a);
     output
         .world_events
-        .push_disconnection(&user_b, addr_b, DisconnectReason::ClientDisconnected);
+        .push_disconnection(user_b, addr_b, DisconnectReason::ClientDisconnected);
     output
         .world_events
         .push_error(NaiaServerError::Wrapped(Box::new(std::io::Error::other(
@@ -1081,8 +1081,8 @@ fn sim_handle_room_ops_deferred_drain_path() {
 
     // Coord-side room ops — all push-only, no drain.
     let rk = sim_handle.create_room();
-    sim_handle.room_add_user(&rk, &user_key);
-    sim_handle.room_add_entity(&rk, &42u64);
+    sim_handle.room_add_user(rk, &user_key);
+    sim_handle.room_add_entity(rk, &42u64);
 
     // The queue should have 4 entries: (legacy+room) for add_user, (legacy+room) for add_entity.
     {
@@ -1099,7 +1099,7 @@ fn sim_handle_room_ops_deferred_drain_path() {
         .apply_pending_room_changes(&sim_handle.shared.scope_change_queue);
 
     // entity_room_map must have entity 42u64 in room rk.
-    let erm_rooms = send.state.entity_room_map.entity_get_rooms(&global_entity);
+    let erm_rooms = send.state.entity_room_map.entity_get_rooms(global_entity);
     assert!(
         erm_rooms.map(|set| set.contains(&rk)).unwrap_or(false),
         "entity_room_map should map global_entity → rk after drain"
@@ -1162,20 +1162,20 @@ fn configure_unpublish_captures_owner_addr_before_transition() {
         .shared
         .global_world_manager
         .write()
-        .insert_entity_record(&global_entity, EntityOwner::Client(user_key));
+        .insert_entity_record(global_entity, EntityOwner::Client(user_key));
     // entity_publish: Client → ClientPublic + Publicity::Public.
     let published = sim_handle
         .shared
         .global_world_manager
         .write()
-        .entity_publish(&global_entity);
+        .entity_publish(global_entity);
     assert!(published, "manufactured entity should publish");
     assert!(matches!(
         sim_handle
             .shared
             .global_world_manager
             .read()
-            .entity_owner(&global_entity),
+            .entity_owner(global_entity),
         Some(EntityOwner::ClientPublic(_))
     ));
 
@@ -1190,7 +1190,7 @@ fn configure_unpublish_captures_owner_addr_before_transition() {
                 .shared
                 .global_world_manager
                 .read()
-                .entity_owner(&global_entity),
+                .entity_owner(global_entity),
             Some(EntityOwner::Client(_))
         ),
         "gwm owner must be Client after unpublish (transitioned immediately)",
@@ -1200,7 +1200,7 @@ fn configure_unpublish_captures_owner_addr_before_transition() {
             .shared
             .global_world_manager
             .read()
-            .entity_replication_config(&global_entity)
+            .entity_replication_config(global_entity)
             .unwrap()
             .publicity,
         Publicity::Private,
@@ -1246,7 +1246,7 @@ fn sim_handle_receive_user_inserts_into_user_store() {
 
     // Before receive_user the user must not exist.
     assert!(
-        !sim_handle.user_exists(&user_key),
+        !sim_handle.user_exists(user_key),
         "user should not exist before receive_user"
     );
 
@@ -1254,13 +1254,13 @@ fn sim_handle_receive_user_inserts_into_user_store() {
 
     // After receive_user the user must be present.
     assert!(
-        sim_handle.user_exists(&user_key),
+        sim_handle.user_exists(user_key),
         "user should exist after receive_user"
     );
 
     // The stored address must match.
     assert_eq!(
-        sim_handle.user_address(&user_key),
+        sim_handle.user_address(user_key),
         Some(user_addr),
         "user_address should match the addr passed to receive_user"
     );
@@ -1283,7 +1283,7 @@ fn sim_handle_disconnect_user_nonexistent_is_noop() {
     let unknown_key = UserKey::from_u64(999);
 
     // Must not panic.
-    sim_handle.disconnect_user(&unknown_key);
+    sim_handle.disconnect_user(unknown_key);
 
     // Queue must remain empty.
     let q = sim_handle.shared.pending_disconnect_requests.lock();
@@ -1311,7 +1311,7 @@ fn sim_handle_disconnect_user_queues_request() {
     let user_addr: SocketAddr = "127.0.0.1:12000".parse().unwrap();
 
     sim_handle.receive_user(user_key, user_addr);
-    sim_handle.disconnect_user(&user_key);
+    sim_handle.disconnect_user(user_key);
 
     let q = sim_handle.shared.pending_disconnect_requests.lock();
     assert_eq!(
@@ -1367,8 +1367,8 @@ fn send_handle_scope_checks_pending_and_mark_handled() {
 
     // Coord room ops — push-only.
     let rk = sim_handle.create_room();
-    sim_handle.room_add_user(&rk, &user_key);
-    sim_handle.room_add_entity(&rk, &10u64);
+    sim_handle.room_add_user(rk, &user_key);
+    sim_handle.room_add_entity(rk, &10u64);
 
     // Before drain, pending should be empty (scope cache not yet updated).
     let pending_before = send.scope_checks_pending();
@@ -1425,7 +1425,7 @@ fn send_handle_user_scope_has_entity_explicit_include_exclude() {
         .global_world_manager
         .write()
         .insert_entity_record(
-            &global_entity,
+            global_entity,
             crate::world::entity_owner::EntityOwner::Server,
         );
     if idx.is_valid() {
@@ -1443,15 +1443,15 @@ fn send_handle_user_scope_has_entity_explicit_include_exclude() {
     // Put the entity in a room so it is not roomless (avoids the roomless
     // server-owned gate that would veto explicit include on non-resources).
     let rk = sim_handle.create_room();
-    sim_handle.room_add_user(&rk, &user_key);
-    sim_handle.room_add_entity(&rk, &world_entity);
+    sim_handle.room_add_user(rk, &user_key);
+    sim_handle.room_add_entity(rk, &world_entity);
 
     // Drain pending room changes so entity_room_map + user_room_map are current.
     send.state
         .apply_pending_room_changes(&sim_handle.shared.scope_change_queue);
 
     // Set explicit include.
-    let set_ok = send.user_scope_set_entity(&user_key, &world_entity, true);
+    let set_ok = send.user_scope_set_entity(user_key, &world_entity, true);
     assert!(
         set_ok,
         "user_scope_set_entity should return true for a registered entity"
@@ -1459,14 +1459,14 @@ fn send_handle_user_scope_has_entity_explicit_include_exclude() {
 
     // user_scope_has_entity must return true (is_resource=false, entity is in a room).
     assert!(
-        send.user_scope_has_entity(&user_key, &world_entity, false),
+        send.user_scope_has_entity(user_key, &world_entity, false),
         "user_scope_has_entity should return true after explicit include"
     );
 
     // Set explicit exclude.
-    send.user_scope_set_entity(&user_key, &world_entity, false);
+    send.user_scope_set_entity(user_key, &world_entity, false);
     assert!(
-        !send.user_scope_has_entity(&user_key, &world_entity, false),
+        !send.user_scope_has_entity(user_key, &world_entity, false),
         "user_scope_has_entity should return false after explicit exclude"
     );
 }
@@ -1503,7 +1503,7 @@ fn send_handle_user_scope_has_entity_room_default() {
             .shared
             .global_world_manager
             .write()
-            .insert_entity_record(&ge, crate::world::entity_owner::EntityOwner::Server);
+            .insert_entity_record(ge, crate::world::entity_owner::EntityOwner::Server);
         if idx.is_valid() {
             sim_handle.shared.idx_to_world.write()[idx.as_usize()] = Some(entity_in_room);
         }
@@ -1519,12 +1519,12 @@ fn send_handle_user_scope_has_entity_room_default() {
 
     // Only entity_in_room goes into the room with the user.
     let rk = sim_handle.create_room();
-    sim_handle.room_add_user(&rk, &user_key);
-    sim_handle.room_add_entity(&rk, &entity_in_room);
+    sim_handle.room_add_user(rk, &user_key);
+    sim_handle.room_add_entity(rk, &entity_in_room);
 
     // entity_not_in_room goes into a different room the user is NOT in.
     let rk2 = sim_handle.create_room();
-    sim_handle.room_add_entity(&rk2, &entity_not_in_room);
+    sim_handle.room_add_entity(rk2, &entity_not_in_room);
 
     // Drain pending room changes.
     send.state
@@ -1532,13 +1532,13 @@ fn send_handle_user_scope_has_entity_room_default() {
 
     // entity_in_room: in same room as user → in-scope by default.
     assert!(
-        send.user_scope_has_entity(&user_key, &entity_in_room, false),
+        send.user_scope_has_entity(user_key, &entity_in_room, false),
         "entity sharing a room with the user should be in-scope by default"
     );
 
     // entity_not_in_room: in a different room → not in-scope by default.
     assert!(
-        !send.user_scope_has_entity(&user_key, &entity_not_in_room, false),
+        !send.user_scope_has_entity(user_key, &entity_not_in_room, false),
         "entity in a different room should NOT be in-scope by default"
     );
 }
@@ -1564,7 +1564,7 @@ fn pipelined_priority_publish_global_and_per_user() {
     // Coord-side writes (global mirror + per-user staging) — not yet in `send`.
     server.global_entity_priority_mut(e).set_gain(3.0);
     server
-        .user_entity_priority_mut(&uk, e)
+        .user_entity_priority_mut(uk, e)
         .set_gain(5.0)
         .boost_once(10.0);
 
@@ -1619,7 +1619,7 @@ fn pipelined_priority_publish_global_and_per_user() {
     // `reset()` in a LATER tick (staging already cleared) must still reach the
     // persisted send gain — the case a state-based mirror cannot express and the
     // `gain_dirty` flag exists for.
-    server.user_entity_priority_mut(&uk, e).reset();
+    server.user_entity_priority_mut(uk, e).reset();
     server.publish_priority_for_test();
     {
         let slot = server.send_slot();
@@ -1667,47 +1667,47 @@ fn pipelined_arming_reaches_the_send_side_scope_ledger() {
     let other_user = UserKey::from_u64(3);
 
     // Send-side writer: arms exactly the pair it names.
-    send.user_scope_despawn_on_next_exit_global(&user_key, global_entity);
+    send.user_scope_despawn_on_next_exit_global(user_key, global_entity);
     assert!(
         send.state
             .entity_scope_map
-            .has_despawn_on_next_exit(&user_key, &global_entity),
+            .has_despawn_on_next_exit(user_key, global_entity),
         "the send-side writer should arm the named pair"
     );
     assert!(
         !send
             .state
             .entity_scope_map
-            .has_despawn_on_next_exit(&other_user, &global_entity),
+            .has_despawn_on_next_exit(other_user, global_entity),
         "arming one user must not arm another"
     );
 
     // Arming is idempotent, and firing consumes it exactly once.
-    send.user_scope_despawn_on_next_exit_global(&user_key, global_entity);
+    send.user_scope_despawn_on_next_exit_global(user_key, global_entity);
     assert!(
         send.state
             .entity_scope_map
-            .take_despawn_on_next_exit(&user_key, &global_entity),
+            .take_despawn_on_next_exit(user_key, global_entity),
         "the first exit after arming should fire"
     );
     assert!(
         !send
             .state
             .entity_scope_map
-            .take_despawn_on_next_exit(&user_key, &global_entity),
+            .take_despawn_on_next_exit(user_key, global_entity),
         "a second exit must not fire again"
     );
 
     // Re-entry disarms without firing.
-    send.user_scope_despawn_on_next_exit_global(&user_key, global_entity);
+    send.user_scope_despawn_on_next_exit_global(user_key, global_entity);
     send.state
         .entity_scope_map
-        .clear_despawn_on_next_exit(&user_key, &global_entity);
+        .clear_despawn_on_next_exit(user_key, global_entity);
     assert!(
         !send
             .state
             .entity_scope_map
-            .take_despawn_on_next_exit(&user_key, &global_entity),
+            .take_despawn_on_next_exit(user_key, global_entity),
         "re-entry should have disarmed the override"
     );
 }
@@ -1725,7 +1725,7 @@ fn pipelined_despawn_on_next_exit_stages_a_scope_ledger_op() {
     let user_key = UserKey::from_u64(2);
 
     assert!(server.coord().state.pending_scope_ledger_ops.is_empty());
-    server.user_scope_despawn_on_next_exit(&user_key, &world_entity);
+    server.user_scope_despawn_on_next_exit(user_key, &world_entity);
 
     let staged = &server.coord().state.pending_scope_ledger_ops;
     assert_eq!(staged.len(), 1, "arming should stage exactly one ledger op");
@@ -1755,7 +1755,7 @@ fn scope_ledger_snapshot(
         .map(|(user_key, global_entity)| {
             send.state
                 .entity_scope_map
-                .get(user_key, global_entity)
+                .get(*user_key, *global_entity)
                 .copied()
         })
         .collect()
@@ -2019,25 +2019,25 @@ fn pipelined_room_churn_cannot_grow_the_removal_queue() {
         .insert(user_key, WorldUser::new(user_addr));
 
     let rk = server.coord_mut().create_room();
-    server.coord_mut().room_add_user(&rk, &user_key);
+    server.coord_mut().room_add_user(rk, &user_key);
 
     // Control: entity churn queues one entry per removal ...
     for _ in 0..50 {
-        server.coord_mut().room_add_entity(&rk, &entity);
-        server.coord_mut().room_remove_entity(&rk, &entity);
+        server.coord_mut().room_add_entity(rk, &entity);
+        server.coord_mut().room_remove_entity(rk, &entity);
     }
     // ... and user churn queues one entry per entity in the room per leave.
-    server.coord_mut().room_add_entity(&rk, &entity);
+    server.coord_mut().room_add_entity(rk, &entity);
     for _ in 0..50 {
-        server.coord_mut().room_remove_user(&rk, &user_key);
-        server.coord_mut().room_add_user(&rk, &user_key);
+        server.coord_mut().room_remove_user(rk, &user_key);
+        server.coord_mut().room_add_user(rk, &user_key);
     }
     assert_eq!(
         server
             .coord()
             .state
             .room_store
-            .entity_removal_queue_len(&rk),
+            .entity_removal_queue_len(rk),
         100,
         "control: coord-side room churn must queue Loop 1 removals"
     );
@@ -2050,22 +2050,22 @@ fn pipelined_room_churn_cannot_grow_the_removal_queue() {
             .coord()
             .state
             .room_store
-            .entity_removal_queue_len(&rk),
+            .entity_removal_queue_len(rk),
         0,
         "drain_and_send must discard the removal queue"
     );
 
     // Steady state: churn between ticks never accumulates across ticks.
     for _ in 0..3 {
-        server.coord_mut().room_remove_entity(&rk, &entity);
-        server.coord_mut().room_add_entity(&rk, &entity);
+        server.coord_mut().room_remove_entity(rk, &entity);
+        server.coord_mut().room_add_entity(rk, &entity);
         server.send(&world);
         assert_eq!(
             server
                 .coord()
                 .state
                 .room_store
-                .entity_removal_queue_len(&rk),
+                .entity_removal_queue_len(rk),
             0
         );
     }
@@ -2160,13 +2160,13 @@ fn split_room_join_spawn_order() -> Vec<u64> {
     let mut world = naia_shared::SnapshotWorld::<u64>::new();
     for entity in &entities {
         server.enable_entity_replication(entity);
-        server.room_add_entity(&room, entity);
+        server.room_add_entity(room, entity);
         world.mark_live(*entity);
     }
     // Settle the entity entries on their own tick so the join below is the
     // only thing that puts them in the user's scope.
     server.send(&world);
-    server.room_add_user(&room, &user_key);
+    server.room_add_user(room, &user_key);
     server.send(&world);
 
     let global_entities: Vec<_> = {

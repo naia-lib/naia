@@ -22,7 +22,7 @@ pub struct ConditionedPacketReceiver {
 }
 
 impl ConditionedPacketReceiver {
-    /// Creates a new ConditionedPacketReceiver
+    /// Creates a new `ConditionedPacketReceiver`
     #[allow(clippy::type_complexity)]
     pub fn new(
         channel_receiver: Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,

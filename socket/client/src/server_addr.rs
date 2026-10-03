@@ -10,6 +10,7 @@ pub enum ServerAddr {
 }
 
 impl ServerAddr {
+    #[must_use]
     pub fn is_found(&self) -> bool {
         match self {
             ServerAddr::Found(_) => true,

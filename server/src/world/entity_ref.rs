@@ -99,11 +99,11 @@ cfg_if! {
             /// Only available with the `interior_visibility` feature.
             pub fn local_entity(&self, user_key: &UserKey) -> Option<LocalEntity> {
                 match &self.server {
-                    EntityRefTarget::Resident(ws) => ws.world_to_local_entity(user_key, &self.entity),
+                    EntityRefTarget::Resident(ws) => ws.world_to_local_entity(**user_key, &self.entity),
                     // The user→local-entity scope map is send-resident; the
                     // pipelined arm reads it via a `&self` slot-lock read that
                     // shares the resident body (`world_to_local_entity_impl`).
-                    EntityRefTarget::Pipelined(ps) => ps.world_to_local_entity(user_key, &self.entity),
+                    EntityRefTarget::Pipelined(ps) => ps.world_to_local_entity(**user_key, &self.entity),
                 }
             }
         }

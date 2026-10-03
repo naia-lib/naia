@@ -91,19 +91,18 @@ impl GlobalRequestManager {
     }
 
     /// Check if a response is available for the given request ID (non-destructive)
-    pub(crate) fn has_response(&self, request_id: &GlobalRequestId) -> bool {
+    pub(crate) fn has_response(&self, request_id: GlobalRequestId) -> bool {
         self.slots
-            .get(request_id)
-            .map(|slot| slot.response.is_some())
-            .unwrap_or(false)
+            .get(&&request_id)
+            .is_some_and(|slot| slot.response.is_some())
     }
 
     /// Non-destructive read of a slot: live without a response is Pending,
     /// live with one is Ready, anything else is Abandoned — a cancelled,
     /// completed-and-taken, or never-allocated key will never yield a
     /// response again.
-    pub(crate) fn poll_slot(&self, request_id: &GlobalRequestId) -> SlotPoll {
-        match self.slots.get(request_id) {
+    pub(crate) fn poll_slot(&self, request_id: GlobalRequestId) -> SlotPoll {
+        match self.slots.get(&&request_id) {
             Some(slot) if slot.response.is_some() => SlotPoll::Ready,
             Some(_) => SlotPoll::Pending,
             None => SlotPoll::Abandoned,
@@ -113,8 +112,8 @@ impl GlobalRequestManager {
     /// Cancels a live request: removes its routing entry and marks its
     /// transport nonce abandoned, so a late response for it drops on the
     /// unknown-id path instead of resurrecting the slot.
-    pub(crate) fn cancel_request(&mut self, request_id: &GlobalRequestId) -> CancelDisposition {
-        match self.slots.remove(request_id) {
+    pub(crate) fn cancel_request(&mut self, request_id: GlobalRequestId) -> CancelDisposition {
+        match self.slots.remove(&&request_id) {
             Some(slot) => {
                 self.abandoned.insert(slot.nonce);
                 CancelDisposition::Cancelled { nonce: slot.nonce }
@@ -125,17 +124,17 @@ impl GlobalRequestManager {
 
     /// Non-destructive read of an arrived response. The slot keeps its
     /// copy; take it with [`destroy_request_id`](Self::destroy_request_id).
-    pub(crate) fn peek_request(&self, request_id: &GlobalRequestId) -> Option<MessageContainer> {
-        self.slots.get(request_id)?.response.clone()
+    pub(crate) fn peek_request(&self, request_id: GlobalRequestId) -> Option<MessageContainer> {
+        self.slots.get(&&request_id)?.response.clone()
     }
 
     pub(crate) fn destroy_request_id(
         &mut self,
-        request_id: &GlobalRequestId,
+        request_id: GlobalRequestId,
     ) -> Option<MessageContainer> {
-        let slot = self.slots.get(request_id)?;
+        let slot = self.slots.get(&&request_id)?;
         if slot.response.is_some() {
-            let slot = self.slots.remove(request_id).unwrap();
+            let slot = self.slots.remove(&&request_id).unwrap();
             return Some(slot.response.unwrap());
         }
         None
@@ -143,13 +142,13 @@ impl GlobalRequestManager {
 
     pub(crate) fn receive_response(
         &mut self,
-        request_id: &GlobalRequestId,
+        request_id: GlobalRequestId,
         response: MessageContainer,
     ) {
-        if let Some(slot) = self.slots.get_mut(request_id) {
+        if let Some(slot) = self.slots.get_mut(&&request_id) {
             slot.response = Some(response);
         } else {
-            warn!("receive_response: dropping response for unknown request_id {:?}; request was likely cancelled or the connection was reset", request_id);
+            warn!("receive_response: dropping response for unknown request_id {request_id:?}; request was likely cancelled or the connection was reset");
         }
     }
 }
@@ -193,7 +192,7 @@ impl GlobalResponseManager {
     pub(crate) fn create_response_id(
         &mut self,
         channel_kind: &ChannelKind,
-        local_response_id: &LocalResponseId,
+        local_response_id: LocalResponseId,
         nonce: ConnectionRequestNonce,
     ) -> GlobalResponseId {
         let id = GlobalResponseId::new(self.next_id);
@@ -220,9 +219,8 @@ impl GlobalResponseManager {
             let oldest = self.order.pop_front().unwrap();
             self.map.remove(&oldest);
             warn!(
-                "server has more than {} unanswered requests outstanding; dropping the oldest. \
-                 Responding to it will now report Undeliverable.",
-                MAX_OUTSTANDING_RESPONSES
+                "server has more than {MAX_OUTSTANDING_RESPONSES} unanswered requests outstanding; dropping the oldest. \
+                 Responding to it will now report Undeliverable."
             );
         }
 
@@ -236,16 +234,16 @@ impl GlobalResponseManager {
     /// once the enqueue actually succeeds.
     pub(crate) fn peek_response_id(
         &self,
-        global_response_id: &GlobalResponseId,
+        global_response_id: GlobalResponseId,
     ) -> Option<(ChannelKind, LocalResponseId, ConnectionRequestNonce)> {
-        self.map.get(global_response_id).cloned()
+        self.map.get(&&global_response_id).copied()
     }
 
     pub(crate) fn destroy_response_id(
         &mut self,
-        global_response_id: &GlobalResponseId,
+        global_response_id: GlobalResponseId,
     ) -> Option<(ChannelKind, LocalResponseId, ConnectionRequestNonce)> {
-        self.map.remove(global_response_id)
+        self.map.remove(&&global_response_id)
     }
 }
 
@@ -272,7 +270,7 @@ mod tests {
         for i in 0..(MAX_OUTSTANDING_RESPONSES as u16 * 8) {
             manager.create_response_id(
                 &channel(),
-                &response_id(i),
+                response_id(i),
                 ConnectionRequestNonce::from_wire(i as u64),
             );
         }
@@ -289,18 +287,18 @@ mod tests {
 
         let oldest = manager.create_response_id(
             &channel(),
-            &response_id(0),
+            response_id(0),
             ConnectionRequestNonce::from_wire(0),
         );
         for i in 1..=(MAX_OUTSTANDING_RESPONSES as u16) {
             manager.create_response_id(
                 &channel(),
-                &response_id(i),
+                response_id(i),
                 ConnectionRequestNonce::from_wire(i as u64),
             );
         }
 
-        assert!(manager.peek_response_id(&oldest).is_none());
+        assert!(manager.peek_response_id(oldest).is_none());
     }
 
     /// Answered requests must not consume the cap, and the lazily-cleaned
@@ -312,10 +310,10 @@ mod tests {
         for i in 0..(MAX_OUTSTANDING_RESPONSES as u16 * 8) {
             let id = manager.create_response_id(
                 &channel(),
-                &response_id(i),
+                response_id(i),
                 ConnectionRequestNonce::from_wire(i as u64),
             );
-            manager.destroy_response_id(&id);
+            manager.destroy_response_id(id);
         }
 
         assert_eq!(manager.outstanding(), 0);
@@ -344,15 +342,15 @@ mod tests {
     fn local_guest_abandonment_cancel_removes_slot_and_names_nonce() {
         let mut manager = request_manager();
         let (id, _) = manager.create_request_id().expect("capacity remains");
-        assert_eq!(manager.poll_slot(&id), SlotPoll::Pending);
+        assert_eq!(manager.poll_slot(id), SlotPoll::Pending);
 
-        let disposition = manager.cancel_request(&id);
+        let disposition = manager.cancel_request(id);
         let CancelDisposition::Cancelled { nonce } = disposition else {
             panic!("first cancel must succeed, got {:?}", disposition);
         };
         assert_eq!(nonce.value(), 0);
-        assert!(!manager.has_response(&id));
-        assert_eq!(manager.poll_slot(&id), SlotPoll::Abandoned);
+        assert!(!manager.has_response(id));
+        assert_eq!(manager.poll_slot(id), SlotPoll::Abandoned);
     }
 
     #[test]
@@ -360,31 +358,31 @@ mod tests {
         let mut manager = request_manager();
         let (id, _) = manager.create_request_id().expect("capacity remains");
         assert!(matches!(
-            manager.cancel_request(&id),
+            manager.cancel_request(id),
             CancelDisposition::Cancelled { .. }
         ));
-        assert_eq!(manager.cancel_request(&id), CancelDisposition::UnknownKey);
+        assert_eq!(manager.cancel_request(id), CancelDisposition::UnknownKey);
     }
 
     #[test]
     fn local_guest_abandonment_poll_pending_then_ready() {
         let mut manager = request_manager();
         let (id, _) = manager.create_request_id().expect("capacity remains");
-        assert_eq!(manager.poll_slot(&id), SlotPoll::Pending);
+        assert_eq!(manager.poll_slot(id), SlotPoll::Pending);
 
-        manager.receive_response(&id, probe_container());
-        assert_eq!(manager.poll_slot(&id), SlotPoll::Ready);
+        manager.receive_response(id, probe_container());
+        assert_eq!(manager.poll_slot(id), SlotPoll::Ready);
     }
 
     #[test]
     fn local_guest_abandonment_late_response_after_cancel_drops() {
         let mut manager = request_manager();
         let (id, _) = manager.create_request_id().expect("capacity remains");
-        manager.cancel_request(&id);
+        manager.cancel_request(id);
 
-        manager.receive_response(&id, probe_container());
-        assert!(!manager.has_response(&id));
-        assert_eq!(manager.poll_slot(&id), SlotPoll::Abandoned);
+        manager.receive_response(id, probe_container());
+        assert!(!manager.has_response(id));
+        assert_eq!(manager.poll_slot(id), SlotPoll::Abandoned);
     }
 
     #[test]
@@ -394,7 +392,7 @@ mod tests {
         assert!(manager.create_request_id().is_err());
         // No wrap: the failed create allocated nothing.
         assert_eq!(manager.outstanding(), 1);
-        assert_eq!(manager.poll_slot(&last), SlotPoll::Pending);
+        assert_eq!(manager.poll_slot(last), SlotPoll::Pending);
     }
 
     /// H3 envelope cutover: the response routing keeps the incoming
@@ -405,9 +403,9 @@ mod tests {
     fn response_routing_keeps_the_wire_nonce() {
         let mut manager = GlobalResponseManager::new();
         let nonce = ConnectionRequestNonce::from_wire(41);
-        let id = manager.create_response_id(&channel(), &response_id(3), nonce);
+        let id = manager.create_response_id(&channel(), response_id(3), nonce);
 
-        let (_, _, kept) = manager.peek_response_id(&id).expect("a live routing peeks");
+        let (_, _, kept) = manager.peek_response_id(id).expect("a live routing peeks");
         assert_eq!(kept, nonce);
     }
 
@@ -421,10 +419,10 @@ mod tests {
         }
         for (i, id) in ids.iter().enumerate() {
             if i % 2 == 0 {
-                manager.cancel_request(id);
+                manager.cancel_request(*id);
             } else {
-                manager.receive_response(id, probe_container());
-                manager.destroy_request_id(id);
+                manager.receive_response(*id, probe_container());
+                manager.destroy_request_id(*id);
             }
         }
         assert_eq!(manager.outstanding(), 0);

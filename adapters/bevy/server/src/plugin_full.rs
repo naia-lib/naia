@@ -1,7 +1,7 @@
 //! `Topology::WorldProxied(DriveShape::Pipelined(_))` — plugin variant that
 //! internally owns the Recv + Send worker threads and the pipeline runtime.
 //!
-//! # MISSION_PIPELINE_API_BOUNDARY §2f — PipelinedServer resource removal
+//! # `MISSION_PIPELINE_API_BOUNDARY` §2f — `PipelinedServer` resource removal
 //!
 //! The pipeline is now stored in the unified `ServerImpl::WorldOnly(WorldServer)`
 //! resource (via [`naia_server::WorldServer::from_pipelined`]) so the standard
@@ -71,9 +71,9 @@ pub struct PipelineConfig {
     /// per component type are pure no-op dispatch. cyberlith's base game cell
     /// sets this (Sim owns all gameplay; the main world replicates nothing);
     /// the level-editor cell leaves it `false` (its main world DOES host
-    /// delegated tile/spawn-point entities). MISSION_OVERLAP_FRONTIER T2.
+    /// delegated tile/spawn-point entities). `MISSION_OVERLAP_FRONTIER` T2.
     pub skip_main_world_host_sync: bool,
-    /// MISSION_PIPELINE_API_BOUNDARY G8 (§2l) — when `true`, the adapter itself
+    /// `MISSION_PIPELINE_API_BOUNDARY` G8 (§2l) — when `true`, the adapter itself
     /// drives the per-tick park-window bracket from the existing
     /// `ReceivePackets` / `SendPackets` system sets:
     /// - `ReceivePackets` ⇒ [`PipelinedWorldServer::receive`] (parks internally).
@@ -99,6 +99,7 @@ impl PipelineConfig {
     }
 
     /// Skip registering host-sync change-tracking (see field docs).
+    #[must_use]
     pub fn skip_host_sync(mut self, skip: bool) -> Self {
         self.skip_main_world_host_sync = skip;
         self
@@ -106,6 +107,7 @@ impl PipelineConfig {
 
     /// Have the adapter drive the park-window bracket from the `ReceivePackets`
     /// / `SendPackets` system sets (see [`Self::drive_bracket_in_update`]).
+    #[must_use]
     pub fn drive_in_update(mut self, drive: bool) -> Self {
         self.drive_bracket_in_update = drive;
         self

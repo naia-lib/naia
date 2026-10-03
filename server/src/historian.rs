@@ -67,6 +67,7 @@ pub struct Historian {
 
 impl Historian {
     /// Creates a historian that retains at most `max_ticks` snapshots before evicting the oldest.
+    #[must_use]
     pub fn new(max_ticks: u16) -> Self {
         Self {
             max_ticks,
@@ -117,7 +118,7 @@ impl Historian {
             let Ok(world_entity) = global_entity_map.global_entity_to_entity(&global_entity) else {
                 continue;
             };
-            let Some(kinds) = global_world_manager.component_kinds(&global_entity) else {
+            let Some(kinds) = global_world_manager.component_kinds(lobal_entity) else {
                 continue;
             };
             let mut entity_snapshot = EntitySnapshot::new();
@@ -139,9 +140,9 @@ impl Historian {
         self.snapshots.push_back((tick, tick_snapshot));
 
         // Evict snapshots older than max_ticks relative to the current tick.
-        let max_ticks = self.max_ticks as u32;
+        let max_ticks = u32::from(self.max_ticks);
         while let Some(&(oldest_tick, _)) = self.snapshots.front() {
-            let age = (tick as u32).wrapping_sub(oldest_tick as u32);
+            let age = u32::from(tick).wrapping_sub(u32::from(oldest_tick));
             if age > max_ticks {
                 self.snapshots.pop_front();
             } else {
@@ -152,6 +153,7 @@ impl Historian {
 
     /// Returns the snapshot for the exact given tick, or `None` if it has
     /// been evicted or never recorded.
+    #[must_use]
     pub fn snapshot_at_tick(&self, tick: Tick) -> Option<&HashMap<GlobalEntity, EntitySnapshot>> {
         for (t, snapshot) in &self.snapshots {
             if *t == tick {
@@ -167,6 +169,7 @@ impl Historian {
     /// Converts the time offset to ticks and delegates to `snapshot_at_tick`.
     /// Clamps to the oldest available tick rather than returning `None` when
     /// `time_ago_ms` is large.
+    #[must_use]
     pub fn snapshot_at_time_ago_ms(
         &self,
         time_ago_ms: u32,
@@ -177,7 +180,7 @@ impl Historian {
             return None;
         }
         let ticks_ago = (time_ago_ms as f32 / tick_duration_ms).round() as u32;
-        let target_tick = (current_tick as u32).wrapping_sub(ticks_ago) as u16;
+        let target_tick = u32::from(current_tick).wrapping_sub(ticks_ago) as u16;
         // Try exact match first, then fall back to nearest available.
         if let Some(snap) = self.snapshot_at_tick(target_tick) {
             return Some(snap);
@@ -187,11 +190,13 @@ impl Historian {
     }
 
     /// Number of snapshots currently retained.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.snapshots.len()
     }
 
     /// Returns `true` if no snapshots are currently stored.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.snapshots.is_empty()
     }

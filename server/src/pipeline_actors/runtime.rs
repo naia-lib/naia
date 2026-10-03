@@ -1,4 +1,4 @@
-//! MISSION_PIPELINE_API_BOUNDARY G7-3 — the framework-agnostic pipeline worker
+//! `MISSION_PIPELINE_API_BOUNDARY` G7-3 — the framework-agnostic pipeline worker
 //! runtime, moved out of the bevy adapter's `plugin_full.rs` into naia-server
 //! core so ANY consumer (bevy or non-bevy) gets turnkey pipelining.
 //!
@@ -15,12 +15,12 @@
 //! ## Parked vs active (the `workers_active` cfg)
 //!
 //! `workers_active = not(deterministic)` (emitted by `build.rs`). The two modes:
-//!   - **not(workers_active)** (deterministic test/determinism harness): the
+//!   - **`not(workers_active)`** (deterministic test/determinism harness): the
 //!     workers are PURE PARKING SERVICES — the consumer drives recv/send
 //!     synchronously inside its park window, so handshake responses + snapshot
 //!     delivery land at a deterministic point each tick. The workers only
 //!     body-sleep until parked. This is the byte-exact determinism path.
-//!   - **workers_active** (production / bench): the workers actively drain the
+//!   - **`workers_active`** (production / bench): the workers actively drain the
 //!     socket (recv) and transmit the lagged frozen send job (send) between park
 //!     windows, overlapping the consumer's gameplay tick.
 
@@ -78,7 +78,7 @@ pub enum RuntimeState {
 
 // ─── ParkControl ─────────────────────────────────────────────────────────────
 
-/// Park-control flags + condvar pair (parking_lot Mutex + Condvar) used to
+/// Park-control flags + condvar pair (`parking_lot` Mutex + Condvar) used to
 /// coordinate the main thread parking the worker threads at their checkpoints.
 pub(crate) struct ParkControl {
     /// `true` ⇒ workers should park at the top of their loop iteration.
@@ -116,10 +116,10 @@ pub(crate) struct ParkControl {
     /// worker is still mid-resume.
     resumed_cv: parking_lot::Condvar,
     /// Mutex + condvar for workers to sleep between park windows. Used by BOTH
-    /// paths (MISSION_OVERLAP_FRONTIER T1):
-    ///   - not(workers_active): the worker body-sleeps on an UNBOUNDED `wait()`
+    /// paths (`MISSION_OVERLAP_FRONTIER` T1):
+    ///   - `not(workers_active)`: the worker body-sleeps on an UNBOUNDED `wait()`
     ///     until woken (it has no other work).
-    ///   - workers_active: the worker idle-waits on a BOUNDED `wait_for(100µs)`
+    ///   - `workers_active`: the worker idle-waits on a BOUNDED `wait_for(100µs)`
     ///     between iterations; signalling here wakes it instantly instead of
     ///     after up to one ~100µs poll (the park-barrier win).
     ///
@@ -128,7 +128,7 @@ pub(crate) struct ParkControl {
     /// is.
     body_sleep_mu: Mutex<()>,
     body_sleep_cv: parking_lot::Condvar,
-    /// Event-driven control wake (workers_active): an awaitable, coalescing
+    /// Event-driven control wake (`workers_active)`: an awaitable, coalescing
     /// `bounded(1)` signal the recv worker selects on alongside the transport's
     /// packet-readiness. Every site that must wake an idle worker —
     /// `park_workers`, `Drop` (shutdown), test-panic — pings it via
@@ -202,7 +202,7 @@ pub struct PipelineRuntime<E: Copy + Eq + Hash + Send + Sync + 'static> {
     /// Sender half retained so it can be dropped on shutdown (signals the
     /// consumer-side drain that the worker is gone).
     recv_out_chan_tx: Mutex<Option<Sender<ReceiveOutput<E>>>>,
-    /// SnapshotReceiver held until the Send worker is spawned.
+    /// `SnapshotReceiver` held until the Send worker is spawned.
     snapshot_receiver: Mutex<Option<SnapshotReceiver<E>>>,
     /// Shutdown signaller: dropping flips `true`, observed by workers at the top
     /// of each loop iteration.
@@ -475,7 +475,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
                 .workers
                 .lock()
                 .iter()
-                .filter(|w| w.join.as_ref().map(|j| j.is_finished()).unwrap_or(true))
+                .filter(|w| w.join.as_ref().is_none_or(std::thread::JoinHandle::is_finished))
                 .count() as u32;
             if *g + finished >= expected {
                 break;
@@ -548,7 +548,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
                 .workers
                 .lock()
                 .iter()
-                .filter(|w| w.join.as_ref().map(|j| j.is_finished()).unwrap_or(true))
+                .filter(|w| w.join.as_ref().is_none_or(std::thread::JoinHandle::is_finished))
                 .count() as u32;
             // If the only thing keeping the count above 0 would be a worker that
             // has since finished, stop waiting.
@@ -599,7 +599,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Drop for PipelineRuntime<E> {
 
         let mut workers = std::mem::take(&mut *self.workers.lock());
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
-        for w in workers.iter_mut() {
+        for w in &mut workers {
             let name = w.name;
             if let Some(join) = w.join.take() {
                 while std::time::Instant::now() < deadline {
@@ -718,12 +718,9 @@ pub(crate) fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
             // the worker stuck while `park_workers()` waits for it to reach its
             // checkpoint — a deadlock. A contended slot just produces a 100µs
             // retry.
-            let mut recv = match recv_slot.try_lock().and_then(|mut g| g.take()) {
-                Some(h) => h,
-                None => {
-                    thread::sleep(Duration::from_micros(100));
-                    continue;
-                }
+            let mut recv = if let Some(h) = recv_slot.try_lock().and_then(|mut g| g.take()) { h } else {
+                thread::sleep(Duration::from_micros(100));
+                continue;
             };
 
             let _t_recv = timing.record_recv.map(|_| std::time::Instant::now());
@@ -806,7 +803,7 @@ pub(crate) fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
 /// Send worker loop. Symmetric to [`recv_worker_loop`]: the `SendHandle` lives
 /// in the shared `send_slot` so a parked-window consumer system can borrow it.
 ///
-/// In not(workers_active) (deterministic) mode this worker is a **pure parking
+/// In `not(workers_active)` (deterministic) mode this worker is a **pure parking
 /// service**: the consumer drives the send synchronously inside its park window,
 /// so `snap_rx` / `send_slot` are unused here.
 #[cfg_attr(not(workers_active), allow(unused_variables))]
@@ -913,12 +910,9 @@ fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
             // Claim the handle FIRST — before touching the lag buffer — so a
             // failed claim cannot drop a buffered job. try_lock never blocks the
             // park checkpoint.
-            let mut send = match send_slot.try_lock().and_then(|mut g| g.take()) {
-                Some(h) => h,
-                None => {
-                    thread::sleep(Duration::from_micros(100));
-                    continue;
-                }
+            let mut send = if let Some(h) = send_slot.try_lock().and_then(|mut g| g.take()) { h } else {
+                thread::sleep(Duration::from_micros(100));
+                continue;
             };
 
             // One-tick lag: buffer this cycle's freshly-published job; transmit

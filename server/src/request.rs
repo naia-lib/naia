@@ -33,7 +33,7 @@ impl GlobalRequestManager {
     /// can name the exchange on the wire (envelope cutover).
     pub(crate) fn create_request_id(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
     ) -> Result<(GlobalRequestId, ConnectionRequestNonce), NonceExhaustion> {
         let allocator = self.nonces.entry(*user_key).or_default();
         let nonce = allocator.next()?;
@@ -56,17 +56,17 @@ impl GlobalRequestManager {
     /// Unlike [`destroy_request_id`](Self::destroy_request_id), which only
     /// releases ANSWERED rows to the caller, this removes whatever is there:
     /// a request that never left must not linger until disconnect.
-    pub(crate) fn cancel_request_id(&mut self, request_id: &GlobalRequestId) -> bool {
-        self.map.remove(request_id).is_some()
+    pub(crate) fn cancel_request_id(&mut self, request_id: GlobalRequestId) -> bool {
+        self.map.remove(&&request_id).is_some()
     }
 
     pub(crate) fn destroy_request_id(
         &mut self,
-        request_id: &GlobalRequestId,
+        request_id: GlobalRequestId,
     ) -> Option<(UserKey, MessageContainer)> {
-        let (_, _, response_opt) = self.map.get(request_id)?;
+        let (_, _, response_opt) = self.map.get(&&request_id)?;
         if response_opt.is_some() {
-            let (user_key, _, response_opt) = self.map.remove(request_id).unwrap();
+            let (user_key, _, response_opt) = self.map.remove(&&request_id).unwrap();
             return Some((user_key, response_opt.unwrap()));
         }
         None
@@ -74,13 +74,13 @@ impl GlobalRequestManager {
 
     pub(crate) fn receive_response(
         &mut self,
-        request_id: &GlobalRequestId,
+        request_id: GlobalRequestId,
         response: MessageContainer,
     ) {
-        if let Some((_, _, response_opt)) = self.map.get_mut(request_id) {
+        if let Some((_, _, response_opt)) = self.map.get_mut(&&request_id) {
             *response_opt = Some(response);
         } else {
-            warn!("receive_response: dropping response for unknown request_id {:?}; request was likely cancelled or the user disconnected", request_id);
+            warn!("receive_response: dropping response for unknown request_id {request_id:?}; request was likely cancelled or the user disconnected");
         }
     }
 
@@ -88,9 +88,9 @@ impl GlobalRequestManager {
     /// Without this, disconnecting mid-request leaks the entry indefinitely.
     /// The user's nonce supply goes with it: a reconnect starts a fresh
     /// supply, so nonces never span connections.
-    pub(crate) fn purge_user(&mut self, user_key: &UserKey) {
-        self.map.retain(|_, (key, _, _)| key != user_key);
-        self.nonces.remove(user_key);
+    pub(crate) fn purge_user(&mut self, user_key: UserKey) {
+        self.map.retain(|_, (key, _, _)| **key != user_key);
+        self.nonces.remove(&&user_key);
     }
 }
 
@@ -143,9 +143,9 @@ impl GlobalResponseManager {
 
     pub(crate) fn create_response_id(
         &mut self,
-        user_key: &UserKey,
+        user_key: UserKey,
         channel_kind: &ChannelKind,
-        local_response_id: &LocalResponseId,
+        local_response_id: LocalResponseId,
         nonce: ConnectionRequestNonce,
     ) -> GlobalResponseId {
         let id = GlobalResponseId::new(self.next_id);
@@ -171,9 +171,8 @@ impl GlobalResponseManager {
             let oldest = queue.pop_front().unwrap();
             self.map.remove(&oldest);
             warn!(
-                "user has more than {} unanswered requests outstanding; dropping the oldest. \
-                 Responding to it will now report Undeliverable.",
-                MAX_OUTSTANDING_RESPONSES_PER_USER
+                "user has more than {MAX_OUTSTANDING_RESPONSES_PER_USER} unanswered requests outstanding; dropping the oldest. \
+                 Responding to it will now report Undeliverable."
             );
         }
 
@@ -187,32 +186,32 @@ impl GlobalResponseManager {
     /// once the enqueue actually succeeds.
     pub(crate) fn peek_response_id(
         &self,
-        global_response_id: &GlobalResponseId,
+        global_response_id: GlobalResponseId,
     ) -> Option<(
         UserKey,
         ChannelKind,
         LocalResponseId,
         ConnectionRequestNonce,
     )> {
-        self.map.get(global_response_id).cloned()
+        self.map.get(&&global_response_id).copied()
     }
 
     pub(crate) fn destroy_response_id(
         &mut self,
-        global_response_id: &GlobalResponseId,
+        global_response_id: GlobalResponseId,
     ) -> Option<(
         UserKey,
         ChannelKind,
         LocalResponseId,
         ConnectionRequestNonce,
     )> {
-        self.map.remove(global_response_id)
+        self.map.remove(&&global_response_id)
     }
 
     /// Remove all outstanding response entries for a user that has disconnected.
-    pub(crate) fn purge_user(&mut self, user_key: &UserKey) {
-        self.map.retain(|_, (key, _, _, _)| key != user_key);
-        self.order.remove(user_key);
+    pub(crate) fn purge_user(&mut self, user_key: UserKey) {
+        self.map.retain(|_, (key, _, _, _)| **key != user_key);
+        self.order.remove(&&user_key);
     }
 }
 
@@ -259,9 +258,9 @@ mod tests {
 
         for i in 0..(MAX_OUTSTANDING_RESPONSES_PER_USER as u16 * 8) {
             manager.create_response_id(
-                &user,
+                user,
                 &channel(),
-                &response_id(i),
+                response_id(i),
                 ConnectionRequestNonce::from_wire(i as u64),
             );
         }
@@ -283,22 +282,22 @@ mod tests {
         let user = UserKey::from_u64(1);
 
         let oldest = manager.create_response_id(
-            &user,
+            user,
             &channel(),
-            &response_id(0),
+            response_id(0),
             ConnectionRequestNonce::from_wire(0),
         );
         for i in 1..=(MAX_OUTSTANDING_RESPONSES_PER_USER as u16) {
             manager.create_response_id(
-                &user,
+                user,
                 &channel(),
-                &response_id(i),
+                response_id(i),
                 ConnectionRequestNonce::from_wire(i as u64),
             );
         }
 
         assert!(
-            manager.peek_response_id(&oldest).is_none(),
+            manager.peek_response_id(oldest).is_none(),
             "the oldest request is no longer routable"
         );
     }
@@ -312,22 +311,22 @@ mod tests {
         let flooder = UserKey::from_u64(2);
 
         let quiet_request = manager.create_response_id(
-            &quiet,
+            quiet,
             &channel(),
-            &response_id(0),
+            response_id(0),
             ConnectionRequestNonce::from_wire(0),
         );
         for i in 0..(MAX_OUTSTANDING_RESPONSES_PER_USER as u16 * 4) {
             manager.create_response_id(
-                &flooder,
+                flooder,
                 &channel(),
-                &response_id(i),
+                response_id(i),
                 ConnectionRequestNonce::from_wire(i as u64),
             );
         }
 
         assert!(
-            manager.peek_response_id(&quiet_request).is_some(),
+            manager.peek_response_id(quiet_request).is_some(),
             "the quiet user's request survives the flood"
         );
     }
@@ -342,12 +341,12 @@ mod tests {
 
         for i in 0..(MAX_OUTSTANDING_RESPONSES_PER_USER as u16 * 8) {
             let id = manager.create_response_id(
-                &user,
+                user,
                 &channel(),
-                &response_id(i),
+                response_id(i),
                 ConnectionRequestNonce::from_wire(i as u64),
             );
-            manager.destroy_response_id(&id);
+            manager.destroy_response_id(id);
         }
 
         assert_eq!(manager.outstanding(), 0);
@@ -366,9 +365,9 @@ mod tests {
         let mut manager = GlobalResponseManager::new();
         let user = UserKey::from_u64(1);
         let nonce = ConnectionRequestNonce::from_wire(41);
-        let id = manager.create_response_id(&user, &channel(), &response_id(3), nonce);
+        let id = manager.create_response_id(user, &channel(), response_id(3), nonce);
 
-        let (_, _, _, kept) = manager.peek_response_id(&id).expect("a live routing peeks");
+        let (_, _, _, kept) = manager.peek_response_id(id).expect("a live routing peeks");
         assert_eq!(kept, nonce);
     }
 
@@ -381,10 +380,10 @@ mod tests {
         let first = UserKey::from_u64(1);
         let second = UserKey::from_u64(2);
 
-        let (_, nonce_a) = manager.create_request_id(&first).expect("capacity remains");
-        let (_, nonce_b) = manager.create_request_id(&first).expect("capacity remains");
+        let (_, nonce_a) = manager.create_request_id(first).expect("capacity remains");
+        let (_, nonce_b) = manager.create_request_id(first).expect("capacity remains");
         let (_, nonce_other) = manager
-            .create_request_id(&second)
+            .create_request_id(second)
             .expect("capacity remains");
 
         assert_eq!(nonce_a.value(), 0);
@@ -400,11 +399,11 @@ mod tests {
         let mut manager = GlobalRequestManager::new();
         let user = UserKey::from_u64(1);
 
-        let (_, first) = manager.create_request_id(&user).expect("capacity remains");
+        let (_, first) = manager.create_request_id(user).expect("capacity remains");
         assert_eq!(first.value(), 0);
-        manager.purge_user(&user);
+        manager.purge_user(user);
 
-        let (_, fresh) = manager.create_request_id(&user).expect("capacity remains");
+        let (_, fresh) = manager.create_request_id(user).expect("capacity remains");
         assert_eq!(fresh.value(), 0);
     }
 
@@ -416,13 +415,13 @@ mod tests {
 
         for i in 0..64u16 {
             manager.create_response_id(
-                &user,
+                user,
                 &channel(),
-                &response_id(i),
+                response_id(i),
                 ConnectionRequestNonce::from_wire(i as u64),
             );
         }
-        manager.purge_user(&user);
+        manager.purge_user(user);
 
         assert_eq!(manager.outstanding(), 0);
         assert!(!manager.order.contains_key(&user));

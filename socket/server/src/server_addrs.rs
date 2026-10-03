@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// List of addresses needed to start listening on a ServerSocket
+/// List of addresses needed to start listening on a `ServerSocket`
 #[derive(Clone)]
 pub struct ServerAddrs {
     /// IP Address to listen on for the signaling portion of WebRTC
@@ -16,8 +16,9 @@ pub struct ServerAddrs {
 }
 
 impl ServerAddrs {
-    /// Create a new ServerSocketAddrs instance which will be used to start
-    /// listening on a ServerSocket
+    /// Create a new `ServerSocketAddrs` instance which will be used to start
+    /// listening on a `ServerSocket`
+    #[must_use]
     pub fn new(
         session_listen_addr: SocketAddr,
         webrtc_listen_addr: SocketAddr,
@@ -40,6 +41,7 @@ impl ServerAddrs {
     /// is asynchronous — a bare drop cannot promise *when* the ports come
     /// back. Poll `wait_until_free` (or use [`Socket::close`](crate::Socket::close),
     /// which drops and waits) and rebind only on true: no guessed sleeps.
+    #[must_use]
     pub fn wait_until_free(&self, timeout: Duration) -> bool {
         let start = Instant::now();
         while start.elapsed() < timeout {

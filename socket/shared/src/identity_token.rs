@@ -22,6 +22,7 @@ pub struct IdentityToken(Box<[u8]>);
 
 impl IdentityToken {
     /// Mints a new random token.
+    #[must_use]
     pub fn generate() -> Self {
         let mut bytes = Vec::with_capacity(TOKEN_LEN);
         for _ in 0..TOKEN_LEN {
@@ -33,31 +34,37 @@ impl IdentityToken {
     /// Wraps raw bytes as a token. No validation is performed: any byte
     /// sequence is a syntactically valid token, and a token is only ever
     /// meaningful by comparison against one the server minted.
+    #[must_use]
     pub fn from_bytes(bytes: Vec<u8>) -> Self {
         Self(bytes.into_boxed_slice())
     }
 
     /// The token's raw bytes.
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
 
     /// Number of bytes in the token.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
     /// Whether the token carries no bytes at all.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
     /// Encodes the token for the text-based signaling hop.
+    #[must_use]
     pub fn to_signaling_string(&self) -> String {
         base64::encode_config(&self.0, base64::URL_SAFE_NO_PAD)
     }
 
     /// Decodes a token received over the text-based signaling hop.
+    #[must_use]
     pub fn from_signaling_string(string: &str) -> Option<Self> {
         base64::decode_config(string, base64::URL_SAFE_NO_PAD)
             .ok()
