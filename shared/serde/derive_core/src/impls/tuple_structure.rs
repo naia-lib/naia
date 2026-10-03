@@ -87,7 +87,7 @@ pub fn derive_serde_tuple_struct(
     let imports = quote! { use #serde_crate_name::{#import_types}; };
 
     let schema_impl =
-        derive_wire_schema_tuple_struct(struct_, struct_name, generics, &serde_crate_name);
+        derive_wire_schema_tuple_struct(struct_, struct_name, generics, serde_crate_name);
 
     quote! {
         mod #module_name {

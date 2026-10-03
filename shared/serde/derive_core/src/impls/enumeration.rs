@@ -146,7 +146,7 @@ pub fn derive_serde_enum(
         quote! { Serde, BitWrite, UnsignedInteger, BitReader, SerdeErr, ConstBitLength, };
     let imports = quote! { use #serde_crate_name::{#import_types}; };
 
-    let schema_impl = derive_wire_schema_enum(enum_, enum_name, generics, &serde_crate_name);
+    let schema_impl = derive_wire_schema_enum(enum_, enum_name, generics, serde_crate_name);
 
     quote! {
         mod #module_name {

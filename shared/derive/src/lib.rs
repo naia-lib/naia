@@ -1,6 +1,6 @@
 //! # Naia Derive
 //! Procedural macros to simplify implementation of Naia types.
-//! This crate contains only the naia_shared / crate-internal flavors.
+//! This crate contains only the `naia_shared` / crate-internal flavors.
 //! Adapter flavors live in their own adapter-owned derive crates.
 
 #![deny(trivial_casts, trivial_numeric_casts, unstable_features)]
@@ -44,23 +44,23 @@ pub fn channel_derive_internal(input: proc_macro::TokenStream) -> proc_macro::To
 pub fn message_derive_internal(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     let shared_crate_name = quote! { crate };
-    message_impl(input, shared_crate_name, false, false).into()
+    message_impl(input, &shared_crate_name, false, false).into()
 }
 
-/// Derives the Message trait for a given struct, for FragmentedMessage
+/// Derives the Message trait for a given struct, for `FragmentedMessage`
 #[proc_macro_derive(MessageFragment)]
 pub fn message_derive_fragment(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     let shared_crate_name = quote! { crate };
-    message_impl(input, shared_crate_name, true, false).into()
+    message_impl(input, &shared_crate_name, true, false).into()
 }
 
-/// Derives the Message trait for a given struct, for RequestMessage
+/// Derives the Message trait for a given struct, for `RequestMessage`
 #[proc_macro_derive(MessageRequest)]
 pub fn message_derive_request(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     let shared_crate_name = quote! { crate };
-    message_impl(input, shared_crate_name, false, true).into()
+    message_impl(input, &shared_crate_name, false, true).into()
 }
 
 /// Derives the Message trait for a given struct
@@ -68,5 +68,5 @@ pub fn message_derive_request(input: proc_macro::TokenStream) -> proc_macro::Tok
 pub fn message_derive_shared(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     let shared_crate_name = quote! { naia_shared };
-    message_impl(input, shared_crate_name, false, false).into()
+    message_impl(input, &shared_crate_name, false, false).into()
 }

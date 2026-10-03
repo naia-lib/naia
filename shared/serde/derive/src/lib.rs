@@ -15,7 +15,7 @@
 //! caught in Phase 8.3. The proptest harness exists to keep that class of
 //! bug from reappearing.
 //!
-//! This crate contains only the naia_shared / crate-internal (naia_serde) flavors.
+//! This crate contains only the `naia_shared` / crate-internal (`naia_serde`) flavors.
 //! Adapter and facade flavors live in their own adapter-owned derive crates.
 
 use naia_serde_derive_core::derive_serde_common;
@@ -26,12 +26,12 @@ use syn::parse_macro_input;
 pub fn derive_serde(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     let serde_crate_name = quote! { naia_shared };
-    derive_serde_common(input, serde_crate_name).into()
+    derive_serde_common(input, &serde_crate_name).into()
 }
 
 #[proc_macro_derive(SerdeInternal)]
 pub fn derive_serde_internal(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     let serde_crate_name = quote! { naia_serde };
-    derive_serde_common(input, serde_crate_name).into()
+    derive_serde_common(input, &serde_crate_name).into()
 }

@@ -65,9 +65,42 @@ pub fn replicate_impl(
     // Helper Properties
     let properties = get_properties(input);
     let struct_type = get_struct_type(input);
-    let (untyped_generics, typed_generics, turbofish) = get_generics(input);
 
     // Names
+    let names = collect_replicate_names(input);
+
+    validate_immutable_properties(is_immutable, &properties);
+
+    // Definitions
+    let definitions = collect_replicate_definitions(&names.enum_name, &properties, is_immutable);
+
+    // Methods
+    let methods = collect_replicate_methods(
+        &names,
+        &properties,
+        &struct_type,
+        &input.generics,
+        is_immutable,
+        definitions.diff_mask_size,
+    );
+
+    assemble_replicate_module(shared_crate_name, &names, &definitions, &methods)
+}
+
+struct ReplicateNames {
+    replica_name: Ident,
+    replica_name_str: LitStr,
+    module_name: Ident,
+    enum_name: Ident,
+    builder_name: Ident,
+    untyped_generics: TokenStream,
+    typed_generics: TokenStream,
+    turbofish: TokenStream,
+    builder_generic_fields: TokenStream,
+}
+
+fn collect_replicate_names(input: &DeriveInput) -> ReplicateNames {
+    let (untyped_generics, typed_generics, turbofish) = get_generics(input);
     let replica_name = input.ident.clone();
     let replica_name_str = LitStr::new(
         format!(
@@ -86,11 +119,34 @@ pub fn replicate_impl(
     let enum_name = format_ident!("{}Property", replica_name);
     let builder_name = format_ident!("{}Builder", replica_name);
     let builder_generic_fields = get_builder_generic_fields(&input.generics);
+    ReplicateNames {
+        replica_name,
+        replica_name_str,
+        module_name,
+        enum_name,
+        builder_name,
+        untyped_generics,
+        typed_generics,
+        turbofish,
+        builder_generic_fields,
+    }
+}
 
-    validate_immutable_properties(is_immutable, &properties);
+struct ReplicateDefinitions {
+    property_enum_definition: TokenStream,
+    diff_mask_size: u8,
+    is_immutable: TokenStream,
+    builder_is_immutable: TokenStream,
+    has_entity_properties: TokenStream,
+    max_bit_length: TokenStream,
+}
 
-    // Definitions
-    let property_enum_definition = get_property_enum_definition(&enum_name, &properties);
+fn collect_replicate_definitions(
+    enum_name: &Ident,
+    properties: &[Property],
+    is_immutable: bool,
+) -> ReplicateDefinitions {
+    let property_enum_definition = get_property_enum_definition(enum_name, properties);
     let diff_mask_size: u8 = {
         let len = properties.len();
         if len == 0 {
@@ -99,59 +155,144 @@ pub fn replicate_impl(
             u8::try_from(((len - 1) / 8) + 1).expect("property count fits in u8")
         }
     };
-
     let is_immutable_method: TokenStream = get_is_immutable_method(is_immutable);
-    let builder_is_immutable_method: TokenStream =
-        get_builder_is_immutable_method(is_immutable);
-    let has_entity_properties_method: TokenStream =
-        get_has_entity_properties_method(&properties);
+    let builder_is_immutable_method: TokenStream = get_builder_is_immutable_method(is_immutable);
+    let has_entity_properties_method: TokenStream = get_has_entity_properties_method(properties);
+    let max_bit_length_method: TokenStream = get_max_bit_length_method(properties);
+    ReplicateDefinitions {
+        property_enum_definition,
+        diff_mask_size,
+        is_immutable: is_immutable_method,
+        builder_is_immutable: builder_is_immutable_method,
+        has_entity_properties: has_entity_properties_method,
+        max_bit_length: max_bit_length_method,
+    }
+}
 
-    let max_bit_length_method: TokenStream = get_max_bit_length_method(&properties);
+struct ReplicateMethods {
+    new_complete: TokenStream,
+    builder_create: TokenStream,
+    builder_new: TokenStream,
+    builder_box_clone: TokenStream,
+    builder_read: TokenStream,
+    read_create_update: TokenStream,
+    dyn_ref: TokenStream,
+    dyn_mut: TokenStream,
+    clone: TokenStream,
+    mirror: TokenStream,
+    mirror_single_field: TokenStream,
+    set_mutator: TokenStream,
+    publish: TokenStream,
+    unpublish: TokenStream,
+    enable_delegation: TokenStream,
+    disable_delegation: TokenStream,
+    localize: TokenStream,
+    read_apply_update: TokenStream,
+    read_apply_field_update: TokenStream,
+    write: TokenStream,
+    write_update: TokenStream,
+    relations_waiting: TokenStream,
+    relations_complete: TokenStream,
+    wire_schema: TokenStream,
+    component_facts: TokenStream,
+    split_update: TokenStream,
+}
 
-    // Methods
-    let new_complete_method =
-        get_new_complete_method(&enum_name, &properties, &struct_type, is_immutable);
-    let builder_create_method = get_builder_create_method(&builder_name, &turbofish);
-    let builder_new_method = get_builder_new_method(
-        &typed_generics,
-        &builder_name,
-        &untyped_generics,
-        &input.generics,
-    );
-    let builder_box_clone_method = get_builder_box_clone_method(&input.generics);
-    let builder_read_method =
-        get_builder_read_method(&replica_name, &properties, &struct_type, &turbofish);
-    let read_create_update_method =
-        get_read_create_update_method(&replica_name, &properties, &untyped_generics);
+fn collect_replicate_methods(
+    names: &ReplicateNames,
+    properties: &[Property],
+    struct_type: &StructType,
+    generics: &Generics,
+    is_immutable: bool,
+    diff_mask_size: u8,
+) -> ReplicateMethods {
+    let ReplicateNames {
+        replica_name,
+        enum_name,
+        builder_name,
+        untyped_generics,
+        typed_generics,
+        turbofish,
+        ..
+    } = names;
+    let new_complete = get_new_complete_method(enum_name, properties, struct_type, is_immutable);
+    let builder_create = get_builder_create_method(builder_name, turbofish);
+    let builder_new =
+        get_builder_new_method(typed_generics, builder_name, untyped_generics, generics);
+    let builder_box_clone = get_builder_box_clone_method(generics);
+    let builder_read = get_builder_read_method(replica_name, properties, struct_type, turbofish);
+    let read_create_update =
+        get_read_create_update_method(replica_name, properties, untyped_generics);
+    let dyn_ref = get_dyn_ref_method();
+    let dyn_mut = get_dyn_mut_method();
+    let clone = get_clone_method(properties, struct_type);
+    let mirror = get_mirror_method(replica_name, properties, struct_type, untyped_generics);
+    let mirror_single_field =
+        get_mirror_single_field_method(replica_name, properties, struct_type, untyped_generics);
+    let set_mutator = get_set_mutator_method(properties, struct_type);
+    let publish = get_publish_method(enum_name, properties, struct_type);
+    let unpublish = get_unpublish_method(properties, struct_type);
+    let enable_delegation = get_enable_delegation_method(enum_name, properties, struct_type);
+    let disable_delegation = get_disable_delegation_method(properties, struct_type);
+    let localize = get_localize_method(properties, struct_type);
+    let read_apply_update = get_read_apply_update_method(properties, struct_type);
+    let read_apply_field_update = get_read_apply_field_update_method(properties, struct_type);
+    let write = get_write_method(properties, struct_type);
+    let write_update: TokenStream =
+        get_write_update_method_for(enum_name, properties, struct_type, is_immutable);
+    let relations_waiting = get_relations_waiting_method(properties, struct_type);
+    let relations_complete = get_relations_complete_method(properties, struct_type);
+    let wire_schema = get_wire_schema_method(properties);
+    let component_facts = get_component_facts_method(properties, diff_mask_size);
+    let split_update = get_split_update_method(replica_name, properties, untyped_generics);
+    ReplicateMethods {
+        new_complete,
+        builder_create,
+        builder_new,
+        builder_box_clone,
+        builder_read,
+        read_create_update,
+        dyn_ref,
+        dyn_mut,
+        clone,
+        mirror,
+        mirror_single_field,
+        set_mutator,
+        publish,
+        unpublish,
+        enable_delegation,
+        disable_delegation,
+        localize,
+        read_apply_update,
+        read_apply_field_update,
+        write,
+        write_update,
+        relations_waiting,
+        relations_complete,
+        wire_schema,
+        component_facts,
+        split_update,
+    }
+}
 
-    let dyn_ref_method = get_dyn_ref_method();
-    let dyn_mut_method = get_dyn_mut_method();
-    let clone_method = get_clone_method(&properties, &struct_type);
-    let mirror_method =
-        get_mirror_method(&replica_name, &properties, &struct_type, &untyped_generics);
-    let mirror_single_field_method =
-        get_mirror_single_field_method(&replica_name, &properties, &struct_type, &untyped_generics);
-    let set_mutator_method = get_set_mutator_method(&properties, &struct_type);
-    let publish_method = get_publish_method(&enum_name, &properties, &struct_type);
-    let unpublish_method = get_unpublish_method(&properties, &struct_type);
-    let enable_delegation_method =
-        get_enable_delegation_method(&enum_name, &properties, &struct_type);
-    let disable_delegation_method = get_disable_delegation_method(&properties, &struct_type);
-    let localize_method = get_localize_method(&properties, &struct_type);
-    let read_apply_update_method = get_read_apply_update_method(&properties, &struct_type);
-    let read_apply_field_update_method =
-        get_read_apply_field_update_method(&properties, &struct_type);
-    let write_method = get_write_method(&properties, &struct_type);
-    let write_update_method: TokenStream =
-        get_write_update_method_for(&enum_name, &properties, &struct_type, is_immutable);
-    let relations_waiting_method = get_relations_waiting_method(&properties, &struct_type);
-    let relations_complete_method = get_relations_complete_method(&properties, &struct_type);
-    let wire_schema_method = get_wire_schema_method(&properties);
-    let component_facts_method = get_component_facts_method(&properties, diff_mask_size);
-    let split_update_method =
-        get_split_update_method(&replica_name, &properties, &untyped_generics);
-
-    let gen = quote! {
+fn assemble_replicate_module(
+    shared_crate_name: &TokenStream,
+    names: &ReplicateNames,
+    definitions: &ReplicateDefinitions,
+    methods: &ReplicateMethods,
+) -> TokenStream {
+    let builder_tokens = assemble_builder_tokens(names, definitions, methods);
+    let replica_tokens = assemble_replica_tokens(names, definitions, methods);
+    let ReplicateNames {
+        module_name,
+        replica_name,
+        typed_generics,
+        untyped_generics,
+        ..
+    } = names;
+    let property_enum_definition = &definitions.property_enum_definition;
+    let clone = &methods.clone;
+    quote! {
         mod #module_name {
 
             use std::{rc::Rc, cell::RefCell, io::Cursor, any::Any, collections::HashSet};
@@ -170,77 +311,12 @@ pub fn replicate_impl(
 
             #property_enum_definition
 
-            struct #builder_name #typed_generics #builder_generic_fields
-            #builder_new_method
-            impl #typed_generics ReplicateBuilder for #builder_name #untyped_generics {
-                #builder_is_immutable_method
-                #builder_read_method
-                #read_create_update_method
-                #split_update_method
-                #builder_box_clone_method
-            }
-            impl #typed_generics Named for #builder_name #untyped_generics {
-                fn name(&self) -> String {
-                    #replica_name_str.to_string()
-                }
-                fn protocol_name() -> &'static str {
-                    #replica_name_str
-                }
-            }
+            #builder_tokens
 
-            impl #typed_generics #replica_name #untyped_generics {
-                #new_complete_method
-            }
-            impl #typed_generics Named for #replica_name #untyped_generics {
-                fn name(&self) -> String {
-                    #replica_name_str.to_string()
-                }
-                fn protocol_name() -> &'static str {
-                    #replica_name_str
-                }
-            }
-            impl #typed_generics Replicate for #replica_name #untyped_generics {
-                #is_immutable_method
-                #has_entity_properties_method
-                #max_bit_length_method
-                #wire_schema_method
-                #component_facts_method
-                fn kind(&self) -> ComponentKind {
-                    ComponentKind::of::<#replica_name #untyped_generics>()
-                }
-                fn to_any(&self) -> &dyn Any {
-                    self
-                }
-                fn to_any_mut(&mut self) -> &mut dyn Any {
-                    self
-                }
-                fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
-                    self
-                }
-                fn copy_to_box(&self) -> Box<dyn Replicate> {
-                    Box::new(self.clone())
-                }
-                fn diff_mask_size(&self) -> u8 { #diff_mask_size }
-                #builder_create_method
-                #dyn_ref_method
-                #dyn_mut_method
-                #mirror_method
-                #mirror_single_field_method
-                #publish_method
-                #unpublish_method
-                #enable_delegation_method
-                #disable_delegation_method
-                #localize_method
-                #set_mutator_method
-                #write_method
-                #write_update_method
-                #read_apply_update_method
-                #read_apply_field_update_method
-                #relations_waiting_method
-                #relations_complete_method
-            }
+            #replica_tokens
+
             impl #typed_generics Clone for #replica_name #untyped_generics {
-                #clone_method
+                #clone
             }
 
             // Per-type HostComponent impl so every `#[derive(Replicate)]` type
@@ -248,9 +324,147 @@ pub fn replicate_impl(
             // The type is local to the proto crate so the orphan rule is satisfied.
             impl #typed_generics #shared_crate_name::HostComponent for #replica_name #untyped_generics {}
         }
-    };
+    }
+}
 
-    gen
+fn assemble_builder_tokens(
+    names: &ReplicateNames,
+    definitions: &ReplicateDefinitions,
+    methods: &ReplicateMethods,
+) -> TokenStream {
+    let ReplicateNames {
+        builder_name,
+        typed_generics,
+        untyped_generics,
+        builder_generic_fields,
+        replica_name_str,
+        ..
+    } = names;
+    let builder_is_immutable = &definitions.builder_is_immutable;
+    let ReplicateMethods {
+        builder_new,
+        builder_read,
+        read_create_update,
+        split_update,
+        builder_box_clone,
+        ..
+    } = methods;
+    quote! {
+        struct #builder_name #typed_generics #builder_generic_fields
+        #builder_new
+        impl #typed_generics ReplicateBuilder for #builder_name #untyped_generics {
+            #builder_is_immutable
+            #builder_read
+            #read_create_update
+            #split_update
+            #builder_box_clone
+        }
+        impl #typed_generics Named for #builder_name #untyped_generics {
+            fn name(&self) -> String {
+                #replica_name_str.to_string()
+            }
+            fn protocol_name() -> &'static str {
+                #replica_name_str
+            }
+        }
+    }
+}
+
+fn assemble_replica_tokens(
+    names: &ReplicateNames,
+    definitions: &ReplicateDefinitions,
+    methods: &ReplicateMethods,
+) -> TokenStream {
+    let ReplicateNames {
+        replica_name,
+        replica_name_str,
+        typed_generics,
+        untyped_generics,
+        ..
+    } = names;
+    let ReplicateDefinitions {
+        is_immutable,
+        has_entity_properties,
+        max_bit_length,
+        diff_mask_size,
+        ..
+    } = definitions;
+    let ReplicateMethods {
+        new_complete,
+        builder_create,
+        dyn_ref,
+        dyn_mut,
+        mirror,
+        mirror_single_field,
+        publish,
+        unpublish,
+        enable_delegation,
+        disable_delegation,
+        localize,
+        set_mutator,
+        write,
+        write_update,
+        read_apply_update,
+        read_apply_field_update,
+        relations_waiting,
+        relations_complete,
+        wire_schema,
+        component_facts,
+        ..
+    } = methods;
+    quote! {
+        impl #typed_generics #replica_name #untyped_generics {
+            #new_complete
+        }
+        impl #typed_generics Named for #replica_name #untyped_generics {
+            fn name(&self) -> String {
+                #replica_name_str.to_string()
+            }
+            fn protocol_name() -> &'static str {
+                #replica_name_str
+            }
+        }
+        impl #typed_generics Replicate for #replica_name #untyped_generics {
+            #is_immutable
+            #has_entity_properties
+            #max_bit_length
+            #wire_schema
+            #component_facts
+            fn kind(&self) -> ComponentKind {
+                ComponentKind::of::<#replica_name #untyped_generics>()
+            }
+            fn to_any(&self) -> &dyn Any {
+                self
+            }
+            fn to_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+            fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
+                self
+            }
+            fn copy_to_box(&self) -> Box<dyn Replicate> {
+                Box::new(self.clone())
+            }
+            fn diff_mask_size(&self) -> u8 { #diff_mask_size }
+            #builder_create
+            #dyn_ref
+            #dyn_mut
+            #mirror
+            #mirror_single_field
+            #publish
+            #unpublish
+            #enable_delegation
+            #disable_delegation
+            #localize
+            #set_mutator
+            #write
+            #write_update
+            #read_apply_update
+            #read_apply_field_update
+            #relations_waiting
+            #relations_complete
+        }
+    }
 }
 
 /// Rejects `EntityProperty` fields on `#[replicate(immutable)]` components:
@@ -299,9 +513,7 @@ fn get_builder_is_immutable_method(is_immutable: bool) -> TokenStream {
 }
 
 fn get_has_entity_properties_method(properties: &[Property]) -> TokenStream {
-    let has_entity_props = properties
-        .iter()
-        .any(|p| matches!(p, Property::Entity(_)));
+    let has_entity_props = properties.iter().any(|p| matches!(p, Property::Entity(_)));
     if has_entity_props {
         quote! {
             fn has_entity_properties() -> bool where Self: Sized { true }
@@ -339,8 +551,7 @@ fn get_field_name(property: &Property, struct_type: &StructType) -> Member {
         StructType::Struct => Member::from(property.variable_name().clone()),
         StructType::TupleStruct => {
             let index = Index {
-                index: u32::try_from(property.index())
-                    .expect("property index fits in u32"),
+                index: u32::try_from(property.index()).expect("property index fits in u32"),
                 span: property.variable_name().span(),
             };
             Member::from(index)
@@ -608,6 +819,10 @@ pub fn get_wire_schema_method(properties: &[Property]) -> TokenStream {
 /// declaration-order discriminants (`property.index()`, matching the
 /// property enum's explicit `= index` values); the mask size reuses the
 /// `diff_mask_size` const emitted for `diff_mask_size(&self)`.
+///
+/// # Panics
+///
+/// Panics if a property index does not fit in a `u8`.
 #[must_use]
 pub fn get_component_facts_method(properties: &[Property], diff_mask_size: u8) -> TokenStream {
     let mut labels: Vec<String> = Vec::new();
@@ -711,7 +926,7 @@ fn get_clone_method(properties: &[Property], struct_type: &StructType) -> TokenS
                 };
                 entity_property_output = new_output_result;
             }
-        };
+        }
     }
 
     quote! {
@@ -1027,7 +1242,7 @@ fn get_new_complete_args(properties: &[Property]) -> TokenStream {
                 args = new_output_result;
             }
             Property::Entity(_) => {}
-        };
+        }
     }
     args
 }
@@ -1233,7 +1448,7 @@ pub fn get_read_create_update_method(
                     }
                 }
             }
-            Property::NonReplicated(_) => {}
+            Property::NonReplicated(_) => quote! {},
         };
 
         let new_output_result = quote! {
@@ -1278,8 +1493,7 @@ fn get_split_update_method(
                 }
             }
             Property::Entity(inner_property) => {
-                let index =
-                    u8::try_from(inner_property.index).expect("property index fits in u8");
+                let index = u8::try_from(inner_property.index).expect("property index fits in u8");
                 quote! {
                     let should_read = bool::de(reader)?;
                     if should_read {
@@ -1308,7 +1522,7 @@ fn get_split_update_method(
                     }
                 }
             }
-            Property::NonReplicated(_) => {}
+            Property::NonReplicated(_) => quote! {},
         };
 
         let new_output_result = quote! {
@@ -1378,7 +1592,7 @@ fn get_read_apply_update_method(properties: &[Property], struct_type: &StructTyp
                     }
                 }
             }
-            Property::NonReplicated(_) => {}
+            Property::NonReplicated(_) => quote! {},
         };
 
         let new_output_result = quote! {
@@ -1406,10 +1620,9 @@ fn get_read_apply_field_update_method(
     for property in properties {
         let field_name = get_field_name(property, struct_type);
         let new_output_right = match property {
-            Property::Normal(_) | Property::NonReplicated(_) => {}
+            Property::Normal(_) | Property::NonReplicated(_) => quote! {},
             Property::Entity(inner_property) => {
-                let index =
-                    u8::try_from(inner_property.index).expect("property index fits in u8");
+                let index = u8::try_from(inner_property.index).expect("property index fits in u8");
                 quote! {
                     #index => {
                         EntityProperty::read(&mut self.#field_name, reader, converter)?;
@@ -1453,7 +1666,7 @@ fn get_write_method(properties: &[Property], struct_type: &StructType) -> TokenS
                     EntityProperty::write(&self.#field_name, writer, converter);
                 }
             }
-            Property::NonReplicated(_) => {}
+            Property::NonReplicated(_) => quote! {},
         };
 
         let new_output_result = quote! {
@@ -1567,7 +1780,7 @@ fn get_write_update_method(
                     }
                 }
             }
-            Property::NonReplicated(_) => {}
+            Property::NonReplicated(_) => quote! {},
         };
 
         let new_output_result = quote! {
@@ -1747,7 +1960,7 @@ mod field_init_shorthand_tests {
                 source: u32,
             }
         };
-        let out = replicate_impl(input, quote::quote! { naia_shared }, true);
+        let out = replicate_impl(&input, &quote::quote! { naia_shared }, true);
         let rendered = out.to_string();
         assert!(
             !rendered.contains("source : source"),

@@ -1,6 +1,6 @@
 //! # Naia Bevy Derive
 //! Proc-macro derives for the naia Bevy adapter.
-//! Hosts the Bevy-flavored Replicate, Message, and ClientMarker derives.
+//! Hosts the Bevy-flavored `Replicate`, `Message`, and `ClientMarker` derives.
 
 #![deny(trivial_casts, trivial_numeric_casts, unstable_features)]
 
@@ -27,7 +27,7 @@ pub fn replicate_derive_bevy(input: proc_macro::TokenStream) -> proc_macro::Toke
 pub fn message_derive_bevy(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     let shared_crate_name = quote! { naia_bevy_shared };
-    message_impl(input, shared_crate_name, false, false).into()
+    message_impl(input, &shared_crate_name, false, false).into()
 }
 
 /// Derives the Channel trait for a given struct, for the Bevy adapter.
@@ -52,7 +52,7 @@ pub fn client_marker_derive_bevy(input: proc_macro::TokenStream) -> proc_macro::
 pub fn derive_serde_bevy_shared(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     let serde_crate_name = quote! { naia_bevy_shared };
-    derive_serde_common(input, serde_crate_name).into()
+    derive_serde_common(input, &serde_crate_name).into()
 }
 
 /// Derives the Serde trait for a given type, using `naia_bevy_server::` paths.
@@ -60,7 +60,7 @@ pub fn derive_serde_bevy_shared(input: proc_macro::TokenStream) -> proc_macro::T
 pub fn derive_serde_bevy_server(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     let serde_crate_name = quote! { naia_bevy_server };
-    derive_serde_common(input, serde_crate_name).into()
+    derive_serde_common(input, &serde_crate_name).into()
 }
 
 /// Derives the Serde trait for a given type, using `naia_bevy_client::` paths.
@@ -68,5 +68,5 @@ pub fn derive_serde_bevy_server(input: proc_macro::TokenStream) -> proc_macro::T
 pub fn derive_serde_bevy_client(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     let serde_crate_name = quote! { naia_bevy_client };
-    derive_serde_common(input, serde_crate_name).into()
+    derive_serde_common(input, &serde_crate_name).into()
 }

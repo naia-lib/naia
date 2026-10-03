@@ -475,11 +475,13 @@ impl UserDiffHandler {
         }
     }
 
+    /// Number of dense slots holding a receiver (`test_utils` introspection).
     #[cfg(feature = "test_utils")]
     pub fn receiver_count(&self) -> usize {
         self.receivers_dense.iter().filter(|s| s.is_some()).count()
     }
 
+    /// Number of slotted receivers with a non-clear diff mask (`test_utils` introspection).
     #[cfg(feature = "test_utils")]
     pub fn dirty_candidates_count(&self) -> usize {
         self.receivers_dense

@@ -9,7 +9,7 @@ use super::shared::{get_builder_generic_fields, get_generics, get_struct_type, S
 #[must_use]
 pub fn message_impl(
     input: DeriveInput,
-    shared_crate_name: TokenStream,
+    shared_crate_name: &TokenStream,
     is_fragment: bool,
     is_request: bool,
 ) -> TokenStream {
@@ -18,7 +18,7 @@ pub fn message_impl(
         return enum_message_impl(
             &input,
             data_enum,
-            &shared_crate_name,
+            shared_crate_name,
             is_fragment,
             is_request,
         );
@@ -556,10 +556,7 @@ fn get_fields(input: &DeriveInput) -> Vec<Field> {
                                         fields.push(Field::entity_property(variable_name));
                                         // Property
                                     } else {
-                                        fields.push(Field::normal(
-                                            variable_name,
-                                            field.ty.clone(),
-                                        ));
+                                        fields.push(Field::normal(variable_name, field.ty.clone()));
                                     }
                                 }
                             }
