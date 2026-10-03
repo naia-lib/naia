@@ -122,7 +122,7 @@ use crate::world::sync::RemoteEntityChannel;
 use crate::world::update::entity_update_manager::EntityUpdateManager;
 use crate::world::update::retransmit_ledger::RetransmitLedger;
 use crate::{
-    messages::channels::receivers::reliable_receiver::ReliableReceiver,
+    messages::channels::receivers::reliable_receiver::{BufferOutcome, ReliableReceiver},
     sequence_list::SequenceList,
     types::{HostType, PacketIndex},
     world::{
@@ -802,31 +802,38 @@ impl LocalWorldManager {
         //     );
         // }
 
-        // m2 fix (Drake 42808): first stamp wins for a given id. A same-id
-        // retransmit re-read (e.g. an Insert degraded to a payload-less Noop
-        // at retransmit-expansion time) must not re-stamp the buffered tick:
-        // `ReliableReceiver` drops the duplicate content, so the surviving
-        // message would be processed under the NEW tick while its payload (if
-        // any) was pushed under the OLD one — the exact
-        // missing-N/buffered-N-3 panic. The duplicate read still logs for id
-        // correlation with the writer-side expansion probe.
-        match self.incoming_message_ticks.entry(id) {
-            std::collections::hash_map::Entry::Vacant(slot) => {
-                slot.insert(tick);
+        // m2 fix (Drake 42808): first stamp wins for a given id, and the
+        // upgrade-hole fix below it: a same-id retransmit re-read either
+        // keeps the old tick (duplicate content dropped) or takes the new
+        // tick (placeholder upgraded to real content, whose payload was
+        // pushed under the new tick). The log lines correlate by id with
+        // the writer-side expansion probe.
+        let msg_type = msg.get_type();
+        match self.receiver.buffer_message(id, msg) {
+            BufferOutcome::Buffered => {
+                self.incoming_message_ticks.entry(id).or_insert(tick);
             }
-            std::collections::hash_map::Entry::Occupied(slot) => {
-                if *slot.get() != tick {
+            BufferOutcome::ReplacedUpgrade => {
+                self.incoming_message_ticks.insert(id, tick);
+                log::debug!(
+                    "upgrade delivered: message id {:?} now tick {:?} (msg type {:?})",
+                    id,
+                    tick,
+                    msg_type
+                );
+            }
+            BufferOutcome::IgnoredDuplicate => {
+                if self.incoming_message_ticks.get(&id) != Some(&tick) {
                     log::debug!(
                         "duplicate read ignored for tick: message id {:?} keeps {:?}, retransmit read {:?} (msg type {:?})",
                         id,
-                        slot.get(),
+                        self.incoming_message_ticks.get(&id),
                         tick,
-                        msg.get_type()
+                        msg_type
                     );
                 }
             }
         }
-        self.receiver.buffer_message(id, msg);
     }
 
     pub(crate) fn insert_received_component(

@@ -1,6 +1,7 @@
 use log::error;
 
 use crate::{
+    messages::channels::receivers::reliable_receiver::UpgradableMessage,
     world::component::component_kinds::ComponentKind,
     world::host::host_world_manager::SubCommandId, EntityAuthStatus, EntityEvent,
     EntityMessageType, HostEntity, LocalEntityMap, RemoteEntity,
@@ -41,6 +42,12 @@ pub enum EntityMessage<E: Copy + Eq + PartialEq> {
 
     /// Placeholder that carries no payload.
     Noop,
+}
+
+impl<E: Copy + Eq + PartialEq> UpgradableMessage for EntityMessage<E> {
+    fn is_placeholder(&self) -> bool {
+        self.is_noop()
+    }
 }
 
 impl<E: Copy + Eq + PartialEq> EntityMessage<E> {

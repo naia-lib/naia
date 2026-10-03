@@ -4,9 +4,18 @@ use naia_serde::BitWrite;
 
 use crate::world::local::local_entity::RemoteEntity;
 use crate::{
+    messages::channels::receivers::reliable_receiver::UpgradableMessage,
     world::entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
     LocalEntityAndGlobalEntityConverter, Message, MessageKind, MessageKinds,
 };
+
+impl UpgradableMessage for MessageContainer {
+    /// Channel messages are never placeholders: the Noop degrade exists
+    /// only on the entity-command write path.
+    fn is_placeholder(&self) -> bool {
+        false
+    }
+}
 
 /// A reference-counted wrapper around a heap-allocated [`Message`] trait object.
 ///
