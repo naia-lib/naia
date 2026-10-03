@@ -161,9 +161,7 @@ impl ClientEvents {
         // reject_connection_with (naia-lib/naia#133). The address is Some
         // once the data address is learned, None for pre-auth refusals.
         let rejections: Vec<(Option<SocketAddr>, RejectReason, Option<MessageContainer>)> =
-            world_events
-                .read::<naia_client::RejectEvent>()
-                .collect();
+            world_events.read::<naia_client::RejectEvent>().collect();
         // The message is the optional reason the server attached with
         // disconnect_user_with (naia-lib/naia#10).
         let disconnections: Vec<(DisconnectReason, Option<MessageContainer>)> = world_events

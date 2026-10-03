@@ -188,9 +188,11 @@ impl Handshaker for HandshakeManager {
                         // re-finalizing (finalize emits a downstream
                         // connection event and must run exactly once).
                         // Anything else is still an Auth reject.
-                        if self.authenticated_and_identified_users.contains_key(address) {
-                            let identify_response =
-                                Self::write_identity_response().to_packet();
+                        if self
+                            .authenticated_and_identified_users
+                            .contains_key(address)
+                        {
+                            let identify_response = Self::write_identity_response().to_packet();
                             return Ok(HandshakeAction::SendPacket(identify_response));
                         }
                         let reject_response =
@@ -651,10 +653,7 @@ mod tests {
     /// Challenge request bytes: header, timestamp, then token — the exact
     /// layout `recv_challenge_request` reads.
     #[cfg(feature = "transport_udp")]
-    fn challenge_inbound(
-        timestamp: u64,
-        token: &IdentityToken,
-    ) -> Vec<u8> {
+    fn challenge_inbound(timestamp: u64, token: &IdentityToken) -> Vec<u8> {
         let mut writer = BitWriter::new();
         HandshakeHeader::ClientChallengeRequest(server_pid()).ser(&mut writer);
         timestamp.ser(&mut writer);

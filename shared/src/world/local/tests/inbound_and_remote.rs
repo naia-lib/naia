@@ -608,7 +608,8 @@ fn a_degraded_retransmit_must_not_restamp_a_buffered_insert() {
     );
     // Retransmit read at tick 4: same id degraded to Noop, no payload push —
     // exactly what `world_reader` does with a degraded retransmit.
-    fx.manager.receiver_buffer_message(1, 4, crate::EntityMessage::Noop);
+    fx.manager
+        .receiver_buffer_message(1, 4, crate::EntityMessage::Noop);
     let events = fx.take_events(&mut world);
 
     assert!(
@@ -639,7 +640,8 @@ fn a_retransmitted_upgrade_must_not_be_dropped_as_duplicate() {
     let local_entity = fx.adopt_remote(&mut world, 3);
 
     // First read at tick 1: Noop#1, the degraded first write. No payload.
-    fx.manager.receiver_buffer_message(1, 1, crate::EntityMessage::Noop);
+    fx.manager
+        .receiver_buffer_message(1, 1, crate::EntityMessage::Noop);
     // Retransmit read at tick 4: same id as a full Insert with its payload.
     fx.manager.insert_received_component(
         4,
