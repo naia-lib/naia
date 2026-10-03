@@ -1,7 +1,7 @@
 //! Standalone scenario functions for golden-trace capture.
 //!
 //! Each function runs a complete protocol sequence with wire-trace capture
-//! enabled and returns the captured [`Trace`]. Used by `naia_spec_tool traces
+//! enabled and returns the captured [`Trace`]. Used by `naia-spec-tool traces
 //! record/check` to establish and verify golden wire-trace baselines.
 //!
 //! The traces are captured **after** the handshake completes, so they contain

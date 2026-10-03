@@ -13,7 +13,7 @@ mod traces;
 
 /// Naia spec tool
 #[derive(Parser, Debug)]
-#[command(name = "naia_spec_tool")]
+#[command(name = "naia-spec-tool")]
 #[command(version, about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
