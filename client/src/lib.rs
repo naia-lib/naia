@@ -162,3 +162,27 @@ pub use world_events::{
     RemoveComponentEvent, RequestEvent, SpawnEntityEvent, UnpublishEntityEvent,
     UpdateComponentEvent, WorldEvent,
 };
+
+// ---- Post-Connected liveness watch (Usher 42587 fork a, oracle pins) ----
+// These pins live here (not in client.rs) so the pinned file never contains
+// the test's own strings: a pin inside client.rs would pass vacuously off
+// its own source. Each pin fails if its marker is removed or renamed.
+#[cfg(test)]
+mod client_marker_tests {
+    const CLIENT_RS: &str = include_str!("client.rs");
+
+    #[test]
+    fn post_connect_markers_carry_the_capture_prefix() {
+        for marker in [
+            "naia: Client post-connect watch started",
+            "naia: Client post-connect +30s",
+            "naia: Client post-connect +60s",
+            "naia: Client first post-connect data packet received",
+        ] {
+            assert!(
+                CLIENT_RS.contains(marker),
+                "post-Connected liveness marker must stay warn-level with the naia: prefix: {marker}",
+            );
+        }
+    }
+}

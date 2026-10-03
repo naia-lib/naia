@@ -147,3 +147,19 @@ pub use world::{
     entity_ref::EntityRef,
     replication_config::{Publicity, ReplicationConfig, ScopeExit},
 };
+
+// ---- Post-Connected liveness watch (Usher 42587 fork a, oracle pin) ----
+// Pinned here (not in recv_state.rs) so the pinned file never contains the
+// test's own strings. Fails if the timeout-drop marker is removed/renamed.
+#[cfg(test)]
+mod server_marker_tests {
+    const RECV_STATE_RS: &str = include_str!("server/recv_state.rs");
+
+    #[test]
+    fn timeout_drop_marker_names_the_silent_side() {
+        assert!(
+            RECV_STATE_RS.contains("naia: Server timing out connection"),
+            "the timeout-drop marker must stay warn-level with the naia: prefix",
+        );
+    }
+}

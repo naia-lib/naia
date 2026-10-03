@@ -143,6 +143,22 @@ impl PostConnectWatch {
             summary_60_warned: false,
         }
     }
+
+    /// One-shot summary schedule: returns (fire_30s, fire_60s) for the given
+    /// elapsed-seconds count, setting the fired flags so each summary fires
+    /// exactly once. Pure takes-elapsed-seconds form so tests can pin the
+    /// schedule without waiting out a wall clock.
+    fn summaries_due(&mut self, elapsed_secs: u64) -> (bool, bool) {
+        let fire_30 = elapsed_secs >= 30 && !self.summary_30_warned;
+        let fire_60 = elapsed_secs >= 60 && !self.summary_60_warned;
+        if fire_30 {
+            self.summary_30_warned = true;
+        }
+        if fire_60 {
+            self.summary_60_warned = true;
+        }
+        (fire_30, fire_60)
+    }
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
@@ -2403,15 +2419,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // "sent but lost". No summaries fire if the game stops polling.
         if let Some(watch) = self.post_connect_watch.as_mut() {
             let elapsed_secs = watch.connected_at.elapsed(&Instant::now()).as_secs();
-            if elapsed_secs >= 30 && !watch.summary_30_warned {
-                watch.summary_30_warned = true;
+            let (fire_30, fire_60) = watch.summaries_due(elapsed_secs);
+            if fire_30 {
                 warn!(
                     "naia: Client post-connect +30s: data_rx={} data_applied={} keepalive_sent={} last_keepalive_ok={:?}",
                     watch.data_rx, watch.data_applied, watch.keepalive_sent, watch.last_keepalive_ok
                 );
             }
-            if elapsed_secs >= 60 && !watch.summary_60_warned {
-                watch.summary_60_warned = true;
+            if fire_60 {
                 warn!(
                     "naia: Client post-connect +60s: data_rx={} data_applied={} keepalive_sent={} last_keepalive_ok={:?}",
                     watch.data_rx, watch.data_applied, watch.keepalive_sent, watch.last_keepalive_ok
@@ -3642,6 +3657,45 @@ mod handshake_send_accounting_tests {
         assert_eq!(
             client.handshake_failed_sends, 0,
             "the first success resets the attempt counter",
+        );
+    }
+}
+
+// ---- Post-Connected liveness watch (Usher 42587 fork a, oracle pins) ----
+// The +30s/+60s summaries and the first-data line are operator signals:
+// the tests below fail if the markers or their schedule are removed.
+#[cfg(test)]
+mod post_connect_watch_tests {
+    use super::*;
+
+    #[test]
+    fn watch_starts_unfired_with_zeroed_counters() {
+        let watch = PostConnectWatch::new();
+        assert_eq!(watch.data_rx, 0);
+        assert_eq!(watch.data_applied, 0);
+        assert_eq!(watch.keepalive_sent, 0);
+        assert_eq!(watch.last_keepalive_ok, None);
+        assert!(!watch.first_data_warned);
+        assert!(!watch.summary_30_warned);
+        assert!(!watch.summary_60_warned);
+    }
+
+    #[test]
+    fn summaries_fire_once_at_30s_and_60s() {
+        let mut watch = PostConnectWatch::new();
+        assert_eq!(watch.summaries_due(29), (false, false));
+        assert_eq!(watch.summaries_due(30), (true, false));
+        assert_eq!(
+            watch.summaries_due(31),
+            (false, false),
+            "the +30s summary must not repeat",
+        );
+        assert_eq!(watch.summaries_due(59), (false, false));
+        assert_eq!(watch.summaries_due(60), (false, true));
+        assert_eq!(
+            watch.summaries_due(61),
+            (false, false),
+            "the +60s summary must not repeat",
         );
     }
 }

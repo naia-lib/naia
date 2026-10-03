@@ -128,3 +128,23 @@ impl Default for ConnectionShared {
         Self::new()
     }
 }
+
+// ---- Post-Connected liveness watch (Usher 42587 fork a, oracle pins) ----
+#[cfg(test)]
+mod connection_shared_tests {
+    use super::*;
+
+    #[test]
+    fn outbound_packet_count_starts_at_zero_and_accumulates() {
+        let shared = ConnectionShared::new();
+        assert_eq!(shared.outbound_packets_sent(), 0);
+        shared.note_outbound_packet();
+        shared.note_outbound_packet();
+        shared.note_outbound_packet();
+        assert_eq!(
+            shared.outbound_packets_sent(),
+            3,
+            "every packet handed to the socket must be counted for the timeout-drop marker",
+        );
+    }
+}
