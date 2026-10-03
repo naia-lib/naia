@@ -535,7 +535,7 @@ mod miniquad_js_bridge_host_oracle {
     /// either repair reds here instead of shipping two behaviors. The bound
     /// itself is decided once, in naia-socket-shared (`should_post_session_offer`
     /// + `ICE_GATHER_EARLY_POST_MS`), and covered by host unit tests there;
-    /// this oracle pins that both halves actually call through to it.
+    ///   this oracle pins that both halves actually call through to it.
     #[test]
     fn the_wasm_backend_gates_its_offer_the_same_way() {
         assert!(

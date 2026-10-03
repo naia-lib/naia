@@ -184,7 +184,7 @@ pub fn response_events(mut client: Client<Main>, mut global: ResMut<Global>) {
     for response_key in &global.response_keys {
         if let Some(response) = client.receive_response(response_key) {
             info!("Client received Response <- Server: {:?}", response);
-            finished_response_keys.push(response_key.clone());
+            finished_response_keys.push(*response_key);
         }
     }
     for response_key in finished_response_keys {

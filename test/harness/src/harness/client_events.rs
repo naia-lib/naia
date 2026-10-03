@@ -163,7 +163,6 @@ impl ClientEvents {
         let rejections: Vec<(Option<SocketAddr>, RejectReason, Option<MessageContainer>)> =
             world_events
                 .read::<naia_client::RejectEvent>()
-                .map(|(address, reason, message)| (address, reason, message))
                 .collect();
         // The message is the optional reason the server attached with
         // disconnect_user_with (naia-lib/naia#10).

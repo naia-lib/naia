@@ -470,6 +470,9 @@ impl RemoteWorldManager {
         }
     }
 
+    /// Eight params mirror the per-message apply context 1:1; bundling them
+    /// would churn the insert path's call sites for style alone.
+    #[allow(clippy::too_many_arguments)]
     fn process_insert<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         tick: Tick,
@@ -502,6 +505,8 @@ impl RemoteWorldManager {
         }
     }
 
+    /// Same shape as `process_insert` above; same reason for the allow.
+    #[allow(clippy::too_many_arguments)]
     fn finish_insert<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         tick: Tick,

@@ -650,7 +650,7 @@ fn decode_qprobe01(d: &[u8]) -> Result<Vec<QBinBucket>, QBinErr> {
 }
 
 fn bucket_index(tag: u8, tick: u16) -> Result<u32, QBinErr> {
-    if tag > 2 || tick < 24 || tick > 47 {
+    if tag > 2 || !(24..=47).contains(&tick) {
         return Err(QBinErr {
             off: 0,
             msg: "bucket out of window",
@@ -802,6 +802,9 @@ fn wbucket(v: &mut Vec<u8>, tag: u8, tick: u16, ov: u8, count: u16) {
     wu8(v, ov);
     wu16(v, count);
 }
+/// Test-only binary record writer: the nine params mirror the wire record
+/// layout 1:1, so bundling them would obscure the format being probed.
+#[allow(clippy::too_many_arguments)]
 fn wrecord(
     v: &mut Vec<u8>,
     slot: u32,

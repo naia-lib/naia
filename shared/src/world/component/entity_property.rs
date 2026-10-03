@@ -1437,6 +1437,9 @@ mod relation_state_machine_tests {
 
     // -- fixtures ----------------------------------------------------------
 
+    /// Named entity-property builders for the mirror tables below.
+    type BuilderTable<const N: usize> = [(&'static str, fn() -> EntityProperty); N];
+
     #[derive(Clone)]
     struct CountingMutator(Arc<AtomicUsize>);
 
@@ -2647,14 +2650,14 @@ mod relation_state_machine_tests {
 
     #[test]
     fn mirroring_copies_the_entity_into_every_settable_relation() {
-        let sources: [(&str, fn() -> EntityProperty); 5] = [
+        let sources: BuilderTable<5> = [
             ("host", || host_created(Some(7))),
             ("remote", || remote_created(Some(7))),
             ("public", || remote_public(Some(7)).0),
             ("local", || local(Some(7))),
             ("delegated", || delegated(Some(7)).0),
         ];
-        let targets: [(&str, fn() -> EntityProperty); 3] = [
+        let targets: BuilderTable<3> = [
             ("host", || host_created(None)),
             ("local", || local(None)),
             ("delegated", || delegated(None).0),
@@ -2674,7 +2677,7 @@ mod relation_state_machine_tests {
 
     #[test]
     fn mirroring_a_waiting_property_clears_the_target() {
-        let targets: [(&str, fn() -> EntityProperty); 3] = [
+        let targets: BuilderTable<3> = [
             ("host", || host_created(Some(7))),
             ("local", || local(Some(7))),
             ("delegated", || delegated(Some(7)).0),
@@ -2692,7 +2695,7 @@ mod relation_state_machine_tests {
 
     #[test]
     fn mirroring_an_invalid_property_panics() {
-        let targets: [(&str, fn() -> EntityProperty); 3] = [
+        let targets: BuilderTable<3> = [
             ("host", || host_created(Some(7))),
             ("local", || local(Some(7))),
             ("delegated", || delegated(Some(7)).0),

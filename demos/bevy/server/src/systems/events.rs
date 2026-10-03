@@ -233,7 +233,7 @@ pub fn response_events(mut server: Server, mut global: ResMut<Global>) {
                 user.address(),
                 response
             );
-            finished_response_keys.push(response_key.clone());
+            finished_response_keys.push(*response_key);
         }
     }
     for response_key in finished_response_keys {

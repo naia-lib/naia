@@ -78,7 +78,7 @@ impl Fixture {
     fn take_events(&mut self, world: &mut TestWorld) -> Vec<crate::EntityEvent> {
         let mut spawner = TestSpawner::new();
         let now = crate::Instant::now();
-        let kinds = std::mem::replace(&mut self.kinds, ComponentKinds::new());
+        let kinds = std::mem::take(&mut self.kinds);
         let events =
             self.manager
                 .take_incoming_events(&mut spawner, &self.gwm, &kinds, world, &now);
