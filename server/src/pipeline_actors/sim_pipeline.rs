@@ -813,15 +813,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         world: &mut W,
         world_entity: &E,
     ) -> bool {
-        let global_entity = match self
+        let Ok(global_entity) = self
             .coord()
             .shared
             .global_entity_map
             .read()
             .entity_to_global_entity(world_entity)
-        {
-            Ok(global_entity) => global_entity,
-            Err(_) => return false,
+        else {
+            return false;
         };
 
         if !self.entity_owner(world_entity).is_server() {
@@ -1207,15 +1206,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         let Some(global_entity) = self.coord_mut().state.resource_registry.remove::<R>() else {
             return false;
         };
-        let world_entity = match self
+        let Ok(world_entity) = self
             .coord()
             .shared
             .global_entity_map
             .read()
             .global_entity_to_entity(global_entity)
-        {
-            Ok(entity) => entity,
-            Err(_) => return true,
+        else {
+            return true;
         };
         let entity_idx = Self::entity_global_idx(self.coord(), global_entity);
         self.coord_mut()

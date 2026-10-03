@@ -591,15 +591,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         is_contained: bool,
     ) -> bool {
         use naia_shared::EntityAndGlobalEntityConverter;
-        let global_entity = match self
+        let Ok(global_entity) = self
             .state
             .shared
             .global_entity_map
             .read()
             .entity_to_global_entity(world_entity)
-        {
-            Ok(ge) => ge,
-            Err(_) => return false,
+        else {
+            return false;
         };
         self.user_scope_set_global_entity(user_key, global_entity, is_contained);
         true
@@ -658,15 +657,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     ) -> bool {
         use naia_shared::{EntityAndGlobalEntityConverter, Publicity};
 
-        let global_entity = match self
+        let Ok(global_entity) = self
             .state
             .shared
             .global_entity_map
             .read()
             .entity_to_global_entity(world_entity)
-        {
-            Ok(ge) => ge,
-            Err(_) => return false,
+        else {
+            return false;
         };
 
         // Check if entity has Private replication config.

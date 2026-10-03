@@ -537,7 +537,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         for send_conn in self.send_user_connections.values() {
             for global_entity in send_conn.base.world_manager.pending_outbound_entities() {
                 if let Some(idx) = guard.entity_to_global_idx(global_entity) {
-                    let _ = needed.set_bit(idx.as_usize() as u32);
+                    let _ = needed.set_bit(
+            u32::try_from(idx.as_usize()).expect("global index fits in u32"),
+        );
                 }
             }
         }
@@ -783,7 +785,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         while remaining != 0 {
                             let bit_pos = remaining.trailing_zeros() as usize;
                             remaining &= remaining - 1;
-                            let kind_bit = (word_idx * 64 + bit_pos) as u16;
+                            let kind_bit = u16::try_from(word_idx * 64 + bit_pos)
+            .expect("component kind bit fits in u16");
                             let Some(component_kind) = guard.kind_for_bit(kind_bit) else {
                                 continue;
                             };
@@ -954,7 +957,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     while remaining != 0 {
                         let bit_pos = remaining.trailing_zeros() as usize;
                         remaining &= remaining - 1;
-                        let kind_bit = (word_idx * 64 + bit_pos) as u16;
+                        let kind_bit = u16::try_from(word_idx * 64 + bit_pos)
+            .expect("component kind bit fits in u16");
                         let Some(component_kind) = guard.kind_for_bit(kind_bit) else {
                             continue;
                         };
