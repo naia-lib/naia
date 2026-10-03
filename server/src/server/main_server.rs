@@ -378,6 +378,18 @@ impl MainServer {
 
     /// Maintain connection with a client and read all incoming packet data
     fn maintain_socket(&mut self) {
+        self.drain_auth_events();
+        self.drain_socket_packets();
+        self.sweep_pending_auth_timeouts();
+    }
+
+    /// Drain inbound auth requests into user records and auth events.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a just-inserted user record is missing, which cannot
+    /// happen single-threaded between insert and lookup.
+    fn drain_auth_events(&mut self) {
         // receive auth events
         //
         // Every request that arrives here has already had its protocol
@@ -450,7 +462,10 @@ impl MainServer {
                 }
             }
         }
+    }
 
+    /// Drain inbound socket packets into world/handshake events.
+    fn drain_socket_packets(&mut self) {
         // receive socket events
         loop {
             match self.recv_io.recv_reader() {
@@ -546,7 +561,11 @@ impl MainServer {
                 }
             }
         }
+    }
 
+    /// Auto-reject network-handshaked connections the application never
+    /// accepted or rejected within the pending-auth timeout.
+    fn sweep_pending_auth_timeouts(&mut self) {
         // Auto-reject connections that completed the network handshake but where the
         // application never called accept_connection/reject_connection within the timeout.
         if self.auth_io.is_some() {
@@ -572,7 +591,8 @@ impl MainServer {
             }
         }
     }
-}
+    }
+
 
 #[cfg(test)]
 mod pending_auth_capacity_tests {

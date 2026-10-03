@@ -50,6 +50,22 @@ pub struct CoordHandle<E: Copy + Eq + Hash + Send + Sync> {
     pub shared: Arc<ServerShared<E>>,
 }
 
+/// Read-before-write snapshot plus drain buffers for one
+/// `configure_entity_replication` publicity transition. Bundled so
+/// [`CoordHandle::capture_publicity_transition`] stays under the pedantic
+/// argument-count lint.
+struct PublicityTransition<'a, E> {
+    global_entity: GlobalEntity,
+    world_entity: &'a E,
+    server_owned: bool,
+    client_owned: bool,
+    client_origin: Option<UserKey>,
+    prev_config: crate::ReplicationConfig,
+    config: crate::ReplicationConfig,
+    send_ops: &'a mut Vec<crate::server::configure_replication::ConfigureSendOp<E>>,
+    world_ops: &'a mut Vec<crate::server::configure_replication::ConfigureWorldOp<E>>,
+}
+
 impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     // ============================================================
     // Phase B.7 — coordination-side read API surface for the bevy adapter
@@ -656,7 +672,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             ConfigureCapture, ConfigureSendOp, ConfigureWorldOp,
         };
         use crate::server::scope_change::ScopeChange;
-        use naia_shared::Publicity;
 
         let global_entity = self
             .shared
@@ -703,107 +718,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         let mut send_ops: Vec<ConfigureSendOp<E>> = Vec::new();
         let mut world_ops: Vec<ConfigureWorldOp<E>> = Vec::new();
 
-        // Handle publicity state machine only when publicity changed —
-        // this branch structure mirrors `world_server.rs:1464` verbatim.
-        if prev_config.publicity != config.publicity {
-            match prev_config.publicity {
-                Publicity::Private => {
-                    assert!(!server_owned, "Server-owned entity should never be private");
-                    match config.publicity {
-                        Publicity::Private => {
-                            unreachable!("publicity prev == next but outer check passed");
-                        }
-                        Publicity::Public => {
-                            // private -> public
-                            self.capture_publish(
-                                global_entity,
-                                world_entity,
-                                true,
-                                &mut send_ops,
-                                &mut world_ops,
-                            );
-                        }
-                        Publicity::Delegated => {
-                            // private -> delegated
-                            self.capture_publish(
-                                global_entity,
-                                world_entity,
-                                true,
-                                &mut send_ops,
-                                &mut world_ops,
-                            );
-                            self.capture_enable_delegation(
-                                global_entity,
-                                world_entity,
-                                client_origin,
-                                &mut send_ops,
-                                &mut world_ops,
-                            );
-                        }
-                    }
-                }
-                Publicity::Public => match config.publicity {
-                    Publicity::Private => {
-                        // public -> private
-                        assert!(!server_owned, "Cannot unpublish a Server-owned Entity (doing so would disable replication entirely, just use a local entity instead)");
-                        self.capture_unpublish(
-                            global_entity,
-                            world_entity,
-                            true,
-                            &mut send_ops,
-                            &mut world_ops,
-                        );
-                    }
-                    Publicity::Public => {
-                        unreachable!("publicity prev == next but outer check passed");
-                    }
-                    Publicity::Delegated => {
-                        // public -> delegated
-                        self.capture_enable_delegation(
-                            global_entity,
-                            world_entity,
-                            client_origin,
-                            &mut send_ops,
-                            &mut world_ops,
-                        );
-                    }
-                },
-                Publicity::Delegated => {
-                    assert!(!client_owned, "Client-owned entity should never be delegated");
-                    match config.publicity {
-                        Publicity::Private => {
-                            // delegated -> private
-                            assert!(!server_owned, "Cannot unpublish a Server-owned Entity (doing so would disable replication entirely, just use a local entity instead)");
-                            self.capture_disable_delegation(
-                                global_entity,
-                                world_entity,
-                                &mut send_ops,
-                                &mut world_ops,
-                            );
-                            self.capture_unpublish(
-                                global_entity,
-                                world_entity,
-                                true,
-                                &mut send_ops,
-                                &mut world_ops,
-                            );
-                        }
-                        Publicity::Public => {
-                            // delegated -> public
-                            self.capture_disable_delegation(
-                                global_entity,
-                                world_entity,
-                                &mut send_ops,
-                                &mut world_ops,
-                            );
-                        }
-                        Publicity::Delegated => {
-                            unreachable!("publicity prev == next but outer check passed");
-                        }
-                    }
-                }
-            }
-        }
+        self.capture_publicity_transition(PublicityTransition {
+            global_entity,
+            world_entity,
+            server_owned,
+            client_owned,
+            client_origin,
+            prev_config,
+            config,
+            send_ops: &mut send_ops,
+            world_ops: &mut world_ops,
+        });
 
         // Always persist the scope_exit field regardless of whether
         // publicity changed (mirrors world_server.rs:1543). Coord-side
@@ -835,6 +760,148 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// `entity_publish` write now (so same-tick reads compose) and
     /// record the Send-side + World-side leaf work. Mirrors
     /// `InternalWorldServer::publish_entity` (`world_server.rs:2531`).
+    /// Capture the publicity state-machine transition when publicity
+    /// changed: record Send-side and World-side leaf work into the op
+    /// buffers. Mirrors the `world_server.rs:1464` branch structure.
+    ///
+    /// # Panics
+    ///
+    /// Panics on impossible transitions (server-owned private,
+    /// client-owned delegated, or prev == next), which the guards
+    /// above rule out.
+    fn capture_publicity_transition(&mut self, transition: PublicityTransition<'_, E>) {
+        use naia_shared::Publicity;
+        // Handle publicity state machine only when publicity changed —
+        // this branch structure mirrors `world_server.rs:1464` verbatim.
+        if transition.prev_config.publicity != transition.config.publicity {
+            match transition.prev_config.publicity {
+                Publicity::Private => self.capture_private_transition(transition),
+                Publicity::Public => self.capture_public_transition(transition),
+                Publicity::Delegated => self.capture_delegated_transition(transition),
+            }
+        }
+    }
+
+    /// Capture a `Private`-sourced publicity transition into the op buffers.
+    /// Mirrors the matching `world_server.rs:1464` arm verbatim.
+    ///
+    /// # Panics
+    ///
+    /// Panics on a server-owned private entity or a prev == next transition, which the guards rule out.
+    fn capture_private_transition(&mut self, transition: PublicityTransition<'_, E>) {
+        use naia_shared::Publicity;
+        let PublicityTransition {
+            global_entity,
+            world_entity,
+            server_owned,
+            client_origin,
+            config,
+            send_ops,
+            world_ops,
+            ..
+        } = transition;
+        assert!(!server_owned, "Server-owned entity should never be private");
+        match config.publicity {
+            Publicity::Private => {
+                unreachable!("publicity prev == next but outer check passed");
+            }
+            Publicity::Public => {
+                // private -> public
+                self.capture_publish(global_entity, world_entity, true, send_ops, world_ops);
+            }
+            Publicity::Delegated => {
+                // private -> delegated
+                self.capture_publish(global_entity, world_entity, true, send_ops, world_ops);
+                self.capture_enable_delegation(
+                    global_entity,
+                    world_entity,
+                    client_origin,
+                    send_ops,
+                    world_ops,
+                );
+            }
+        }
+    }
+
+    /// Capture a `Public`-sourced publicity transition into the op buffers.
+    /// Mirrors the matching `world_server.rs:1464` arm verbatim.
+    ///
+    /// # Panics
+    ///
+    /// Panics on an attempt to unpublish a server-owned entity or a prev == next transition, which the guards rule out.
+    fn capture_public_transition(&mut self, transition: PublicityTransition<'_, E>) {
+        use naia_shared::Publicity;
+        let PublicityTransition {
+            global_entity,
+            world_entity,
+            server_owned,
+            client_origin,
+            config,
+            send_ops,
+            world_ops,
+            ..
+        } = transition;
+        match config.publicity {
+            Publicity::Private => {
+                // public -> private
+                assert!(!server_owned, "Cannot unpublish a Server-owned Entity (doing so would disable replication entirely, just use a local entity instead)");
+                self.capture_unpublish(global_entity, world_entity, true, send_ops, world_ops);
+            }
+            Publicity::Public => {
+                unreachable!("publicity prev == next but outer check passed");
+            }
+            Publicity::Delegated => {
+                // public -> delegated
+                self.capture_enable_delegation(
+                    global_entity,
+                    world_entity,
+                    client_origin,
+                    send_ops,
+                    world_ops,
+                );
+            }
+        }
+    }
+
+    /// Capture a `Delegated`-sourced publicity transition into the op buffers.
+    /// Mirrors the matching `world_server.rs:1464` arm verbatim.
+    ///
+    /// # Panics
+    ///
+    /// Panics on a client-owned delegated entity, an attempt to unpublish a server-owned entity, or a prev == next transition, which the guards rule out.
+    fn capture_delegated_transition(&mut self, transition: PublicityTransition<'_, E>) {
+        use naia_shared::Publicity;
+        let PublicityTransition {
+            global_entity,
+            world_entity,
+            server_owned,
+            client_owned,
+            config,
+            send_ops,
+            world_ops,
+            ..
+        } = transition;
+        assert!(
+            !client_owned,
+            "Client-owned entity should never be delegated"
+        );
+        match config.publicity {
+            Publicity::Private => {
+                // delegated -> private
+                assert!(!server_owned, "Cannot unpublish a Server-owned Entity (doing so would disable replication entirely, just use a local entity instead)");
+                self.capture_disable_delegation(global_entity, world_entity, send_ops, world_ops);
+                self.capture_unpublish(global_entity, world_entity, true, send_ops, world_ops);
+            }
+            Publicity::Public => {
+                // delegated -> public
+                self.capture_disable_delegation(global_entity, world_entity, send_ops, world_ops);
+            }
+            Publicity::Delegated => {
+                unreachable!("publicity prev == next but outer check passed");
+            }
+        }
+    }
+
     fn capture_publish(
         &mut self,
         global_entity: naia_shared::GlobalEntity,
@@ -879,9 +946,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             world_ops.push(ConfigureWorldOp::Publish {
                 world_entity: *world_entity,
             });
-            send_ops.push(ConfigureSendOp::PublishScopeReeval {
-                global_entity,
-            });
+            send_ops.push(ConfigureSendOp::PublishScopeReeval { global_entity });
         }
     }
 
@@ -1011,9 +1076,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     ) {
         use crate::server::configure_replication::{ConfigureSendOp, ConfigureWorldOp};
 
-        send_ops.push(ConfigureSendOp::DisableDelegationFanout {
-            global_entity,
-        });
+        send_ops.push(ConfigureSendOp::DisableDelegationFanout { global_entity });
 
         // Coord-side gwm write — immediate.
         self.shared
