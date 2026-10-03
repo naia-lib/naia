@@ -799,6 +799,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         kinds
     }
 
+    /// `MISSION_TICK_FLOOR` Lever 3 — PLAN half. Runs on the Sim thread: drains the
+    /// pending send preamble and entity-scope changes, freezes the dirty domain,
+    /// then builds the per-user update plan (`SendPlan`) that
+    /// [`transmit_send_job`][Self::transmit_send_job] later serializes.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the global diff handler lock is poisoned.
     pub fn prepare_send_job<W: WorldRefType<E> + Sync>(&mut self, world: &W) -> SendPlan {
         #[cfg(feature = "f3_diag")]
         eprintln!(

@@ -20,7 +20,7 @@
 //!     let events: Events<E> = server.take_world_events(); // 3. drain events
 //!     let ticks: TickEvents = server.take_tick_events(&now); // 4. tick clock
 //!     // 5. mutate replicated components here
-//!     server.send_all_packets(world);                  // 6. flush outbound
+//!     server.send_all_packets(&world);                  // 6. flush outbound
 //! #   break;
 //! }
 //! # }
