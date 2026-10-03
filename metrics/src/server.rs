@@ -3,7 +3,7 @@ use naia_shared::ConnectionStats;
 
 /// Emit the three server-wide aggregate gauges.
 ///
-/// Call once per tick after [`Server::send_all_packets`].
+/// Call once per tick after `Server::send_all_packets`.
 pub fn emit_server_aggregates(user_count: usize, entity_count: usize, room_count: usize) {
     metrics::gauge!(names::SERVER_CONNECTED_USERS).set(user_count as f64);
     metrics::gauge!(names::SERVER_TOTAL_ENTITIES).set(entity_count as f64);

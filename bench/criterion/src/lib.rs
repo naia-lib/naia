@@ -896,7 +896,7 @@ impl BenchWorld {
         }
     }
 
-    /// Have ALL connected clients request authority on server_entities[entity_idx].
+    /// Have ALL connected clients request authority on `server_entities[entity_idx]`.
     /// Used by authority contention benchmarks to simulate simultaneous requests.
     pub fn request_authority_all_clients(&mut self, entity_idx: usize) {
         if let Some(&entity) = self.server_entities.get(entity_idx) {
@@ -925,7 +925,7 @@ impl BenchWorld {
         self.server_entities.len()
     }
 
-    /// Grant authority on entity[entity_idx] to user[0].
+    /// Grant authority on `entity[entity_idx]` to `user[0]`.
     /// Used by authority benchmarks.
     pub fn give_authority_on_entity(&mut self, entity_idx: usize) {
         if let (Some(&entity), Some(&user_key)) = (
@@ -939,7 +939,7 @@ impl BenchWorld {
         }
     }
 
-    /// Remove user[user_idx] from the room. Used for scope-exit benchmarks.
+    /// Remove `user[user_idx]` from the room. Used for scope-exit benchmarks.
     pub fn remove_user_from_room(&mut self, user_idx: usize) {
         if let Some(&user_key) = self.connected_user_keys.get(user_idx) {
             self.server.room_mut(&self.room_key).remove_user(&user_key);
@@ -1029,7 +1029,7 @@ impl BenchWorld {
 
     // ─── Authority cycle helpers ──────────────────────────────────────────────
 
-    /// Server takes authority back on entity[entity_idx].
+    /// Server takes authority back on `entity[entity_idx]`.
     /// Used by `authority/cycle` benchmarks.
     pub fn take_authority_on_entity(&mut self, entity_idx: usize) {
         if let Some(&entity) = self.server_entities.get(entity_idx) {

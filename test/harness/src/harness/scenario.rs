@@ -198,7 +198,7 @@ pub struct Scenario {
     /// Type-erased storage for request/response keys between BDD steps.
     /// Maps a string key (e.g., "response_receive_key") to a boxed Any value.
     bdd_storage: HashMap<String, Box<dyn Any + Send + Sync>>,
-    /// Received messages for BDD assertions (type-erased: Vec<u32> for TestMessage values).
+    /// Received messages for BDD assertions (type-erased: `Vec<u32>` for TestMessage values).
     received_messages: Vec<u32>,
     /// Whether wire trace capture is currently enabled on the hub.
     trace_capture_enabled: bool,
@@ -1629,7 +1629,7 @@ impl Scenario {
     /// Enable wire-level packet recording on the local transport hub.
     ///
     /// After calling this, every packet sent or received through the hub will
-    /// be appended to an internal buffer. Call [`take_trace`] to consume the
+    /// be appended to an internal buffer. Call [`Scenario::take_trace`] to consume the
     /// buffer and obtain a [`Trace`].
     pub fn enable_trace_capture(&mut self) {
         self.hub.enable_packet_recording();
@@ -1639,7 +1639,7 @@ impl Scenario {
     /// Consume the recorded wire trace and return it as a [`Trace`].
     ///
     /// The internal buffer is cleared. Capture remains enabled; call
-    /// [`enable_trace_capture`] again if you need to restart from scratch.
+    /// [`Scenario::enable_trace_capture`] again if you need to restart from scratch.
     ///
     /// # Panics
     ///

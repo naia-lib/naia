@@ -55,7 +55,7 @@
 //! | [`EntityRef`] | Read-only entity handle |
 //! | [`Publicity`] | The three visibility states (Private / Public / Delegated) |
 //! | [`CommandHistory`] | Rollback buffer for client-prediction |
-//! | [`ConnectionStatus`](client::ConnectionStatus) | Lifecycle state |
+//! | [`ConnectionStatus`] | Lifecycle state |
 
 #![deny(
     trivial_casts,
@@ -79,7 +79,7 @@ pub mod shared {
     };
 }
 
-/// The refusal reason carried by [`RejectEvent`](crate::RejectEvent) tuples.
+/// The refusal reason carried by [`RejectEvent`] tuples.
 /// Re-exported at the root -- alongside `DisconnectReason` above -- so adapter
 /// crates and users can name the reason without reaching past this crate into
 /// `naia-shared` directly.

@@ -200,9 +200,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ///
     /// Must be called before [`connect`](Client::connect) if the server
     /// requires authentication. The server receives this as an
-    /// [`AuthEvent`] in its connection handler.
-    ///
-    /// [`AuthEvent`]: naia_server::events::AuthEvent
+    /// `AuthEvent` in its connection handler.
     pub fn auth<M: Message>(&mut self, auth: M) {
         // get auth bytes
         let mut bit_writer = BitWriter::new();
@@ -235,7 +233,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Panics if the client has already initiated a connection. Check
     /// [`connection_status`](Client::connection_status) before calling.
     ///
-    /// [`ConnectionEvent`]: crate::events::ConnectionEvent
+    /// [`ConnectionEvent`]: crate::ConnectEvent
     pub fn connect<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
         if !self.is_disconnected() {
             panic!("Client has already initiated a connection, cannot initiate a new one. TIP: Check client.is_disconnected() before calling client.connect()");
@@ -342,7 +340,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ///
     /// Panics if the client is not currently connected.
     ///
-    /// [`DisconnectionEvent`]: crate::events::DisconnectionEvent
+    /// [`DisconnectionEvent`]: crate::DisconnectEvent
     pub fn disconnect(&mut self) {
         if !self.is_connected() {
             panic!("Trying to disconnect Client which is not connected yet!")
@@ -401,7 +399,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Must be called after [`receive_all_packets`](Client::receive_all_packets)
     /// and before [`take_world_events`](Client::take_world_events). Applies
     /// server-replicated entity spawn/update/despawn events and queues them
-    /// for the next [`take_world_events`] call.
+    /// for the next [`take_world_events`](Client::take_world_events) call.
     pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
         // all other operations
         if self.is_disconnecting() {
@@ -720,7 +718,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// the server's original request. Returns `true` on success; `false` if
     /// the key is no longer valid (e.g. the connection was dropped).
     ///
-    /// [`RequestEvent`]: crate::events::RequestEvent
+    /// [`RequestEvent`]: crate::RequestEvent
     pub fn send_response<S: Response>(
         &mut self,
         response_key: &ResponseSendKey<S>,
@@ -1311,8 +1309,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// [`entity_mut(...).request_authority()`](crate::EntityMut::request_authority)
     /// instead.
     ///
-    /// [`EntityAuthGrantedEvent`]: crate::events::EntityAuthGrantedEvent
-    /// [`EntityAuthDeniedEvent`]: crate::events::EntityAuthDeniedEvent
+    /// [`EntityAuthGrantedEvent`]: crate::EntityAuthGrantedEvent
+    /// [`EntityAuthDeniedEvent`]: crate::EntityAuthDeniedEvent
     pub fn entity_request_authority(&mut self, world_entity: &E) -> Result<(), AuthorityError> {
         self.check_client_authoritative_allowed();
 
@@ -1748,7 +1746,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// changed) BEFORE ticking its simulation — so a client-confirmed re-simulation
     /// can re-derive every tick in a catch-up batch with that tick's own input —
     /// then reconcile the remaining *state* afterward (the input-early / state-late
-    /// split). See [`LocalWorldManager::take_received_updates_of_kind`].
+    /// split). See [`take_received_updates_of_kind`](Client::take_received_updates_of_kind).
     pub fn take_received_updates_of_kind<R: ReplicatedComponent, W: WorldMutType<E>>(
         &mut self,
         mut world: W,

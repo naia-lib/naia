@@ -224,12 +224,12 @@ pub fn apply_receive_output(
     });
 }
 
-/// Phase B.7 (MISSION_SIM_OWNS_WORLD) sibling of [`apply_receive_output`]
+/// Phase B.7 (MISSION_SIM_OWNS_WORLD) sibling of `apply_receive_output`
 /// for the three-handle pipeline architecture.
 ///
-/// Same event-emission body as [`apply_receive_output`], byte-for-byte,
+/// Same event-emission body as `apply_receive_output`, byte-for-byte,
 /// EXCEPT the two `ServerImpl` query sites (`is_resource_entity`,
-/// `entity_owner`) route through [`CoordHandle`] instead. The
+/// `entity_owner`) route through [`CoordHandle`](naia_server::pipeline_actors::CoordHandle) instead. The
 /// `ComponentEventRegistry::receive_events` tail call is preserved
 /// verbatim (lesson 11 of `feedback_naia_4f_operational`: omitting it
 /// silently breaks `InsertComponentEvent<C>` / `UpdateComponentEvent<C>` /

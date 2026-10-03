@@ -37,7 +37,7 @@
 //! sim_app.insert_resource(sim_converter);
 //! ```
 //!
-//! See [`crate::pipeline_actors::CoordHandle::sim_converter`].
+//! See [`CoordHandle::entity_converter`](crate::pipeline_actors::CoordHandle::entity_converter).
 
 use std::{hash::Hash, sync::Arc};
 
@@ -55,7 +55,7 @@ pub struct ServerEntityConverter<E: Copy + Eq + Hash + Send + Sync + 'static> {
 
 impl<E: Copy + Eq + Hash + Send + Sync + 'static> ServerEntityConverter<E> {
     /// Wrap an arbitrary `Arc`-backed converter. The typical
-    /// construction site is [`crate::pipeline_actors::CoordHandle::sim_converter`],
+    /// construction site is [`CoordHandle::entity_converter`](crate::pipeline_actors::CoordHandle::entity_converter),
     /// which wraps the shared `Arc<ServerShared<E>>`.
     pub fn from_arc(inner: Arc<dyn EntityAndGlobalEntityConverter<E> + Send + Sync>) -> Self {
         Self { inner }

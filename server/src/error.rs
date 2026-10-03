@@ -25,7 +25,7 @@ pub enum NaiaServerError {
     UserNotFound,
     /// The target channel's send queue is at capacity. The message was not
     /// queued. The caller may retry on the next tick or discard the message.
-    /// Configure [`ReliableSettings::max_queue_depth`] to adjust the limit.
+    /// Configure [`ReliableSettings::max_queue_depth`](naia_shared::ReliableSettings::max_queue_depth) to adjust the limit.
     MessageQueueFull,
     /// The connection's request nonce supply is spent. No further request
     /// may start on it: retire the connection. A fresh connection starts a
