@@ -294,9 +294,19 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
     fn handle_disconnects(&mut self) {
         if self.timeout_timer.ringing() {
             self.timeout_timer.reset();
+            let now = naia_shared::Instant::now();
             let mut user_disconnects: Vec<UserKey> = Vec::new();
             for (_, recv_conn) in self.recv_user_connections.iter() {
                 if recv_conn.should_drop() && !recv_conn.manual_disconnect {
+                    // Post-Connected liveness marker (Usher 42587 fork (a)):
+                    // name the silent side at the drop decision.
+                    warn!(
+                        "naia: Server timing out connection user={:?} addr={} silent_secs={} outbound_sent={}",
+                        recv_conn.user_key,
+                        recv_conn.address,
+                        recv_conn.last_inbound_at.elapsed(&now).as_secs(),
+                        recv_conn.shared.outbound_packets_sent()
+                    );
                     user_disconnects.push(recv_conn.user_key);
                 }
             }

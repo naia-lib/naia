@@ -372,6 +372,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     address
                 );
             }
+            if let Some(send_conn) = self.send_user_connections.get(&address) {
+                send_conn.shared.note_outbound_packet();
+            }
         }
     }
 
@@ -421,6 +424,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         time_manager.current_tick().ser(&mut writer);
         time_manager.current_tick_instant().ser(&mut writer);
 
+        send_conn.shared.note_outbound_packet();
         if io.send_packet(user_address, writer.to_packet()).is_err() {
             // Heartbeat send failure is not fatal: the connection timeout
             // will detect a persistently dead link when heartbeats stop arriving.
