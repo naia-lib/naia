@@ -1,4 +1,4 @@
-//! MISSION_PIPELINE_API_BOUNDARY G7-3.
+//! `MISSION_PIPELINE_API_BOUNDARY` G7-3.
 //!
 //! Centralizes the Recv/Send worker parked-vs-active choice behind a single
 //! `workers_active` cfg (consumed by `pipeline_actors/runtime.rs`) so the branch
@@ -7,7 +7,7 @@
 //! `workers_active = not(deterministic)`. The `test_time` feature (advanceable
 //! clock) is orthogonal and does NOT influence this. Truth table:
 //!
-//! | test_time | deterministic | workers_active | meaning                          |
+//! | `test_time` | `deterministic` | `workers_active` | meaning                    |
 //! |-----------|---------------|----------------|----------------------------------|
 //! | off       | off           | ON             | production: real clock, active   |
 //! | on        | on            | off            | test suite: sim clock, parked    |
