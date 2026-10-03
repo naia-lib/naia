@@ -3,15 +3,35 @@
   "packets": [
     {
       "direction": "ClientToServer",
-      "hex": "05000200020000001400300040030000"
+      "hex": "07000400060000001400300060030000"
     },
     {
       "direction": "ServerToClient",
-      "hex": "05000400060000000a008002000e0060008000"
+      "hex": "1800180038000000300080090000"
+    },
+    {
+      "direction": "ServerToClient",
+      "hex": "090006000e0000000c006002000a0064008000"
+    },
+    {
+      "direction": "ServerToClient",
+      "hex": "0b0006000e0000000c006002000a0064008000"
     },
     {
       "direction": "ClientToServer",
-      "hex": "180010001800000000"
+      "hex": "200020007800000000"
+    },
+    {
+      "direction": "ClientToServer",
+      "hex": "0b000a003e00000014000840040000000800000000"
+    },
+    {
+      "direction": "ServerToClient",
+      "hex": "30002800f80000003800000b0000"
+    },
+    {
+      "direction": "ServerToClient",
+      "hex": "0f000a003e0000000e00c002000388000000000100000000"
     }
   ]
 }
