@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# naia push gate — tracked source. Install once per clone:
+#   git config core.hooksPath tools/hooks
+# (per-worktree instead: git config --worktree core.hooksPath tools/hooks)
+# Legs: rustfmt drift check first, then warning-clean native + wasm32 checks.
+# Verify linux-native + wasm32-unknown-unknown builds before every push.
+# As of T2.4 (2026-05-05) the workspace is warning-clean. We gate the
+# native build with `RUSTFLAGS="-D warnings"` so any regression fails
+# the push instead of silently piling up. The wasm32 checks stay on
+# `cargo check` (faster than full build) but also gate on warnings.
+set -e
+
+# Block all direct pushes to main. Naia uses dev-trunk model; main is
+# only touched at tag time via a deliberate release process.
+while read local_ref local_sha remote_ref remote_sha; do
+    if [[ "$remote_ref" == "refs/heads/main" ]]; then
+        echo "[pre-push] ERROR: Direct push to 'main' is forbidden."
+        echo "[pre-push] Naia uses dev-trunk model — main is only touched at tag time."
+        echo "[pre-push] Push to 'dev' instead."
+        exit 1
+    fi
+done
+
+echo "[pre-push] cargo fmt --all --check (no rustfmt drift)..."
+cargo fmt --all --check
+
+echo "[pre-push] cargo check --workspace --all-targets (warning-clean gate)..."
+RUSTFLAGS="-D warnings" cargo check --workspace --all-targets --quiet
+
+echo "[pre-push] cargo check -p naia-shared --target wasm32-unknown-unknown..."
+RUSTFLAGS="-D warnings" cargo check -p naia-shared --target wasm32-unknown-unknown --features wbindgen --quiet
+
+echo "[pre-push] cargo check -p naia-client --target wasm32-unknown-unknown..."
+RUSTFLAGS="-D warnings" cargo check -p naia-client --target wasm32-unknown-unknown --features wbindgen --quiet
+
+echo "[pre-push] cargo check -p naia-bevy-client --target wasm32-unknown-unknown..."
+RUSTFLAGS="-D warnings" cargo check -p naia-bevy-client --target wasm32-unknown-unknown --quiet
+
+echo "[pre-push] all checks passed."
