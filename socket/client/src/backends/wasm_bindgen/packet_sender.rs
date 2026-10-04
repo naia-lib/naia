@@ -20,11 +20,7 @@ impl PacketSender {
     /// Create a new PacketSender. `closer` is `Some` on the standard path
     /// (the peer/channel `start` built) and `None` for a worker-supplied
     /// `DataPort`, whose connection the host page owns.
-    pub fn new(
-        data_port: &DataPort,
-        addr_cell: &AddrCell,
-        closer: Option<WasmPeerCloser>,
-    ) -> Self {
+    pub fn new(data_port: &DataPort, addr_cell: &AddrCell, closer: Option<WasmPeerCloser>) -> Self {
         PacketSender {
             message_port: data_port.message_port(),
             server_addr: addr_cell.clone(),
