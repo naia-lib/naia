@@ -79,6 +79,8 @@ use std::{
     hash::Hash,
 };
 
+use log::warn;
+
 use crate::{
     sequence_less_than, world::sync::remote_component_channel::RemoteComponentChannel,
     ComponentKind, EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageType, HostType,
@@ -105,6 +107,10 @@ pub enum EntityChannelState {
 pub struct RemoteEntityChannel {
     state: EntityChannelState,
     last_epoch_id: Option<MessageIndex>,
+    /// Count of duplicate-Spawn arrivals on an already-Spawned channel
+    /// (Usher 48217 (A)). Each hit permanently stalls this channel, so the
+    /// count must stay zero in a healthy session.
+    duplicate_spawn_stalls: u64,
 
     component_channels: HashMap<ComponentKind, RemoteComponentChannel>,
     auth_channel: AuthChannel,
@@ -120,6 +126,7 @@ impl RemoteEntityChannel {
         Self {
             state: EntityChannelState::Despawned,
             last_epoch_id: None,
+            duplicate_spawn_stalls: 0,
 
             component_channels: HashMap::new(),
             auth_channel: AuthChannel::new_remote(host_type),
@@ -219,6 +226,16 @@ impl RemoteEntityChannel {
             match msg.get_type() {
                 EntityMessageType::Spawn => {
                     if self.state != EntityChannelState::Despawned {
+                        // Usher 48217 (A): a second, newer-id Spawn on an
+                        // already-Spawned channel stalls it (and everything
+                        // behind it) permanently. Count it and log loudly
+                        // instead of wedging silently.
+                        self.duplicate_spawn_stalls += 1;
+                        warn!(
+                            "duplicate Spawn for already-Spawned entity channel \
+                             (epoch {:?}, stalled total {})",
+                            self.last_epoch_id, self.duplicate_spawn_stalls,
+                        );
                         break;
                     }
 
@@ -258,6 +275,13 @@ impl RemoteEntityChannel {
                 }
                 EntityMessageType::SpawnWithComponents => {
                     if self.state != EntityChannelState::Despawned {
+                        // Usher 48217 (A): see the Spawn arm above.
+                        self.duplicate_spawn_stalls += 1;
+                        warn!(
+                            "duplicate SpawnWithComponents for already-Spawned entity channel \
+                             (epoch {:?}, stalled total {})",
+                            self.last_epoch_id, self.duplicate_spawn_stalls,
+                        );
                         break;
                     }
 
@@ -356,6 +380,13 @@ impl RemoteEntityChannel {
     #[allow(dead_code)] // used in migration unit tests
     pub(crate) fn get_state(&self) -> EntityChannelState {
         self.state
+    }
+
+    /// Count of duplicate-Spawn stalls hit by this channel (Usher 48217
+    /// (A)). Zero in a healthy session; every hit is also `warn!`-logged
+    /// at the break site.
+    pub fn duplicate_spawn_stalls(&self) -> u64 {
+        self.duplicate_spawn_stalls
     }
 
     #[cfg(feature = "e2e_debug")]

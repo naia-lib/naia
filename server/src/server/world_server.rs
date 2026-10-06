@@ -389,11 +389,89 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         // to actually push spawn messages).
     }
 
+    /// Send-side address already held for `user_key`, if any.
+    fn send_addr_for_user(&self, user_key: &UserKey) -> Option<SocketAddr> {
+        self.send
+            .state
+            .send_user_connections
+            .iter()
+            .find(|(_, conn)| conn.user_key == *user_key)
+            .map(|(addr, _)| *addr)
+    }
+
+    /// Whether `old_addr` still has a live recv connection, under the
+    /// server's own liveness definition (recv timeout sweep). Absent
+    /// counts as not live: nothing is listening there anymore.
+    fn recv_conn_live(&self, old_addr: &SocketAddr) -> bool {
+        match self.recv.state.recv_user_connections.get(old_addr) {
+            Some(conn) => !conn.should_drop(),
+            None => false,
+        }
+    }
+
+    /// T1 (Usher 48217): the same client re-finalized from a new address
+    /// while its old connection is silent. Re-key both connection halves
+    /// to the new address, preserving tracking, visibility, sequence
+    /// numbers, and RTT — so no Spawn re-fires for entities the client
+    /// already holds (a second Spawn would wedge its channels silently).
+    fn rekey_connection(
+        &mut self,
+        user_key: &UserKey,
+        old_addr: &SocketAddr,
+        new_addr: &SocketAddr,
+    ) {
+        if let Some(mut send_conn) = self.send.state.send_user_connections.remove(old_addr) {
+            send_conn.address = *new_addr;
+            self.send
+                .state
+                .send_user_connections
+                .insert(*new_addr, send_conn);
+        }
+        if let Some(mut recv_conn) = self.recv.state.recv_user_connections.remove(old_addr) {
+            recv_conn.address = *new_addr;
+            // The client just proved liveness by handshaking: restart the
+            // timeout so the sweep cannot reap the re-keyed connection on
+            // the old socket's silence.
+            recv_conn.timeout_timer.reset();
+            self.recv
+                .state
+                .recv_user_connections
+                .insert(*new_addr, recv_conn);
+        }
+        if let Some(user) = self.sim_handle.state.user_store.get_mut(user_key) {
+            user.set_address(*new_addr);
+        }
+        if self.send.state.send_io.bandwidth_monitor_enabled() {
+            self.send.state.send_io.register_client(new_addr);
+        }
+        self.recv
+            .state
+            .incoming_world_events
+            .push_connection(user_key);
+    }
+
     fn finalize_connection(&mut self, user_key: &UserKey, user_address: &SocketAddr) {
         if !self.sim_handle.state.user_store.contains(user_key) {
             warn!("unknown user is finalizing connection...");
             return;
         };
+
+        // Usher 48217: a second finalize for an already-finalized user is
+        // either a same-client reconnect (T1) or a fresh client under a
+        // live key (T2). A fresh pair re-fires Spawn for entities the old
+        // connection holds, so build one only when no live connection
+        // exists for this user.
+        let superseded: Option<(SocketAddr, bool)> = self
+            .send_addr_for_user(user_key)
+            .filter(|old_addr| old_addr != user_address)
+            .map(|old_addr| {
+                let old_live = self.recv_conn_live(&old_addr);
+                (old_addr, old_live)
+            });
+        if let Some((old_addr, false)) = superseded {
+            self.rekey_connection(user_key, &old_addr, user_address);
+            return;
+        }
 
         let (recv_conn, send_conn) = new_connection_pair(
             &self.shared.server_config.connection,
@@ -451,6 +529,28 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .state
             .incoming_world_events
             .push_connection(user_key);
+
+        // T2 (Usher 48217 hazard): this fresh build superseded a live
+        // connection for the same user_key (a fresh client while the old
+        // one still listens). Close the old halves — mirror user_delete's
+        // removal path — and report the deliberate server-initiated close
+        // to the app as Kicked, the nearest existing reason.
+        if let Some((old_addr, true)) = superseded {
+            if let Some(user) = self.sim_handle.state.user_store.get_mut(user_key) {
+                user.set_address(*user_address);
+            }
+            self.recv.state.recv_user_connections.remove(&old_addr);
+            self.shared
+                .pending_send_state_updates
+                .lock()
+                .push(crate::server::SendStateUpdate::ConnectionRemoved(old_addr));
+            self.commit_pending_send_state_updates();
+            self.recv.state.incoming_world_events.push_disconnection(
+                user_key,
+                old_addr,
+                DisconnectReason::Kicked,
+            );
+        }
     }
 
     /// Maintain connection with a client and read all incoming packet data

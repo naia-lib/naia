@@ -25,6 +25,13 @@ impl WorldUser {
         self.data_addr
     }
 
+    /// Re-points the user's data-channel address (Usher 48217: same client
+    /// re-finalizing from a new address keeps its connection state; the
+    /// store must follow the client, not the stale socket).
+    pub(crate) fn set_address(&mut self, address: SocketAddr) {
+        self.data_addr = address;
+    }
+
     // Rooms
 
     pub(crate) fn cache_room(&mut self, room_key: &RoomKey) {
