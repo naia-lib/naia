@@ -230,7 +230,7 @@ fn pipelined_send(world: &mut World) {
         if !ws.is_running() {
             return;
         }
-        ws.send(world.proxy());
+        ws.send(&world.proxy());
     });
 }
 

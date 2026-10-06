@@ -628,7 +628,7 @@ mod tests {
         let mut manager = HandshakeManager::new(server_pid());
         let token = IdentityToken::generate();
         let user_key = UserKey::from_u64(7);
-        manager.authenticate_user(&token, &user_key);
+        manager.authenticate_user(&token, user_key);
         let bytes = inbound(
             &HandshakeHeader::ClientIdentifyRequest(server_pid()),
             Some(&token),
@@ -670,7 +670,7 @@ mod tests {
         let mut manager = HandshakeManager::new(server_pid());
         let token = IdentityToken::generate();
         let user_key = UserKey::from_u64(7);
-        manager.authenticate_user(&token, &user_key);
+        manager.authenticate_user(&token, user_key);
         let bytes = inbound(
             &HandshakeHeader::ClientIdentifyRequest(server_pid()),
             Some(&token),

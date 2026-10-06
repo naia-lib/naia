@@ -594,8 +594,8 @@ fn a_degraded_retransmit_must_not_restamp_a_buffered_insert() {
     // Original read at tick 1: Insert#1 plus its inline payload.
     fx.manager.insert_received_component(
         1,
-        &local_entity,
-        &ComponentKind::of::<Wraith>(),
+        local_entity,
+        ComponentKind::of::<Wraith>(),
         remote_component(&fx.kinds, &Wraith::new_complete(9)),
     );
     fx.manager.receiver_buffer_message(
@@ -642,8 +642,8 @@ fn a_retransmitted_upgrade_must_not_be_dropped_as_duplicate() {
     // Retransmit read at tick 4: same id as a full Insert with its payload.
     fx.manager.insert_received_component(
         4,
-        &local_entity,
-        &ComponentKind::of::<Wraith>(),
+        local_entity,
+        ComponentKind::of::<Wraith>(),
         remote_component(&fx.kinds, &Wraith::new_complete(9)),
     );
     fx.manager.receiver_buffer_message(

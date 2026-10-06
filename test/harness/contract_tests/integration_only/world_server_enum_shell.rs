@@ -37,7 +37,7 @@ fn world_server_enum_resident_shell_dispatches() {
             outputs.iter().all(|o| o.is_empty()),
             "resident receive with no clients must yield only empty outputs",
         );
-        server.send(world.proxy());
+        server.send(&world.proxy());
         let _tick = server.current_tick();
     }
 }
@@ -58,7 +58,7 @@ fn world_server_enum_pipelined_shell_dispatches() {
             outputs.iter().all(|o| o.is_empty()),
             "pipelined receive with no clients must yield only empty outputs",
         );
-        server.send(world.proxy());
+        server.send(&world.proxy());
         let _tick = server.current_tick();
     }
 }
@@ -115,7 +115,7 @@ fn drive_historian_fast_path(mut server: WorldServer<DemoEntity>) {
         server.historian().is_none(),
         "historian starts disabled in both engine shapes",
     );
-    server.record_historian_tick(world.proxy(), 7);
+    server.record_historian_tick(&world.proxy(), 7);
     assert!(
         server.historian().is_none(),
         "recording while disabled must remain a no-op",
@@ -128,7 +128,7 @@ fn drive_historian_fast_path(mut server: WorldServer<DemoEntity>) {
             .is_some_and(|historian| historian.is_empty()),
         "enable_historian creates an empty coord-resident buffer",
     );
-    server.record_historian_tick(world.proxy(), 8);
+    server.record_historian_tick(&world.proxy(), 8);
     {
         let historian = server.historian().expect("historian must be enabled");
         assert_eq!(historian.len(), 1, "one snapshot must be retained");
@@ -145,7 +145,7 @@ fn drive_historian_fast_path(mut server: WorldServer<DemoEntity>) {
             .is_some_and(|historian| historian.is_empty()),
         "filtered enable replaces the buffer in both modes",
     );
-    server.record_historian_tick(world.proxy(), 9);
+    server.record_historian_tick(&world.proxy(), 9);
     {
         let historian = server.historian().expect("historian must be enabled");
         assert_eq!(historian.len(), 1, "filtered buffer records the tick");

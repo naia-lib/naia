@@ -147,16 +147,16 @@ fn entity_with_component_matches_across_views() {
 
     // has_component_of_kind parity
     let kind = ComponentKind::of::<Position>();
-    assert!(bevy_view.has_component_of_kind(&entity, &kind));
-    assert!(snap.has_component_of_kind(&entity, &kind));
+    assert!(bevy_view.has_component_of_kind(&entity, kind));
+    assert!(snap.has_component_of_kind(&entity, kind));
 
     // component<R> value parity
     assert_eq!(read_position(&bevy_view, entity), Some((3.5, -1.25)));
     assert_eq!(read_position(&snap, entity), Some((3.5, -1.25)));
 
     // component_of_kind dyn parity — both return Some.
-    assert!(bevy_view.component_of_kind(&entity, &kind).is_some());
-    assert!(snap.component_of_kind(&entity, &kind).is_some());
+    assert!(bevy_view.component_of_kind(&entity, kind).is_some());
+    assert!(snap.component_of_kind(&entity, kind).is_some());
 }
 
 #[test]
@@ -178,8 +178,8 @@ fn entity_without_component_returns_none_in_both_views() {
     assert!(snap.component::<Position>(&entity).is_none());
 
     let kind = ComponentKind::of::<Position>();
-    assert!(!bevy_view.has_component_of_kind(&entity, &kind));
-    assert!(!snap.has_component_of_kind(&entity, &kind));
+    assert!(!bevy_view.has_component_of_kind(&entity, kind));
+    assert!(!snap.has_component_of_kind(&entity, kind));
 }
 
 #[test]
@@ -202,8 +202,8 @@ fn lifecycle_spawn_insert_mutate_remove_despawn_all_parity() {
     let bevy_view = app.world().proxy();
     assert_eq!(read_position(&bevy_view, entity), Some((1.0, 2.0)));
     assert_eq!(read_position(&snap, entity), Some((1.0, 2.0)));
-    assert!(bevy_view.has_component_of_kind(&entity, &kind));
-    assert!(snap.has_component_of_kind(&entity, &kind));
+    assert!(bevy_view.has_component_of_kind(&entity, kind));
+    assert!(snap.has_component_of_kind(&entity, kind));
 
     // 3. Mutate value. Re-snapshot, both views show the new value.
     replace_position(&mut app, entity, 10.0, 20.0);
@@ -224,7 +224,7 @@ fn lifecycle_spawn_insert_mutate_remove_despawn_all_parity() {
     assert!(bevy_view.has_entity(&entity));
     assert!(snap.has_entity(&entity));
     // Cleanup snap for completeness — exercises `remove_component`.
-    snap.remove_component(entity, &kind);
+    snap.remove_component(entity, kind);
 
     // 5. Despawn the entity. Bevy view no longer has it; snapshot is
     // updated via mark_despawned to match.
@@ -287,7 +287,7 @@ fn serialize_via_dyn_write(
     component_kinds: &naia_shared::ComponentKinds,
 ) -> Box<[u8]> {
     let component_ref = view
-        .component_of_kind(&entity, kind)
+        .component_of_kind(&entity, *kind)
         .expect("component_of_kind returned None — caller must ensure presence");
     let mut writer = BitWriter::new();
     let mut converter = FakeEntityConverter;

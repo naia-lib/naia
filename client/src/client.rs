@@ -3580,7 +3580,7 @@ mod handshake_send_accounting_tests {
         fn has_component_of_kind(
             &self,
             _world_entity: &u64,
-            _component_kind: &ComponentKind,
+            _component_kind: ComponentKind,
         ) -> bool {
             false
         }
@@ -3593,7 +3593,7 @@ mod handshake_send_accounting_tests {
         fn component_of_kind<'a>(
             &'a self,
             _entity: &u64,
-            _component_kind: &ComponentKind,
+            _component_kind: ComponentKind,
         ) -> Option<ReplicaDynRefWrapper<'a>> {
             None
         }

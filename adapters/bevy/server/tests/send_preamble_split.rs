@@ -114,7 +114,7 @@ fn second_call_to_send_all_packets_does_not_double_run_preamble() {
 
     // Empty world for send_all_packets.
     let world = World::new();
-    send.send_all_packets(world.proxy());
+    send.send_all_packets(&world.proxy());
 
     // send_all_packets must SKIP its inline preamble (flag was true),
     // so the post-preamble RoomChange is STILL in the queue.
@@ -126,7 +126,7 @@ fn second_call_to_send_all_packets_does_not_double_run_preamble() {
     // Second send_all_packets WITHOUT explicit preamble — flag was
     // reset, so it runs the preamble inline.
     let world2 = World::new();
-    send.send_all_packets(world2.proxy());
+    send.send_all_packets(&world2.proxy());
     assert_eq!(
         queue_len(&sim_handle),
         0,
@@ -145,7 +145,7 @@ fn backward_compat_send_all_packets_alone_still_drains_queue() {
     // Call send_all_packets directly — must drain queue inline (no
     // explicit preamble called).
     let world = World::new();
-    send.send_all_packets(world.proxy());
+    send.send_all_packets(&world.proxy());
 
     assert_eq!(
         queue_len(&sim_handle),

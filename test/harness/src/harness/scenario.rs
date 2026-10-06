@@ -1167,7 +1167,7 @@ impl Scenario {
             }
             server.receive_all_packets();
             server.process_all_packets(self.server_world.proxy_mut(), &now);
-            server.send_all_packets(self.server_world.proxy());
+            server.send_all_packets(&self.server_world.proxy());
         }
     }
 
@@ -1209,7 +1209,7 @@ impl Scenario {
             server.receive_all_packets();
             server.process_all_packets(self.server_world.proxy_mut(), &now);
         }
-        server.transmit_send_job(snap, plan);
+        server.transmit_send_job(&snap, plan);
     }
 
     /// MISSION_TICK_FLOOR Lever 3 (test support): build a [`SendPlan`] at the
@@ -1360,7 +1360,7 @@ impl Scenario {
         // Server update
         server.receive_all_packets();
         server.process_all_packets(server_world.proxy_mut(), now);
-        server.send_all_packets(server_world.proxy());
+        server.send_all_packets(&server_world.proxy());
     }
 
     // ========================================================================

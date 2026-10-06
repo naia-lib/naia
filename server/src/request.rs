@@ -36,7 +36,7 @@ impl GlobalRequestManager {
         user_key: UserKey,
     ) -> Result<(GlobalRequestId, ConnectionRequestNonce), NonceExhaustion> {
         let allocator = self.nonces.entry(user_key).or_default();
-        let nonce = allocator.next_nonce()?;
+        let nonce = allocator.next()?;
         let id = GlobalRequestId::new(self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
 

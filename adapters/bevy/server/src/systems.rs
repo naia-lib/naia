@@ -372,7 +372,7 @@ pub fn send_packets(world: &mut World) {
                 }
 
                 if did_tick {
-                    server.send_all_packets(world.proxy());
+                    server.send_all_packets(&world.proxy());
                 }
             },
         );

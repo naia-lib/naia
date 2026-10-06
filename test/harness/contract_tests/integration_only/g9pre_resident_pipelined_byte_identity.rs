@@ -536,7 +536,7 @@ impl DirectScopeRun {
         self.server.receive_all_packets();
         self.server
             .process_all_packets(self.server_world.proxy_mut(), &now);
-        self.server.send_all_packets(self.server_world.proxy());
+        self.server.send_all_packets(&self.server_world.proxy());
     }
 
     fn tick_bracket(&mut self) {
@@ -550,7 +550,7 @@ impl DirectScopeRun {
         self.client.send_all_packets(self.client_world.proxy_mut());
 
         self.server.receive(self.server_world.proxy_mut());
-        self.server.send(self.server_world.proxy());
+        self.server.send(&self.server_world.proxy());
     }
 
     fn connect(&mut self) -> naia_server::UserKey {

@@ -180,7 +180,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         let scenario = self.ctx.scenario();
         let (server, registry) = scenario.server_and_registry().unwrap();
         let world_ref = scenario.server_world_ref();
-        let server_entities = server.entities(world_ref);
+        let server_entities = server.entities(&world_ref);
         server_entities
             .iter()
             .filter_map(|e| registry.entity_key_for_server_entity(e))

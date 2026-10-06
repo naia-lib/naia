@@ -475,11 +475,13 @@ impl UserDiffHandler {
         }
     }
 
+    /// Test-only count of live per-user receiver slots (dense, `Some` entries).
     #[cfg(feature = "test_utils")]
     pub fn receiver_count(&self) -> usize {
         self.receivers_dense.iter().filter(|s| s.is_some()).count()
     }
 
+    /// Test-only count of receivers currently holding dirty bits.
     #[cfg(feature = "test_utils")]
     pub fn dirty_candidates_count(&self) -> usize {
         self.receivers_dense
