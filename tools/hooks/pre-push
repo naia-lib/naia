@@ -10,14 +10,21 @@
 # `cargo check` (faster than full build) but also gate on warnings.
 set -e
 
-# Block all direct pushes to main. Naia uses dev-trunk model; main is
-# only touched at tag time via a deliberate release process.
+# main moves only by integrator fast-forward of dev content (SEAM RULE,
+# Connor 2026-09-30: the repo's named integration agent owns dev->main).
+# Every pushed commit must already be on origin/dev (so main never holds
+# what dev lacks), and the update must fast-forward. All other pushes to
+# main stay rejected. No commit-message/trailer inspection anywhere here.
 while read local_ref local_sha remote_ref remote_sha; do
     if [[ "$remote_ref" == "refs/heads/main" ]]; then
-        echo "[pre-push] ERROR: Direct push to 'main' is forbidden."
-        echo "[pre-push] Naia uses dev-trunk model — main is only touched at tag time."
-        echo "[pre-push] Push to 'dev' instead."
-        exit 1
+        if git merge-base --is-ancestor "$local_sha" refs/remotes/origin/dev \
+            && git merge-base --is-ancestor "$remote_sha" "$local_sha"; then
+            echo "[pre-push] main fast-forward of origin/dev content permitted."
+        else
+            echo "[pre-push] ERROR: push to 'main' rejected: only fast-forward"
+            echo "[pre-push] updates carrying commits already on 'dev' are allowed."
+            exit 1
+        fi
     fi
 done
 
