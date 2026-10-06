@@ -2455,6 +2455,9 @@ impl naia_shared::WorldRefType<u64> for ScopeWorld {
 }
 
 /// Distinct component kind for scope tests (kinds are TypeId-derived).
+/// The derive only satisfies the `Replicate` bound `ComponentKind::of`
+/// requires; the fixture never syncs this component.
+#[derive(naia_shared::Replicate)]
 struct ScopeKindA;
 
 /// Registers one server-owned world entity with a single component record,
