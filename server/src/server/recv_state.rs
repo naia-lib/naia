@@ -118,6 +118,7 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
 impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
     /// Awaitable readiness of the recv transport, if event-driven (see
     /// [`crate::transport::PacketReceiver::readiness`]).
+    #[must_use]
     pub fn readiness(&self) -> Option<crate::transport::PacketReadiness> {
         self.recv_io.readiness()
     }
@@ -175,14 +176,12 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                                 .is_err()
                             {
                                 warn!("Server Error: cannot read malformed packet");
-                                continue;
                             }
                         }
                         PacketType::Heartbeat => {
                             if let Some(recv_conn) = self.recv_user_connections.get_mut(&address) {
                                 recv_conn.process_incoming_header(&header);
                             }
-                            continue;
                         }
                         PacketType::Ping => {
                             // 4-F.naia.c.1: queue the pong response on
@@ -202,7 +201,6 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                             if let Some(recv_conn) = self.recv_user_connections.get_mut(&address) {
                                 recv_conn.process_incoming_header(&header);
                             }
-                            continue;
                         }
                         PacketType::Pong => {
                             if let Some(recv_conn) = self.recv_user_connections.get_mut(&address) {
@@ -217,15 +215,13 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                                     .shared
                                     .set_rtt_avg_ms(recv_conn.ping_manager.rtt_average);
                             }
-                            continue;
                         }
                         PacketType::Handshake => {
                             let handshake_header_result = HandshakeHeader::de(&mut reader);
                             let Ok(HandshakeHeader::ClientConnectRequest) = handshake_header_result
                             else {
                                 warn!(
-                                    "Server Error: received invalid handshake packet: {:?}",
-                                    handshake_header_result
+                                    "Server Error: received invalid handshake packet: {handshake_header_result:?}"
                                 );
                                 continue;
                             };
@@ -240,8 +236,6 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                                 .pending_outbound_packets
                                 .lock()
                                 .push((address, packet));
-
-                            continue;
                         }
                     }
                 }
@@ -296,7 +290,7 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
             self.timeout_timer.reset();
             let now = naia_shared::Instant::now();
             let mut user_disconnects: Vec<UserKey> = Vec::new();
-            for (_, recv_conn) in self.recv_user_connections.iter() {
+            for recv_conn in self.recv_user_connections.values() {
                 if recv_conn.should_drop() && !recv_conn.manual_disconnect {
                     // Post-Connected liveness marker (Usher 42587 fork (a)):
                     // name the silent side at the drop decision.
@@ -328,9 +322,10 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
         header: &StandardHeader,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        if header.packet_type != PacketType::Data {
-            panic!("Server Error: received non-data packet in data packet handler");
-        }
+        assert!(
+            header.packet_type == PacketType::Data,
+            "Server Error: received non-data packet in data packet handler"
+        );
 
         let Some(recv_conn) = self.recv_user_connections.get_mut(address) else {
             return Ok(());

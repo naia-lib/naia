@@ -63,7 +63,7 @@ impl<R: Replicate> CachedReplicate for R {
         writer: &mut dyn BitWrite,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     ) {
-        Replicate::write(self, component_kinds, writer, converter)
+        Replicate::write(self, component_kinds, writer, converter);
     }
 
     fn cached_write_update(
@@ -72,7 +72,7 @@ impl<R: Replicate> CachedReplicate for R {
         writer: &mut dyn BitWrite,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     ) {
-        Replicate::write_update(self, diff_mask, writer, converter)
+        Replicate::write_update(self, diff_mask, writer, converter);
     }
 
     fn cached_as_any(&self) -> &dyn Any {

@@ -10,7 +10,7 @@
 //! * **Locality** – Ordering is only meaningful *within the scope of one
 //!   component on one entity*; isolating that scope lets unrelated
 //!   components proceed even if this one stalls.
-//! * **HoLB elimination** – By buffering at this granularity we avoid a
+//! * **`HoLB` elimination** – By buffering at this granularity we avoid a
 //!   stale component update blocking the entire entity.
 //!
 //! ## State machine
@@ -64,7 +64,7 @@ impl RemoteComponentChannel {
 
     pub(crate) fn drain_messages_into(
         &mut self,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
         outgoing_messages: &mut Vec<(Tick, EntityMessage<()>)>,
     ) {
         // Drain the component channel and append the messages to the outgoing events
@@ -94,8 +94,8 @@ impl RemoteComponentChannel {
         }
 
         let insert = match &msg {
-            EntityMessage::InsertComponent(_, _) => true,
-            EntityMessage::RemoveComponent(_, _) => false,
+            EntityMessage::InsertComponent((), _) => true,
+            EntityMessage::RemoveComponent((), _) => false,
             _ => panic!(
                 "ComponentChannel can only accept InsertComponent or RemoveComponent messages"
             ),
@@ -115,19 +115,16 @@ impl RemoteComponentChannel {
         while let Some((id, (_, insert))) = self.buffered_messages.peek_front() {
             let id = *id;
 
-            match *insert {
-                true => {
-                    if self.inserted {
-                        break;
-                    }
-                    self.set_inserted(true, id);
+            if *insert {
+                if self.inserted {
+                    break;
                 }
-                false => {
-                    if !self.inserted {
-                        break;
-                    }
-                    self.set_inserted(false, id);
+                self.set_inserted(true, id);
+            } else {
+                if !self.inserted {
+                    break;
                 }
+                self.set_inserted(false, id);
             }
 
             let (_, (tick, insert)) = self.buffered_messages.pop_front().unwrap();

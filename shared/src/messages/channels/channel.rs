@@ -18,10 +18,20 @@ pub struct ChannelSettings {
 
 impl ChannelSettings {
     /// Creates a `ChannelSettings` with the given mode and direction, deriving default criticality from the mode.
+    ///
+    ///
+    /// # Panics
+    ///
+    /// Panics if `!(mode.tick_buffered(` does not hold.
+    /// # Panics
+    ///
+    /// Panics if `!(mode.tick_buffered(` does not hold.
+    #[must_use]
     pub fn new(mode: ChannelMode, direction: ChannelDirection) -> Self {
-        if mode.tick_buffered() && direction != ChannelDirection::ClientToServer {
-            panic!("TickBuffered Messages are only allowed to be sent from Client to Server");
-        }
+        assert!(
+            !(mode.tick_buffered() && direction != ChannelDirection::ClientToServer),
+            "TickBuffered Messages are only allowed to be sent from Client to Server"
+        );
 
         let criticality = ChannelCriticality::default_for(&mode);
         Self {
@@ -32,12 +42,14 @@ impl ChannelSettings {
     }
 
     /// Override the channel's priority tier. Builder-style.
+    #[must_use]
     pub fn with_criticality(mut self, criticality: ChannelCriticality) -> Self {
         self.criticality = criticality;
         self
     }
 
     /// Returns `true` if this channel guarantees delivery (all reliable modes).
+    #[must_use]
     pub fn reliable(&self) -> bool {
         match &self.mode {
             ChannelMode::UnorderedUnreliable => false,
@@ -50,11 +62,13 @@ impl ChannelSettings {
     }
 
     /// Returns `true` if this channel uses tick-buffered delivery.
+    #[must_use]
     pub fn tick_buffered(&self) -> bool {
         self.mode.tick_buffered()
     }
 
     /// Returns `true` if the client may send on this channel.
+    #[must_use]
     pub fn can_send_to_server(&self) -> bool {
         match &self.direction {
             ChannelDirection::ClientToServer => true,
@@ -64,6 +78,7 @@ impl ChannelSettings {
     }
 
     /// Returns `true` if the server may send on this channel.
+    #[must_use]
     pub fn can_send_to_client(&self) -> bool {
         match &self.direction {
             ChannelDirection::ClientToServer => false,
@@ -73,6 +88,7 @@ impl ChannelSettings {
     }
 
     /// Returns `true` if this channel supports bidirectional reliable request/response messaging.
+    #[must_use]
     pub fn can_request_and_respond(&self) -> bool {
         self.reliable() && self.can_send_to_server() && self.can_send_to_client()
     }
@@ -85,6 +101,7 @@ impl ChannelSettings {
     /// fixed widths, no separators — the mode encoding is self-delimiting
     /// because each discriminant determines its own payload length, so the two
     /// trailing bytes can never be mistaken for part of it.
+    #[must_use]
     pub fn schema_bytes(&self) -> Vec<u8> {
         let mut out = self.mode.schema_bytes();
         out.push(self.direction.schema_discriminant());
@@ -118,6 +135,7 @@ pub struct ReliableSettings {
 
 impl ReliableSettings {
     /// Returns the default `ReliableSettings` (RTT factor 1.5, queue cap 1 024).
+    #[must_use]
     pub const fn default() -> Self {
         Self {
             rtt_resend_factor: 1.5,
@@ -136,6 +154,7 @@ pub struct TickBufferSettings {
 
 impl TickBufferSettings {
     /// Returns the default `TickBufferSettings` with a message capacity of 64.
+    #[must_use]
     pub const fn default() -> Self {
         Self {
             message_capacity: 64,
@@ -162,6 +181,7 @@ pub enum ChannelMode {
 
 impl ChannelMode {
     /// Returns `true` if this mode is `TickBuffered`.
+    #[must_use]
     pub fn tick_buffered(&self) -> bool {
         matches!(self, ChannelMode::TickBuffered(_))
     }
@@ -179,6 +199,7 @@ impl ChannelMode {
     /// variant's payload. A fingerprint built from the discriminant alone
     /// would call two protocols equal when one of them has, say, a different
     /// reliable receive window, which is a value both peers must agree on.
+    #[must_use]
     pub const fn schema_discriminant(&self) -> u8 {
         match self {
             ChannelMode::UnorderedUnreliable => 0,
@@ -209,6 +230,7 @@ impl ChannelMode {
     /// `usize` is widened to `u64` deliberately: a 32-bit and a 64-bit peer
     /// with identical settings must produce identical bytes, so the native
     /// width must not reach the preimage.
+    #[must_use]
     pub fn schema_bytes(&self) -> Vec<u8> {
         let mut out = vec![self.schema_discriminant()];
         match self {
@@ -264,6 +286,7 @@ impl ChannelDirection {
     /// Stable identifier for this direction inside the protocol fingerprint
     /// preimage. Hand-pinned for the same reason as
     /// [`ChannelMode::schema_discriminant`].
+    #[must_use]
     pub const fn schema_discriminant(&self) -> u8 {
         match self {
             ChannelDirection::ClientToServer => 0,
@@ -292,8 +315,9 @@ pub enum ChannelCriticality {
 
 impl ChannelCriticality {
     /// Default tier applied by `ChannelSettings::new` based on channel mode.
-    /// TickBuffered → High (must land in the right tick window). Everything
+    /// `TickBuffered` → High (must land in the right tick window). Everything
     /// else → Normal. Callers can override via `with_criticality()`.
+    #[must_use]
     pub const fn default_for(mode: &ChannelMode) -> Self {
         match mode {
             ChannelMode::TickBuffered(_) => ChannelCriticality::High,
@@ -304,6 +328,7 @@ impl ChannelCriticality {
     /// Stable identifier for this tier inside the protocol fingerprint
     /// preimage. Hand-pinned for the same reason as
     /// [`ChannelMode::schema_discriminant`].
+    #[must_use]
     pub const fn schema_discriminant(&self) -> u8 {
         match self {
             ChannelCriticality::Low => 0,
@@ -313,6 +338,7 @@ impl ChannelCriticality {
     }
 
     /// Per-tick priority gain applied to every queued message on this channel.
+    #[must_use]
     pub const fn base_gain(&self) -> f32 {
         match self {
             ChannelCriticality::Low => 0.5,

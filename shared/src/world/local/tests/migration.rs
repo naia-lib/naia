@@ -54,7 +54,7 @@ impl Fixture {
     fn adopt_remote(&mut self, id: u64, kinds: Vec<ComponentKind>) -> RemoteEntity {
         let remote_entity = RemoteEntity::new(id as u32);
         self.manager.insert_remote_entity(
-            &global(id),
+            global(id),
             remote_entity,
             kinds.into_iter().collect::<HashSet<_>>(),
         );
@@ -64,7 +64,7 @@ impl Fixture {
     fn spawn_host(&mut self, id: u64) {
         let kinds = self.kinds.clone();
         self.manager.host_init_entity(
-            &global(id),
+            global(id),
             vec![ComponentKind::of::<Ghost>()],
             &kinds,
             false,
@@ -91,7 +91,7 @@ impl Fixture {
     fn drain_commands(&mut self) -> Vec<EntityCommand> {
         let now = Instant::now();
         self.manager
-            .take_outgoing_commands(&now, &200.0)
+            .take_outgoing_commands(&now, 200.0)
             .into_iter()
             .map(|(_, command)| command)
             .collect()
@@ -105,7 +105,7 @@ fn an_entity_the_map_has_never_heard_of_cannot_migrate() {
     let mut fx = Fixture::new(HostType::Client);
     let error = fx
         .manager
-        .migrate_entity_remote_to_host(&global(1))
+        .migrate_entity_remote_to_host(global(1))
         .expect_err("an unmapped entity must not migrate");
     assert!(
         error.contains("does not exist in local entity map"),
@@ -124,19 +124,19 @@ fn refusing_to_migrate_a_host_owned_entity_puts_the_record_back() {
     let before = fx
         .manager
         .entity_converter()
-        .global_entity_to_host_entity(&global(1))
+        .global_entity_to_host_entity(global(1))
         .expect("fixture: the entity is host-owned");
 
     let error = fx
         .manager
-        .migrate_entity_remote_to_host(&global(1))
+        .migrate_entity_remote_to_host(global(1))
         .expect_err("a host-owned entity is already where migration would put it");
     assert!(error.contains("not remote-owned"), "got {error:?}");
 
     assert_eq!(
         fx.manager
             .entity_converter()
-            .global_entity_to_host_entity(&global(1))
+            .global_entity_to_host_entity(global(1))
             .expect("the record must survive the refusal"),
         before,
         "the refusal must restore the record it removed to inspect",
@@ -154,7 +154,7 @@ fn migrating_an_entity_moves_it_wholesale_from_the_remote_side_to_the_host_side(
 
     let new_host = fx
         .manager
-        .migrate_entity_remote_to_host(&global(1))
+        .migrate_entity_remote_to_host(global(1))
         .expect("a remote-owned entity migrates");
 
     // The entity map now answers as host, and no longer as remote. The second
@@ -163,14 +163,14 @@ fn migrating_an_entity_moves_it_wholesale_from_the_remote_side_to_the_host_side(
     assert_eq!(
         fx.manager
             .entity_converter()
-            .global_entity_to_host_entity(&global(1))
+            .global_entity_to_host_entity(global(1))
             .expect("the migrated entity is host-owned"),
         new_host,
     );
     assert!(
         fx.manager
             .entity_converter()
-            .global_entity_to_remote_entity(&global(1))
+            .global_entity_to_remote_entity(global(1))
             .is_err(),
         "the remote mapping must be gone, not merely shadowed",
     );
@@ -179,7 +179,7 @@ fn migrating_an_entity_moves_it_wholesale_from_the_remote_side_to_the_host_side(
     // state extracted from the remote channel -- not an empty one.
     let channel = fx
         .manager
-        .get_host_entity_channel(&new_host)
+        .get_host_entity_channel(new_host)
         .expect("the new host entity must have a channel");
     assert!(
         channel
@@ -218,18 +218,18 @@ fn migration_carries_every_component_kind_across() {
 
     let new_host = fx
         .manager
-        .migrate_entity_remote_to_host(&global(1))
+        .migrate_entity_remote_to_host(global(1))
         .expect("migrates");
 
     let channel = fx
         .manager
-        .get_host_entity_channel(&new_host)
+        .get_host_entity_channel(new_host)
         .expect("channel");
     for kind in [ComponentKind::of::<Ghost>(), ComponentKind::of::<Wraith>()] {
         assert!(
             channel.component_kinds().contains(&kind),
             "{} must survive the migration",
-            fx.kinds.kind_to_name(&kind),
+            fx.kinds.kind_to_name(kind),
         );
     }
 }
@@ -243,18 +243,18 @@ fn an_entity_cannot_migrate_twice() {
     fx.adopt_remote(1, vec![ComponentKind::of::<Ghost>()]);
     let first = fx
         .manager
-        .migrate_entity_remote_to_host(&global(1))
+        .migrate_entity_remote_to_host(global(1))
         .expect("migrates");
 
     let error = fx
         .manager
-        .migrate_entity_remote_to_host(&global(1))
+        .migrate_entity_remote_to_host(global(1))
         .expect_err("the second migration must be refused");
     assert!(error.contains("not remote-owned"), "got {error:?}");
     assert_eq!(
         fx.manager
             .entity_converter()
-            .global_entity_to_host_entity(&global(1))
+            .global_entity_to_host_entity(global(1))
             .expect("still mapped"),
         first,
         "and must not have allocated a second host id",
@@ -308,7 +308,7 @@ fn only_the_owning_side_may_enable_delegation() {
 
         let message = panic_message_of(|| {
             fx.manager
-                .send_enable_delegation(host_type, origin_is_owning_client, &global(1))
+                .send_enable_delegation(host_type, origin_is_owning_client, global(1))
         });
         assert!(
             message.as_deref().is_some_and(|m| m.contains(expected)),
@@ -323,7 +323,7 @@ fn enabling_delegation_for_an_entity_that_does_not_exist_is_a_loud_failure() {
     let mut fx = Fixture::new(HostType::Server);
     let message = panic_message_of(|| {
         fx.manager
-            .send_enable_delegation(HostType::Server, false, &global(1))
+            .send_enable_delegation(HostType::Server, false, global(1))
     });
     assert!(
         message
@@ -341,7 +341,7 @@ fn a_client_delegating_its_own_entity_publishes_it_first() {
     fx.spawn_host(1);
 
     fx.manager
-        .send_enable_delegation(HostType::Client, true, &global(1));
+        .send_enable_delegation(HostType::Client, true, global(1));
 
     assert_eq!(
         fx.delegation_commands(),
@@ -361,7 +361,7 @@ fn a_server_delegating_its_own_entity_does_not_publish_it_again() {
     fx.spawn_host(1);
 
     fx.manager
-        .send_enable_delegation(HostType::Server, false, &global(1));
+        .send_enable_delegation(HostType::Server, false, global(1));
 
     assert_eq!(
         fx.delegation_commands(),
@@ -381,7 +381,7 @@ fn delegating_a_remote_owned_entity_asks_rather_than_publishes() {
     fx.adopt_remote(1, vec![ComponentKind::of::<Ghost>()]);
 
     fx.manager
-        .send_enable_delegation(HostType::Server, false, &global(1));
+        .send_enable_delegation(HostType::Server, false, global(1));
 
     assert_eq!(
         fx.delegation_commands(),

@@ -40,6 +40,7 @@ pub struct ReliableSender<P: Send + Sync> {
 
 impl<P: Send + Sync> ReliableSender<P> {
     /// Creates a `ReliableSender` with the given RTT resend factor and optional queue-depth cap.
+    #[must_use]
     pub fn new(rtt_resend_factor: f32, max_queue_depth: Option<usize>) -> Self {
         Self {
             rtt_resend_factor,
@@ -113,10 +114,14 @@ impl<P: Send + Sync> ReliableSender<P> {
     }
 
     /// Acknowledges delivery of `message_index`, removing it from the retransmit buffer and returning the message.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a value expected to be present is missing.
     // Called when a message has been delivered
     // If this message has never been delivered before, will clear from the outgoing
     // buffer and return the message previously there
-    pub fn deliver_message(&mut self, message_index: &MessageIndex) -> Option<P> {
+    pub fn deliver_message(&mut self, message_index: MessageIndex) -> Option<P> {
         let mut index = 0;
         let mut found = false;
 
@@ -126,7 +131,7 @@ impl<P: Send + Sync> ReliableSender<P> {
             }
 
             if let Some(Some((old_message_index, _, _))) = self.sending_messages.get(index) {
-                if *message_index == *old_message_index {
+                if message_index == *old_message_index {
                     found = true;
                 }
             }
@@ -168,7 +173,7 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
         true
     }
 
-    fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
+    fn collect_messages(&mut self, now: &Instant, rtt_millis: f32) {
         let resend_duration = Duration::from_millis((self.rtt_resend_factor * rtt_millis) as u64);
 
         // Fast path: no newly-queued messages and min(last_sent) + resend_duration > now
@@ -228,7 +233,7 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
         !self.outgoing_messages.is_empty()
     }
 
-    fn notify_message_delivered(&mut self, message_index: &MessageIndex) {
+    fn notify_message_delivered(&mut self, message_index: MessageIndex) {
         self.deliver_message(message_index);
     }
 }
@@ -274,7 +279,7 @@ mod tests {
         }
 
         let now = Instant::now();
-        sender.collect_messages(&now, &RTT_MILLIS);
+        sender.collect_messages(&now, RTT_MILLIS);
         let out = sender.take_next_messages();
 
         assert_eq!(
@@ -296,7 +301,7 @@ mod tests {
         }
 
         let t0 = Instant::now();
-        sender.collect_messages(&t0, &RTT_MILLIS);
+        sender.collect_messages(&t0, RTT_MILLIS);
         let first = sender.take_next_messages();
         assert_eq!(indices(&first), vec![0, 1, 2, 3, 4]);
 
@@ -305,7 +310,7 @@ mod tests {
 
         // 50ms later — less than the 100ms resend window.
         let t1 = at(&t0, 50);
-        sender.collect_messages(&t1, &RTT_MILLIS);
+        sender.collect_messages(&t1, RTT_MILLIS);
         let second = sender.take_next_messages();
         assert_eq!(
             indices(&second),
@@ -322,13 +327,13 @@ mod tests {
         }
 
         let t0 = Instant::now();
-        sender.collect_messages(&t0, &RTT_MILLIS);
+        sender.collect_messages(&t0, RTT_MILLIS);
         let _ = sender.take_next_messages();
         sender.mark_written(&[0, 1, 2]);
 
         // Past the resend window — all unacked messages must reappear, in order.
         let t1 = at(&t0, 200);
-        sender.collect_messages(&t1, &RTT_MILLIS);
+        sender.collect_messages(&t1, RTT_MILLIS);
         let retransmit = sender.take_next_messages();
         assert_eq!(indices(&retransmit), vec![0, 1, 2]);
     }
@@ -341,15 +346,15 @@ mod tests {
         }
 
         let t0 = Instant::now();
-        sender.collect_messages(&t0, &RTT_MILLIS);
+        sender.collect_messages(&t0, RTT_MILLIS);
         let _ = sender.take_next_messages();
         sender.mark_written(&[0, 1, 2, 3]);
 
         // Ack index 1; it must drop out of the retransmit set.
-        sender.deliver_message(&1);
+        sender.deliver_message(1);
 
         let t1 = at(&t0, 200);
-        sender.collect_messages(&t1, &RTT_MILLIS);
+        sender.collect_messages(&t1, RTT_MILLIS);
         let retransmit = sender.take_next_messages();
         assert_eq!(
             indices(&retransmit),
@@ -399,12 +404,12 @@ mod tests {
         // Now the uncapped reproduction, step for step: write a leading block so
         // it is no longer due, then collect again to force a gap.
         let base = Instant::now();
-        sender.collect_messages(&base, &RTT_MILLIS);
+        sender.collect_messages(&base, RTT_MILLIS);
         let block: Vec<u16> = (1..(DEPTH as u16)).collect();
         sender.mark_written(&block);
         sender.take_next_messages();
 
-        sender.collect_messages(&base, &RTT_MILLIS);
+        sender.collect_messages(&base, RTT_MILLIS);
         let collected = indices(&sender.take_next_messages());
 
         // The gap exists, but is bounded by the cap and so stays encodable.
@@ -430,7 +435,7 @@ mod tests {
         use naia_serde::BitWriter;
 
         let mut writer = BitWriter::new();
-        IndexedMessageWriter::write_message_index(&mut writer, &Some(0), &33_001);
+        IndexedMessageWriter::write_message_index(&mut writer, Some(0), 33_001);
     }
 
     /// The cap is per-channel occupancy, not a lifetime budget: acknowledging
@@ -445,7 +450,7 @@ mod tests {
         }
         assert!(!sender.send_message(99), "full");
 
-        sender.deliver_message(&0);
+        sender.deliver_message(0);
         assert!(sender.send_message(100), "space freed by the ack");
     }
 }

@@ -18,7 +18,7 @@ impl WorldReader {
         last_index_opt: &mut Option<MessageIndex>,
     ) -> Result<MessageIndex, SerdeErr> {
         // read index
-        let current_index = IndexedMessageReader::read_message_index(reader, last_index_opt)?;
+        let current_index = IndexedMessageReader::read_message_index(reader, *last_index_opt)?;
 
         *last_index_opt = Some(current_index);
 
@@ -29,7 +29,7 @@ impl WorldReader {
     pub fn read_world_events(
         world_manager: &mut LocalWorldManager,
         component_kinds: &ComponentKinds,
-        tick: &Tick,
+        tick: Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         // read entity updates
@@ -45,7 +45,7 @@ impl WorldReader {
     fn read_messages(
         world_manager: &mut LocalWorldManager,
         component_kinds: &ComponentKinds,
-        tick: &Tick,
+        tick: Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let mut last_read_id: Option<MessageIndex> = None;
@@ -69,15 +69,15 @@ impl WorldReader {
         Ok(())
     }
 
-    /// Read the bits corresponding to the EntityMessage and adds the [`EntityMessage`]
+    /// Read the bits corresponding to the `EntityMessage` and adds the [`EntityMessage`]
     /// to an internal buffer.
     ///
-    /// We can use a UnorderedReliableReceiver buffer because the messages have already been
+    /// We can use a `UnorderedReliableReceiver` buffer because the messages have already been
     /// ordered by the client's jitter buffer
     fn read_message(
         world_manager: &mut LocalWorldManager,
         component_kinds: &ComponentKinds,
-        tick: &Tick,
+        tick: Tick,
         reader: &mut BitReader,
         last_read_id: &mut Option<MessageIndex>,
     ) -> Result<(), SerdeErr> {
@@ -107,7 +107,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
-                    *tick,
+                    tick,
                     EntityMessage::Spawn(remote_entity.copy_to_owned()),
                 );
             }
@@ -126,9 +126,9 @@ impl WorldReader {
                     };
                     let new_component_kind = new_component.kind();
                     world_manager.insert_received_component(
-                        *tick,
-                        &local_entity,
-                        &new_component_kind,
+                        tick,
+                        local_entity,
+                        new_component_kind,
                         new_component,
                     );
                     kinds.push(new_component_kind);
@@ -136,7 +136,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
-                    *tick,
+                    tick,
                     EntityMessage::SpawnWithComponents(local_entity, kinds),
                 );
             }
@@ -148,7 +148,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
-                    *tick,
+                    tick,
                     EntityMessage::Despawn(local_entity),
                 );
             }
@@ -167,13 +167,13 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
-                    *tick,
+                    tick,
                     EntityMessage::InsertComponent(local_entity, new_component_kind),
                 );
                 world_manager.insert_received_component(
-                    *tick,
-                    &local_entity,
-                    &new_component_kind,
+                    tick,
+                    local_entity,
+                    new_component_kind,
                     new_component,
                 );
             }
@@ -188,7 +188,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
-                    *tick,
+                    tick,
                     EntityMessage::RemoveComponent(local_entity, component_kind),
                 );
             }
@@ -203,7 +203,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
-                    *tick,
+                    tick,
                     EntityMessage::Publish(sub_command_id, local_entity),
                 );
             }
@@ -218,7 +218,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
-                    *tick,
+                    tick,
                     EntityMessage::Unpublish(sub_command_id, local_entity),
                 );
             }
@@ -233,7 +233,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
-                    *tick,
+                    tick,
                     EntityMessage::EnableDelegation(sub_command_id, local_entity),
                 );
             }
@@ -248,7 +248,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
-                    *tick,
+                    tick,
                     EntityMessage::DisableDelegation(sub_command_id, remote_entity.copy_to_owned()),
                 );
             }
@@ -279,7 +279,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
-                    *tick,
+                    tick,
                     EntityMessage::SetAuthority(
                         sub_command_id,
                         remote_entity.copy_to_owned(),
@@ -300,7 +300,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
-                    *tick,
+                    tick,
                     EntityMessage::RequestAuthority(sub_command_id, host_entity.copy_to_owned()),
                 );
             }
@@ -317,7 +317,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
-                    *tick,
+                    tick,
                     EntityMessage::ReleaseAuthority(sub_command_id, local_entity),
                 );
             }
@@ -332,7 +332,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
-                    *tick,
+                    tick,
                     EntityMessage::EnableDelegationResponse(
                         sub_command_id,
                         host_entity.copy_to_owned(),
@@ -353,7 +353,7 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
-                    *tick,
+                    tick,
                     EntityMessage::MigrateResponse(
                         sub_command_id,
                         client_host_entity.copy_to_owned(),
@@ -362,7 +362,7 @@ impl WorldReader {
                 );
             }
             EntityMessageType::Noop => {
-                world_manager.receiver_buffer_message(message_id, *tick, EntityMessage::Noop);
+                world_manager.receiver_buffer_message(message_id, tick, EntityMessage::Noop);
             }
         }
 
@@ -373,7 +373,7 @@ impl WorldReader {
     fn read_updates(
         world_manager: &mut LocalWorldManager,
         component_kinds: &ComponentKinds,
-        tick: &Tick,
+        tick: Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         loop {
@@ -387,7 +387,7 @@ impl WorldReader {
             // apply redirect if entity was migrated
             local_entity = world_manager.apply_entity_redirect(local_entity);
 
-            Self::read_update(world_manager, component_kinds, tick, reader, &local_entity)?;
+            Self::read_update(world_manager, component_kinds, tick, reader, local_entity)?;
         }
 
         Ok(())
@@ -397,9 +397,9 @@ impl WorldReader {
     fn read_update(
         world_manager: &mut LocalWorldManager,
         component_kinds: &ComponentKinds,
-        tick: &Tick,
+        tick: Tick,
         reader: &mut BitReader,
-        local_entity: &OwnedLocalEntity,
+        local_entity: OwnedLocalEntity,
     ) -> Result<(), SerdeErr> {
         loop {
             // read update continue bit
@@ -412,7 +412,7 @@ impl WorldReader {
 
             // At this point, the WorldChannel/EntityReceiver should guarantee the Entity is in scope, correct?
             if world_manager.has_local_entity(local_entity) {
-                world_manager.insert_received_update(*tick, local_entity, component_update);
+                world_manager.insert_received_update(tick, local_entity, component_update);
             }
         }
 
@@ -539,7 +539,7 @@ mod world_reader_tests {
                 self.end_updates();
             }
             true.ser(&mut self.writer);
-            IndexedMessageWriter::write_message_index(&mut self.writer, &self.last_index, &index);
+            IndexedMessageWriter::write_message_index(&mut self.writer, self.last_index, index);
             self.last_index = Some(index);
             kind.ser(&mut self.writer);
             self
@@ -636,7 +636,7 @@ mod world_reader_tests {
             let mut reader = BitReader::new(bytes);
             let kinds = std::mem::take(&mut self.kinds);
             let result =
-                WorldReader::read_world_events(&mut self.manager, &kinds, &tick, &mut reader);
+                WorldReader::read_world_events(&mut self.manager, &kinds, tick, &mut reader);
             self.kinds = kinds;
             result?;
             u32::de(&mut reader)
@@ -661,7 +661,7 @@ mod world_reader_tests {
             let mut component_kinds = HashSet::new();
             component_kinds.insert(ComponentKind::of::<Ghost>());
             self.manager
-                .insert_remote_entity(&global(id), remote_entity, component_kinds);
+                .insert_remote_entity(global(id), remote_entity, component_kinds);
             world.spawn_at(id);
             world.insert_boxed_component(
                 &id,
@@ -1399,7 +1399,7 @@ mod world_reader_tests {
             // byte can read as a valid "stop" bit) or it may error. What it may
             // never do is panic or hang, and if it parses it must not have
             // invented a message out of the padding.
-            let _ = WorldReader::read_world_events(&mut fx.manager, &kinds, &0, &mut reader);
+            let _ = WorldReader::read_world_events(&mut fx.manager, &kinds, 0, &mut reader);
             fx.kinds = kinds;
         }
     }
@@ -1409,7 +1409,7 @@ mod world_reader_tests {
         let mut fx = Fixture::client();
         let mut reader = BitReader::new(&[]);
         let kinds = std::mem::take(&mut fx.kinds);
-        let result = WorldReader::read_world_events(&mut fx.manager, &kinds, &0, &mut reader);
+        let result = WorldReader::read_world_events(&mut fx.manager, &kinds, 0, &mut reader);
         fx.kinds = kinds;
         assert!(
             result.is_err(),

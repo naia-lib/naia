@@ -3,6 +3,7 @@
 /// The client assigns an owner to every entity it knows about. This mirrors
 /// the server-side `EntityOwner` but uses only the variants observable from
 /// the client's perspective.
+
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum EntityOwner {
     /// Originated on the server and replicated to this client.
@@ -30,11 +31,13 @@ pub enum EntityOwner {
 
 impl EntityOwner {
     /// Returns `true` if this entity originated on the server.
+    #[must_use]
     pub fn is_server(&self) -> bool {
         matches!(self, EntityOwner::Server)
     }
 
     /// Returns `true` if this entity was spawned by this client.
+    #[must_use]
     pub fn is_client(&self) -> bool {
         matches!(self, EntityOwner::Client)
     }

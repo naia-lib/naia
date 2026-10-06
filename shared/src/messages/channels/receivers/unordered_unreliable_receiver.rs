@@ -57,9 +57,8 @@ impl UnorderedUnreliableReceiver {
                 message,
             );
             return;
-        } else {
-            trace!("Received message {:?}!", message.name());
         }
+        trace!("Received message {:?}!", message.name());
 
         self.incoming_messages.push_back(message);
     }

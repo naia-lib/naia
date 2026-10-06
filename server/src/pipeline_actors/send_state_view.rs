@@ -2,7 +2,7 @@
 //! entity/component state, used to drive per-tick snapshot construction
 //! for `SnapshotWorld<E>`.
 //!
-//! Cyberlith's Sim SubApp holds one as a bevy `Resource` (cloned from
+//! Cyberlith's Sim `SubApp` holds one as a bevy `Resource` (cloned from
 //! [`CoordHandle::send_state_view`]) and queries it each tick to learn:
 //! - which entities to mark live in `SnapshotWorld`
 //! - which `(entity, component_kind)` pairs to populate from Sim's
@@ -10,7 +10,7 @@
 //!
 //! # Superset semantics
 //!
-//! Per SPEC_IRIS_2_NAIA.md §1.3 (cyberlith repo), the methods return
+//! Per `SPEC_IRIS_2_NAIA.md` §1.3 (cyberlith repo), the methods return
 //! a safe **superset** of what naia actually reads during
 //! `send_all_packets`. Specifically:
 //!
@@ -77,6 +77,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
     /// Briefly acquires the `global_world_manager` and
     /// `global_entity_map` read guards; no guards held across the
     /// returned `Vec`.
+    #[must_use]
     pub fn live_entities(&self) -> Vec<E> {
         let gwm = self.shared.global_world_manager.read();
         let gem = self.shared.global_entity_map.read();
@@ -97,7 +98,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
         }
         #[cfg(not(feature = "f3_diag"))]
         gwm.all_global_entities()
-            .filter_map(|ge| gem.global_entity_to_entity(ge).ok())
+            .filter_map(|ge| gem.global_entity_to_entity(*ge).ok())
             .collect()
     }
 
@@ -109,19 +110,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
     /// Briefly acquires the `global_world_manager` and
     /// `global_entity_map` read guards; no guards held across the
     /// returned `Vec`.
+    #[must_use]
     pub fn required_snapshot_entries(&self) -> Vec<(E, ComponentKind)> {
         let gwm = self.shared.global_world_manager.read();
         let gem = self.shared.global_entity_map.read();
 
         let mut out = Vec::new();
         for ge in gwm.all_global_entities() {
-            let Ok(world_entity) = gem.global_entity_to_entity(ge) else {
+            let Ok(world_entity) = gem.global_entity_to_entity(*ge) else {
                 // Reserved-but-not-yet-spawned global entities have no
                 // world-entity counterpart; skip them (cyberlith can't
                 // look them up anyway).
                 continue;
             };
-            if let Some(kinds) = gwm.component_kinds(ge) {
+            if let Some(kinds) = gwm.component_kinds(*ge) {
                 for kind in kinds {
                     out.push((world_entity, kind));
                 }
@@ -130,7 +132,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
         out
     }
 
-    /// MISSION_TICK_FLOOR Lever 3: capture a plain-`u64` frozen snapshot of the
+    /// `MISSION_TICK_FLOOR` Lever 3: capture a plain-`u64` frozen snapshot of the
     /// current `global_dirty` state, to ride along in the send job so the
     /// active send worker can iterate a consistent "what-to-send" set while
     /// transmitting the previous tick's job concurrently with the gameplay
@@ -138,6 +140,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
     /// (after this tick's `refresh_needed_entities`), so the frozen dirty
     /// domain aligns with the `SnapshotWorld` value source built from the same
     /// view. See [`naia_shared::GlobalDirtyBitset::freeze`].
+    #[must_use]
     pub fn freeze_global_dirty(&self) -> naia_shared::FrozenGlobalDirty {
         self.shared.global_dirty.freeze()
     }
@@ -153,14 +156,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
     ///
     /// Correctness rests on `refresh_needed_entities` having run after this
     /// tick's scope application; see `MISSION_SNAPSHOT_DIRTY_TRIM.md` §4.
-    /// MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20) — fused reader returning BOTH
+    /// `MISSION_SNAPSHOT_DIRTY_TRIM` (2026-05-20) — fused reader returning BOTH
     /// the trimmed live-entity list and its `(entity, kind)` snapshot entries in
     /// a SINGLE locked pass. The two were previously separate methods
     /// (`needed_live_entities` + `needed_snapshot_entries`), each acquiring the
     /// gwm/gem/diff-handler read guards AND rebuilding the same `needed_index_set`
     /// (a `collect_set_bits` Vec + `HashSet` + dirty-union) — paid twice per
     /// snapshot tick. Fusing them computes the index set once and resolves both
-    /// outputs in one iteration (~15-25µs/tick; CAPACITY_MICROOPT_AUDIT #1).
+    /// outputs in one iteration (~15-25µs/tick; `CAPACITY_MICROOPT_AUDIT` #1).
     ///
     /// - `live` = needed entities that are replicating (the gate
     ///   `send_all_packets` Phase 1+2 applies before any read — paused /
@@ -173,6 +176,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
     /// `SnapshotWorld`, and the index set is a `HashSet`. Membership is identical
     /// to the two predecessor methods (the `live` and `entries` predicates are
     /// independent per index; resolving the world-entity first is equivalent).
+    #[must_use]
     pub fn needed_live_and_snapshot_entries(&self) -> (Vec<E>, Vec<(E, ComponentKind)>) {
         let gwm = self.shared.global_world_manager.read();
         let gem = self.shared.global_entity_map.read();
@@ -186,13 +190,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
             let Some(ge) = guard.global_entity_at(idx) else {
                 continue;
             };
-            let Ok(world_entity) = gem.global_entity_to_entity(&ge) else {
+            let Ok(world_entity) = gem.global_entity_to_entity(ge) else {
                 continue;
             };
-            if gwm.entity_is_replicating(&ge) {
+            if gwm.entity_is_replicating(ge) {
                 live.push(world_entity);
             }
-            if let Some(kinds) = gwm.component_kinds(&ge) {
+            if let Some(kinds) = gwm.component_kinds(ge) {
                 for kind in kinds {
                     entries.push((world_entity, kind));
                 }
@@ -201,7 +205,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
         (live, entries)
     }
 
-    /// MISSION_PIPELINE_API_BOUNDARY G7 (N4 acceptance contract): assemble a
+    /// `MISSION_PIPELINE_API_BOUNDARY` G7 (N4 acceptance contract): assemble a
     /// [`SnapshotWorld<E>`] from any [`WorldRefType<E>`] using the **dirty-trim**
     /// needed-set ([`Self::needed_live_and_snapshot_entries`]).
     ///
@@ -263,10 +267,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
             // the bevy world panics on an unregistered kind, so this guard
             // (not the `else` arm below) is what makes the assembler match the
             // bevy assembler's skip semantics and stay panic-free.
-            if !world.has_component_of_kind(entity, kind) {
+            if !world.has_component_of_kind(entity, *kind) {
                 continue;
             }
-            let Some(dyn_ref) = world.component_of_kind(entity, kind) else {
+            let Some(dyn_ref) = world.component_of_kind(entity, *kind) else {
                 // Belt-and-suspenders: a TOCTOU removal between the has-check
                 // and the fetch also skips rather than panics.
                 continue;
@@ -295,8 +299,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
 
 impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// Construct a [`SendStateView<E>`] backed by the same
-    /// `Arc<ServerShared>` as this CoordHandle. Cyberlith calls this
+    /// `Arc<ServerShared>` as this `CoordHandle`. Cyberlith calls this
     /// once at init and hands the view to Sim as a Resource.
+    #[must_use]
     pub fn send_state_view(&self) -> SendStateView<E> {
         SendStateView::from_shared(Arc::clone(&self.shared))
     }
@@ -366,11 +371,11 @@ mod tests {
         };
         {
             let mut gwm = sim_handle.shared.global_world_manager.write();
-            gwm.insert_entity_record(&global_entity, EntityOwner::Server);
+            gwm.insert_entity_record(global_entity, EntityOwner::Server);
             // Two distinct kinds drawn from std types — kinds are
             // TypeId-derived, so any two distinct types serve.
-            gwm.insert_component_record(&global_entity, &ComponentKind::of::<TestKindA>());
-            gwm.insert_component_record(&global_entity, &ComponentKind::of::<TestKindB>());
+            gwm.insert_component_record(global_entity, &ComponentKind::of::<TestKindA>());
+            gwm.insert_component_record(global_entity, &ComponentKind::of::<TestKindB>());
         }
 
         let view = sim_handle.send_state_view();
@@ -407,8 +412,8 @@ mod tests {
         };
         {
             let mut gwm = sim_handle.shared.global_world_manager.write();
-            gwm.insert_entity_record(&global_entity, EntityOwner::Server);
-            gwm.insert_component_record(&global_entity, &ComponentKind::of::<TestKindA>());
+            gwm.insert_entity_record(global_entity, EntityOwner::Server);
+            gwm.insert_component_record(global_entity, &ComponentKind::of::<TestKindA>());
         }
 
         // Sanity: present before removal.
@@ -420,9 +425,9 @@ mod tests {
         // Deregister the component record + entity record + map entry.
         {
             let mut gwm = sim_handle.shared.global_world_manager.write();
-            gwm.remove_component_record(&global_entity, &ComponentKind::of::<TestKindA>());
-            gwm.remove_entity_diff_handlers(&global_entity);
-            gwm.remove_entity_record(&global_entity);
+            gwm.remove_component_record(global_entity, &ComponentKind::of::<TestKindA>());
+            gwm.remove_entity_diff_handlers(global_entity);
+            gwm.remove_entity_record(global_entity);
         }
         {
             let mut gem = sim_handle.shared.global_entity_map.write();
@@ -454,11 +459,11 @@ mod tests {
         let g2 = sim_handle.shared.global_entity_map.write().spawn(e2, None);
         {
             let mut gwm = sim_handle.shared.global_world_manager.write();
-            gwm.insert_entity_record(&g1, EntityOwner::Server);
-            gwm.insert_entity_record(&g2, EntityOwner::Server);
-            gwm.insert_component_record(&g1, &ComponentKind::of::<TestKindA>());
-            gwm.insert_component_record(&g1, &ComponentKind::of::<TestKindB>());
-            gwm.insert_component_record(&g2, &ComponentKind::of::<TestKindA>());
+            gwm.insert_entity_record(g1, EntityOwner::Server);
+            gwm.insert_entity_record(g2, EntityOwner::Server);
+            gwm.insert_component_record(g1, &ComponentKind::of::<TestKindA>());
+            gwm.insert_component_record(g1, &ComponentKind::of::<TestKindB>());
+            gwm.insert_component_record(g2, &ComponentKind::of::<TestKindA>());
         }
 
         let view = sim_handle.send_state_view();

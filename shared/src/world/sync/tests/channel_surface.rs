@@ -35,15 +35,15 @@ struct Beta;
 fn a_remote_channel_reports_only_the_component_kinds_it_holds() {
     let mut channel = RemoteEntityChannel::new(HostType::Client);
     assert!(
-        !channel.has_component_kind(&component_kind::<Alpha>()),
+        !channel.has_component_kind(component_kind::<Alpha>()),
         "a fresh channel holds no component kinds",
     );
 
     channel.insert_component(component_kind::<Alpha>());
 
-    assert!(channel.has_component_kind(&component_kind::<Alpha>()));
+    assert!(channel.has_component_kind(component_kind::<Alpha>()));
     assert!(
-        !channel.has_component_kind(&component_kind::<Beta>()),
+        !channel.has_component_kind(component_kind::<Beta>()),
         "inserting one kind must not register every kind",
     );
 }
@@ -56,9 +56,9 @@ fn removing_a_component_kind_unregisters_it() {
 
     channel.remove_component(component_kind::<Alpha>());
 
-    assert!(!channel.has_component_kind(&component_kind::<Alpha>()));
+    assert!(!channel.has_component_kind(component_kind::<Alpha>()));
     assert!(
-        channel.has_component_kind(&component_kind::<Beta>()),
+        channel.has_component_kind(component_kind::<Beta>()),
         "removing one kind must not clear the rest",
     );
 }
@@ -72,7 +72,7 @@ fn inserting_a_component_kind_twice_is_idempotent() {
     channel.remove_component(component_kind::<Alpha>());
 
     assert!(
-        !channel.has_component_kind(&component_kind::<Alpha>()),
+        !channel.has_component_kind(component_kind::<Alpha>()),
         "the second insert created a second channel that survived the remove",
     );
 }
@@ -263,7 +263,7 @@ fn a_coalesced_spawn_spawns_an_unspawned_channel() {
         "the coalesced spawn never spawned the channel: {events:?}",
     );
     assert!(
-        channel.has_component_kind(&component_kind::<Alpha>()),
+        channel.has_component_kind(component_kind::<Alpha>()),
         "the coalesced components were not registered",
     );
 }

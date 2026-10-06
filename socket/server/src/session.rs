@@ -65,7 +65,7 @@ type AuthMuxMap = Arc<
 >;
 
 /// The request-line prefixes this listener accepts, derived from the
-/// SocketConfig. Per-listener (not global) so multiple server Sockets can
+/// `SocketConfig`. Per-listener (not global) so multiple server Sockets can
 /// coexist in one process (e.g. tests).
 #[derive(Clone)]
 struct RtcUrlPaths {
@@ -124,12 +124,7 @@ async fn listen(
         config.rtc_endpoint_path
     );
 
-    let mut auth_mux_sender_opt =
-        if let Some(to_session_all_auth_receiver) = to_session_all_auth_receiver {
-            Some(setup_auth_mux(to_session_all_auth_receiver).await)
-        } else {
-            None
-        };
+    let mut auth_mux_sender_opt = to_session_all_auth_receiver.map(setup_auth_mux);
 
     // The accept future never observes handle drops on its own, so race it
     // against shutdown: the last handle drop ends this task and releases
@@ -141,7 +136,7 @@ async fn listen(
         let accept = listener.accept().fuse();
         pin_mut!(accept);
         let (response_stream, remote_addr) = select! {
-            _ = shutdown => return,
+            () = shutdown => return,
             result = accept => {
                 result.expect("was not able to accept the incoming stream from the listener")
             }
@@ -187,7 +182,7 @@ async fn listen(
     }
 }
 
-async fn setup_auth_mux(
+fn setup_auth_mux(
     to_session_all_auth_receiver: smol::channel::Receiver<(SocketAddr, AuthResponse)>,
 ) -> smol::channel::Sender<(SocketAddr, futures_channel::oneshot::Sender<AuthResponse>)> {
     let (sender_sender, sender_receiver) = smol::channel::unbounded();
@@ -230,7 +225,6 @@ async fn serve_auth_mux_in(
             // info!("sending auth answer to session: {}", addr);
             if sender.send(answer).is_err() {
                 warn!("Unable to send auth to session");
-                continue;
             }
         } else {
             // info!("auth answer sender does not exist for: {}, inserting answer", addr);
@@ -263,7 +257,6 @@ async fn serve_auth_mux_out(
             // info!("sending auth answer to session: {}", addr);
             if sender.send(answer).is_err() {
                 warn!("Unable to send auth to session");
-                continue;
             }
         } else {
             // info!("auth answer does not exist for: {}, inserting sender", addr);
@@ -295,6 +288,7 @@ struct SessionRequest {
 /// `Content-Length` -- yields `None` so the caller can answer 404 and drop the
 /// connection. None of it may panic: `serve` runs one task per incoming
 /// connection, and a panic there takes the whole server process down.
+#[allow(clippy::too_many_lines)]
 async fn read_session_request<R: AsyncRead + Unpin>(
     reader: R,
     rtc_url_paths: &RtcUrlPaths,
@@ -306,7 +300,7 @@ async fn read_session_request<R: AsyncRead + Unpin>(
     let mut content_length: Option<usize> = None;
     let mut auth_string: Option<String> = None;
     let mut protocol_id: Option<String> = None;
-    let protocol_id_prefix = format!("{}: ", PROTOCOL_ID_HEADER);
+    let protocol_id_prefix = format!("{PROTOCOL_ID_HEADER}: ");
     let mut rtc_url_matched = false;
     let mut is_options: bool = false;
     let mut body: Vec<u8> = Vec::new();
@@ -318,10 +312,7 @@ async fn read_session_request<R: AsyncRead + Unpin>(
         let byte = match byte {
             Ok(byte) => byte,
             Err(err) => {
-                warn!(
-                    "Error reading WebRTC session request from {}: {}",
-                    remote_addr, err
-                );
+                warn!("Error reading WebRTC session request from {remote_addr}: {err}");
                 return None;
             }
         };
@@ -329,10 +320,7 @@ async fn read_session_request<R: AsyncRead + Unpin>(
         if !headers_been_read {
             header_bytes_read += 1;
             if header_bytes_read > MAX_HEADER_BYTES {
-                warn!(
-                    "Over-long headers in WebRTC session request from {}",
-                    remote_addr
-                );
+                warn!("Over-long headers in WebRTC session request from {remote_addr}");
                 return None;
             }
         }
@@ -357,14 +345,12 @@ async fn read_session_request<R: AsyncRead + Unpin>(
 
         if byte == b'\r' {
             continue;
-        } else if byte == b'\n' {
+        }
+        if byte == b'\n' {
             // Header lines come straight off the wire pre-auth; non-UTF-8 is a
             // malformed request, not a server fault.
             let Ok(mut str) = String::from_utf8(line.clone()) else {
-                warn!(
-                    "Non-UTF-8 header line in WebRTC session request from {}",
-                    remote_addr
-                );
+                warn!("Non-UTF-8 header line in WebRTC session request from {remote_addr}");
                 return None;
             };
             line.clear();
@@ -376,8 +362,7 @@ async fn read_session_request<R: AsyncRead + Unpin>(
                     content_length = str.parse::<usize>().ok();
                     if content_length.is_some_and(|len| len > MAX_BODY_BYTES) {
                         warn!(
-                            "Over-large Content-Length in WebRTC session request from {}",
-                            remote_addr
+                            "Over-large Content-Length in WebRTC session request from {remote_addr}"
                         );
                         return None;
                     }
@@ -416,10 +401,7 @@ async fn read_session_request<R: AsyncRead + Unpin>(
             }
         } else {
             if line.len() >= MAX_REQUEST_LINE_BYTES {
-                warn!(
-                    "Over-long header line in WebRTC session request from {}",
-                    remote_addr
-                );
+                warn!("Over-long header line in WebRTC session request from {remote_addr}");
                 return None;
             }
             line.push(byte);
@@ -449,6 +431,7 @@ fn fingerprint_is_acceptable(protocol_id: Option<&str>, expected: &str, is_optio
 }
 
 /// Reads a request from the client and sends it a response.
+#[allow(clippy::too_many_lines)]
 async fn serve(
     mut session_endpoint: SessionEndpoint,
     mut stream: Arc<Async<TcpStream>>,
@@ -464,7 +447,7 @@ async fn serve(
         return;
     };
 
-    info!("Incoming WebRTC session request from {}", remote_addr);
+    info!("Incoming WebRTC session request from {remote_addr}");
 
     // Parse the request before any authentication has happened: everything this
     // reads is attacker-controlled, so it must never panic and must never buffer
@@ -503,10 +486,7 @@ async fn serve(
     if success
         && !fingerprint_is_acceptable(protocol_id.as_deref(), &expected_protocol_id, is_options)
     {
-        warn!(
-            "Refusing WebRTC session request from {}: protocol fingerprint mismatch",
-            remote_addr
-        );
+        warn!("Refusing WebRTC session request from {remote_addr}: protocol fingerprint mismatch");
         success = false;
         fingerprint_mismatch = true;
     }
@@ -517,7 +497,7 @@ async fn serve(
     {
         // handle OPTIONS request
         if success && is_options {
-            let mut resp = Response::<String>::new("".to_string());
+            let mut resp = Response::<String>::new(String::new());
             resp.headers_mut().insert(
                 header::ACCESS_CONTROL_ALLOW_ORIGIN,
                 HeaderValue::from_static("*"),
@@ -542,7 +522,7 @@ async fn serve(
             // info!("OPTIONS request from {}", remote_addr);
 
             if stream.write_all(&out).await.is_err() {
-                warn!("Error writing response to {}", remote_addr);
+                warn!("Error writing response to {remote_addr}");
                 return;
             }
         }
@@ -586,19 +566,17 @@ async fn serve(
                             }
                         }
                         Err(_) => {
-                            warn!("Invalid WebRTC session request from {}. Error: unable to decode auth string", remote_addr);
+                            warn!("Invalid WebRTC session request from {remote_addr}. Error: unable to decode auth string");
                         }
                     }
                 } else {
                     warn!(
-                        "Invalid WebRTC session request from {}. Error: missing auth string",
-                        remote_addr
+                        "Invalid WebRTC session request from {remote_addr}. Error: missing auth string"
                     );
                 }
             } else {
                 warn!(
-                    "Invalid WebRTC session request from {}. Error: missing auth sender",
-                    remote_addr
+                    "Invalid WebRTC session request from {remote_addr}. Error: missing auth sender"
                 );
             }
         }
@@ -643,18 +621,15 @@ async fn serve(
                         let mut out = response_header_to_vec(&response);
                         out.extend_from_slice(response.body().as_bytes());
 
-                        info!("Successful WebRTC session request from {}", remote_addr);
+                        info!("Successful WebRTC session request from {remote_addr}");
 
                         if stream.write_all(&out).await.is_err() {
-                            warn!("Error writing response to {}", remote_addr);
+                            warn!("Error writing response to {remote_addr}");
                             return;
                         }
                     }
                     Err(err) => {
-                        warn!(
-                            "Invalid WebRTC session request from {}. Error: {}",
-                            remote_addr, err
-                        );
+                        warn!("Invalid WebRTC session request from {remote_addr}. Error: {err}");
                     }
                 }
             } else {
@@ -679,10 +654,10 @@ async fn serve(
                 // a client reading to EOF sees the two responses run together.
                 success = true;
 
-                info!("Rejected WebRTC session request from {}", remote_addr);
+                info!("Rejected WebRTC session request from {remote_addr}");
 
                 if stream.write_all(&out).await.is_err() {
-                    warn!("Error writing response to {}", remote_addr);
+                    warn!("Error writing response to {remote_addr}");
                     return;
                 }
             }
@@ -709,30 +684,30 @@ async fn serve(
                 .expect("could not build protocol-mismatch response");
             let out = response_header_to_vec(&mismatch);
             if stream.write_all(&out).await.is_err() {
-                warn!("Error writing mismatch response to {}", remote_addr);
+                warn!("Error writing mismatch response to {remote_addr}");
                 return;
             }
         } else if stream.write_all(RESPONSE_BAD).await.is_err() {
-            warn!("Error writing 404 response to {}", remote_addr);
+            warn!("Error writing 404 response to {remote_addr}");
             return;
         }
     }
 
     if stream.flush().await.is_err() {
-        warn!("Error flushing stream to {}", remote_addr);
+        warn!("Error flushing stream to {remote_addr}");
         return;
     }
     if stream.close().await.is_err() {
-        warn!("Error closing stream to {}", remote_addr);
+        warn!("Error closing stream to {remote_addr}");
     }
 }
 
-const RESPONSE_BAD: &[u8] = br#"
+const RESPONSE_BAD: &[u8] = br"
 HTTP/1.1 404 NOT FOUND
 Content-Type: text/html
 Content-Length: 0
 Access-Control-Allow-Origin: *
-"#;
+";
 
 struct RequestBuffer<'a, R: AsyncBufRead + Unpin> {
     buffer: &'a mut Lines<R>,
@@ -752,7 +727,7 @@ type ReqError = std::io::Error; //Box<dyn error::Error + Send + Sync>;
 
 const NEWLINE_STR: &str = "\n";
 
-impl<'a, R: AsyncBufRead + Unpin> Stream for RequestBuffer<'a, R> {
+impl<R: AsyncBufRead + Unpin> Stream for RequestBuffer<'_, R> {
     type Item = Result<String, ReqError>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

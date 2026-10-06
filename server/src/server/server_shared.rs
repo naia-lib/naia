@@ -79,9 +79,9 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// Global dirty bitset — already atomic; recv writes, send reads.
     pub global_dirty: Arc<GlobalDirtyBitset>,
 
-    /// MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20) — cross-thread
+    /// `MISSION_SNAPSHOT_DIRTY_TRIM` (2026-05-20) — cross-thread
     /// "needed entity" set: entities with an in-flight value-reading
-    /// reliable command (Spawn / SpawnWithComponents / InsertComponent)
+    /// reliable command (Spawn / `SpawnWithComponents` / `InsertComponent`)
     /// to ANY user, keyed by `GlobalEntityIndex`. Recomputed each tick by
     /// `SendState::refresh_needed_entities` (send-side, inside the park
     /// window) and read by `SendStateView::needed_snapshot_entries`
@@ -124,7 +124,7 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// `ClientConnectRequest` packet. Recv pushes (one entry per inbound
     /// handshake — `take_disconnected` is idempotent on the drain side per
     /// the spec's Option C-2). Drained by the coordinator-stage
-    /// `drain_pending_handshakes`, which looks up the matching user_key
+    /// `drain_pending_handshakes`, which looks up the matching `user_key`
     /// via `sim_handle.user_store.take_disconnected` and calls
     /// `finalize_connection`. LOCK ORDER position #9 (last).
     pub(crate) pending_handshakes: Mutex<Vec<SocketAddr>>,
@@ -136,19 +136,19 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// paths, the send-loop Iris phase — takes a brief **read** guard.
     pub(crate) time_manager: RwLock<TimeManager>,
 
-    /// World-entity ↔ GlobalEntity bidirectional map (step 4-E.2c).
+    /// World-entity ↔ `GlobalEntity` bidirectional map (step 4-E.2c).
     /// LOCK ORDER position #3 (paired with `idx_to_world`). The
     /// coordinator takes **write** for spawn / despawn / reservation
-    /// flows; every other path (send Iris phase, EntityAndGlobalEntity-
+    /// flows; every other path (send Iris phase, `EntityAndGlobalEntity`-
     /// Converter impl, room/scope plumbing) takes a brief **read** guard.
     /// Hot send-side loops hold one read guard for the whole tick scope
-    /// to amortize the RwLock acquisition.
+    /// to amortize the `RwLock` acquisition.
     pub(crate) global_entity_map: RwLock<GlobalEntityMap<E>>,
 
     /// Per-world replicated-entity registry (step 4-F.naia.a).
     /// LOCK ORDER position #2 (outer wrapper). The inner
     /// `diff_handler: Arc<RwLock<GlobalDiffHandler>>` keeps its own
-    /// internal RwLock at LOCK ORDER position #2a — acquire AFTER the
+    /// internal `RwLock` at LOCK ORDER position #2a — acquire AFTER the
     /// outer #2 guard, never inverted. Coordinator-thread paths take
     /// **write** for spawn / despawn / publication / delegation /
     /// authority transitions; the send thread takes **read** for the
@@ -163,7 +163,7 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// and are always updated together.
     pub(crate) idx_to_world: RwLock<Vec<Option<E>>>,
 
-    /// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — pending
+    /// `MISSION_USER_ONLY_SEES_SIM` Phase D.2.2 (2026-05-19) — pending
     /// World-side `configure_entity_replication` hook ops, pushed by
     /// `CoordHandle::configure_entity_replication` and drained by
     /// `SendHandle::apply_pending_world_hooks<W>` on the Sim system
@@ -173,7 +173,7 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// drain site differs (world parameter required).
     pub(crate) pending_world_hooks: Mutex<VecDeque<ConfigureWorldOp<E>>>,
 
-    /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — pending
+    /// `MISSION_USER_ONLY_SEES_SIM` Phase D.3b.3 (2026-05-19) — pending
     /// disconnect requests pushed by `CoordHandle::disconnect_user` and
     /// drained by the recv path at the top of `process_disconnects`,
     /// immediately before `outstanding_disconnects` is consumed. LOCK
@@ -238,14 +238,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
     pub(crate) fn set_idx_to_world(&self, idx: GlobalEntityIndex, world_entity: Option<E>) {
         let mut idx_to_world = self.idx_to_world.write();
         let slot = idx.as_usize();
-        if slot >= idx_to_world.len() {
-            panic!(
-                "replicated entity limit exceeded: entity index {} is past \
-                 ServerConfig::max_replicated_entities ({}). Raise \
-                 max_replicated_entities, or despawn entities before spawning more.",
-                slot, self.server_config.max_replicated_entities,
-            );
-        }
+        assert!(
+            slot < idx_to_world.len(),
+            "replicated entity limit exceeded: entity index {} is past \
+             ServerConfig::max_replicated_entities ({}). Raise \
+             max_replicated_entities, or despawn entities before spawning more.",
+            slot,
+            self.server_config.max_replicated_entities,
+        );
         idx_to_world[slot] = world_entity;
     }
 }
@@ -259,7 +259,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
 impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E> for ServerShared<E> {
     fn global_entity_to_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<E, EntityDoesNotExistError> {
         self.global_entity_map
             .read()

@@ -36,7 +36,7 @@ pub type EntitySnapshot = HashMap<ComponentKind, Box<dyn Replicate>>;
 ///
 /// // Inside tick processing — call before send_all_packets so the snapshot
 /// // reflects the state *after* mutation but *before* replication sends:
-/// server.record_historian_tick(world, current_tick);
+/// server.record_historian_tick(&world, current_tick);
 ///
 /// // On receiving a fire command with client tick T:
 /// if let Some(historian) = server.historian() {
@@ -67,6 +67,7 @@ pub struct Historian {
 
 impl Historian {
     /// Creates a historian that retains at most `max_ticks` snapshots before evicting the oldest.
+    #[must_use]
     pub fn new(max_ticks: u16) -> Self {
         Self {
             max_ticks,
@@ -114,10 +115,10 @@ impl Historian {
         let mut tick_snapshot: HashMap<GlobalEntity, EntitySnapshot> = HashMap::new();
 
         for &global_entity in global_world_manager.all_global_entities() {
-            let Ok(world_entity) = global_entity_map.global_entity_to_entity(&global_entity) else {
+            let Ok(world_entity) = global_entity_map.global_entity_to_entity(global_entity) else {
                 continue;
             };
-            let Some(kinds) = global_world_manager.component_kinds(&global_entity) else {
+            let Some(kinds) = global_world_manager.component_kinds(global_entity) else {
                 continue;
             };
             let mut entity_snapshot = EntitySnapshot::new();
@@ -127,7 +128,7 @@ impl Historian {
                         continue;
                     }
                 }
-                if let Some(component_ref) = world.component_of_kind(&world_entity, &kind) {
+                if let Some(component_ref) = world.component_of_kind(&world_entity, kind) {
                     entity_snapshot.insert(kind, component_ref.copy_to_box());
                 }
             }
@@ -139,9 +140,9 @@ impl Historian {
         self.snapshots.push_back((tick, tick_snapshot));
 
         // Evict snapshots older than max_ticks relative to the current tick.
-        let max_ticks = self.max_ticks as u32;
+        let max_ticks = u32::from(self.max_ticks);
         while let Some(&(oldest_tick, _)) = self.snapshots.front() {
-            let age = (tick as u32).wrapping_sub(oldest_tick as u32);
+            let age = u32::from(tick).wrapping_sub(u32::from(oldest_tick));
             if age > max_ticks {
                 self.snapshots.pop_front();
             } else {
@@ -152,6 +153,7 @@ impl Historian {
 
     /// Returns the snapshot for the exact given tick, or `None` if it has
     /// been evicted or never recorded.
+    #[must_use]
     pub fn snapshot_at_tick(&self, tick: Tick) -> Option<&HashMap<GlobalEntity, EntitySnapshot>> {
         for (t, snapshot) in &self.snapshots {
             if *t == tick {
@@ -167,6 +169,17 @@ impl Historian {
     /// Converts the time offset to ticks and delegates to `snapshot_at_tick`.
     /// Clamps to the oldest available tick rather than returning `None` when
     /// `time_ago_ms` is large.
+    #[must_use]
+    // NOTE (clippy float casts): `time_ago_ms as f32` and the final
+    // `as u32` below have no `TryFrom` replacement on this toolchain
+    // (no float/int conversions exist); the lookback inputs are small
+    // in practice and the wrapping tick arithmetic below must keep its
+    // exact `as`-cast bit behavior.
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
     pub fn snapshot_at_time_ago_ms(
         &self,
         time_ago_ms: u32,
@@ -177,7 +190,9 @@ impl Historian {
             return None;
         }
         let ticks_ago = (time_ago_ms as f32 / tick_duration_ms).round() as u32;
-        let target_tick = (current_tick as u32).wrapping_sub(ticks_ago) as u16;
+        let ticks_ago_u16 =
+            u16::try_from(ticks_ago % 65_536).expect("remainder below 2^16 fits in u16");
+        let target_tick = current_tick.wrapping_sub(ticks_ago_u16);
         // Try exact match first, then fall back to nearest available.
         if let Some(snap) = self.snapshot_at_tick(target_tick) {
             return Some(snap);
@@ -187,11 +202,13 @@ impl Historian {
     }
 
     /// Number of snapshots currently retained.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.snapshots.len()
     }
 
     /// Returns `true` if no snapshots are currently stored.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.snapshots.is_empty()
     }

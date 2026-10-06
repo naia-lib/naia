@@ -165,7 +165,7 @@ impl TimeManager {
             // Pruned out sample
         }
 
-        let sample = rtt_millis.min(u16::MAX as u32) as u16;
+        let sample = rtt_millis.min(u32::from(u16::MAX)) as u16;
         if self.rtt_ring_count < RTT_RING_SIZE {
             self.rtt_ring[self.rtt_ring_count] = sample;
             self.rtt_ring_count += 1;
@@ -184,7 +184,7 @@ impl TimeManager {
         sorted[..count].copy_from_slice(&self.rtt_ring[..count]);
         sorted[..count].sort_unstable();
         let idx = ((99 * (count - 1)) / 100).min(count - 1);
-        sorted[idx] as f32
+        f32::from(sorted[idx])
     }
 
     // GameTime
@@ -350,13 +350,15 @@ impl TimeManager {
         let receiving_incremented = self.client_receiving_tick != prev_client_receiving_tick;
         let sending_incremented = self.client_sending_tick != prev_client_sending_tick;
 
-        let output_receiving = match receiving_incremented {
-            true => Some((prev_client_receiving_tick, self.client_receiving_tick)),
-            false => None,
+        let output_receiving = if receiving_incremented {
+            Some((prev_client_receiving_tick, self.client_receiving_tick))
+        } else {
+            None
         };
-        let output_sending = match sending_incremented {
-            true => Some((prev_client_sending_tick, self.client_sending_tick)),
-            false => None,
+        let output_sending = if sending_incremented {
+            Some((prev_client_sending_tick, self.client_sending_tick))
+        } else {
+            None
         };
 
         (output_receiving, output_sending)
@@ -404,7 +406,7 @@ impl TimeManager {
     pub fn tick_to_instant(&self, tick: Tick) -> GameInstant {
         let tick_diff = wrapping_diff(self.server_tick, tick);
         let tick_diff_duration =
-            ((tick_diff as f32) * self.server_tick_duration_avg).round() as i32;
+            (f32::from(tick_diff) * self.server_tick_duration_avg).round() as i32;
         self.server_tick_instant
             .add_signed_millis(tick_diff_duration)
     }

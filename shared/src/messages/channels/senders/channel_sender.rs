@@ -18,16 +18,16 @@ pub trait ChannelSender<P>: Send + Sync {
     /// oldest entry was evicted to make room (unreliable).
     fn send_message(&mut self, message: P) -> bool;
     /// For reliable channels, will collect any Messages that need to be resent
-    fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32);
+    fn collect_messages(&mut self, now: &Instant, rtt_millis: f32);
     /// Returns true if there are queued Messages ready to be written
     fn has_messages(&self) -> bool;
     /// Called when it receives acknowledgement that a Message has been received
-    fn notify_message_delivered(&mut self, message_index: &MessageIndex);
+    fn notify_message_delivered(&mut self, message_index: MessageIndex);
 }
 
 /// Extended sender trait for message channels that writes wire bits and supports request/response lifecycle.
 pub trait MessageChannelSender: ChannelSender<MessageContainer> {
-    /// Gets Messages from the internal buffer and writes it to the BitWriter
+    /// Gets Messages from the internal buffer and writes it to the `BitWriter`
     fn write_messages(
         &mut self,
         message_kinds: &MessageKinds,
@@ -66,7 +66,7 @@ pub trait MessageChannelSender: ChannelSender<MessageContainer> {
     /// H3: resolves only when `wire_nonce` names the outstanding exchange.
     fn process_incoming_response(
         &mut self,
-        local_request_id: &LocalRequestId,
+        local_request_id: LocalRequestId,
         wire_nonce: ConnectionRequestNonce,
     ) -> Option<GlobalRequestId>;
 }

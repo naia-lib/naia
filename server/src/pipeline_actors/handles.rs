@@ -2,7 +2,7 @@
 //! of the cross-thread shared init (`Arc<ServerShared<E>>`) so cyberlith's
 //! Sim app can install it as a single resource.
 //!
-//! Naming (MISSION_USER_ONLY_SEES_SIM Phase H): there is no separate
+//! Naming (`MISSION_USER_ONLY_SEES_SIM` Phase H): there is no separate
 //! coordinator thread — the coordination capability is folded into the
 //! Sim/main thread, so this handle is named `CoordHandle`. The underlying
 //! per-thread state struct keeps the name [`CoordinatorState`] because it
@@ -50,6 +50,22 @@ pub struct CoordHandle<E: Copy + Eq + Hash + Send + Sync> {
     pub shared: Arc<ServerShared<E>>,
 }
 
+/// Read-before-write snapshot plus drain buffers for one
+/// `configure_entity_replication` publicity transition. Bundled so
+/// [`CoordHandle::capture_publicity_transition`] stays under the pedantic
+/// argument-count lint.
+struct PublicityTransition<'a, E> {
+    global_entity: GlobalEntity,
+    world_entity: &'a E,
+    server_owned: bool,
+    client_owned: bool,
+    client_origin: Option<UserKey>,
+    prev_config: crate::ReplicationConfig,
+    config: crate::ReplicationConfig,
+    send_ops: &'a mut Vec<crate::server::configure_replication::ConfigureSendOp<E>>,
+    world_ops: &'a mut Vec<crate::server::configure_replication::ConfigureWorldOp<E>>,
+}
+
 impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     // ============================================================
     // Phase B.7 — coordination-side read API surface for the bevy adapter
@@ -73,7 +89,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         };
         self.state
             .resource_registry
-            .is_resource_entity(&global_entity)
+            .is_resource_entity(global_entity)
     }
 
     /// Returns the current [`EntityOwner`] — who holds authoritative
@@ -98,16 +114,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             .shared
             .global_world_manager
             .read()
-            .entity_owner(&global_entity)
+            .entity_owner(global_entity)
         {
             return owner;
         }
         EntityOwner::Local
     }
 
-    /// Returns whether a User exists for the given UserKey.
+    /// Returns whether a User exists for the given `UserKey`.
+    #[must_use]
     pub fn user_exists(&self, user_key: &UserKey) -> bool {
-        self.state.user_store.contains(user_key)
+        self.state.user_store.contains(*user_key)
     }
 
     /// Returns the list of currently-registered user keys.
@@ -116,89 +133,105 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// handshake has not yet completed). For the handshaked-only set,
     /// use `InternalWorldServer::user_keys` via `run_with_world_server`, which
     /// filters by `send_user_connections` membership.
+    #[must_use]
     pub fn user_keys(&self) -> Vec<UserKey> {
         self.state.user_store.keys_copied()
     }
 
     /// Returns the address of the user with the given key, or `None`
     /// if the key is stale.
-    pub fn user_address(&self, user_key: &UserKey) -> Option<std::net::SocketAddr> {
+    #[must_use]
+    pub fn user_address(&self, user_key: UserKey) -> Option<std::net::SocketAddr> {
         self.state.user_store.address(user_key)
     }
 
     /// Returns the current server tick (read from the shared time
     /// manager).
+    #[must_use]
     pub fn current_tick(&self) -> Tick {
         self.shared.time_manager.read().current_tick()
     }
 
     /// Returns a read-only reference to the coord-resident Historian, or
     /// `None` if lag-compensation snapshotting has not been enabled.
+    #[must_use]
     pub fn historian(&self) -> Option<&crate::historian::Historian> {
         self.state.historian.as_ref()
     }
 
     /// Average tick duration (read from the shared time manager).
+    #[must_use]
     pub fn average_tick_duration(&self) -> Duration {
         self.shared.time_manager.read().average_tick_duration()
     }
 
     /// Total number of replicated entities.
+    #[must_use]
     pub fn entity_count(&self) -> usize {
         self.shared.global_entity_map.read().entity_count()
     }
 
     /// Number of users currently tracked.
+    #[must_use]
     pub fn users_count(&self) -> usize {
         self.state.user_store.len()
     }
 
     /// Number of fully-connected users.
+    #[must_use]
     pub fn user_count(&self) -> usize {
         self.user_keys().len()
     }
 
     /// Whether a room exists for the given key.
+    #[must_use]
     pub fn room_exists(&self, room_key: &RoomKey) -> bool {
-        self.state.room_store.contains(room_key)
+        self.state.room_store.contains(*room_key)
     }
 
     /// Keys of all rooms.
+    #[must_use]
     pub fn room_keys(&self) -> Vec<RoomKey> {
         self.state.room_store.keys()
     }
 
     /// Number of rooms.
+    #[must_use]
     pub fn rooms_count(&self) -> usize {
         self.state.room_store.len()
     }
 
     /// Number of rooms (alias).
+    #[must_use]
     pub fn room_count(&self) -> usize {
         self.room_keys().len()
     }
 
     /// True iff a resource of type `R` is currently inserted.
+    #[must_use]
     pub fn has_resource<R: ReplicatedComponent>(&self) -> bool {
         self.state.resource_registry.entity_for::<R>().is_some()
     }
 
     /// The hidden entity carrying resource `R`, or `None`.
+    #[must_use]
     pub fn resource_entity<R: ReplicatedComponent>(&self) -> Option<E> {
         let global_entity = self.state.resource_registry.entity_for::<R>()?;
         self.shared
             .global_entity_map
             .read()
-            .global_entity_to_entity(&global_entity)
+            .global_entity_to_entity(global_entity)
             .ok()
     }
 
     /// Number of currently-inserted resources.
+    #[must_use]
     pub fn resources_count(&self) -> usize {
         self.state.resource_registry.len()
     }
 
     /// Server-side authority status for resource `R`, or `None`.
+    #[must_use]
     pub fn resource_authority_status<R: ReplicatedComponent>(&self) -> Option<EntityAuthStatus> {
         let entity = self.resource_entity::<R>()?;
         self.entity_authority_status(&entity)
@@ -212,7 +245,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         self.shared
             .global_entity_map
             .read()
-            .global_entity_to_entity(global_entity)
+            .global_entity_to_entity(*global_entity)
     }
 
     /// Convert the consumer's entity handle to a [`GlobalEntity`].
@@ -226,7 +259,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             .entity_to_global_entity(world_entity)
     }
 
-    /// MISSION_USER_ONLY_SEES_SIM Phase B.1 (2026-05-19) — return a
+    /// `MISSION_USER_ONLY_SEES_SIM` Phase B.1 (2026-05-19) — return a
     /// cloneable [`crate::pipeline_actors::ServerEntityConverter`] view over
     /// this server's `Arc<ServerShared<E>>`.
     ///
@@ -237,6 +270,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// `EntityAndGlobalEntityConverter<E>` impl on `ServerShared<E>`
     /// delegates to the same `global_entity_map` `RwLock` that
     /// `InternalWorldServer`'s converter reads, so wire output is byte-identical.
+    #[must_use]
     pub fn entity_converter(&self) -> crate::pipeline_actors::ServerEntityConverter<E>
     where
         E: 'static,
@@ -262,12 +296,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     // `outstanding_disconnects` is consumed, which preserves atomicity within
     // one recv tick.
 
-    /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — register a
+    /// `MISSION_USER_ONLY_SEES_SIM` Phase D.3b.3 (2026-05-19) — register a
     /// newly-accepted user so the coordination state can track their scope without
     /// reassembling a `InternalWorldServer`.
     ///
     /// Byte-identical to `InternalWorldServer::receive_user`: inserts a `WorldUser`
-    /// record into the user_store and registers the address in the
+    /// record into the `user_store` and registers the address in the
     /// disconnected-users map so the subsequent handshake can look it up via
     /// `user_store.take_disconnected`.
     pub fn receive_user(&mut self, user_key: UserKey, user_addr: SocketAddr) {
@@ -279,16 +313,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             .register_disconnected(user_addr, user_key);
     }
 
-    /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — request a
+    /// `MISSION_USER_ONLY_SEES_SIM` Phase D.3b.3 (2026-05-19) — request a
     /// user disconnect without reassembling a `InternalWorldServer`.
     ///
-    /// Idempotent: returns silently if the user is not in the user_store
+    /// Idempotent: returns silently if the user is not in the `user_store`
     /// (already disconnected or never registered). Otherwise pushes
     /// `(user_key, DisconnectReason::Kicked)` onto
     /// `shared.pending_disconnect_requests`; the recv path drains the queue
     /// at the top of `process_disconnects` via `user_queue_disconnect`.
     pub fn disconnect_user(&mut self, user_key: &UserKey) {
-        if !self.state.user_store.contains(user_key) {
+        if !self.state.user_store.contains(*user_key) {
             return;
         }
         self.shared
@@ -313,7 +347,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             let entity_map = self.shared.global_entity_map.read();
             self.state
                 .room_store
-                .destroy(room_key, &mut self.state.user_store, &*entity_map)
+                .destroy(*room_key, &mut self.state.user_store, &*entity_map)
         };
         if let Some(room_change) = room_change_opt {
             self.shared
@@ -334,7 +368,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     }
 
     /// Add a user to a room. Push-only; Send drains on next tick.
-    pub fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
+    pub fn room_add_user(&mut self, room_key: RoomKey, user_key: UserKey) {
         let (legacy_change, room_change) = {
             let entity_map = self.shared.global_entity_map.read();
             self.state.room_store.add_user(
@@ -350,7 +384,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     }
 
     /// Remove a user from a room. Push-only; Send drains on next tick.
-    pub fn room_remove_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
+    pub fn room_remove_user(&mut self, room_key: RoomKey, user_key: UserKey) {
         let (legacy_change, room_change) =
             self.state
                 .room_store
@@ -366,7 +400,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             let entity_map = self.shared.global_entity_map.read();
             self.state
                 .room_store
-                .add_entity(room_key, world_entity, &*entity_map)
+                .add_entity(*room_key, world_entity, &*entity_map)
         };
         if let Some((legacy_change, room_change)) = pair_opt {
             let mut q = self.shared.scope_change_queue.lock();
@@ -377,18 +411,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
 
     /// C.6 prep — number of pending `ScopeChange` entries on the
     /// cross-half `scope_change_queue`. Used by Send's preamble drain
-    /// tests + cyberlith Send SubApp telemetry to observe backpressure
+    /// tests + cyberlith Send `SubApp` telemetry to observe backpressure
     /// between the coordination/cyberlith-Sim room mutations and the Send-side
-    /// drain. O(1) lock + len().
+    /// drain. O(1) lock + `len()`.
+    #[must_use]
     pub fn scope_change_queue_len(&self) -> usize {
         self.shared.scope_change_queue.lock().len()
     }
 
-    /// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — number of
+    /// `MISSION_USER_ONLY_SEES_SIM` Phase D.2.2 (2026-05-19) — number of
     /// pending World-side `configure_entity_replication` hook ops on the
     /// `pending_world_hooks` queue. Used by tests + cyberlith Sim
     /// telemetry to observe that world-hook registration is deferred to
-    /// (and consumed by) `apply_pending_world_hooks`. O(1) lock + len().
+    /// (and consumed by) `apply_pending_world_hooks`. O(1) lock + `len()`.
+    #[must_use]
     pub fn pending_world_hooks_len(&self) -> usize {
         self.shared.pending_world_hooks.lock().len()
     }
@@ -399,7 +435,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             let entity_map = self.shared.global_entity_map.read();
             self.state
                 .room_store
-                .remove_entity(room_key, world_entity, &*entity_map)
+                .remove_entity(*room_key, world_entity, &*entity_map)
         };
         if let Some((legacy_change, room_change)) = pair_opt {
             let mut q = self.shared.scope_change_queue.lock();
@@ -431,7 +467,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     // therefore the entire delta. Backward compat:
     // `InternalWorldServer::enable_entity_replication` remains unchanged.
 
-    /// MISSION_USER_ONLY_SEES_SIM Phase D.2.1 (2026-05-19) —
+    /// `MISSION_USER_ONLY_SEES_SIM` Phase D.2.1 (2026-05-19) —
     /// register `entity` as a server-owned replicating entity without
     /// reassembling a `InternalWorldServer`.
     ///
@@ -479,7 +515,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             .shared
             .global_world_manager
             .write()
-            .insert_entity_record(&global_entity, EntityOwner::Server);
+            .insert_entity_record(global_entity, EntityOwner::Server);
         if idx.is_valid() {
             self.shared.set_idx_to_world(idx, Some(*world_entity));
         }
@@ -509,7 +545,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     // reassembly in cyberlith's `drain_sim_tile_registrations`
     // (Phase E.6).
 
-    /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.1 (2026-05-19) — mark
+    /// `MISSION_USER_ONLY_SEES_SIM` Phase D.3b.1 (2026-05-19) — mark
     /// `world_entity` as static (its component data is not re-sent after
     /// the initial spawn packet) without reassembling a `InternalWorldServer`.
     ///
@@ -530,10 +566,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         self.shared
             .global_world_manager
             .write()
-            .mark_entity_as_static(&global_entity);
+            .mark_entity_as_static(global_entity);
     }
 
-    /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.2 (2026-05-19) — pure
+    /// `MISSION_USER_ONLY_SEES_SIM` Phase D.3b.2 (2026-05-19) — pure
     /// Coord-side read of the entity's authority status. Mirrors
     /// `InternalWorldServer::entity_authority_status` (`world_server.rs:1698`) —
     /// reads only `shared.global_entity_map` + `shared.global_world_manager`.
@@ -541,19 +577,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// when a client holds authority). Returns `None` when the entity is
     /// not in the global map.
     pub fn entity_authority_status(&self, world_entity: &E) -> Option<EntityAuthStatus> {
-        let global_entity = match self
+        let Ok(global_entity) = self
             .shared
             .global_entity_map
             .read()
             .entity_to_global_entity(world_entity)
-        {
-            Ok(ge) => ge,
-            Err(_) => return None,
+        else {
+            return None;
         };
         self.shared
             .global_world_manager
             .read()
-            .entity_authority_status(&global_entity)
+            .entity_authority_status(global_entity)
     }
 
     /// Returns the [`ReplicationConfig`](crate::ReplicationConfig) for `world_entity`, or `None` if it is
@@ -573,7 +608,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         self.shared
             .global_world_manager
             .read()
-            .entity_replication_config(&global_entity)
+            .entity_replication_config(global_entity)
     }
 
     /// Returns `true` if `world_entity` has been marked as static. Mirrors
@@ -591,7 +626,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         self.shared
             .global_world_manager
             .read()
-            .entity_is_static(&global_entity)
+            .entity_is_static(global_entity)
     }
 
     // ====================================================================
@@ -611,7 +646,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     // per-connection parameters resolved at push time is the B.2
     // blocker-1 read-before-write fix (see `configure_replication.rs`).
 
-    /// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — set the
+    /// `MISSION_USER_ONLY_SEES_SIM` Phase D.2.2 (2026-05-19) — set the
     /// [`ReplicationConfig`](crate::ReplicationConfig) for `world_entity`
     /// without reassembling a `InternalWorldServer`.
     ///
@@ -637,7 +672,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             ConfigureCapture, ConfigureSendOp, ConfigureWorldOp,
         };
         use crate::server::scope_change::ScopeChange;
-        use naia_shared::Publicity;
 
         let global_entity = self
             .shared
@@ -649,7 +683,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             .shared
             .global_world_manager
             .read()
-            .has_entity(&global_entity)
+            .has_entity(global_entity)
         {
             panic!("Entity is not yet replicating. Be sure to call `enable_replication` or `spawn_entity` on the Server, before configuring replication.");
         }
@@ -659,7 +693,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             .shared
             .global_world_manager
             .read()
-            .entity_owner(&global_entity)
+            .entity_owner(global_entity)
             .unwrap();
         let server_owned: bool = entity_owner.is_server();
         let client_owned: bool = entity_owner.is_client();
@@ -674,7 +708,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             .shared
             .global_world_manager
             .read()
-            .entity_replication_config(&global_entity)
+            .entity_replication_config(global_entity)
             .unwrap();
         if prev_config == config {
             // Fully identical — no-op (matches legacy early return).
@@ -684,115 +718,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         let mut send_ops: Vec<ConfigureSendOp<E>> = Vec::new();
         let mut world_ops: Vec<ConfigureWorldOp<E>> = Vec::new();
 
-        // Handle publicity state machine only when publicity changed —
-        // this branch structure mirrors `world_server.rs:1464` verbatim.
-        if prev_config.publicity != config.publicity {
-            match prev_config.publicity {
-                Publicity::Private => {
-                    if server_owned {
-                        panic!("Server-owned entity should never be private");
-                    }
-                    match config.publicity {
-                        Publicity::Private => {
-                            unreachable!("publicity prev == next but outer check passed");
-                        }
-                        Publicity::Public => {
-                            // private -> public
-                            self.capture_publish(
-                                &global_entity,
-                                world_entity,
-                                true,
-                                &mut send_ops,
-                                &mut world_ops,
-                            );
-                        }
-                        Publicity::Delegated => {
-                            // private -> delegated
-                            self.capture_publish(
-                                &global_entity,
-                                world_entity,
-                                true,
-                                &mut send_ops,
-                                &mut world_ops,
-                            );
-                            self.capture_enable_delegation(
-                                &global_entity,
-                                world_entity,
-                                client_origin,
-                                &mut send_ops,
-                                &mut world_ops,
-                            );
-                        }
-                    }
-                }
-                Publicity::Public => match config.publicity {
-                    Publicity::Private => {
-                        // public -> private
-                        if server_owned {
-                            panic!("Cannot unpublish a Server-owned Entity (doing so would disable replication entirely, just use a local entity instead)");
-                        }
-                        self.capture_unpublish(
-                            &global_entity,
-                            world_entity,
-                            true,
-                            &mut send_ops,
-                            &mut world_ops,
-                        );
-                    }
-                    Publicity::Public => {
-                        unreachable!("publicity prev == next but outer check passed");
-                    }
-                    Publicity::Delegated => {
-                        // public -> delegated
-                        self.capture_enable_delegation(
-                            &global_entity,
-                            world_entity,
-                            client_origin,
-                            &mut send_ops,
-                            &mut world_ops,
-                        );
-                    }
-                },
-                Publicity::Delegated => {
-                    if client_owned {
-                        panic!("Client-owned entity should never be delegated");
-                    }
-                    match config.publicity {
-                        Publicity::Private => {
-                            // delegated -> private
-                            if server_owned {
-                                panic!("Cannot unpublish a Server-owned Entity (doing so would disable replication entirely, just use a local entity instead)");
-                            }
-                            self.capture_disable_delegation(
-                                &global_entity,
-                                world_entity,
-                                &mut send_ops,
-                                &mut world_ops,
-                            );
-                            self.capture_unpublish(
-                                &global_entity,
-                                world_entity,
-                                true,
-                                &mut send_ops,
-                                &mut world_ops,
-                            );
-                        }
-                        Publicity::Public => {
-                            // delegated -> public
-                            self.capture_disable_delegation(
-                                &global_entity,
-                                world_entity,
-                                &mut send_ops,
-                                &mut world_ops,
-                            );
-                        }
-                        Publicity::Delegated => {
-                            unreachable!("publicity prev == next but outer check passed");
-                        }
-                    }
-                }
-            }
-        }
+        self.capture_publicity_transition(PublicityTransition {
+            global_entity,
+            world_entity,
+            server_owned,
+            client_owned,
+            client_origin,
+            prev_config,
+            config,
+            send_ops: &mut send_ops,
+            world_ops: &mut world_ops,
+        });
 
         // Always persist the scope_exit field regardless of whether
         // publicity changed (mirrors world_server.rs:1543). Coord-side
@@ -800,7 +736,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         self.shared
             .global_world_manager
             .write()
-            .entity_set_scope_exit(&global_entity, config.scope_exit);
+            .entity_set_scope_exit(global_entity, config.scope_exit);
 
         // Queue the deferred Send-side work (if any).
         if !send_ops.is_empty() {
@@ -824,9 +760,151 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// `entity_publish` write now (so same-tick reads compose) and
     /// record the Send-side + World-side leaf work. Mirrors
     /// `InternalWorldServer::publish_entity` (`world_server.rs:2531`).
+    /// Capture the publicity state-machine transition when publicity
+    /// changed: record Send-side and World-side leaf work into the op
+    /// buffers. Mirrors the `world_server.rs:1464` branch structure.
+    ///
+    /// # Panics
+    ///
+    /// Panics on impossible transitions (server-owned private,
+    /// client-owned delegated, or prev == next), which the guards
+    /// above rule out.
+    fn capture_publicity_transition(&mut self, transition: PublicityTransition<'_, E>) {
+        use naia_shared::Publicity;
+        // Handle publicity state machine only when publicity changed —
+        // this branch structure mirrors `world_server.rs:1464` verbatim.
+        if transition.prev_config.publicity != transition.config.publicity {
+            match transition.prev_config.publicity {
+                Publicity::Private => self.capture_private_transition(transition),
+                Publicity::Public => self.capture_public_transition(transition),
+                Publicity::Delegated => self.capture_delegated_transition(transition),
+            }
+        }
+    }
+
+    /// Capture a `Private`-sourced publicity transition into the op buffers.
+    /// Mirrors the matching `world_server.rs:1464` arm verbatim.
+    ///
+    /// # Panics
+    ///
+    /// Panics on a server-owned private entity or a prev == next transition, which the guards rule out.
+    fn capture_private_transition(&mut self, transition: PublicityTransition<'_, E>) {
+        use naia_shared::Publicity;
+        let PublicityTransition {
+            global_entity,
+            world_entity,
+            server_owned,
+            client_origin,
+            config,
+            send_ops,
+            world_ops,
+            ..
+        } = transition;
+        assert!(!server_owned, "Server-owned entity should never be private");
+        match config.publicity {
+            Publicity::Private => {
+                unreachable!("publicity prev == next but outer check passed");
+            }
+            Publicity::Public => {
+                // private -> public
+                self.capture_publish(global_entity, world_entity, true, send_ops, world_ops);
+            }
+            Publicity::Delegated => {
+                // private -> delegated
+                self.capture_publish(global_entity, world_entity, true, send_ops, world_ops);
+                self.capture_enable_delegation(
+                    global_entity,
+                    world_entity,
+                    client_origin,
+                    send_ops,
+                    world_ops,
+                );
+            }
+        }
+    }
+
+    /// Capture a `Public`-sourced publicity transition into the op buffers.
+    /// Mirrors the matching `world_server.rs:1464` arm verbatim.
+    ///
+    /// # Panics
+    ///
+    /// Panics on an attempt to unpublish a server-owned entity or a prev == next transition, which the guards rule out.
+    fn capture_public_transition(&mut self, transition: PublicityTransition<'_, E>) {
+        use naia_shared::Publicity;
+        let PublicityTransition {
+            global_entity,
+            world_entity,
+            server_owned,
+            client_origin,
+            config,
+            send_ops,
+            world_ops,
+            ..
+        } = transition;
+        match config.publicity {
+            Publicity::Private => {
+                // public -> private
+                assert!(!server_owned, "Cannot unpublish a Server-owned Entity (doing so would disable replication entirely, just use a local entity instead)");
+                self.capture_unpublish(global_entity, world_entity, true, send_ops, world_ops);
+            }
+            Publicity::Public => {
+                unreachable!("publicity prev == next but outer check passed");
+            }
+            Publicity::Delegated => {
+                // public -> delegated
+                self.capture_enable_delegation(
+                    global_entity,
+                    world_entity,
+                    client_origin,
+                    send_ops,
+                    world_ops,
+                );
+            }
+        }
+    }
+
+    /// Capture a `Delegated`-sourced publicity transition into the op buffers.
+    /// Mirrors the matching `world_server.rs:1464` arm verbatim.
+    ///
+    /// # Panics
+    ///
+    /// Panics on a client-owned delegated entity, an attempt to unpublish a server-owned entity, or a prev == next transition, which the guards rule out.
+    fn capture_delegated_transition(&mut self, transition: PublicityTransition<'_, E>) {
+        use naia_shared::Publicity;
+        let PublicityTransition {
+            global_entity,
+            world_entity,
+            server_owned,
+            client_owned,
+            config,
+            send_ops,
+            world_ops,
+            ..
+        } = transition;
+        assert!(
+            !client_owned,
+            "Client-owned entity should never be delegated"
+        );
+        match config.publicity {
+            Publicity::Private => {
+                // delegated -> private
+                assert!(!server_owned, "Cannot unpublish a Server-owned Entity (doing so would disable replication entirely, just use a local entity instead)");
+                self.capture_disable_delegation(global_entity, world_entity, send_ops, world_ops);
+                self.capture_unpublish(global_entity, world_entity, true, send_ops, world_ops);
+            }
+            Publicity::Public => {
+                // delegated -> public
+                self.capture_disable_delegation(global_entity, world_entity, send_ops, world_ops);
+            }
+            Publicity::Delegated => {
+                unreachable!("publicity prev == next but outer check passed");
+            }
+        }
+    }
+
     fn capture_publish(
         &mut self,
-        global_entity: &naia_shared::GlobalEntity,
+        global_entity: naia_shared::GlobalEntity,
         world_entity: &E,
         server_origin: bool,
         send_ops: &mut Vec<crate::server::configure_replication::ConfigureSendOp<E>>,
@@ -845,13 +923,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
                 .entity_owner(global_entity);
             let Some(EntityOwner::Client(user_key)) = entity_owner else {
                 panic!(
-                    "Entity is not owned by a Client. Cannot publish entity. Owner is: {:?}",
-                    entity_owner
+                    "Entity is not owned by a Client. Cannot publish entity. Owner is: {entity_owner:?}"
                 );
             };
-            if let Some(addr) = self.state.user_store.address(&user_key) {
+            if let Some(addr) = self.state.user_store.address(user_key) {
                 send_ops.push(ConfigureSendOp::Publish {
-                    global_entity: *global_entity,
+                    global_entity,
                     owner_addr: addr,
                 });
             }
@@ -869,19 +946,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             world_ops.push(ConfigureWorldOp::Publish {
                 world_entity: *world_entity,
             });
-            send_ops.push(ConfigureSendOp::PublishScopeReeval {
-                global_entity: *global_entity,
-            });
+            send_ops.push(ConfigureSendOp::PublishScopeReeval { global_entity });
         }
     }
 
     /// Coord-immediate `unpublish_entity` body split. The `owner_addr`
     /// capture happens BEFORE `gwm.entity_unpublish` transitions
-    /// ClientPublic → Client — this is the B.2 blocker-1 read-before-write
+    /// `ClientPublic` → Client — this is the B.2 blocker-1 read-before-write
     /// fix. Mirrors `InternalWorldServer::unpublish_entity` (`world_server.rs:2585`).
     fn capture_unpublish(
         &mut self,
-        global_entity: &naia_shared::GlobalEntity,
+        global_entity: naia_shared::GlobalEntity,
         world_entity: &E,
         _server_origin: bool,
         send_ops: &mut Vec<crate::server::configure_replication::ConfigureSendOp<E>>,
@@ -902,10 +977,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
                     None
                 }
             })
-            .and_then(|k| self.state.user_store.address(&k));
+            .and_then(|k| self.state.user_store.address(k));
 
         send_ops.push(ConfigureSendOp::Unpublish {
-            global_entity: *global_entity,
+            global_entity,
             owner_addr,
         });
 
@@ -941,7 +1016,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// `InternalWorldServer::entity_enable_delegation` (`world_server.rs:2649`).
     fn capture_enable_delegation(
         &mut self,
-        global_entity: &naia_shared::GlobalEntity,
+        global_entity: naia_shared::GlobalEntity,
         world_entity: &E,
         client_origin: Option<UserKey>,
         send_ops: &mut Vec<crate::server::configure_replication::ConfigureSendOp<E>>,
@@ -951,7 +1026,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
 
         // Per-connection `send_enable_delegation` fan-out — deferred.
         send_ops.push(ConfigureSendOp::EnableDelegationFanout {
-            global_entity: *global_entity,
+            global_entity,
             client_origin,
         });
 
@@ -973,7 +1048,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             // So `apply_delegation_migrate` enqueues the world ops in the
             // correct order during the drain.
             send_ops.push(ConfigureSendOp::DelegationMigrate {
-                global_entity: *global_entity,
+                global_entity,
                 world_entity: *world_entity,
                 client_key,
             });
@@ -994,16 +1069,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// `InternalWorldServer::entity_disable_delegation` (`world_server.rs:2914`).
     fn capture_disable_delegation(
         &mut self,
-        global_entity: &naia_shared::GlobalEntity,
+        global_entity: naia_shared::GlobalEntity,
         world_entity: &E,
         send_ops: &mut Vec<crate::server::configure_replication::ConfigureSendOp<E>>,
         world_ops: &mut Vec<crate::server::configure_replication::ConfigureWorldOp<E>>,
     ) {
         use crate::server::configure_replication::{ConfigureSendOp, ConfigureWorldOp};
 
-        send_ops.push(ConfigureSendOp::DisableDelegationFanout {
-            global_entity: *global_entity,
-        });
+        send_ops.push(ConfigureSendOp::DisableDelegationFanout { global_entity });
 
         // Coord-side gwm write — immediate.
         self.shared
@@ -1016,7 +1089,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         });
     }
 
-    /// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — drain the
+    /// `MISSION_USER_ONLY_SEES_SIM` Phase D.2.2 (2026-05-19) — drain the
     /// pending World-side `configure_entity_replication` hook ops onto
     /// `world`, installing per-component diff mutators against the
     /// (already-transitioned) gwm.
@@ -1043,26 +1116,28 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
 
     /// Whether `user_key` is a member of `room_key`. Mirrors
     /// `InternalWorldServer::room_has_user`.
-    pub fn room_has_user(&self, room_key: &RoomKey, user_key: &UserKey) -> bool {
+    #[must_use]
+    pub fn room_has_user(&self, room_key: RoomKey, user_key: UserKey) -> bool {
         self.state.room_store.has_user(room_key, user_key)
     }
 
     /// Number of users in `room_key`. Mirrors `InternalWorldServer::room_users_count`.
+    #[must_use]
     pub fn room_users_count(&self, room_key: &RoomKey) -> usize {
-        self.state.room_store.users_count(room_key)
+        self.state.room_store.users_count(*room_key)
     }
 
     /// Iterator over the user keys in `room_key`. Borrows `state.room_store`.
     /// Mirrors `InternalWorldServer::room_user_keys`.
     pub fn room_user_keys(&self, room_key: &RoomKey) -> impl Iterator<Item = &UserKey> {
-        self.state.room_store.user_keys_iter(room_key)
+        self.state.room_store.user_keys_iter(*room_key)
     }
 
     /// Whether `world_entity` is in `room_key` (converts via the global map).
     /// Mirrors `InternalWorldServer::room(..).has_entity`.
     pub fn room_has_entity(&self, room_key: &RoomKey, world_entity: &E) -> bool {
         if let Ok(global_entity) = self.entity_to_global_entity(world_entity) {
-            self.state.room_store.has_entity(room_key, &global_entity)
+            self.state.room_store.has_entity(*room_key, global_entity)
         } else {
             false
         }
@@ -1071,9 +1146,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// All world-entities in `room_key` (converts each via the global map,
     /// dropping any that no longer resolve). Mirrors
     /// `InternalWorldServer::room(..).entities`.
+    #[must_use]
     pub fn room_entities(&self, room_key: &RoomKey) -> Vec<E> {
         let mut output = Vec::new();
-        for global_entity in self.state.room_store.entities_iter(room_key) {
+        for global_entity in self.state.room_store.entities_iter(*room_key) {
             if let Ok(entity) = self.global_entity_to_entity(global_entity) {
                 output.push(entity);
             }
@@ -1082,20 +1158,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     }
 
     /// Number of entities in `room_key`. Mirrors `InternalWorldServer::room_entities_count`.
+    #[must_use]
     pub fn room_entities_count(&self, room_key: &RoomKey) -> usize {
-        self.state.room_store.entities_count(room_key)
+        self.state.room_store.entities_count(*room_key)
     }
 
     /// Number of rooms `user_key` belongs to, or `None` if the key is stale.
     /// Mirrors `InternalWorldServer::user_rooms_count`.
+    #[must_use]
     pub fn user_rooms_count(&self, user_key: &UserKey) -> Option<usize> {
-        self.state.user_store.rooms_count(user_key)
+        self.state.user_store.rooms_count(*user_key)
     }
 
     /// Iterator over the room keys `user_key` belongs to, or `None` if stale.
     /// Borrows `state.user_store`. Mirrors `InternalWorldServer::user_room_keys`.
+    #[must_use]
     pub fn user_room_keys(&self, user_key: &UserKey) -> Option<Iter<'_, RoomKey>> {
-        self.state.user_store.room_keys_iter(user_key)
+        self.state.user_store.room_keys_iter(*user_key)
     }
 
     /// Read-only handle to the **sender-wide (global)** priority state for

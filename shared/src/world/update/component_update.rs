@@ -16,11 +16,13 @@ pub struct PendingComponentUpdate {
 
 impl PendingComponentUpdate {
     /// Creates a new `PendingComponentUpdate` wrapping `buffer` for the given `kind`.
+    #[must_use]
     pub fn new(kind: ComponentKind, buffer: OwnedBitReader) -> Self {
         Self { kind, buffer }
     }
 
     /// Borrows the payload buffer as a [`BitReader`] for field deserialization.
+    #[must_use]
     pub fn reader(&'_ self) -> BitReader<'_> {
         self.buffer.borrow()
     }
@@ -31,7 +33,7 @@ impl PendingComponentUpdate {
         component_kinds: &ComponentKinds,
     ) -> SplitUpdateResult {
         let kind = self.kind;
-        component_kinds.split_update(converter, &kind, self)
+        component_kinds.split_update(converter, kind, self)
     }
 }
 
@@ -43,16 +45,19 @@ pub struct ComponentFieldUpdate {
 
 impl ComponentFieldUpdate {
     /// Creates a `ComponentFieldUpdate` for field `id` with the given serialized `buffer`.
+    #[must_use]
     pub fn new(id: u8, buffer: OwnedBitReader) -> Self {
         Self { id, buffer }
     }
 
     /// Returns the field index this update targets.
+    #[must_use]
     pub fn field_id(&self) -> u8 {
         self.id
     }
 
     /// Borrows the field payload as a [`BitReader`] for deserialization.
+    #[must_use]
     pub fn reader(&'_ self) -> BitReader<'_> {
         self.buffer.borrow()
     }

@@ -1,4 +1,4 @@
-//! MISSION_PIPELINE_API_BOUNDARY G7-3 — the framework-agnostic pipeline worker
+//! `MISSION_PIPELINE_API_BOUNDARY` G7-3 — the framework-agnostic pipeline worker
 //! runtime, moved out of the bevy adapter's `plugin_full.rs` into naia-server
 //! core so ANY consumer (bevy or non-bevy) gets turnkey pipelining.
 //!
@@ -15,12 +15,12 @@
 //! ## Parked vs active (the `workers_active` cfg)
 //!
 //! `workers_active = not(deterministic)` (emitted by `build.rs`). The two modes:
-//!   - **not(workers_active)** (deterministic test/determinism harness): the
+//!   - **`not(workers_active)`** (deterministic test/determinism harness): the
 //!     workers are PURE PARKING SERVICES — the consumer drives recv/send
 //!     synchronously inside its park window, so handshake responses + snapshot
 //!     delivery land at a deterministic point each tick. The workers only
 //!     body-sleep until parked. This is the byte-exact determinism path.
-//!   - **workers_active** (production / bench): the workers actively drain the
+//!   - **`workers_active`** (production / bench): the workers actively drain the
 //!     socket (recv) and transmit the lagged frozen send job (send) between park
 //!     windows, overlapping the consumer's gameplay tick.
 
@@ -78,7 +78,7 @@ pub enum RuntimeState {
 
 // ─── ParkControl ─────────────────────────────────────────────────────────────
 
-/// Park-control flags + condvar pair (parking_lot Mutex + Condvar) used to
+/// Park-control flags + condvar pair (`parking_lot` Mutex + Condvar) used to
 /// coordinate the main thread parking the worker threads at their checkpoints.
 pub(crate) struct ParkControl {
     /// `true` ⇒ workers should park at the top of their loop iteration.
@@ -116,10 +116,10 @@ pub(crate) struct ParkControl {
     /// worker is still mid-resume.
     resumed_cv: parking_lot::Condvar,
     /// Mutex + condvar for workers to sleep between park windows. Used by BOTH
-    /// paths (MISSION_OVERLAP_FRONTIER T1):
-    ///   - not(workers_active): the worker body-sleeps on an UNBOUNDED `wait()`
+    /// paths (`MISSION_OVERLAP_FRONTIER` T1):
+    ///   - `not(workers_active)`: the worker body-sleeps on an UNBOUNDED `wait()`
     ///     until woken (it has no other work).
-    ///   - workers_active: the worker idle-waits on a BOUNDED `wait_for(100µs)`
+    ///   - `workers_active`: the worker idle-waits on a BOUNDED `wait_for(100µs)`
     ///     between iterations; signalling here wakes it instantly instead of
     ///     after up to one ~100µs poll (the park-barrier win).
     ///
@@ -128,7 +128,7 @@ pub(crate) struct ParkControl {
     /// is.
     body_sleep_mu: Mutex<()>,
     body_sleep_cv: parking_lot::Condvar,
-    /// Event-driven control wake (workers_active): an awaitable, coalescing
+    /// Event-driven control wake (`workers_active)`: an awaitable, coalescing
     /// `bounded(1)` signal the recv worker selects on alongside the transport's
     /// packet-readiness. Every site that must wake an idle worker —
     /// `park_workers`, `Drop` (shutdown), test-panic — pings it via
@@ -202,7 +202,7 @@ pub struct PipelineRuntime<E: Copy + Eq + Hash + Send + Sync + 'static> {
     /// Sender half retained so it can be dropped on shutdown (signals the
     /// consumer-side drain that the worker is gone).
     recv_out_chan_tx: Mutex<Option<Sender<ReceiveOutput<E>>>>,
-    /// SnapshotReceiver held until the Send worker is spawned.
+    /// `SnapshotReceiver` held until the Send worker is spawned.
     snapshot_receiver: Mutex<Option<SnapshotReceiver<E>>>,
     /// Shutdown signaller: dropping flips `true`, observed by workers at the top
     /// of each loop iteration.
@@ -355,7 +355,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
                         &shutdown_recv,
                         &park_recv,
                         recv_readiness,
-                        timing_recv,
+                        &timing_recv,
                         #[cfg(any(test, feature = "test_time"))]
                         &test_panic_recv,
                     );
@@ -399,7 +399,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
                         &snap_rx,
                         &shutdown_send,
                         &park_send,
-                        timing_send,
+                        &timing_send,
                         #[cfg(any(test, feature = "test_time"))]
                         &test_panic_send,
                     );
@@ -445,7 +445,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
         if self.state() != RuntimeState::Running {
             return;
         }
-        let expected = self.workers.lock().len() as u32;
+        let expected = u32::try_from(self.workers.lock().len()).expect("worker count fits in u32");
         self.park.park.store(true, Ordering::SeqCst);
         // Wake body-sleeping workers via condvar so they loop back to the
         // checkpoint and park immediately. Hold body_sleep_mu while notifying to
@@ -463,7 +463,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
         // blocked in its `future::or` select.
         self.park.ping_control();
 
-        let _t_barrier = self
+        let t_barrier = self
             .timing
             .record_barrier
             .map(|_| std::time::Instant::now());
@@ -475,8 +475,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
                 .workers
                 .lock()
                 .iter()
-                .filter(|w| w.join.as_ref().map(|j| j.is_finished()).unwrap_or(true))
-                .count() as u32;
+                .filter(|w| {
+                    w.join
+                        .as_ref()
+                        .is_none_or(std::thread::JoinHandle::is_finished)
+                })
+                .count();
+            let finished = u32::try_from(finished).expect("worker count fits in u32");
             if *g + finished >= expected {
                 break;
             }
@@ -486,8 +491,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
                 .parked_cv
                 .wait_for(&mut g, Duration::from_millis(5));
         }
-        if let (Some(f), Some(t)) = (self.timing.record_barrier, _t_barrier) {
-            f(t.elapsed().as_nanos() as u64);
+        if let (Some(f), Some(t)) = (self.timing.record_barrier, t_barrier) {
+            f(u64::try_from(t.elapsed().as_nanos()).expect("elapsed nanos fit in u64"));
         }
     }
 
@@ -548,8 +553,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
                 .workers
                 .lock()
                 .iter()
-                .filter(|w| w.join.as_ref().map(|j| j.is_finished()).unwrap_or(true))
-                .count() as u32;
+                .filter(|w| {
+                    w.join
+                        .as_ref()
+                        .is_none_or(std::thread::JoinHandle::is_finished)
+                })
+                .count();
+            let finished_unparked =
+                u32::try_from(finished_unparked).expect("worker count fits in u32");
             // If the only thing keeping the count above 0 would be a worker that
             // has since finished, stop waiting.
             if finished_unparked >= *g {
@@ -599,7 +610,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Drop for PipelineRuntime<E> {
 
         let mut workers = std::mem::take(&mut *self.workers.lock());
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
-        for w in workers.iter_mut() {
+        for w in &mut workers {
             let name = w.name;
             if let Some(join) = w.join.take() {
                 while std::time::Instant::now() < deadline {
@@ -665,14 +676,20 @@ fn worker_park_checkpoint(park: &ParkControl) {
 /// 2. **Claim** the handle for the brief receive window.
 /// 3. `recv.receive()` + ship the `ReceiveOutput`.
 /// 4. **Deposit** the handle back *before* looping to the checkpoint.
+///
+/// NOTE (clippy `needless_pass_by_value`): `readiness` is deliberately owned.
+/// `spawn_workers` moves it into the `'static` worker thread, so no borrow of
+/// the caller can satisfy the lifetime; the lint's `Option<&PacketReadiness>`
+/// suggestion does not compile here. The body only needs shared access.
 #[cfg_attr(not(workers_active), allow(unused_variables))]
+#[allow(clippy::needless_pass_by_value)]
 pub(crate) fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
     recv_slot: &Arc<Mutex<Option<RecvHandle<E>>>>,
     out_tx: &Sender<ReceiveOutput<E>>,
     shutdown: &Arc<AtomicBool>,
     park: &Arc<ParkControl>,
     readiness: Option<PacketReadiness>,
-    timing: RuntimeTimingHooks,
+    timing: &RuntimeTimingHooks,
     #[cfg(any(test, feature = "test_time"))] test_panic: &Arc<AtomicBool>,
 ) {
     loop {
@@ -718,18 +735,15 @@ pub(crate) fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
             // the worker stuck while `park_workers()` waits for it to reach its
             // checkpoint — a deadlock. A contended slot just produces a 100µs
             // retry.
-            let mut recv = match recv_slot.try_lock().and_then(|mut g| g.take()) {
-                Some(h) => h,
-                None => {
-                    thread::sleep(Duration::from_micros(100));
-                    continue;
-                }
+            let Some(mut recv) = recv_slot.try_lock().and_then(|mut g| g.take()) else {
+                thread::sleep(Duration::from_micros(100));
+                continue;
             };
 
-            let _t_recv = timing.record_recv.map(|_| std::time::Instant::now());
+            let t_recv = timing.record_recv.map(|_| std::time::Instant::now());
             let output = recv.receive();
-            if let (Some(f), Some(t)) = (timing.record_recv, _t_recv) {
-                f(t.elapsed().as_nanos() as u64);
+            if let (Some(f), Some(t)) = (timing.record_recv, t_recv) {
+                f(u64::try_from(t.elapsed().as_nanos()).expect("elapsed nanos fit in u64"));
             }
 
             // Re-deposit using try_lock spin (never blocks park checkpoint).
@@ -757,7 +771,7 @@ pub(crate) fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
                 return;
             }
             // Idle inter-iteration wait.
-            match &readiness {
+            if let Some(readiness) = &readiness {
                 // Event-driven (in-process PacketChannel): block with ZERO CPU
                 // until either the transport signals a packet may be ready OR a
                 // control wake (park / shutdown / test-panic) fires. Eliminates
@@ -769,35 +783,32 @@ pub(crate) fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
                 // leaves a buffered token, so the freshly-created future resolves
                 // immediately. The per-tick park-window drain remains the
                 // authoritative safety net (≤1-tick dwell ceiling).
-                Some(readiness) => {
-                    if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
-                        smol::block_on(smol::future::or(readiness.wait(), async {
-                            let _ = park.control_rx.recv().await;
-                        }));
-                    }
-                    // Terminal peer loss (PF1-B): a closed readiness resolves
-                    // instantly every iteration. Exit instead of spinning —
-                    // the deposited handle stays in `recv_slot`, so the
-                    // consumer's park-window drain keeps working after us.
-                    if readiness.is_closed() {
-                        return;
-                    }
-                    // Clear the token(s) that woke us so the next wait starts
-                    // fresh (data is drained by recv.receive() at the loop top).
-                    readiness.drain();
-                    while park.control_rx.try_recv().is_ok() {}
+                if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
+                    smol::block_on(smol::future::or(readiness.wait(), async {
+                        let _ = park.control_rx.recv().await;
+                    }));
                 }
-                // Poll-only transport (raw socket, no awaitable readiness): keep
-                // the bounded condvar poll — park_workers()'s body_sleep_cv wake
-                // still cuts the park barrier; the 100µs bound drains the socket.
-                None => {
-                    let mut g = park.body_sleep_mu.lock();
-                    if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
-                        park.body_sleep_cv
-                            .wait_for(&mut g, Duration::from_micros(100));
-                    }
-                    drop(g);
+                // Terminal peer loss (PF1-B): a closed readiness resolves
+                // instantly every iteration. Exit instead of spinning —
+                // the deposited handle stays in `recv_slot`, so the
+                // consumer's park-window drain keeps working after us.
+                if readiness.is_closed() {
+                    return;
                 }
+                // Clear the token(s) that woke us so the next wait starts
+                // fresh (data is drained by recv.receive() at the loop top).
+                readiness.drain();
+                while park.control_rx.try_recv().is_ok() {}
+            // Poll-only transport (raw socket, no awaitable readiness): keep
+            // the bounded condvar poll — park_workers()'s body_sleep_cv wake
+            // still cuts the park barrier; the 100µs bound drains the socket.
+            } else {
+                let mut g = park.body_sleep_mu.lock();
+                if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
+                    park.body_sleep_cv
+                        .wait_for(&mut g, Duration::from_micros(100));
+                }
+                drop(g);
             }
         } // end #[cfg(workers_active)]
     }
@@ -806,7 +817,7 @@ pub(crate) fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
 /// Send worker loop. Symmetric to [`recv_worker_loop`]: the `SendHandle` lives
 /// in the shared `send_slot` so a parked-window consumer system can borrow it.
 ///
-/// In not(workers_active) (deterministic) mode this worker is a **pure parking
+/// In `not(workers_active)` (deterministic) mode this worker is a **pure parking
 /// service**: the consumer drives the send synchronously inside its park window,
 /// so `snap_rx` / `send_slot` are unused here.
 #[cfg_attr(not(workers_active), allow(unused_variables))]
@@ -815,7 +826,7 @@ fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
     snap_rx: &SnapshotReceiver<E>,
     shutdown: &Arc<AtomicBool>,
     park: &Arc<ParkControl>,
-    timing: RuntimeTimingHooks,
+    timing: &RuntimeTimingHooks,
     #[cfg(any(test, feature = "test_time"))] test_panic: &Arc<AtomicBool>,
 ) {
     // MISSION_TICK_FLOOR Lever 3: one-tick send lag. The job published this
@@ -880,9 +891,9 @@ fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
                         match job.take_send_plan() {
                             Some(plan) => {
                                 send.drain_all_acks();
-                                send.transmit_send_job(job, plan);
+                                send.transmit_send_job(&job, plan);
                             }
-                            None => send.send_all_packets(job),
+                            None => send.send_all_packets(&job),
                         }
                         loop {
                             match send_slot.try_lock() {
@@ -913,12 +924,9 @@ fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
             // Claim the handle FIRST — before touching the lag buffer — so a
             // failed claim cannot drop a buffered job. try_lock never blocks the
             // park checkpoint.
-            let mut send = match send_slot.try_lock().and_then(|mut g| g.take()) {
-                Some(h) => h,
-                None => {
-                    thread::sleep(Duration::from_micros(100));
-                    continue;
-                }
+            let Some(mut send) = send_slot.try_lock().and_then(|mut g| g.take()) else {
+                thread::sleep(Duration::from_micros(100));
+                continue;
             };
 
             // One-tick lag: buffer this cycle's freshly-published job; transmit
@@ -930,7 +938,7 @@ fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
                 None => held_job.take(),
             };
 
-            let _t_send = timing.record_send.map(|_| std::time::Instant::now());
+            let t_send = timing.record_send.map(|_| std::time::Instant::now());
 
             if let Some(mut job) = job_to_send {
                 // Dispatch on the prepared send plan. An active job carries a
@@ -947,12 +955,12 @@ fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
                         // side — single-owner. The no-plan fallback below drains
                         // inside `send_all_packets`.
                         send.drain_all_acks();
-                        send.transmit_send_job(job, plan);
+                        send.transmit_send_job(&job, plan);
                     }
-                    None => send.send_all_packets(job),
+                    None => send.send_all_packets(&job),
                 }
-                if let (Some(f), Some(t)) = (timing.record_send, _t_send) {
-                    f(t.elapsed().as_nanos() as u64);
+                if let (Some(f), Some(t)) = (timing.record_send, t_send) {
+                    f(u64::try_from(t.elapsed().as_nanos()).expect("elapsed nanos fit in u64"));
                 }
 
                 // Re-deposit before looping back to the park checkpoint.
@@ -990,7 +998,6 @@ fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
                     }
                     drop(g);
                 }
-                continue;
             }
         }
     }

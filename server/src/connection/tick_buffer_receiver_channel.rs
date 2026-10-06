@@ -22,7 +22,7 @@ impl TickBufferReceiverChannel {
     }
 
     /// Read the stored buffer-data corresponding to the given [`Tick`]
-    pub fn receive_messages(&mut self, host_tick: &Tick) -> Vec<MessageContainer> {
+    pub fn receive_messages(&mut self, host_tick: Tick) -> Vec<MessageContainer> {
         self.incoming_messages.collect(host_tick)
     }
 
@@ -34,7 +34,8 @@ impl TickBufferReceiverChannel {
         message_tick: &Tick,
         message: MessageContainer,
     ) -> bool {
-        let message_capacity = self.settings.message_capacity as u16;
+        let message_capacity =
+            u16::try_from(self.settings.message_capacity).expect("message capacity fits in u16");
         self.incoming_messages
             .insert(host_tick, message_tick, 0, message, message_capacity)
     }
@@ -45,11 +46,11 @@ impl TickBufferReceiverChannel {
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         message_kinds: &MessageKinds,
-        host_tick: &Tick,
-        remote_tick: &Tick,
+        host_tick: Tick,
+        remote_tick: Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        let mut last_read_tick = *remote_tick;
+        let mut last_read_tick = remote_tick;
 
         loop {
             let message_continue = bool::de(reader)?;
@@ -74,13 +75,14 @@ impl TickBufferReceiverChannel {
     fn read_message(
         &mut self,
         message_kinds: &MessageKinds,
-        host_tick: &Tick,
+        host_tick: Tick,
         last_read_tick: &mut Tick,
         entity_converter: &dyn LocalEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         // read remote tick
-        let remote_tick_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as Tick;
+        let remote_tick_diff =
+            u16::try_from(UnsignedVariableInteger::<3>::de(reader)?.get()).map_err(|_| SerdeErr)?;
         *last_read_tick = last_read_tick.wrapping_sub(remote_tick_diff);
         let remote_tick = *last_read_tick;
 
@@ -90,18 +92,20 @@ impl TickBufferReceiverChannel {
         let mut last_read_message_index: ShortMessageIndex = 0;
         for _ in 0..message_count {
             // read message id diff, add to last read id
-            let id_diff = UnsignedVariableInteger::<2>::de(reader)?.get() as ShortMessageIndex;
+            let id_diff = u8::try_from(UnsignedVariableInteger::<2>::de(reader)?.get())
+                .map_err(|_| SerdeErr)?;
             let message_index: ShortMessageIndex = last_read_message_index + id_diff;
             last_read_message_index = message_index;
 
             // read payload
             let new_message = message_kinds.read(reader, entity_converter)?;
 
-            let message_capacity = self.settings.message_capacity as u16;
+            let message_capacity = u16::try_from(self.settings.message_capacity)
+                .expect("message capacity fits in u16");
 
             if !self.incoming_messages.insert(
                 host_tick,
-                &remote_tick,
+                remote_tick,
                 message_index,
                 new_message,
                 message_capacity,
@@ -135,8 +139,8 @@ impl IncomingMessages {
     /// Will only insert messages that are from future ticks compared to the current server tick
     pub fn insert(
         &mut self,
-        host_tick: &Tick,
-        message_tick: &Tick,
+        host_tick: Tick,
+        message_tick: Tick,
         message_index: ShortMessageIndex, // this is used to de-dupe messages
         new_message: MessageContainer,
         message_capacity: u16,
@@ -145,9 +149,9 @@ impl IncomingMessages {
         //  * add unit test?
         //  * should there be a maximum buffer size?
 
-        if sequence_greater_than(*message_tick, *host_tick) {
+        if sequence_greater_than(message_tick, host_tick) {
             let buffer_limit_tick = host_tick.wrapping_add(message_capacity);
-            if !sequence_greater_than(buffer_limit_tick, *message_tick) {
+            if !sequence_greater_than(buffer_limit_tick, message_tick) {
                 // message is too far in the future
                 return false;
             }
@@ -158,7 +162,7 @@ impl IncomingMessages {
             if index == 0 {
                 let mut map = HashMap::new();
                 map.insert(message_index, new_message);
-                self.buffer.push_back((*message_tick, map));
+                self.buffer.push_back((message_tick, map));
                 return true;
             }
 
@@ -169,7 +173,7 @@ impl IncomingMessages {
                 index -= 1;
 
                 if let Some((existing_tick, existing_messages)) = self.buffer.get_mut(index) {
-                    if *existing_tick == *message_tick {
+                    if *existing_tick == message_tick {
                         // should almost never collide
                         if let std::collections::hash_map::Entry::Vacant(e) =
                             existing_messages.entry(message_index)
@@ -177,11 +181,10 @@ impl IncomingMessages {
                             e.insert(new_message);
 
                             return true;
-                        } else {
-                            // TODO: log hash collisions?
-                            return false;
                         }
-                    } else if sequence_greater_than(*message_tick, *existing_tick) {
+                        // TODO: log hash collisions?
+                        return false;
+                    } else if sequence_greater_than(message_tick, *existing_tick) {
                         // incoming client tick is larger (more in the future) than found tick
                         insert = true;
                     }
@@ -191,7 +194,7 @@ impl IncomingMessages {
                     // found correct position to insert node
                     let mut new_messages = HashMap::new();
                     new_messages.insert(message_index, new_message);
-                    self.buffer.insert(index + 1, (*message_tick, new_messages));
+                    self.buffer.insert(index + 1, (message_tick, new_messages));
                     return true;
                 }
 
@@ -199,7 +202,7 @@ impl IncomingMessages {
                     //traversed the whole vec, push front
                     let mut new_messages = HashMap::new();
                     new_messages.insert(message_index, new_message);
-                    self.buffer.push_front((*message_tick, new_messages));
+                    self.buffer.push_front((message_tick, new_messages));
                     return true;
                 }
             }
@@ -210,11 +213,11 @@ impl IncomingMessages {
     }
 
     /// Delete from the buffer all data that is older than the provided [`Tick`]
-    fn prune_outdated_commands(&mut self, host_tick: &Tick) {
+    fn prune_outdated_commands(&mut self, host_tick: Tick) {
         loop {
             let mut pop = false;
             if let Some((front_tick, _)) = self.buffer.front() {
-                if sequence_greater_than(*host_tick, *front_tick) {
+                if sequence_greater_than(host_tick, *front_tick) {
                     pop = true;
                 }
             }
@@ -227,14 +230,14 @@ impl IncomingMessages {
     }
 
     /// Retrieve from the buffer data corresponding to the provided [`Tick`]
-    pub fn collect(&mut self, host_tick: &Tick) -> Vec<MessageContainer> {
+    pub fn collect(&mut self, host_tick: Tick) -> Vec<MessageContainer> {
         self.prune_outdated_commands(host_tick);
 
         // now get the newest applicable command
         let mut output = Vec::new();
         let mut pop = false;
         if let Some((front_tick, _)) = self.buffer.front() {
-            if *front_tick == *host_tick {
+            if *front_tick == host_tick {
                 pop = true;
             }
         }

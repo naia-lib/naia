@@ -99,15 +99,15 @@ fn the_in_scope_view_of_a_remote_engine_follows_the_registry() {
     let mut engine = remote_engine();
 
     assert!(
-        !InScopeEntities::has_entity(&engine, &entity),
+        !InScopeEntities::has_entity(&engine, entity),
         "a fresh engine has nothing in scope",
     );
 
     engine.receive_message(1, 1, EntityMessage::Spawn(entity));
 
-    assert!(InScopeEntities::has_entity(&engine, &entity));
+    assert!(InScopeEntities::has_entity(&engine, entity));
     assert!(
-        !InScopeEntities::has_entity(&engine, &RemoteEntity::new(2)),
+        !InScopeEntities::has_entity(&engine, RemoteEntity::new(2)),
         "one spawn brought every entity into scope",
     );
 }
@@ -294,8 +294,8 @@ fn the_component_command_arms_maintain_the_channels_kind_registry() {
 
     {
         let channel = engine.get_entity_channel_mut(&entity).unwrap();
-        assert!(channel.has_component_kind(&component_kind::<Alpha>()));
-        assert!(channel.has_component_kind(&component_kind::<Beta>()));
+        assert!(channel.has_component_kind(component_kind::<Alpha>()));
+        assert!(channel.has_component_kind(component_kind::<Beta>()));
     }
 
     engine.send_entity_command(
@@ -305,11 +305,11 @@ fn the_component_command_arms_maintain_the_channels_kind_registry() {
 
     let channel = engine.get_entity_channel_mut(&entity).unwrap();
     assert!(
-        !channel.has_component_kind(&component_kind::<Alpha>()),
+        !channel.has_component_kind(component_kind::<Alpha>()),
         "the remove arm did not unregister the kind",
     );
     assert!(
-        channel.has_component_kind(&component_kind::<Beta>()),
+        channel.has_component_kind(component_kind::<Beta>()),
         "the remove arm cleared kinds it was not given",
     );
 }
@@ -452,7 +452,7 @@ fn a_host_spawn_registers_the_channel_and_queues_the_command() {
     );
 
     assert!(
-        engine.get_entity_channel(&HostEntity::new(1)).is_some(),
+        engine.get_entity_channel(HostEntity::new(1)).is_some(),
         "the spawn did not register an entity channel",
     );
     assert_eq!(
@@ -476,7 +476,7 @@ fn a_host_coalesced_spawn_seeds_the_channels_component_kinds() {
     );
 
     let channel = engine
-        .get_entity_channel(&HostEntity::new(1))
+        .get_entity_channel(HostEntity::new(1))
         .expect("the coalesced spawn did not register an entity channel");
     assert!(
         channel
@@ -517,7 +517,7 @@ fn a_host_despawn_drops_the_channel_and_queues_the_command() {
     );
 
     assert!(
-        engine.get_entity_channel(&HostEntity::new(1)).is_none(),
+        engine.get_entity_channel(HostEntity::new(1)).is_none(),
         "the despawned entity's channel outlived it",
     );
     assert_eq!(
@@ -611,7 +611,7 @@ fn a_received_host_despawn_drops_the_channel_and_surfaces_the_event() {
         "the despawn was not surfaced",
     );
     assert!(
-        engine.get_entity_channel(&host_entity).is_none(),
+        engine.get_entity_channel(host_entity).is_none(),
         "the despawned entity's channel outlived it",
     );
 }
@@ -705,21 +705,21 @@ fn extracting_a_host_entitys_commands_empties_its_channel() {
     spawn_on_host(&mut engine, &map, 1);
     let host_entity = HostEntity::new(1);
     engine
-        .get_entity_channel_mut(&host_entity)
+        .get_entity_channel_mut(host_entity)
         .expect("fixture: the spawned entity should have a channel")
         .send_command(EntityCommand::EnableDelegation(
             Some(0),
             GlobalEntity::from_u64(1),
         ));
 
-    let first = engine.extract_entity_commands(&host_entity);
-    let second = engine.extract_entity_commands(&host_entity);
+    let first = engine.extract_entity_commands(host_entity);
+    let second = engine.extract_entity_commands(host_entity);
 
     assert!(!first.is_empty(), "the queued command was not extracted");
     assert!(second.is_empty(), "the extract left the command behind");
     assert!(
         engine
-            .extract_entity_commands(&HostEntity::new(2))
+            .extract_entity_commands(HostEntity::new(2))
             .is_empty(),
         "an untracked entity produced commands",
     );
@@ -732,17 +732,17 @@ fn a_host_channel_can_be_lifted_out_and_reinserted() {
     spawn_on_host(&mut engine, &map, 1);
     let host_entity = HostEntity::new(1);
 
-    let channel = engine.remove_entity_channel(&host_entity);
+    let channel = engine.remove_entity_channel(host_entity);
 
     assert!(
-        engine.get_entity_channel(&host_entity).is_none(),
+        engine.get_entity_channel(host_entity).is_none(),
         "the channel was copied, not removed",
     );
 
     engine.insert_entity_channel(host_entity, channel);
 
     assert!(
-        engine.get_entity_channel(&host_entity).is_some(),
+        engine.get_entity_channel(host_entity).is_some(),
         "the reinserted channel was not registered",
     );
 }
@@ -752,7 +752,7 @@ fn a_host_channel_can_be_lifted_out_and_reinserted() {
 fn removing_an_untracked_host_channel_panics() {
     let (mut engine, _map) = host_engine(&[1]);
 
-    engine.remove_entity_channel(&HostEntity::new(1));
+    engine.remove_entity_channel(HostEntity::new(1));
 }
 
 #[test]
@@ -770,8 +770,8 @@ fn the_host_channel_lookups_find_only_tracked_entities() {
     let (mut engine, map) = host_engine(&[1]);
     spawn_on_host(&mut engine, &map, 1);
 
-    assert!(engine.get_entity_channel(&HostEntity::new(1)).is_some());
-    assert!(engine.get_entity_channel(&HostEntity::new(2)).is_none());
-    assert!(engine.get_entity_channel_mut(&HostEntity::new(1)).is_some());
-    assert!(engine.get_entity_channel_mut(&HostEntity::new(2)).is_none());
+    assert!(engine.get_entity_channel(HostEntity::new(1)).is_some());
+    assert!(engine.get_entity_channel(HostEntity::new(2)).is_none());
+    assert!(engine.get_entity_channel_mut(HostEntity::new(1)).is_some());
+    assert!(engine.get_entity_channel_mut(HostEntity::new(2)).is_none());
 }

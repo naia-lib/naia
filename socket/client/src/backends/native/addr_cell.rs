@@ -28,6 +28,7 @@ pub struct AddrCell {
 }
 
 impl AddrCell {
+    #[must_use]
     pub fn new(receiver: Receiver<SocketAddr>) -> Self {
         Self {
             cell: Arc::new(Mutex::new(MaybeAddr {
@@ -37,6 +38,7 @@ impl AddrCell {
         }
     }
 
+    #[must_use]
     pub fn get(&self) -> ServerAddr {
         // A contended lock means another caller is mid-update; reporting
         // `Finding` matches what this would have answered a moment earlier and

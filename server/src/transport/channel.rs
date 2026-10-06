@@ -20,6 +20,7 @@ impl PacketChannel {
     /// channel is created: the sender pings it on every `send`, and the
     /// receiver exposes it via [`TransportReceiver::readiness`] so the
     /// pipeline recv worker can block event-driven instead of polling.
+    #[must_use]
     pub fn unbounded() -> (Box<dyn TransportSender>, Box<dyn TransportReceiver>) {
         let (data_tx, data_rx) = channel::unbounded();
         // bounded(1) ⇒ at most one buffered "come look" token: a burst of
@@ -48,7 +49,7 @@ impl TransportSender for PacketChannelSender {
         // the worker will wake and drain everything) and `Closed` (the
         // worker is gone; the data send above already succeeded/failed).
         match self.ready_tx.try_send(()) {
-            Ok(()) | Err(TrySendError::Full(())) | Err(TrySendError::Closed(())) => {}
+            Ok(()) | Err(TrySendError::Full(()) | TrySendError::Closed(())) => {}
         }
         Ok(())
     }

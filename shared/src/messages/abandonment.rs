@@ -25,12 +25,14 @@ pub struct ConnectionRequestNonce {
 
 impl ConnectionRequestNonce {
     /// Reads the raw nonce value, for wire encoding and diagnostics.
+    #[must_use]
     pub fn value(self) -> u64 {
         self.value
     }
 
     /// Rebuilds a nonce received on the wire. Only the transport decoder
     /// calls this: it names a peer-allocated nonce, it never allocates.
+    #[must_use]
     pub fn from_wire(value: u64) -> Self {
         Self { value }
     }
@@ -72,6 +74,7 @@ pub struct NonceAllocator {
 
 impl NonceAllocator {
     /// Starts the supply at zero for a new connection.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             next_value: 0,
@@ -81,6 +84,7 @@ impl NonceAllocator {
 
     /// Starts the supply at `next_value`. Test and recovery hook: names
     /// where a fresh supply begins, never resumes a live one.
+    #[must_use]
     pub fn with_next(next_value: u64) -> Self {
         Self {
             next_value,
@@ -133,6 +137,7 @@ pub enum TransportTerminal {
 
 impl TransportTerminal {
     /// The nonce this terminal closes.
+    #[must_use]
     pub fn nonce(self) -> ConnectionRequestNonce {
         match self {
             Self::Abandoned { nonce } => nonce,

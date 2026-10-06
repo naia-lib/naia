@@ -8,7 +8,7 @@ type SentUpdatesMap =
     HashMap<PacketIndex, (Instant, HashMap<(GlobalEntity, ComponentKind), DiffMask>)>;
 
 /// Worker-owned retransmit machinery, carved out of `EntityUpdateManager`
-/// (MISSION_TICK_FLOOR Lever 3 / L3 send-state seam).
+/// (`MISSION_TICK_FLOOR` Lever 3 / L3 send-state seam).
 ///
 /// Holds the per-packet `sent_updates` ledger and the most-recently-sent
 /// packet index. This is purely *transmit* state: the send worker records what
@@ -39,19 +39,18 @@ impl RetransmitLedger {
     pub fn record_sent_update(
         &mut self,
         now: &Instant,
-        packet_index: &PacketIndex,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        packet_index: PacketIndex,
+        global_entity: GlobalEntity,
+        component_kind: ComponentKind,
         diff_mask: DiffMask,
     ) {
-        self.last_update_packet_index = *packet_index;
+        self.last_update_packet_index = packet_index;
 
-        if !self.sent_updates.contains_key(packet_index) {
-            self.sent_updates
-                .insert(*packet_index, (now.clone(), HashMap::new()));
-        }
-        let (_, sent_updates_map) = self.sent_updates.get_mut(packet_index).unwrap();
-        sent_updates_map.insert((*global_entity, *component_kind), diff_mask);
+        self.sent_updates
+            .entry(packet_index)
+            .or_insert_with(|| (now.clone(), HashMap::new()));
+        let (_, sent_updates_map) = self.sent_updates.get_mut(&packet_index).unwrap();
+        sent_updates_map.insert((global_entity, component_kind), diff_mask);
     }
 
     /// Drop a delivered packet's record (called from the ACK drain).
@@ -71,7 +70,7 @@ impl RetransmitLedger {
     pub fn collect_dropped_masks(
         &mut self,
         now: &Instant,
-        rtt_millis: &f32,
+        rtt_millis: f32,
     ) -> Vec<(GlobalEntity, ComponentKind, DiffMask)> {
         let drop_duration = Duration::from_millis((DROP_UPDATE_RTT_FACTOR * rtt_millis) as u64);
 

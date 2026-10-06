@@ -36,9 +36,10 @@ impl<E: Hash + Copy + Eq + Sync + Send> From<WorldEvents<E>> for Events<E> {
 
 impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     pub(crate) fn new(mut main_events: MainEvents, mut world_events: WorldEvents<E>) -> Self {
-        if main_events.has::<ConnectEvent>() {
-            panic!("When using combined Main and World events, MainEvents should not contain ConnectEvent");
-        }
+        assert!(
+            !main_events.has::<ConnectEvent>(),
+            "When using combined Main and World events, MainEvents should not contain ConnectEvent"
+        );
 
         // combine error events
         if main_events.has::<ErrorEvent>() {
@@ -56,6 +57,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     // Public
 
     /// Returns `true` if no events of any kind are pending.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.main_events.is_empty() && self.world_events.is_empty()
     }
@@ -66,12 +68,14 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     }
 
     /// Returns `true` if at least one event of type `V` is pending without draining it.
+    #[must_use]
     pub fn has<V: Event<E>>(&self) -> bool {
         V::has(self)
     }
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     /// Returns `true` if any incoming messages are queued. Prefer `read::<MessageEvent<C,M>>()`.
+    #[must_use]
     pub fn has_messages(&self) -> bool {
         self.world_events.has_messages()
     }
@@ -82,6 +86,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     /// Returns `true` if any incoming requests are queued. Prefer `read::<RequestEvent<C,Q>>()`.
+    #[must_use]
     pub fn has_requests(&self) -> bool {
         self.world_events.has_requests()
     }
@@ -92,6 +97,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     /// Returns `true` if any auth messages are pending. Prefer `read::<AuthEvent<M>>()`.
+    #[must_use]
     pub fn has_auths(&self) -> bool {
         self.main_events.has_auths()
     }
@@ -102,6 +108,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
 
     // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     /// Returns `true` if any component-insert events are pending. Prefer `read::<InsertComponentEvent<C>>()`.
+    #[must_use]
     pub fn has_inserts(&self) -> bool {
         self.world_events.has_inserts()
     }
@@ -112,6 +119,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
 
     // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     /// Returns `true` if any component-update events are pending. Prefer `read::<UpdateComponentEvent<C>>()`.
+    #[must_use]
     pub fn has_updates(&self) -> bool {
         self.world_events.has_updates()
     }
@@ -122,6 +130,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
 
     // These method are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     /// Returns `true` if any component-remove events are pending. Prefer `read::<RemoveComponentEvent<C>>()`.
+    #[must_use]
     pub fn has_removes(&self) -> bool {
         self.world_events.has_removes()
     }

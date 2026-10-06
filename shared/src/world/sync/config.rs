@@ -19,7 +19,7 @@ pub struct EngineConfig {
     ///   unambiguous.
     pub max_in_flight: u16,
     /// *Guard‑band distance from the sequence‑number wrap point (65 536).*
-    /// When the **oldest living packet ID ≥ flush_threshold**, the sender forces a
+    /// When the **oldest living packet ID ≥ `flush_threshold`**, the sender forces a
     /// flush of pending data **on the sender** before it reuses IDs that might
     /// still be referenced by the receiver, guaranteeing the *“unique ID across
     /// the sliding window”* invariant.  The receiver treats wrap‑around as an
@@ -33,7 +33,7 @@ impl Default for EngineConfig {
         let max_in_flight: u16 = 32_767;
 
         // Guard-band threshold where we flush backlog near wrap-around.
-        let flush_threshold: u16 = (65_536u32 - max_in_flight as u32) as u16;
+        let flush_threshold: u16 = (65_536u32 - u32::from(max_in_flight)) as u16;
 
         Self {
             max_in_flight,

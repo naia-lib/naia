@@ -57,7 +57,7 @@ impl ChannelSender<MessageContainer> for UnorderedUnreliableSender {
         true
     }
 
-    fn collect_messages(&mut self, _: &Instant, _: &f32) {
+    fn collect_messages(&mut self, _: &Instant, _: f32) {
         // not necessary for an unreliable channel
     }
 
@@ -65,7 +65,7 @@ impl ChannelSender<MessageContainer> for UnorderedUnreliableSender {
         !self.outgoing_messages.is_empty()
     }
 
-    fn notify_message_delivered(&mut self, _: &MessageIndex) {
+    fn notify_message_delivered(&mut self, _: MessageIndex) {
         // not necessary for an unreliable channel
     }
 }
@@ -127,7 +127,7 @@ impl MessageChannelSender for UnorderedUnreliableSender {
 
     fn process_incoming_response(
         &mut self,
-        _: &LocalRequestId,
+        _: LocalRequestId,
         _: ConnectionRequestNonce,
     ) -> Option<GlobalRequestId> {
         panic!("UnorderedUnreliable channel does not support requests");
@@ -406,8 +406,8 @@ mod unordered_unreliable_sender_tests {
         let mut sender = UnorderedUnreliableSender::new();
         sender.send_message(tagged(1, 4));
 
-        sender.collect_messages(&Instant::now(), &200.0);
-        sender.notify_message_delivered(&7);
+        sender.collect_messages(&Instant::now(), 200.0);
+        sender.notify_message_delivered(7);
 
         assert_eq!(
             drain(&mut sender),
@@ -448,7 +448,7 @@ mod unordered_unreliable_sender_tests {
     fn processing_a_response_is_a_programming_error() {
         let mut sender = UnorderedUnreliableSender::new();
         sender.process_incoming_response(
-            &LocalRequestId::from(0),
+            LocalRequestId::from(0),
             crate::ConnectionRequestNonce::from_wire(0),
         );
     }

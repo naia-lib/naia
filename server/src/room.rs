@@ -44,18 +44,18 @@ impl Room {
 
     // Users
 
-    pub(crate) fn has_user(&self, user_key: &UserKey) -> bool {
-        self.users.contains(user_key)
+    pub(crate) fn has_user(&self, user_key: UserKey) -> bool {
+        self.users.contains(&user_key)
     }
 
-    pub(crate) fn subscribe_user(&mut self, user_key: &UserKey) {
-        self.users.insert(*user_key);
+    pub(crate) fn subscribe_user(&mut self, user_key: UserKey) {
+        self.users.insert(user_key);
     }
 
-    pub(crate) fn unsubscribe_user(&mut self, user_key: &UserKey) {
-        self.users.remove(user_key);
-        for entity in self.entities.iter() {
-            self.entity_removal_queue.push_back((*user_key, *entity));
+    pub(crate) fn unsubscribe_user(&mut self, user_key: UserKey) {
+        self.users.remove(&user_key);
+        for entity in &self.entities {
+            self.entity_removal_queue.push_back((user_key, *entity));
         }
     }
 
@@ -69,20 +69,20 @@ impl Room {
 
     // Entities
 
-    pub(crate) fn add_entity(&mut self, global_entity: &GlobalEntity) {
-        self.entities.insert(*global_entity);
+    pub(crate) fn add_entity(&mut self, global_entity: GlobalEntity) {
+        self.entities.insert(global_entity);
     }
 
     pub(crate) fn remove_entity(
         &mut self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
         entity_is_despawned: bool,
     ) -> bool {
-        if self.entities.remove(global_entity) {
+        if self.entities.remove(&global_entity) {
             if !entity_is_despawned {
-                for user_key in self.users.iter() {
+                for user_key in &self.users {
                     self.entity_removal_queue
-                        .push_back((*user_key, *global_entity));
+                        .push_back((*user_key, global_entity));
                 }
             }
             true
@@ -91,8 +91,8 @@ impl Room {
         }
     }
 
-    pub(crate) fn has_entity(&self, global_entity: &GlobalEntity) -> bool {
-        self.entities.contains(global_entity)
+    pub(crate) fn has_entity(&self, global_entity: GlobalEntity) -> bool {
+        self.entities.contains(&global_entity)
     }
 
     pub(crate) fn entities(&'_ self) -> Iter<'_, GlobalEntity> {
@@ -151,21 +151,22 @@ pub struct RoomRef<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> RoomRef<'s, E> {
-    pub(crate) fn new(server: &'s InternalWorldServer<E>, key: &RoomKey) -> Self {
+    pub(crate) fn new(server: &'s InternalWorldServer<E>, key: RoomKey) -> Self {
         Self {
             server: RoomRefTarget::Resident(server),
-            key: *key,
+            key,
         }
     }
 
-    pub(crate) fn with_pipeline(server: &'s PipelinedWorldServer<E>, key: &RoomKey) -> Self {
+    pub(crate) fn with_pipeline(server: &'s PipelinedWorldServer<E>, key: RoomKey) -> Self {
         Self {
             server: RoomRefTarget::Pipelined(server),
-            key: *key,
+            key,
         }
     }
 
     /// Returns the [`RoomKey`] for this room.
+    #[must_use]
     pub fn key(&self) -> RoomKey {
         self.key
     }
@@ -173,17 +174,19 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> RoomRef<'s, E> {
     // Users
 
     /// Returns `true` if the given user is currently a member of this room.
+    #[must_use]
     pub fn has_user(&self, user_key: &UserKey) -> bool {
         match &self.server {
-            RoomRefTarget::Resident(ws) => ws.room_has_user(&self.key, user_key),
-            RoomRefTarget::Pipelined(ps) => ps.room_has_user(&self.key, user_key),
+            RoomRefTarget::Resident(ws) => ws.room_has_user(self.key, *user_key),
+            RoomRefTarget::Pipelined(ps) => ps.room_has_user(self.key, *user_key),
         }
     }
 
     /// Returns the number of users currently in this room.
+    #[must_use]
     pub fn users_count(&self) -> usize {
         match &self.server {
-            RoomRefTarget::Resident(ws) => ws.room_users_count(&self.key),
+            RoomRefTarget::Resident(ws) => ws.room_users_count(self.key),
             RoomRefTarget::Pipelined(ps) => ps.room_users_count(&self.key),
         }
     }
@@ -191,7 +194,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> RoomRef<'s, E> {
     /// Returns an iterator over the [`UserKey`]s of all users in the room.
     pub fn user_keys(&self) -> impl Iterator<Item = &UserKey> {
         let iter: Box<dyn Iterator<Item = &UserKey> + '_> = match &self.server {
-            RoomRefTarget::Resident(ws) => Box::new(ws.room_user_keys(&self.key)),
+            RoomRefTarget::Resident(ws) => Box::new(ws.room_user_keys(self.key)),
             RoomRefTarget::Pipelined(ps) => Box::new(ps.room_user_keys(&self.key)),
         };
         iter
@@ -202,23 +205,25 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> RoomRef<'s, E> {
     /// Returns `true` if the given entity is currently a member of this room.
     pub fn has_entity(&self, entity: &E) -> bool {
         match &self.server {
-            RoomRefTarget::Resident(ws) => resident_room_has_entity(ws, &self.key, entity),
+            RoomRefTarget::Resident(ws) => resident_room_has_entity(ws, self.key, entity),
             RoomRefTarget::Pipelined(ps) => ps.room_has_entity(&self.key, entity),
         }
     }
 
     /// Returns the number of entities currently in this room.
+    #[must_use]
     pub fn entities_count(&self) -> usize {
         match &self.server {
-            RoomRefTarget::Resident(ws) => ws.room_entities_count(&self.key),
+            RoomRefTarget::Resident(ws) => ws.room_entities_count(self.key),
             RoomRefTarget::Pipelined(ps) => ps.room_entities_count(&self.key),
         }
     }
 
     /// Returns all entity identifiers currently in this room.
+    #[must_use]
     pub fn entities(&self) -> Vec<E> {
         match &self.server {
-            RoomRefTarget::Resident(ws) => resident_room_entities(ws, &self.key),
+            RoomRefTarget::Resident(ws) => resident_room_entities(ws, self.key),
             RoomRefTarget::Pipelined(ps) => ps.room_entities(&self.key),
         }
     }
@@ -234,21 +239,22 @@ pub struct RoomMut<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> RoomMut<'s, E> {
-    pub(crate) fn new(server: &'s mut InternalWorldServer<E>, key: &RoomKey) -> Self {
+    pub(crate) fn new(server: &'s mut InternalWorldServer<E>, key: RoomKey) -> Self {
         Self {
             server: RoomMutTarget::Resident(server),
-            key: *key,
+            key,
         }
     }
 
-    pub(crate) fn with_pipeline(server: &'s mut PipelinedWorldServer<E>, key: &RoomKey) -> Self {
+    pub(crate) fn with_pipeline(server: &'s mut PipelinedWorldServer<E>, key: RoomKey) -> Self {
         Self {
             server: RoomMutTarget::Pipelined(server),
-            key: *key,
+            key,
         }
     }
 
     /// Returns the [`RoomKey`] for this room.
+    #[must_use]
     pub fn key(&self) -> RoomKey {
         self.key
     }
@@ -258,7 +264,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> RoomMut<'s, E> {
     pub fn destroy(&mut self) {
         match &mut self.server {
             RoomMutTarget::Resident(ws) => {
-                ws.room_destroy(&self.key);
+                ws.room_destroy(self.key);
             }
             RoomMutTarget::Pipelined(ps) => {
                 ps.room_destroy(&self.key);
@@ -269,10 +275,11 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> RoomMut<'s, E> {
     // Users
 
     /// Returns `true` if the given user is currently a member of this room.
+    #[must_use]
     pub fn has_user(&self, user_key: &UserKey) -> bool {
         match &self.server {
-            RoomMutTarget::Resident(ws) => ws.room_has_user(&self.key, user_key),
-            RoomMutTarget::Pipelined(ps) => ps.room_has_user(&self.key, user_key),
+            RoomMutTarget::Resident(ws) => ws.room_has_user(self.key, *user_key),
+            RoomMutTarget::Pipelined(ps) => ps.room_has_user(self.key, *user_key),
         }
     }
 
@@ -282,8 +289,8 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> RoomMut<'s, E> {
     /// will begin replicating to that user.
     pub fn add_user(&mut self, user_key: &UserKey) -> &mut Self {
         match &mut self.server {
-            RoomMutTarget::Resident(ws) => ws.room_add_user(&self.key, user_key),
-            RoomMutTarget::Pipelined(ps) => ps.room_add_user(&self.key, user_key),
+            RoomMutTarget::Resident(ws) => ws.room_add_user(self.key, *user_key),
+            RoomMutTarget::Pipelined(ps) => ps.room_add_user(self.key, *user_key),
         }
         self
     }
@@ -294,16 +301,17 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> RoomMut<'s, E> {
     /// direct scope include) will be despawned on that user's side.
     pub fn remove_user(&mut self, user_key: &UserKey) -> &mut Self {
         match &mut self.server {
-            RoomMutTarget::Resident(ws) => ws.room_remove_user(&self.key, user_key),
-            RoomMutTarget::Pipelined(ps) => ps.room_remove_user(&self.key, user_key),
+            RoomMutTarget::Resident(ws) => ws.room_remove_user(self.key, *user_key),
+            RoomMutTarget::Pipelined(ps) => ps.room_remove_user(self.key, *user_key),
         }
         self
     }
 
     /// Returns the number of users currently in this room.
+    #[must_use]
     pub fn users_count(&self) -> usize {
         match &self.server {
-            RoomMutTarget::Resident(ws) => ws.room_users_count(&self.key),
+            RoomMutTarget::Resident(ws) => ws.room_users_count(self.key),
             RoomMutTarget::Pipelined(ps) => ps.room_users_count(&self.key),
         }
     }
@@ -311,7 +319,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> RoomMut<'s, E> {
     /// Returns an iterator over the [`UserKey`]s of all users in the room.
     pub fn user_keys(&self) -> impl Iterator<Item = &UserKey> {
         let iter: Box<dyn Iterator<Item = &UserKey> + '_> = match &self.server {
-            RoomMutTarget::Resident(ws) => Box::new(ws.room_user_keys(&self.key)),
+            RoomMutTarget::Resident(ws) => Box::new(ws.room_user_keys(self.key)),
             RoomMutTarget::Pipelined(ps) => Box::new(ps.room_user_keys(&self.key)),
         };
         iter
@@ -322,7 +330,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> RoomMut<'s, E> {
     /// Returns `true` if the given entity is currently a member of this room.
     pub fn has_entity(&self, entity: &E) -> bool {
         match &self.server {
-            RoomMutTarget::Resident(ws) => resident_room_has_entity(ws, &self.key, entity),
+            RoomMutTarget::Resident(ws) => resident_room_has_entity(ws, self.key, entity),
             RoomMutTarget::Pipelined(ps) => ps.room_has_entity(&self.key, entity),
         }
     }
@@ -331,7 +339,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> RoomMut<'s, E> {
     /// the room (subject to per-user scope checks).
     pub fn add_entity(&mut self, world_entity: &E) -> &mut Self {
         match &mut self.server {
-            RoomMutTarget::Resident(ws) => ws.room_add_entity(&self.key, world_entity),
+            RoomMutTarget::Resident(ws) => ws.room_add_entity(self.key, world_entity),
             RoomMutTarget::Pipelined(ps) => ps.room_add_entity(&self.key, world_entity),
         }
         self
@@ -342,16 +350,17 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> RoomMut<'s, E> {
     /// `ScopeExit` is `Persist`).
     pub fn remove_entity(&mut self, world_entity: &E) -> &mut Self {
         match &mut self.server {
-            RoomMutTarget::Resident(ws) => ws.room_remove_entity(&self.key, world_entity),
+            RoomMutTarget::Resident(ws) => ws.room_remove_entity(self.key, world_entity),
             RoomMutTarget::Pipelined(ps) => ps.room_remove_entity(&self.key, world_entity),
         }
         self
     }
 
     /// Returns the number of entities currently in this room.
+    #[must_use]
     pub fn entities_count(&self) -> usize {
         match &self.server {
-            RoomMutTarget::Resident(ws) => ws.room_entities_count(&self.key),
+            RoomMutTarget::Resident(ws) => ws.room_entities_count(self.key),
             RoomMutTarget::Pipelined(ps) => ps.room_entities_count(&self.key),
         }
     }
@@ -364,10 +373,10 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> RoomMut<'s, E> {
         let channel_kind = ChannelKind::of::<C>();
         match &mut self.server {
             RoomMutTarget::Resident(ws) => {
-                ws.room_broadcast_message(&channel_kind, &self.key, cloned_message)
+                ws.room_broadcast_message(&channel_kind, self.key, cloned_message);
             }
             RoomMutTarget::Pipelined(ps) => {
-                ps.room_broadcast_message(&channel_kind, &self.key, cloned_message)
+                ps.room_broadcast_message(&channel_kind, self.key, cloned_message);
             }
         }
     }
@@ -378,11 +387,11 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> RoomMut<'s, E> {
 /// `PipelinedWorldServer::room_has_entity`, which converts via the coord handle.
 fn resident_room_has_entity<E: Copy + Eq + Hash + Send + Sync + 'static>(
     server: &InternalWorldServer<E>,
-    key: &RoomKey,
+    key: RoomKey,
     entity: &E,
 ) -> bool {
     if let Ok(global_entity) = server.entity_converter().entity_to_global_entity(entity) {
-        server.room_has_entity(key, &global_entity)
+        server.room_has_entity(key, global_entity)
     } else {
         false
     }
@@ -391,13 +400,13 @@ fn resident_room_has_entity<E: Copy + Eq + Hash + Send + Sync + 'static>(
 /// Resident-arm helper for `room.entities` (see [`resident_room_has_entity`]).
 fn resident_room_entities<E: Copy + Eq + Hash + Send + Sync + 'static>(
     server: &InternalWorldServer<E>,
-    key: &RoomKey,
+    key: RoomKey,
 ) -> Vec<E> {
     let mut output = Vec::new();
     for global_entity in server.room_entities(key) {
         if let Ok(entity) = server
             .entity_converter()
-            .global_entity_to_entity(global_entity)
+            .global_entity_to_entity(*global_entity)
         {
             output.push(entity);
         }

@@ -127,7 +127,7 @@ impl ServerImpl {
         }
     }
 
-    pub(crate) fn send_all_packets<W: WorldRefType<Entity> + Sync>(&mut self, world: W) {
+    pub(crate) fn send_all_packets<W: WorldRefType<Entity> + Sync>(&mut self, world: &W) {
         match self {
             Self::Full(server) => server.send_all_packets(world),
             Self::WorldOnly(server) => server.send_all_packets(world),
@@ -666,7 +666,7 @@ impl<'w> Server<'w> {
         }
     }
 
-    pub fn record_historian_tick<W: WorldRefType<Entity>>(&mut self, world: W, tick: Tick) {
+    pub fn record_historian_tick<W: WorldRefType<Entity>>(&mut self, world: &W, tick: Tick) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.record_historian_tick(world, tick),
             ServerImpl::Full(server) => server.record_historian_tick(world, tick),
@@ -809,7 +809,7 @@ impl<'w> Server<'w> {
     /// Internally pulls the `ServerImpl` resource out of `World` via
     /// `resource_scope` (so the caller doesn't need to reach for the
     /// private wrapper), then delegates to
-    /// `apply_receive_output`.
+    /// `apply_receive_output::apply_receive_output`.
     pub fn apply_receive_output(world: &mut World, output: naia_server::ReceiveOutput<Entity>) {
         world.resource_scope(|world, mut server: Mut<ServerImpl>| {
             crate::apply_receive_output::apply_receive_output(world, &mut server, output);
@@ -1175,10 +1175,10 @@ impl<'w> Server<'w> {
 impl<'w> EntityAndGlobalEntityConverter<Entity> for Server<'w> {
     fn global_entity_to_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<Entity, EntityDoesNotExistError> {
         match &*self.server_impl {
-            ServerImpl::WorldOnly(server) => server.global_entity_to_entity(global_entity),
+            ServerImpl::WorldOnly(server) => server.global_entity_to_entity(&global_entity),
             ServerImpl::Full(server) => server.global_entity_to_entity(global_entity),
         }
     }

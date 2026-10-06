@@ -30,7 +30,7 @@ impl FragmentId {
 
 impl Serde for FragmentId {
     fn ser(&self, writer: &mut dyn BitWrite) {
-        let integer = UnsignedInteger::<FRAGMENT_ID_BITS>::new(self.inner as u64);
+        let integer = UnsignedInteger::<FRAGMENT_ID_BITS>::new(u64::from(self.inner));
         integer.ser(writer);
     }
 
@@ -47,7 +47,7 @@ impl Serde for FragmentId {
 
 impl ConstBitLength for FragmentId {
     fn const_bit_length() -> u32 {
-        FRAGMENT_ID_BITS as u32
+        u32::from(FRAGMENT_ID_BITS)
     }
 }
 
@@ -75,9 +75,7 @@ impl FragmentIndex {
 
     pub(crate) fn increment(&mut self) {
         self.inner += 1;
-        if self.inner >= FRAGMENT_INDEX_LIMIT {
-            panic!("Attempting to fragment large message, but hit fragment limit of {FRAGMENT_INDEX_LIMIT}. This means you're trying to transmit about 500 megabytes, which is a bad idea.")
-        }
+        assert!(self.inner < FRAGMENT_INDEX_LIMIT, "Attempting to fragment large message, but hit fragment limit of {FRAGMENT_INDEX_LIMIT}. This means you're trying to transmit about 500 megabytes, which is a bad idea.");
     }
 
     pub fn as_usize(&self) -> usize {
@@ -87,7 +85,7 @@ impl FragmentIndex {
 
 impl Serde for FragmentIndex {
     fn ser(&self, writer: &mut dyn BitWrite) {
-        let integer = UnsignedInteger::<FRAGMENT_INDEX_BITS>::new(self.inner as u64);
+        let integer = UnsignedInteger::<FRAGMENT_INDEX_BITS>::new(u64::from(self.inner));
         integer.ser(writer);
     }
 
@@ -104,7 +102,7 @@ impl Serde for FragmentIndex {
 
 impl ConstBitLength for FragmentIndex {
     fn const_bit_length() -> u32 {
-        FRAGMENT_INDEX_BITS as u32
+        u32::from(FRAGMENT_INDEX_BITS)
     }
 }
 

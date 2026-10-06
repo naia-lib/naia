@@ -5,7 +5,7 @@ use super::{link_conditioner_config::LinkConditionerConfig, time_queue::TimeQueu
 use crate::Random;
 
 /// Given a config object which describes the network conditions to be
-/// simulated, process an incoming packet, adding it to a TimeQueue at the
+/// simulated, process an incoming packet, adding it to a `TimeQueue` at the
 /// correct timestamp
 pub fn process_packet<T: Eq>(
     config: &LinkConditionerConfig,
@@ -39,7 +39,10 @@ pub fn process_packet<T: Eq>(
     // Use debug logging instead of println to reduce noise
     debug!(
         "[LINK_COND] Queuing packet: delay={}ms (latency={}, jitter={}, loss={})",
-        latency as u64, config.incoming_latency, config.incoming_jitter, config.incoming_loss
+        u64::from(latency),
+        config.incoming_latency,
+        config.incoming_jitter,
+        config.incoming_loss
     );
     time_queue.add_item(packet_timestamp, packet);
     debug!("[LINK_COND] Queue length after add: {}", time_queue.len());

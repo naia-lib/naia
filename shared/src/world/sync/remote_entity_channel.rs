@@ -42,13 +42,13 @@
 //!    authoritative `SpawnEntity`; drop it to guarantee *at‑most‑once
 //!    semantics*; wrap‑around itself is handled automatically by the
 //!    wrap‑safe `u16` comparison helpers—no epoch reset is performed.
-//! 2. **Buffered queue (`OrderedIds`)**  
+//! 2. **Buffered queue (`OrderedIds`)**\
 //!    Messages are pushed into `buffered_messages`, ordered by the `u16`
-//!    sequence with wrap‑safe comparison.  
+//!    sequence with wrap‑safe comparison.\
 //!    `process_messages()` iterates from the head while the next candidate is
 //!    *legal* under the current FSM state.
-//! 3. **Draining**  
-//!    Once a message is applied, it is moved into `outgoing_messages`.  
+//! 3. **Draining**\
+//!    Once a message is applied, it is moved into `outgoing_messages`.\
 //!    `Engine::drain_messages_into` later annotates them with the concrete
 //!    entity handle and forwards them to the ECS.
 //!
@@ -116,6 +116,7 @@ pub struct RemoteEntityChannel {
 
 impl RemoteEntityChannel {
     /// Creates a fresh `RemoteEntityChannel` in the `Despawned` state for `host_type`.
+    #[must_use]
     pub fn new(host_type: HostType) -> Self {
         Self {
             state: EntityChannelState::Despawned,
@@ -130,10 +131,11 @@ impl RemoteEntityChannel {
         }
     }
 
-    /// Create a RemoteEntityChannel for a delegated entity (used during migration)
+    /// Create a `RemoteEntityChannel` for a delegated entity (used during migration)
     ///
-    /// After migration, MigrateResponse has subcommand_id=0, so the next message (SetAuthority)
-    /// will have subcommand_id=1. We need to sync the receiver's next_subcommand_id accordingly.
+    /// After migration, `MigrateResponse` has `subcommand_id=0`, so the next message (`SetAuthority`)
+    /// will have `subcommand_id=1`. We need to sync the receiver's `next_subcommand_id` accordingly.
+    #[must_use]
     pub fn new_delegated(host_type: HostType) -> Self {
         let mut channel = Self::new(host_type);
         channel.configure_as_delegated();
@@ -155,21 +157,20 @@ impl RemoteEntityChannel {
     }
 
     /// Returns the current authority status recorded in the auth sub-channel.
+    #[must_use]
     pub fn auth_status(&self) -> Option<EntityAuthStatus> {
         self.auth_channel.auth_status()
     }
 
     /// Returns `true` if the auth sub-channel is in the Delegated state.
+    #[must_use]
     pub fn is_delegated(&self) -> bool {
         self.auth_channel.is_delegated()
     }
 
     pub(crate) fn receive_message(&mut self, id: MessageIndex, tick: Tick, msg: EntityMessage<()>) {
         if let Some(last_epoch_id) = self.last_epoch_id {
-            if last_epoch_id == id {
-                panic!("EntityChannel received a message with the same id as the last epoch id. This should not happen. Message: {:?}", msg);
-            }
-
+            assert!(last_epoch_id != id, "EntityChannel received a message with the same id as the last epoch id. This should not happen. Message: {msg:?}");
             if sequence_less_than(id, last_epoch_id) {
                 // This message is older than the last spawn message, ignore it
                 return;
@@ -208,8 +209,8 @@ impl RemoteEntityChannel {
         outgoing_commands.append(&mut self.outgoing_commands);
     }
 
-    pub(crate) fn has_component_kind(&self, component_kind: &ComponentKind) -> bool {
-        self.component_channels.contains_key(component_kind)
+    pub(crate) fn has_component_kind(&self, component_kind: ComponentKind) -> bool {
+        self.component_channels.contains_key(&component_kind)
     }
 
     fn process_messages(&mut self) {
@@ -250,10 +251,10 @@ impl RemoteEntityChannel {
                     // Pop buffered messages from the component channels until and excluding the spawn id
                     // Then process the messages in the component channels
                     // Then drain the messages into the outgoing messages
-                    for (component_kind, component_channel) in self.component_channels.iter_mut() {
+                    for (component_kind, component_channel) in &mut self.component_channels {
                         component_channel.buffer_pop_front_until_and_excluding(id);
                         component_channel.process_messages(self.state);
-                        component_channel.drain_messages_into(component_kind, &mut self.incoming_messages);
+                        component_channel.drain_messages_into(*component_kind, &mut self.incoming_messages);
                     }
                 }
                 EntityMessageType::SpawnWithComponents => {
@@ -277,10 +278,10 @@ impl RemoteEntityChannel {
                     self.incoming_messages.push((tick, EntityMessage::Spawn(())));
 
                     // Process any pre-buffered component channels (out-of-order arrivals)
-                    for (component_kind, component_channel) in self.component_channels.iter_mut() {
+                    for (component_kind, component_channel) in &mut self.component_channels {
                         component_channel.buffer_pop_front_until_and_excluding(id);
                         component_channel.process_messages(self.state);
-                        component_channel.drain_messages_into(component_kind, &mut self.incoming_messages);
+                        component_channel.drain_messages_into(*component_kind, &mut self.incoming_messages);
                     }
 
                     // Accept coalesced components: mark inserted + emit InsertComponent events
@@ -322,7 +323,7 @@ impl RemoteEntityChannel {
                         .or_insert_with(RemoteComponentChannel::new);
 
                     component_channel.accept_message(self.state, id, tick, msg);
-                    component_channel.drain_messages_into(&component_kind, &mut self.incoming_messages);
+                    component_channel.drain_messages_into(component_kind, &mut self.incoming_messages);
                 }
                 EntityMessageType::Publish | EntityMessageType::Unpublish |
                 EntityMessageType::EnableDelegation | EntityMessageType::DisableDelegation |
@@ -342,7 +343,7 @@ impl RemoteEntityChannel {
                     // Drop it
                 }
                 msg => {
-                    panic!("EntityChannel::accept_message() received an unexpected message type: {:?}", msg);
+                    panic!("EntityChannel::accept_message() received an unexpected message type: {msg:?}");
                 }
             }
         }
@@ -408,7 +409,7 @@ impl RemoteEntityChannel {
         }
 
         // Force-drain all component channels
-        for (_, component_channel) in self.component_channels.iter_mut() {
+        for component_channel in self.component_channels.values_mut() {
             component_channel.force_drain_buffers(self.state);
         }
     }
@@ -424,9 +425,10 @@ impl RemoteEntityChannel {
     }
 
     pub(crate) fn set_spawned(&mut self, epoch_id: MessageIndex) {
-        if self.state != EntityChannelState::Despawned {
-            panic!("Can only set spawned on despawned entity");
-        }
+        assert!(
+            self.state == EntityChannelState::Despawned,
+            "Can only set spawned on despawned entity"
+        );
         self.state = EntityChannelState::Spawned;
         self.last_epoch_id = Some(epoch_id);
     }

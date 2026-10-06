@@ -186,7 +186,7 @@ impl SendConnection {
         };
         for (channel_kind, messages) in messages {
             for message in messages {
-                incoming_events.push_message(&user_key, &channel_kind, message);
+                incoming_events.push_message(user_key, &channel_kind, message);
             }
         }
 
@@ -195,16 +195,16 @@ impl SendConnection {
         for (channel_kind, requests) in requests {
             for (local_response_id, wire_nonce, request) in requests {
                 let global_response_id = global_response_manager.create_response_id(
-                    &user_key,
+                    user_key,
                     &channel_kind,
-                    &local_response_id,
+                    local_response_id,
                     wire_nonce,
                 );
-                incoming_events.push_request(&user_key, &channel_kind, global_response_id, request);
+                incoming_events.push_request(user_key, &channel_kind, global_response_id, request);
             }
         }
         for (global_request_id, response) in responses {
-            global_request_manager.receive_response(&global_request_id, response);
+            global_request_manager.receive_response(global_request_id, response);
         }
 
         // Receive World Events
@@ -244,7 +244,7 @@ impl SendConnection {
     ) {
         #[cfg(feature = "bench_instrumentation")]
         let t = std::time::Instant::now();
-        self.base.collect_messages(now, &rtt_millis);
+        self.base.collect_messages(now, rtt_millis);
         #[cfg(feature = "bench_instrumentation")]
         bench_send_counters::NS_COLLECT_MESSAGES.fetch_add(
             t.elapsed().as_nanos() as u64,
@@ -258,7 +258,7 @@ impl SendConnection {
         let mut host_world_events = self
             .base
             .world_manager
-            .take_outgoing_commands(now, &rtt_millis);
+            .take_outgoing_commands(now, rtt_millis);
         #[cfg(feature = "bench_instrumentation")]
         bench_send_counters::NS_TAKE_OUTGOING_EVENTS.fetch_add(
             t.elapsed().as_nanos() as u64,
@@ -348,7 +348,7 @@ impl SendConnection {
 
             let addr = self.address;
             self.shared.note_outbound_packet();
-            if io.send_packet(&addr, writer.to_packet()).is_err() {
+            if io.send_packet(&addr, &writer.to_packet()).is_err() {
                 warn!("Server Error: Cannot send ACK-only packet to {}", &addr);
             } else {
                 #[cfg(feature = "e2e_debug")]
@@ -361,7 +361,10 @@ impl SendConnection {
         }
 
         if has_events || has_messages {
-            if !self.base.can_spend_bandwidth(MTU_SIZE_BYTES as u32) {
+            if !self
+                .base
+                .can_spend_bandwidth(u32::try_from(MTU_SIZE_BYTES).expect("MTU size fits in u32"))
+            {
                 self.base.record_bandwidth_deferred();
                 return false;
             }
@@ -388,12 +391,13 @@ impl SendConnection {
             );
 
             let packet = writer.to_packet();
-            let packet_bytes = packet.slice().len() as u32;
+            let packet_bytes =
+                u32::try_from(packet.slice().len()).expect("packet length fits in u32");
             #[cfg(feature = "bench_instrumentation")]
             let t_io = std::time::Instant::now();
             let addr = self.address;
             self.shared.note_outbound_packet();
-            if io.send_packet(&addr, packet).is_err() {
+            if io.send_packet(&addr, &packet).is_err() {
                 warn!("Server Error: Cannot send data packet to {}", &addr);
             } else {
                 self.base.spend_bandwidth(packet_bytes);
@@ -550,11 +554,11 @@ impl SendConnection {
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
         snapshot_map: &SnapshotMap,
     ) -> (Vec<OutgoingPacket>, bool) {
-        self.base.collect_messages(now, &rtt_millis);
+        self.base.collect_messages(now, rtt_millis);
         let mut host_world_events = self
             .base
             .world_manager
-            .take_outgoing_commands(now, &rtt_millis);
+            .take_outgoing_commands(now, rtt_millis);
         self.base.accumulate_bandwidth(now);
 
         let mut packets = Vec::new();
@@ -636,7 +640,10 @@ impl SendConnection {
         }
 
         if has_events || has_messages {
-            if !self.base.can_spend_bandwidth(MTU_SIZE_BYTES as u32) {
+            if !self
+                .base
+                .can_spend_bandwidth(u32::try_from(MTU_SIZE_BYTES).expect("MTU size fits in u32"))
+            {
                 self.base.record_bandwidth_deferred();
                 *refused_on_bandwidth = true;
                 return None;
@@ -655,7 +662,9 @@ impl SendConnection {
                 snapshot_map,
             );
             let packet = writer.to_packet();
-            self.base.spend_bandwidth(packet.slice().len() as u32);
+            self.base.spend_bandwidth(
+                u32::try_from(packet.slice().len()).expect("packet length fits in u32"),
+            );
             return Some(packet);
         }
 
@@ -684,7 +693,7 @@ impl SendConnection {
             channel_kinds,
             message_kinds,
             component_kinds,
-            &client_tick,
+            client_tick,
             client_authoritative_entities,
             reader,
         )

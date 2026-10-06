@@ -24,7 +24,7 @@ pub trait MessageBuilder: Send + Sync {
 
 /// Core trait for all naia message types — provides serialization, kind lookup, and entity-relation hooks.
 pub trait Message: Send + Sync + Named + MessageClone + Any {
-    /// Gets the MessageKind of this type
+    /// Gets the `MessageKind` of this type
     fn kind(&self) -> MessageKind;
     /// Converts this boxed message into a `Box<dyn Any>` for downcasting.
     fn to_boxed_any(self: Box<Self>) -> Box<dyn Any>;
@@ -72,9 +72,9 @@ pub trait Message: Send + Sync + Named + MessageClone + Any {
         writer: &mut dyn BitWrite,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     );
-    /// Returns a list of RemoteEntities contained within the Message's EntityProperty fields, which have not yet been received.
+    /// Returns a list of `RemoteEntities` contained within the Message's `EntityProperty` fields, which have not yet been received.
     fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>>;
-    /// Converts any LocalEntities contained within the Message's EntityProperty fields to GlobalEntities.
+    /// Converts any `LocalEntities` contained within the Message's `EntityProperty` fields to `GlobalEntities`.
     /// Returns `false` when any awaited entity is still unresolvable; the caller must drop the stale message.
     fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> bool;
     // /// Returns whether has any EntityRelations

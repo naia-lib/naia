@@ -115,6 +115,7 @@ impl Default for AckManager {
 impl AckManager {
     /// Creates a new `AckManager`, wiring the two halves together with a
     /// bounded crossbeam channel.
+    #[must_use]
     pub fn new() -> Self {
         let (tx, rx) = bounded(ACKED_INDEX_CHANNEL_CAPACITY);
         Self {
@@ -134,11 +135,13 @@ impl AckManager {
     }
 
     /// Returns the recent packet loss percentage (0.0–1.0) measured by the loss monitor.
+    #[must_use]
     pub fn packet_loss_pct(&self) -> f32 {
         self.send.loss_monitor.packet_loss_pct()
     }
 
     /// Returns `true` if an empty ack packet should be sent this tick.
+    #[must_use]
     pub fn should_send_empty_ack(&self) -> bool {
         self.send.should_send_empty_ack
     }
@@ -153,7 +156,7 @@ impl AckManager {
         self.send.should_send_empty_ack = false;
     }
 
-    /// Take the should_send_empty_ack flag (returns and clears it).
+    /// Take the `should_send_empty_ack` flag (returns and clears it).
     pub fn take_should_send_empty_ack(&mut self) -> bool {
         let result = self.send.should_send_empty_ack;
         self.send.should_send_empty_ack = false;
@@ -161,11 +164,13 @@ impl AckManager {
     }
 
     /// Get the index of the next outgoing packet.
+    #[must_use]
     pub fn next_sender_packet_index(&self) -> PacketIndex {
         self.send.next_packet_index
     }
 
     /// Returns the sequence index of the most recently received packet.
+    #[must_use]
     pub fn last_received_packet_index(&self) -> PacketIndex {
         self.recv.last_recv_packet_index
     }
@@ -203,6 +208,7 @@ impl AckManager {
     /// a shared crossbeam channel. Used by `BaseConnection::new()` after the
     /// 4-C.2 split — both halves live on different sub-structs (and, after
     /// step 4-C.3 lands, different threads).
+    #[must_use]
     pub fn new_split() -> (AckManagerRecv, AckManagerSend) {
         let mgr = Self::new();
         (mgr.recv, mgr.send)
@@ -299,7 +305,7 @@ impl AckManagerSend {
         self.should_send_empty_ack = false;
     }
 
-    /// Take the should_send_empty_ack flag (returns and clears it).
+    /// Take the `should_send_empty_ack` flag (returns and clears it).
     pub fn take_should_send_empty_ack(&mut self) -> bool {
         let result = self.should_send_empty_ack;
         self.should_send_empty_ack = false;

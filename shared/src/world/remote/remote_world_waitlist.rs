@@ -59,21 +59,21 @@ impl RemoteWorldWaitlist {
     pub(crate) fn waitlist_queue_entity(
         &mut self,
         in_scope_entities: &dyn InScopeEntities<RemoteEntity>,
-        entity: &RemoteEntity,
+        entity: RemoteEntity,
         tick: Tick,
         component: Box<dyn Replicate>,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
         entity_set: &HashSet<RemoteEntity>,
     ) {
         let handle = self.entity_waitlist.queue(
             in_scope_entities,
             entity_set,
             &mut self.insert_waitlist_store,
-            (tick, *entity, component),
+            (tick, entity, component),
         );
 
         self.insert_waitlist_map
-            .insert((*entity, *component_kind), handle);
+            .insert((entity, component_kind), handle);
     }
 
     pub(crate) fn entities_to_insert(
@@ -101,8 +101,7 @@ impl RemoteWorldWaitlist {
                 {
                     if !component.relations_complete(local_converter) {
                         warn!(
-                            "Dropping waitlisted component for entity {:?}: an awaited entity relation is still unresolvable (stale redirect or missing mapping).",
-                            global_entity
+                            "Dropping waitlisted component for entity {global_entity:?}: an awaited entity relation is still unresolvable (stale redirect or missing mapping)."
                         );
                         continue;
                     }
@@ -119,7 +118,7 @@ impl RemoteWorldWaitlist {
         &mut self,
         in_scope_entities: &dyn InScopeEntities<RemoteEntity>,
         // converter: &dyn LocalEntityAndGlobalEntityConverter,
-        entity: &RemoteEntity,
+        entity: RemoteEntity,
     ) {
         self.entity_waitlist.spawn_entity(in_scope_entities, entity);
     }
@@ -131,26 +130,26 @@ impl RemoteWorldWaitlist {
     /// one. Triaged, not missing coverage. Readiness is decided by the
     /// `InScopeEntities` set consulted at queue and release time, which a
     /// despawn updates independently.
-    pub fn despawn_entity(&mut self, entity: &RemoteEntity) {
+    pub fn despawn_entity(&mut self, entity: RemoteEntity) {
         self.entity_waitlist.despawn_entity(entity);
     }
 
     pub(crate) fn process_remove(
         &mut self,
-        entity: &RemoteEntity,
-        component_kind: &ComponentKind,
+        entity: RemoteEntity,
+        component_kind: ComponentKind,
     ) -> bool {
         // Remove from insert waitlist if it's there
-        if let Some(handle) = self.insert_waitlist_map.remove(&(*entity, *component_kind)) {
-            self.insert_waitlist_store.remove(&handle);
-            self.entity_waitlist.remove_waiting_handle(&handle);
+        if let Some(handle) = self.insert_waitlist_map.remove(&(entity, component_kind)) {
+            self.insert_waitlist_store.remove(handle);
+            self.entity_waitlist.remove_waiting_handle(handle);
             return true;
         }
         // Remove Component from update waitlist if it's there
-        if let Some(handle_map) = self.update_waitlist_map.remove(&(*entity, *component_kind)) {
+        if let Some(handle_map) = self.update_waitlist_map.remove(&(entity, component_kind)) {
             for (_index, handle) in handle_map {
-                self.update_waitlist_store.remove(&handle);
-                self.entity_waitlist.remove_waiting_handle(&handle);
+                self.update_waitlist_store.remove(handle);
+                self.entity_waitlist.remove_waiting_handle(handle);
             }
             return true;
         }
@@ -192,9 +191,7 @@ impl RemoteWorldWaitlist {
             if waiting_updates_opt.is_none() && ready_update_opt.is_some() {
                 // warn!("Incoming Update split into ONLY ready part");
             }
-            if waiting_updates_opt.is_none() && ready_update_opt.is_none() {
-                panic!("Incoming Update split into NEITHER waiting nor ready parts. This should not happen.");
-            }
+            assert!(!(waiting_updates_opt.is_none() && ready_update_opt.is_none()), "Incoming Update split into NEITHER waiting nor ready parts. This should not happen.");
 
             // if it exists, queue the waiting part of the component update
             if let Some(waiting_updates) = waiting_updates_opt {
@@ -227,8 +224,8 @@ impl RemoteWorldWaitlist {
                         .get_mut(&component_field_key)
                         .unwrap();
                     if let Some(old_handle) = handle_map.get(&field_id) {
-                        self.update_waitlist_store.remove(&handle);
-                        self.entity_waitlist.remove_waiting_handle(old_handle);
+                        self.update_waitlist_store.remove(handle);
+                        self.entity_waitlist.remove_waiting_handle(*old_handle);
                     }
                     handle_map.insert(field_id, handle);
                 }
@@ -239,42 +236,43 @@ impl RemoteWorldWaitlist {
             // entity) so it applies the moment the spawn lands, rather than
             // unwrapping a missing entity. See `update_self_waitlist_store`.
             if let Some(ready_update) = ready_update_opt {
-                match local_converter.owned_entity_to_global_entity(&local_entity) {
-                    Ok(global_entity) => {
-                        let world_entity = world_converter
-                            .global_entity_to_entity(&global_entity)
-                            .unwrap();
-                        if world
-                            .component_apply_update(
-                                local_converter,
-                                &world_entity,
-                                &component_kind,
-                                ready_update,
-                            )
-                            .is_err()
-                        {
-                            warn!("Remote World Manager: cannot read malformed component update message");
-                            continue;
-                        }
-
-                        output.push((tick, local_entity, component_kind));
-                    }
-                    Err(_) => {
-                        // Target entity not spawned locally yet — defer.
-                        let OwnedLocalEntity::Remote { .. } = local_entity else {
-                            warn!("Remote World Manager: update for a non-remote unspawned entity; dropping");
-                            continue;
-                        };
-                        let remote_entity = local_entity.take_remote();
-                        let mut deps = HashSet::new();
-                        deps.insert(remote_entity);
-                        self.entity_waitlist.queue(
-                            in_scope_entities,
-                            &deps,
-                            &mut self.update_self_waitlist_store,
-                            (tick, remote_entity, component_kind, ready_update),
+                if let Ok(global_entity) =
+                    local_converter.owned_entity_to_global_entity(local_entity)
+                {
+                    let world_entity = world_converter
+                        .global_entity_to_entity(global_entity)
+                        .unwrap();
+                    if world
+                        .component_apply_update(
+                            local_converter,
+                            &world_entity,
+                            component_kind,
+                            ready_update,
+                        )
+                        .is_err()
+                    {
+                        warn!(
+                            "Remote World Manager: cannot read malformed component update message"
                         );
+                        continue;
                     }
+
+                    output.push((tick, local_entity, component_kind));
+                } else {
+                    // Target entity not spawned locally yet — defer.
+                    let OwnedLocalEntity::Remote { .. } = local_entity else {
+                        warn!("Remote World Manager: update for a non-remote unspawned entity; dropping");
+                        continue;
+                    };
+                    let remote_entity = local_entity.take_remote();
+                    let mut deps = HashSet::new();
+                    deps.insert(remote_entity);
+                    self.entity_waitlist.queue(
+                        in_scope_entities,
+                        &deps,
+                        &mut self.update_self_waitlist_store,
+                        (tick, remote_entity, component_kind, ready_update),
+                    );
                 }
             }
         }
@@ -312,17 +310,17 @@ impl RemoteWorldWaitlist {
                 }
 
                 let global_entity = local_converter
-                    .remote_entity_to_global_entity(&remote_entity)
+                    .remote_entity_to_global_entity(remote_entity)
                     .unwrap();
                 let world_entity = world_converter
-                    .global_entity_to_entity(&global_entity)
+                    .global_entity_to_entity(global_entity)
                     .unwrap();
 
                 if world
                     .component_apply_field_update(
                         local_converter,
                         &world_entity,
-                        &component_kind,
+                        component_kind,
                         ready_update,
                     )
                     .is_err()
@@ -362,11 +360,11 @@ impl RemoteWorldWaitlist {
                 // The entity is now in scope (that is what released this item),
                 // but guard defensively against a despawn racing the release.
                 let Ok(global_entity) =
-                    local_converter.remote_entity_to_global_entity(&remote_entity)
+                    local_converter.remote_entity_to_global_entity(remote_entity)
                 else {
                     continue;
                 };
-                let Ok(world_entity) = world_converter.global_entity_to_entity(&global_entity)
+                let Ok(world_entity) = world_converter.global_entity_to_entity(global_entity)
                 else {
                     continue;
                 };
@@ -374,7 +372,7 @@ impl RemoteWorldWaitlist {
                     .component_apply_update(
                         local_converter,
                         &world_entity,
-                        &component_kind,
+                        component_kind,
                         ready_update,
                     )
                     .is_err()
@@ -436,8 +434,8 @@ mod remote_world_waitlist_tests {
     struct Scope(HashSet<RemoteEntity>);
 
     impl InScopeEntities<RemoteEntity> for Scope {
-        fn has_entity(&self, entity: &RemoteEntity) -> bool {
-            self.0.contains(entity)
+        fn has_entity(&self, entity: RemoteEntity) -> bool {
+            self.0.contains(&entity)
         }
     }
 
@@ -459,58 +457,58 @@ mod remote_world_waitlist_tests {
             }
         }
 
-        fn forget(&mut self, entity: &RemoteEntity) {
-            self.remote_to_global.remove(entity);
+        fn forget(&mut self, entity: RemoteEntity) {
+            self.remote_to_global.remove(&entity);
         }
     }
 
     impl LocalEntityAndGlobalEntityConverter for Map {
         fn global_entity_to_host_entity(
             &self,
-            _global_entity: &GlobalEntity,
+            _global_entity: GlobalEntity,
         ) -> Result<HostEntity, EntityDoesNotExistError> {
             Err(EntityDoesNotExistError)
         }
         fn global_entity_to_remote_entity(
             &self,
-            global_entity: &GlobalEntity,
+            global_entity: GlobalEntity,
         ) -> Result<RemoteEntity, EntityDoesNotExistError> {
             self.remote_to_global
                 .iter()
-                .find(|(_, mapped)| *mapped == global_entity)
+                .find(|(_, mapped)| **mapped == global_entity)
                 .map(|(remote, _)| *remote)
                 .ok_or(EntityDoesNotExistError)
         }
         fn global_entity_to_owned_entity(
             &self,
-            global_entity: &GlobalEntity,
+            global_entity: GlobalEntity,
         ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
             self.global_entity_to_remote_entity(global_entity)
                 .map(|remote| remote.copy_to_owned())
         }
         fn host_entity_to_global_entity(
             &self,
-            _host_entity: &HostEntity,
+            _host_entity: HostEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             Err(EntityDoesNotExistError)
         }
         fn static_host_entity_to_global_entity(
             &self,
-            _host_entity: &HostEntity,
+            _host_entity: HostEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             Err(EntityDoesNotExistError)
         }
         fn remote_entity_to_global_entity(
             &self,
-            remote_entity: &RemoteEntity,
+            remote_entity: RemoteEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             self.remote_to_global
-                .get(remote_entity)
+                .get(&remote_entity)
                 .copied()
                 .ok_or(EntityDoesNotExistError)
         }
-        fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
-            *entity
+        fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity {
+            entity
         }
     }
 
@@ -553,10 +551,10 @@ mod remote_world_waitlist_tests {
 
         waitlist.waitlist_queue_entity(
             &scope,
-            &target,
+            target,
             1,
             crate::world::test_world::remote_component(&kinds(), &Ghost::new_complete(5)),
-            &ghost(),
+            ghost(),
             &HashSet::from([dependency]),
         );
 
@@ -568,7 +566,7 @@ mod remote_world_waitlist_tests {
         );
 
         scope.0.insert(dependency);
-        waitlist.spawn_entity(&scope, &dependency);
+        waitlist.spawn_entity(&scope, dependency);
 
         let released = waitlist.entities_to_insert(&Instant::now(), &map);
         assert_eq!(released.len(), 1, "the spawn must release it");
@@ -598,20 +596,20 @@ mod remote_world_waitlist_tests {
 
         waitlist.waitlist_queue_entity(
             &scope,
-            &target,
+            target,
             1,
             crate::world::test_world::remote_component(&kinds(), &Ghost::new_complete(5)),
-            &ghost(),
+            ghost(),
             &HashSet::from([dependency]),
         );
 
         assert!(
-            waitlist.process_remove(&target, &ghost()),
+            waitlist.process_remove(target, ghost()),
             "the remove must report that it cancelled something",
         );
 
         scope.0.insert(dependency);
-        waitlist.spawn_entity(&scope, &dependency);
+        waitlist.spawn_entity(&scope, dependency);
         assert!(
             waitlist
                 .entities_to_insert(&Instant::now(), &map)
@@ -623,7 +621,7 @@ mod remote_world_waitlist_tests {
     #[test]
     fn removing_a_component_nothing_is_waiting_for_reports_nothing() {
         let mut waitlist = RemoteWorldWaitlist::new();
-        assert!(!waitlist.process_remove(&remote(1), &ghost()));
+        assert!(!waitlist.process_remove(remote(1), ghost()));
     }
 
     // -- updates waiting on their own target entity -------------------------
@@ -681,7 +679,7 @@ mod remote_world_waitlist_tests {
         let map = Map::with(&[entity]);
         let mut world = world_holding_ghost(1);
         scope.0.insert(entity);
-        waitlist.spawn_entity(&scope, &entity);
+        waitlist.spawn_entity(&scope, entity);
 
         let flushed = waitlist.process_self_waitlist_updates(
             &map,
@@ -722,7 +720,7 @@ mod remote_world_waitlist_tests {
         let map = Map::with(&[entity]);
         let mut world = world_holding_ghost(1);
         scope.0.insert(entity);
-        waitlist.spawn_entity(&scope, &entity);
+        waitlist.spawn_entity(&scope, entity);
 
         let flushed = waitlist.process_self_waitlist_updates(
             &map,
@@ -761,10 +759,10 @@ mod remote_world_waitlist_tests {
         );
 
         scope.0.insert(entity);
-        waitlist.spawn_entity(&scope, &entity);
+        waitlist.spawn_entity(&scope, entity);
 
         let mut map = Map::with(&[entity]);
-        map.forget(&entity);
+        map.forget(entity);
 
         assert!(
             waitlist
@@ -837,49 +835,49 @@ mod remote_world_waitlist_tests {
     impl LocalEntityAndGlobalEntityConverter for PointsAt {
         fn global_entity_to_host_entity(
             &self,
-            _: &GlobalEntity,
+            _: GlobalEntity,
         ) -> Result<HostEntity, EntityDoesNotExistError> {
             Err(EntityDoesNotExistError)
         }
         fn global_entity_to_remote_entity(
             &self,
-            _: &GlobalEntity,
+            _: GlobalEntity,
         ) -> Result<RemoteEntity, EntityDoesNotExistError> {
             Ok(self.referenced)
         }
         fn global_entity_to_owned_entity(
             &self,
-            _: &GlobalEntity,
+            _: GlobalEntity,
         ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
             Ok(self.referenced.to_host().copy_to_owned())
         }
         fn host_entity_to_global_entity(
             &self,
-            _: &HostEntity,
+            _: HostEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             Err(EntityDoesNotExistError)
         }
         fn static_host_entity_to_global_entity(
             &self,
-            _: &HostEntity,
+            _: HostEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             Err(EntityDoesNotExistError)
         }
         fn remote_entity_to_global_entity(
             &self,
-            _: &RemoteEntity,
+            _: RemoteEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             Ok(GlobalEntity::from_u64(99))
         }
-        fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
-            *entity
+        fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity {
+            entity
         }
     }
 
     impl crate::LocalEntityAndGlobalEntityConverterMut for PointsAt {
         fn get_or_reserve_entity(
             &mut self,
-            _: &GlobalEntity,
+            _: GlobalEntity,
         ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
             Ok(self.referenced.to_host().copy_to_owned())
         }
@@ -960,7 +958,7 @@ mod remote_world_waitlist_tests {
         );
 
         scope.0.insert(referenced);
-        waitlist.spawn_entity(&scope, &referenced);
+        waitlist.spawn_entity(&scope, referenced);
 
         let flushed = waitlist.process_waitlist_updates(
             &Map::with(&[subject, referenced]),

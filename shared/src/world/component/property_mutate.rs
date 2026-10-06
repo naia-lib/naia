@@ -40,6 +40,7 @@ impl PropertyMutator {
     }
 
     /// Returns a freshly cloned `PropertyMutator` backed by a new heap allocation.
+    #[must_use]
     pub fn clone_new(&self) -> Self {
         //let current_inner: &dyn PropertyMutateClone = self.inner.as_ref() as &dyn
         // PropertyMutateClone;

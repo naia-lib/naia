@@ -13,6 +13,10 @@ impl SharedGlobalWorldManager {
     ///
     /// This synthesizes teardown events with no wire message behind them; `tick`
     /// must be the caller's current tick (the tick at which the mirror ceases).
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Global World Manager must not have an accurate component list.
     pub fn despawn_all_entities<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         world: &mut W,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
@@ -24,14 +28,14 @@ impl SharedGlobalWorldManager {
 
         for global_entity in entities {
             // Get world entity
-            let world_entity = converter.global_entity_to_entity(&global_entity).unwrap();
+            let world_entity = converter.global_entity_to_entity(global_entity).unwrap();
 
             // Generate remove event for each component, handing references off just in
             // case
-            if let Some(component_kinds) = global_world_manager.component_kinds(&global_entity) {
+            if let Some(component_kinds) = global_world_manager.component_kinds(global_entity) {
                 for component_kind in component_kinds {
                     if let Some(component) =
-                        world.remove_component_of_kind(&world_entity, &component_kind)
+                        world.remove_component_of_kind(&world_entity, component_kind)
                     {
                         output.push(EntityEvent::RemoveComponent(tick, global_entity, component));
                     } else {

@@ -1,4 +1,4 @@
-//! `ServerEntityConverter<E>` — MISSION_USER_ONLY_SEES_SIM Phase B.1 (2026-05-19).
+//! `ServerEntityConverter<E>` — `MISSION_USER_ONLY_SEES_SIM` Phase B.1 (2026-05-19).
 //!
 //! Sim-installable, cloneable `EntityAndGlobalEntityConverter<E>` view.
 //! Cyberlith's Sim systems install this as a Bevy `Resource` (via the
@@ -63,6 +63,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> ServerEntityConverter<E> {
 
     /// Borrow the inner trait object as a `&dyn EntityAndGlobalEntityConverter<E>`.
     /// Use this with `EntityProperty::set(sim_converter.as_dyn(), &entity)`.
+    #[must_use]
     pub fn as_dyn(&self) -> &dyn EntityAndGlobalEntityConverter<E> {
         &*self.inner
     }
@@ -81,7 +82,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> EntityAndGlobalEntityConverter
 {
     fn global_entity_to_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<E, EntityDoesNotExistError> {
         self.inner.global_entity_to_entity(global_entity)
     }

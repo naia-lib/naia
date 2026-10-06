@@ -41,6 +41,7 @@ pub struct MessageContainer {
 
 impl MessageContainer {
     /// Wraps `message` in an `Arc` so it can be cheaply shared across broadcast targets.
+    #[must_use]
     pub fn new(message: Box<dyn Message>) -> Self {
         Self {
             inner: Arc::new(message),
@@ -48,6 +49,7 @@ impl MessageContainer {
     }
 
     /// Returns the protocol name of the contained message type.
+    #[must_use]
     pub fn name(&self) -> String {
         self.inner.name()
     }
@@ -76,16 +78,19 @@ impl MessageContainer {
     }
 
     /// Returns `true` if this message is a fragment of a larger logical message.
+    #[must_use]
     pub fn is_fragment(&self) -> bool {
         self.inner.is_fragment()
     }
 
     /// Returns `true` if this message envelope carries a request or response (not a plain message).
+    #[must_use]
     pub fn is_request_or_response(&self) -> bool {
         self.inner.is_request()
     }
 
     /// Converts this container into a `Box<dyn Any>` for downcasting to the concrete message type.
+    #[must_use]
     pub fn to_boxed_any(self) -> Box<dyn Any> {
         // Fast path: if this is the only Arc reference (always true after the
         // message is dequeued from a connection's send buffer), extract without
@@ -99,11 +104,13 @@ impl MessageContainer {
     }
 
     /// Returns the `MessageKind` identifying the concrete message type inside this container.
+    #[must_use]
     pub fn kind(&self) -> MessageKind {
         self.inner.kind()
     }
 
     /// Returns the set of remote entities this message is still waiting on, or `None` if ready.
+    #[must_use]
     pub fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> {
         self.inner.relations_waiting()
     }

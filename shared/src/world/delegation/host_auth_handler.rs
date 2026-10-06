@@ -43,6 +43,7 @@ impl Default for HostAuthHandler {
 #[cfg(feature = "entity_delegation")]
 impl HostAuthHandler {
     /// Creates an empty `HostAuthHandler`.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             auth_channels: HashMap::new(),
@@ -50,41 +51,52 @@ impl HostAuthHandler {
     }
 
     /// Registers `entity` with this handler, creating an authority channel for it and returning the accessor.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `!self.auth_channels.contains_key(&entity` does not hold.
     pub fn register_entity(
         &mut self,
         host_type: HostType,
-        entity: &GlobalEntity,
+        entity: GlobalEntity,
     ) -> EntityAuthAccessor {
-        if self.auth_channels.contains_key(entity) {
-            panic!("Entity cannot register with Server more than once!");
-        }
+        assert!(
+            !self.auth_channels.contains_key(&entity),
+            "Entity cannot register with Server more than once!"
+        );
 
         let (mutator, accessor) = EntityAuthChannel::new_channel(host_type);
 
         self.auth_channels
-            .insert(*entity, (mutator, accessor.clone()));
+            .insert(entity, (mutator, accessor.clone()));
 
         accessor
     }
 
     /// Removes `entity`'s authority channel. Called on entity despawn.
-    pub fn deregister_entity(&mut self, entity: &GlobalEntity) {
-        self.auth_channels.remove(entity);
+    pub fn deregister_entity(&mut self, entity: GlobalEntity) {
+        self.auth_channels.remove(&entity);
     }
 
     /// Returns a cloned `EntityAuthAccessor` for `entity`. Panics if not registered.
-    pub fn get_accessor(&self, entity: &GlobalEntity) -> EntityAuthAccessor {
+    ///
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: Entity must be registered with Server before it can receive messages!.
+    #[must_use]
+    pub fn get_accessor(&self, entity: GlobalEntity) -> EntityAuthAccessor {
         let (_, receiver) = self
             .auth_channels
-            .get(entity)
+            .get(&entity)
             .expect("Entity must be registered with Server before it can receive messages!");
 
         receiver.clone()
     }
 
     /// Returns the current authority status for `entity`, or `None` if not registered.
-    pub fn auth_status(&self, entity: &GlobalEntity) -> Option<HostEntityAuthStatus> {
-        if let Some((_, receiver)) = self.auth_channels.get(entity) {
+    #[must_use]
+    pub fn auth_status(&self, entity: GlobalEntity) -> Option<HostEntityAuthStatus> {
+        if let Some((_, receiver)) = self.auth_channels.get(&entity) {
             return Some(receiver.auth_status());
         }
 
@@ -92,10 +104,14 @@ impl HostAuthHandler {
     }
 
     /// Updates the authority status for `entity`. Panics if not registered.
-    pub fn set_auth_status(&self, entity: &GlobalEntity, auth_status: EntityAuthStatus) {
+    ///
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: Entity must be registered with Server before it can be mutated!.
+    pub fn set_auth_status(&self, entity: GlobalEntity, auth_status: EntityAuthStatus) {
         let (sender, _) = self
             .auth_channels
-            .get(entity)
+            .get(&entity)
             .expect("Entity must be registered with Server before it can be mutated!");
 
         sender.set_auth_status(auth_status);
@@ -116,26 +132,26 @@ impl HostAuthHandler {
     pub fn register_entity(
         &mut self,
         host_type: HostType,
-        _entity: &GlobalEntity,
+        _entity: GlobalEntity,
     ) -> EntityAuthAccessor {
         EntityAuthChannel::new_channel(host_type).1
     }
 
     /// Removes `entity`'s authority channel. Called on entity despawn.
-    pub fn deregister_entity(&mut self, _entity: &GlobalEntity) {}
+    pub fn deregister_entity(&mut self, _entity: GlobalEntity) {}
 
     /// Returns a cloned `EntityAuthAccessor` for `entity`. Panics if not registered.
     ///
     /// Without the feature nothing is ever registered; returns a token
     /// accessor rather than panicking so non-delegating builds stay total.
-    pub fn get_accessor(&self, _entity: &GlobalEntity) -> EntityAuthAccessor {
+    pub fn get_accessor(&self, _entity: GlobalEntity) -> EntityAuthAccessor {
         EntityAuthChannel::new_channel(HostType::Client).1
     }
 
     /// Returns the current authority status for `entity`, or `None` if not registered.
     ///
     /// Without the feature this is always `None`.
-    pub fn auth_status(&self, _entity: &GlobalEntity) -> Option<HostEntityAuthStatus> {
+    pub fn auth_status(&self, _entity: GlobalEntity) -> Option<HostEntityAuthStatus> {
         None
     }
 
@@ -143,7 +159,7 @@ impl HostAuthHandler {
     ///
     /// Without the feature this is a no-op. Live delegation callers fail
     /// closed before reaching here.
-    pub fn set_auth_status(&self, _entity: &GlobalEntity, _auth_status: EntityAuthStatus) {}
+    pub fn set_auth_status(&self, _entity: GlobalEntity, _auth_status: EntityAuthStatus) {}
 }
 
 #[cfg(all(test, feature = "entity_delegation"))]
@@ -173,11 +189,11 @@ mod tests {
             (HostType::Client, EntityAuthStatus::Requested),
         ] {
             let mut handler = HostAuthHandler::new();
-            let accessor = handler.register_entity(host_type, &entity(1));
+            let accessor = handler.register_entity(host_type, entity(1));
 
             assert_eq!(accessor.auth_status().status(), expected);
             assert_eq!(
-                handler.auth_status(&entity(1)).map(|s| s.status()),
+                handler.auth_status(entity(1)).map(|s| s.status()),
                 Some(expected),
                 "the handler and the accessor must agree on {host_type:?}",
             );
@@ -188,7 +204,7 @@ mod tests {
     fn an_unregistered_entity_has_no_auth_status() {
         let handler = HostAuthHandler::new();
 
-        assert!(handler.auth_status(&entity(1)).is_none());
+        assert!(handler.auth_status(entity(1)).is_none());
     }
 
     /// The `None` return is what distinguishes registered from unregistered,
@@ -198,19 +214,19 @@ mod tests {
     #[test]
     fn auth_status_distinguishes_registered_from_unregistered_entities() {
         let mut handler = HostAuthHandler::new();
-        handler.register_entity(HostType::Server, &entity(1));
+        handler.register_entity(HostType::Server, entity(1));
 
-        assert!(handler.auth_status(&entity(1)).is_some());
-        assert!(handler.auth_status(&entity(2)).is_none());
+        assert!(handler.auth_status(entity(1)).is_some());
+        assert!(handler.auth_status(entity(2)).is_none());
     }
 
     #[test]
     fn registering_the_same_entity_twice_panics() {
         let mut handler = HostAuthHandler::new();
-        handler.register_entity(HostType::Server, &entity(1));
+        handler.register_entity(HostType::Server, entity(1));
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            handler.register_entity(HostType::Server, &entity(1));
+            handler.register_entity(HostType::Server, entity(1));
         }));
 
         assert!(
@@ -227,10 +243,10 @@ mod tests {
     #[test]
     fn setting_auth_status_is_visible_through_an_existing_accessor() {
         let mut handler = HostAuthHandler::new();
-        let accessor = handler.register_entity(HostType::Server, &entity(1));
+        let accessor = handler.register_entity(HostType::Server, entity(1));
         assert_eq!(accessor.auth_status().status(), EntityAuthStatus::Available);
 
-        handler.set_auth_status(&entity(1), EntityAuthStatus::Granted);
+        handler.set_auth_status(entity(1), EntityAuthStatus::Granted);
 
         assert_eq!(
             accessor.auth_status().status(),
@@ -238,7 +254,7 @@ mod tests {
             "the accessor is a live view, not a snapshot taken at register time",
         );
         assert_eq!(
-            handler.auth_status(&entity(1)).map(|s| s.status()),
+            handler.auth_status(entity(1)).map(|s| s.status()),
             Some(EntityAuthStatus::Granted),
         );
     }
@@ -246,7 +262,7 @@ mod tests {
     #[test]
     fn every_auth_status_round_trips_through_the_handler() {
         let mut handler = HostAuthHandler::new();
-        let accessor = handler.register_entity(HostType::Server, &entity(1));
+        let accessor = handler.register_entity(HostType::Server, entity(1));
 
         for status in [
             EntityAuthStatus::Requested,
@@ -255,7 +271,7 @@ mod tests {
             EntityAuthStatus::Denied,
             EntityAuthStatus::Available,
         ] {
-            handler.set_auth_status(&entity(1), status);
+            handler.set_auth_status(entity(1), status);
             assert_eq!(accessor.auth_status().status(), status, "status {status:?}");
         }
     }
@@ -265,7 +281,7 @@ mod tests {
         let handler = HostAuthHandler::new();
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            handler.set_auth_status(&entity(1), EntityAuthStatus::Granted);
+            handler.set_auth_status(entity(1), EntityAuthStatus::Granted);
         }));
 
         assert!(result.is_err());
@@ -276,7 +292,7 @@ mod tests {
         let handler = HostAuthHandler::new();
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            handler.get_accessor(&entity(1));
+            let _ = handler.get_accessor(entity(1));
         }));
 
         assert!(result.is_err());
@@ -285,10 +301,10 @@ mod tests {
     #[test]
     fn get_accessor_returns_a_handle_onto_the_same_channel() {
         let mut handler = HostAuthHandler::new();
-        let registered = handler.register_entity(HostType::Server, &entity(1));
-        let fetched = handler.get_accessor(&entity(1));
+        let registered = handler.register_entity(HostType::Server, entity(1));
+        let fetched = handler.get_accessor(entity(1));
 
-        handler.set_auth_status(&entity(1), EntityAuthStatus::Denied);
+        handler.set_auth_status(entity(1), EntityAuthStatus::Denied);
 
         assert_eq!(registered.auth_status().status(), EntityAuthStatus::Denied);
         assert_eq!(fetched.auth_status().status(), EntityAuthStatus::Denied);
@@ -300,12 +316,12 @@ mod tests {
     #[test]
     fn deregistering_an_entity_removes_it() {
         let mut handler = HostAuthHandler::new();
-        handler.register_entity(HostType::Server, &entity(1));
+        handler.register_entity(HostType::Server, entity(1));
 
-        handler.deregister_entity(&entity(1));
+        handler.deregister_entity(entity(1));
 
         assert!(
-            handler.auth_status(&entity(1)).is_none(),
+            handler.auth_status(entity(1)).is_none(),
             "deregister_entity left the channel in the map",
         );
     }
@@ -313,11 +329,11 @@ mod tests {
     #[test]
     fn an_entity_can_be_registered_again_after_deregistration() {
         let mut handler = HostAuthHandler::new();
-        handler.register_entity(HostType::Server, &entity(1));
-        handler.set_auth_status(&entity(1), EntityAuthStatus::Granted);
+        handler.register_entity(HostType::Server, entity(1));
+        handler.set_auth_status(entity(1), EntityAuthStatus::Granted);
 
-        handler.deregister_entity(&entity(1));
-        let accessor = handler.register_entity(HostType::Server, &entity(1));
+        handler.deregister_entity(entity(1));
+        let accessor = handler.register_entity(HostType::Server, entity(1));
 
         assert_eq!(
             accessor.auth_status().status(),
@@ -330,22 +346,22 @@ mod tests {
     #[test]
     fn deregistering_one_entity_leaves_the_others_alone() {
         let mut handler = HostAuthHandler::new();
-        handler.register_entity(HostType::Server, &entity(1));
-        handler.register_entity(HostType::Server, &entity(2));
+        handler.register_entity(HostType::Server, entity(1));
+        handler.register_entity(HostType::Server, entity(2));
 
-        handler.deregister_entity(&entity(1));
+        handler.deregister_entity(entity(1));
 
-        assert!(handler.auth_status(&entity(1)).is_none());
-        assert!(handler.auth_status(&entity(2)).is_some());
+        assert!(handler.auth_status(entity(1)).is_none());
+        assert!(handler.auth_status(entity(2)).is_some());
     }
 
     #[test]
     fn deregistering_an_unregistered_entity_is_a_no_op() {
         let mut handler = HostAuthHandler::new();
-        handler.register_entity(HostType::Server, &entity(2));
+        handler.register_entity(HostType::Server, entity(2));
 
-        handler.deregister_entity(&entity(1));
+        handler.deregister_entity(entity(1));
 
-        assert!(handler.auth_status(&entity(2)).is_some());
+        assert!(handler.auth_status(entity(2)).is_some());
     }
 }

@@ -7,7 +7,7 @@ use crate::{
 use crate::world::update::global_entity_index::GlobalEntityIndex;
 use crate::world::update::mut_channel::{MutChannel, MutReceiver, MutReceiverBuilder, MutSender};
 
-/// Per-entity component metadata. One bool per registered kind_bit.
+/// Per-entity component metadata. One bool per registered `kind_bit`.
 /// `user_dependent[kind_bit] == true` iff the component at that bit position
 /// has `EntityProperty` fields and therefore produces per-user-distinct wire bytes.
 /// Indexed by `GlobalEntityIndex`; slot 0 unused (INVALID sentinel).
@@ -34,7 +34,7 @@ impl ComponentFlags {
 /// Global registry of mutation channels for every (entity, component) pair, used to fan out property changes to per-user dirty queues.
 pub struct GlobalDiffHandler {
     mut_receiver_builders: HashMap<(GlobalEntity, ComponentKind), MutReceiverBuilder>,
-    /// `ComponentKind` → NetId (== bit position in the per-user
+    /// `ComponentKind` → `NetId` (== bit position in the per-user
     /// `DirtyQueue`'s flat-strided bitset). Populated lazily as
     /// `register_component` fires; `UserDiffHandler` reads this to
     /// wire `DirtyNotifier`s with a precomputed `kind_bit`.
@@ -42,24 +42,24 @@ pub struct GlobalDiffHandler {
     /// unlimited-kind-count refactor (was `u8`, capped at 256 by the
     /// type even though the assertion was 64).
     kind_bits: HashMap<ComponentKind, u16>,
-    /// Maximum NetId observed at registration. Used to derive the
+    /// Maximum `NetId` observed at registration. Used to derive the
     /// `DirtyQueue` stride at `UserDiffHandler::new` (one stride for
     /// the lifetime of the handler — protocol locks before any
     /// handler is created).
     max_kind_count: u16,
     // Dense entity registry — O(1) GlobalEntity ↔ GlobalEntityIndex lookups.
     global_to_idx: HashMap<GlobalEntity, GlobalEntityIndex>,
-    /// Dense array: slot = GlobalEntityIndex.as_usize(). Slot 0 unused (INVALID sentinel).
+    /// Dense array: slot = `GlobalEntityIndex.as_usize()`. Slot 0 unused (INVALID sentinel).
     idx_to_global: Vec<Option<GlobalEntity>>,
-    /// Per-entity component metadata: idx_to_components[slot].user_dependent[kind_bit]
-    /// is true iff that component has EntityProperty fields. O(1) array access in Phase 2.
+    /// Per-entity component metadata: `idx_to_components`[slot].`user_dependent`[`kind_bit`]
+    /// is true iff that component has `EntityProperty` fields. O(1) array access in Phase 2.
     idx_to_components: Vec<ComponentFlags>,
     /// Free list for index recycling on entity despawn.
     free_list: Vec<GlobalEntityIndex>,
     /// Next fresh index to issue (starts at 1; 0 = INVALID).
     next_idx: u32,
-    /// Inverse kind-bit lookup: bit_to_kind[kind_bit] = ComponentKind. O(1) hot path.
-    /// Populated at register_component time. `None` for unregistered bit positions.
+    /// Inverse kind-bit lookup: `bit_to_kind`[`kind_bit`] = `ComponentKind`. O(1) hot path.
+    /// Populated at `register_component` time. `None` for unregistered bit positions.
     bit_to_kind: Vec<Option<ComponentKind>>,
     /// Flat per-(entity, component) wire-cache for PATH A serialization.
     ///
@@ -102,6 +102,7 @@ impl Default for GlobalDiffHandler {
 
 impl GlobalDiffHandler {
     /// Creates an empty `GlobalDiffHandler`.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             mut_receiver_builders: HashMap::new(),
@@ -117,11 +118,11 @@ impl GlobalDiffHandler {
         }
     }
 
-    /// NetId of a registered kind, used as bit position in the per-user
+    /// `NetId` of a registered kind, used as bit position in the per-user
     /// `DirtyQueue`'s flat-strided bitset. Returns `None` if the kind
     /// has never gone through `register_component` here.
-    pub fn kind_bit(&self, component_kind: &ComponentKind) -> Option<u16> {
-        self.kind_bits.get(component_kind).copied()
+    pub fn kind_bit(&self, component_kind: ComponentKind) -> Option<u16> {
+        self.kind_bits.get(&component_kind).copied()
     }
 
     /// Highest `kind_bit + 1` ever registered with this handler. The
@@ -144,41 +145,44 @@ impl GlobalDiffHandler {
     /// Returns `true` if a mutation channel is registered for `(global_entity, component_kind)`.
     pub fn has_component(
         &self,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        global_entity: GlobalEntity,
+        component_kind: ComponentKind,
     ) -> bool {
         self.mut_receiver_builders
-            .contains_key(&(*global_entity, *component_kind))
+            .contains_key(&(global_entity, component_kind))
     }
 
     /// Creates a `MutSender`/`MutReceiverBuilder` pair for `(global_entity, component_kind)` and returns the sender.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `GlobalDiffHandler`: For Entity {`global_entity`:?}, Component {name} cannot Register more than once!.
     pub fn register_component(
         &mut self,
         component_kinds: &ComponentKinds,
         global_world_manager: &dyn GlobalWorldManagerType,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        global_entity: GlobalEntity,
+        component_kind: ComponentKind,
         diff_mask_length: u8,
     ) -> MutSender {
         let name = component_kinds.kind_to_name(component_kind);
 
         if self
             .mut_receiver_builders
-            .contains_key(&(*global_entity, *component_kind))
+            .contains_key(&(global_entity, component_kind))
         {
             panic!(
-                "GlobalDiffHandler: For Entity {:?}, Component {} cannot Register more than once!",
-                global_entity, name
+                "GlobalDiffHandler: For Entity {global_entity:?}, Component {name} cannot Register more than once!"
             );
         }
 
         let (sender, builder) = MutChannel::new_channel(global_world_manager, diff_mask_length);
 
         self.mut_receiver_builders
-            .insert((*global_entity, *component_kind), builder);
+            .insert((global_entity, component_kind), builder);
 
         let kind_bit_opt = if let std::collections::hash_map::Entry::Vacant(entry) =
-            self.kind_bits.entry(*component_kind)
+            self.kind_bits.entry(component_kind)
         {
             if let Some(net_id) = component_kinds.net_id_of(component_kind) {
                 entry.insert(net_id);
@@ -190,18 +194,18 @@ impl GlobalDiffHandler {
                 if bit_idx >= self.bit_to_kind.len() {
                     self.bit_to_kind.resize(bit_idx + 1, None);
                 }
-                self.bit_to_kind[bit_idx] = Some(*component_kind);
+                self.bit_to_kind[bit_idx] = Some(component_kind);
                 Some(net_id)
             } else {
                 None
             }
         } else {
-            self.kind_bits.get(component_kind).copied()
+            self.kind_bits.get(&component_kind).copied()
         };
 
         // Record per-entity user_dependent flag for O(1) Phase-2 path selection.
         if let Some(kind_bit) = kind_bit_opt {
-            if let Some(&entity_idx) = self.global_to_idx.get(global_entity) {
+            if let Some(&entity_idx) = self.global_to_idx.get(&global_entity) {
                 let slot = entity_idx.0 as usize;
                 let is_user_dep = component_kinds.is_user_dependent(component_kind);
                 if let Some(flags) = self.idx_to_components.get_mut(slot) {
@@ -214,19 +218,18 @@ impl GlobalDiffHandler {
     }
 
     /// Removes the mutation channel for `(entity, component_kind)`, stopping further dirty notifications.
-    pub fn deregister_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
-        self.mut_receiver_builders
-            .remove(&(*entity, *component_kind));
+    pub fn deregister_component(&mut self, entity: GlobalEntity, component_kind: ComponentKind) {
+        self.mut_receiver_builders.remove(&(entity, component_kind));
     }
 
     /// Builds a `MutReceiver` for `address` from the builder registered for `(entity, component_kind)`, if one exists.
     pub fn receiver(
         &self,
         address: &Option<SocketAddr>,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        entity: GlobalEntity,
+        component_kind: ComponentKind,
     ) -> Option<MutReceiver> {
-        if let Some(builder) = self.mut_receiver_builders.get(&(*entity, *component_kind)) {
+        if let Some(builder) = self.mut_receiver_builders.get(&(entity, component_kind)) {
             return builder.build(address);
         }
         None
@@ -240,7 +243,7 @@ impl GlobalDiffHandler {
     }
 
     /// Returns the cached pre-serialized update for `(entity_idx, kind_bit, key)`, or `None` on miss/invalidation.
-    /// O(1) slot calculation, no HashMap, no double-RwLock. Called by PATH A in `write_update`.
+    /// O(1) slot calculation, no `HashMap`, no double-RwLock. Called by PATH A in `write_update`.
     pub fn get_wire_cache(
         &self,
         entity_idx: GlobalEntityIndex,
@@ -337,8 +340,8 @@ impl GlobalDiffHandler {
 
     /// Releases the `GlobalEntityIndex` for `global`, returning it to the free list.
     /// O(1). Called at entity despawn time. Idempotent — safe to call multiple times.
-    pub fn free_entity(&mut self, global: &GlobalEntity) {
-        if let Some(idx) = self.global_to_idx.remove(global) {
+    pub fn free_entity(&mut self, global: GlobalEntity) {
+        if let Some(idx) = self.global_to_idx.remove(&global) {
             if let Some(slot) = self.idx_to_global.get_mut(idx.0 as usize) {
                 *slot = None;
             }
@@ -349,8 +352,8 @@ impl GlobalDiffHandler {
     }
 
     /// Returns the `GlobalEntityIndex` for `global`, or `None` if not allocated.
-    pub fn entity_to_global_idx(&self, global: &GlobalEntity) -> Option<GlobalEntityIndex> {
-        self.global_to_idx.get(global).copied()
+    pub fn entity_to_global_idx(&self, global: GlobalEntity) -> Option<GlobalEntityIndex> {
+        self.global_to_idx.get(&global).copied()
     }
 
     /// Returns the `GlobalEntity` for `idx`, or `None` if the slot is unused or out of range.
@@ -364,9 +367,9 @@ impl GlobalDiffHandler {
         self.bit_to_kind.get(kind_bit as usize).and_then(|k| *k)
     }
 
-    /// Returns `true` if the component at `(idx, kind_bit)` has EntityProperty fields,
-    /// `false` if not, or `None` if the entity or kind_bit is out of range.
-    /// O(1) array access — replaces `ComponentKinds::is_user_dependent()` HashSet lookup
+    /// Returns `true` if the component at `(idx, kind_bit)` has `EntityProperty` fields,
+    /// `false` if not, or `None` if the entity or `kind_bit` is out of range.
+    /// O(1) array access — replaces `ComponentKinds::is_user_dependent()` `HashSet` lookup
     /// in the Phase-2 dirty scan hot path.
     pub fn is_component_user_dependent(
         &self,
@@ -445,7 +448,7 @@ mod wire_cache_tests {
         let mut gdh = make_gdh(4);
         let idx_a = gdh.alloc_entity(ge_a);
         gdh.set_wire_cache(idx_a, 0, 0x01, make_update(8));
-        gdh.free_entity(&ge_a);
+        gdh.free_entity(ge_a);
         let idx_b = gdh.alloc_entity(ge_b);
         // The free-list may recycle idx_a for ge_b (depends on LIFO order).
         // Either way, the slot must be clear — no stale A data.

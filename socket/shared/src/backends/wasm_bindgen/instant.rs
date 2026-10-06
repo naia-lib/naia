@@ -21,6 +21,7 @@ pub struct Instant {
 /// This is the one monotonic source behind the wasm time facade: both
 /// [`Instant`] and naia-shared's wasm `Timer` read it, so the two never
 /// disagree about elapsed time.
+#[must_use]
 pub fn monotonic_now_ms() -> f64 {
     let global = js_sys::global();
     let performance = js_sys::Reflect::get(&global, &"performance".into())
@@ -37,6 +38,7 @@ pub fn monotonic_now_ms() -> f64 {
 
 impl Instant {
     /// Creates an Instant from the moment the method is called
+    #[must_use]
     pub fn now() -> Self {
         Instant {
             inner: monotonic_now_ms(),
@@ -44,6 +46,7 @@ impl Instant {
     }
 
     /// Returns time elapsed since the Instant
+    #[must_use]
     pub fn elapsed(&self, now: &Self) -> Duration {
         let inner_duration = now.inner - self.inner;
         let seconds: u64 = (inner_duration as u64) / 1000;
@@ -52,6 +55,7 @@ impl Instant {
     }
 
     /// Returns time until the Instant occurs
+    #[must_use]
     pub fn until(&self, now: &Self) -> Duration {
         let inner_duration = self.inner - now.inner;
         let seconds: u64 = (inner_duration as u64) / 1000;
@@ -60,6 +64,7 @@ impl Instant {
     }
 
     /// Returns whether the Instant is after another Instant
+    #[must_use]
     pub fn is_after(&self, other: &Self) -> bool {
         self.inner > other.inner
     }

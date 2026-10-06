@@ -33,6 +33,7 @@ impl MainEvents {
     // Public
 
     /// Returns `true` if no events are pending.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.empty
     }
@@ -43,6 +44,7 @@ impl MainEvents {
     }
 
     /// Returns `true` if at least one event of type `V` is pending.
+    #[must_use]
     pub fn has<V: MainEvent>(&self) -> bool {
         V::has(self)
     }
@@ -62,6 +64,7 @@ impl MainEvents {
 
     // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     /// Returns `true` if any auth messages are pending. Prefer `read::<AuthEvent<M>>()`.
+    #[must_use]
     pub fn has_auths(&self) -> bool {
         !self.auths.is_empty()
     }
@@ -72,15 +75,15 @@ impl MainEvents {
 
     // Crate-public
 
-    pub(crate) fn push_connection(&mut self, user_key: &UserKey) {
-        self.connections.push(*user_key);
+    pub(crate) fn push_connection(&mut self, user_key: UserKey) {
+        self.connections.push(user_key);
         self.empty = false;
     }
 
-    pub(crate) fn push_auth(&mut self, user_key: &UserKey, auth_message: MessageContainer) {
+    pub(crate) fn push_auth(&mut self, user_key: UserKey, auth_message: MessageContainer) {
         let message_type_id = auth_message.kind();
         let list = self.auths.entry(message_type_id).or_default();
-        list.push((*user_key, auth_message));
+        list.push((user_key, auth_message));
         self.empty = false;
     }
 
@@ -99,8 +102,8 @@ impl MainEvents {
         self.empty = false;
     }
 
-    pub(crate) fn push_queued_disconnect(&mut self, user_key: &UserKey) {
-        self.queued_disconnects.push(*user_key);
+    pub(crate) fn push_queued_disconnect(&mut self, user_key: UserKey) {
+        self.queued_disconnects.push(user_key);
         self.empty = false;
     }
 }

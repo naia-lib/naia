@@ -16,11 +16,10 @@ impl MutChannelData {
 
 impl MutChannelType for MutChannelData {
     fn new_receiver(&mut self, address_opt: &Option<SocketAddr>) -> Option<MutReceiver> {
-        if address_opt.is_some() {
-            panic!(
-                "should not initialize client MutReceiver with an address (there is only 1 server)"
-            );
-        }
+        assert!(
+            !address_opt.is_some(),
+            "should not initialize client MutReceiver with an address (there is only 1 server)"
+        );
         Some(self.receiver.clone())
     }
 

@@ -46,10 +46,10 @@ use crate::{DiffMask, GlobalWorldManagerType, PropertyMutate};
 /// ## "Was clear" semantics under multi-word
 ///
 /// `push` returns `was_clear == true` (and locks `indices` to push)
-/// when the kind_bit's word was zero before our `fetch_or` AND the
+/// when the `kind_bit`'s word was zero before our `fetch_or` AND the
 /// other words for this entity are also zero (relaxed loads — race-
 /// tolerant). Concurrent pushes to different words of the same entity
-/// might both report was_clear and double-push the index; the
+/// might both report `was_clear` and double-push the index; the
 /// `indices` Vec accepts duplicates and drain swap-zeroes the bits
 /// once, so the duplicate entry contributes nothing on the second
 /// drain pass. Net contract: at-least-once index entry per
@@ -119,7 +119,7 @@ impl DirtyQueue {
     #[inline]
     pub fn push(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
         let word_idx = (kind_bit as usize) / 64;
-        let bit_in_word = (kind_bit as u32) % 64;
+        let bit_in_word = u32::from(kind_bit) % 64;
         let kind_mask = 1u64 << bit_in_word;
         let entity_base = (entity_idx.0 as usize) * self.stride;
         let slot_idx = entity_base + word_idx;
@@ -157,8 +157,7 @@ impl DirtyQueue {
                     return true;
                 }
                 bits.get(entity_base + w)
-                    .map(|word| word.load(Ordering::Relaxed) == 0)
-                    .unwrap_or(true)
+                    .is_none_or(|word| word.load(Ordering::Relaxed) == 0)
             })
         };
         if was_clear {
@@ -172,7 +171,7 @@ impl DirtyQueue {
     #[inline]
     pub fn cancel(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
         let word_idx = (kind_bit as usize) / 64;
-        let bit_in_word = (kind_bit as u32) % 64;
+        let bit_in_word = u32::from(kind_bit) % 64;
         let kind_mask = 1u64 << bit_in_word;
         let slot_idx = (entity_idx.0 as usize) * self.stride + word_idx;
         let bits = self.bits.read();
@@ -198,8 +197,7 @@ impl DirtyQueue {
             for w in 0..self.stride {
                 let v = bits
                     .get(entity_base + w)
-                    .map(|slot| slot.swap(0, Ordering::Relaxed))
-                    .unwrap_or(0);
+                    .map_or(0, |slot| slot.swap(0, Ordering::Relaxed));
                 if v != 0 {
                     any = true;
                 }
@@ -253,8 +251,7 @@ impl DirtyQueue {
                 for w in 0..self.stride {
                     let v = bits
                         .get(entity_base + w)
-                        .map(|slot| slot.load(Ordering::Relaxed))
-                        .unwrap_or(0);
+                        .map_or(0, |slot| slot.load(Ordering::Relaxed));
                     if v != 0 {
                         any = true;
                     }
@@ -289,17 +286,17 @@ impl DirtyQueue {
     }
 }
 
-/// Shared dirty queue owned by a `UserDiffHandler`. MutReceivers hold a
+/// Shared dirty queue owned by a `UserDiffHandler`. `MutReceivers` hold a
 /// `Weak` into this and call `push` directly — `DirtyQueue` provides
 /// interior mutability via its inner `RwLock`/`Mutex` so there is no
 /// outer `Mutex<DirtyQueue>` wrapper. B-strict made the bits-side
-/// fetch_or lock-free under a read guard.
+/// `fetch_or` lock-free under a read guard.
 pub type DirtySet = DirtyQueue;
 
-/// Identifies a MutReceiver's position inside its owning UserDiffHandler's
+/// Identifies a `MutReceiver`'s position inside its owning `UserDiffHandler`'s
 /// dirty set. Installed once per receiver via `MutReceiver::attach_notifier`
-/// (OnceLock — all clones share the notifier). Carries the global
-/// `GlobalEntityIndex` and the protocol-wide `kind_bit` (= ComponentKind's NetId)
+/// (`OnceLock` — all clones share the notifier). Carries the global
+/// `GlobalEntityIndex` and the protocol-wide `kind_bit` (= `ComponentKind`'s `NetId`)
 /// — both resolved once at registration time, so notify is a Vec OR, not a
 /// hash.
 /// Lightweight handle installed in a [`MutReceiver`] to push dirty notifications into a [`DirtySet`]
@@ -420,15 +417,16 @@ pub struct MutReceiver {
     notifier: Arc<OnceLock<DirtyNotifier>>,
     /// Set to `true` when the server receives delivery confirmation (ACK) for the
     /// initial spawn or insert-component command that registered this component.
-    /// Phase 3 uses this as a fast-path alternative to the 6+ HashMap lookup
+    /// Phase 3 uses this as a fast-path alternative to the 6+ `HashMap` lookup
     /// chain in `is_component_updatable_for_entity`: if the flag is true, the
     /// component is known-delivered and we skip the slow updatability check.
-    /// Arc-shared so all clones (MutChannelData + UserDiffHandler) see the write.
+    /// Arc-shared so all clones (`MutChannelData` + `UserDiffHandler`) see the write.
     delivered: Arc<AtomicBool>,
 }
 
 impl MutReceiver {
     /// Creates a `MutReceiver` with an atomic diff mask of `diff_mask_length` bytes.
+    #[must_use]
     pub fn new(diff_mask_length: u8) -> Self {
         Self {
             mask: Arc::new(AtomicDiffMask::new(diff_mask_length)),
@@ -437,8 +435,8 @@ impl MutReceiver {
         }
     }
 
-    /// Installed once per receiver by UserDiffHandler::register_component.
-    /// Cheap no-op on re-attachment (OnceLock::set returns Err, ignored).
+    /// Installed once per receiver by `UserDiffHandler::register_component`.
+    /// Cheap no-op on re-attachment (`OnceLock::set` returns Err, ignored).
     pub fn attach_notifier(&self, notifier: DirtyNotifier) {
         let _ = self.notifier.set(notifier);
     }
@@ -448,6 +446,7 @@ impl MutReceiver {
     /// before clearing the receiver. Replaces the prior
     /// `RwLockReadGuard<'_, DiffMask>` API which forced callers to clone
     /// while holding a read lock.
+    #[must_use]
     pub fn mask_snapshot(&self) -> DiffMask {
         self.mask.snapshot()
     }
@@ -455,11 +454,13 @@ impl MutReceiver {
     /// Read one byte of the receiver's mask. Cheaper than `mask_snapshot()`
     /// when callers only need a single byte (currently unused but kept as
     /// the obvious primitive on top of the atomic representation).
+    #[must_use]
     pub fn mask_byte(&self, index: usize) -> u8 {
         self.mask.byte(index)
     }
 
     /// Returns `true` if no property bits are currently set in this receiver's diff mask.
+    #[must_use]
     pub fn diff_mask_is_clear(&self) -> bool {
         self.mask.is_clear()
     }
@@ -471,14 +472,16 @@ impl MutReceiver {
     }
 
     /// Returns `true` if the spawn/insert for this component has been delivered to the client.
+    #[must_use]
     pub fn is_delivered(&self) -> bool {
         self.delivered.load(Ordering::Relaxed)
     }
 
     /// Combined fast-path check for Phase 3: returns `true` iff the component has
-    /// pending dirty bits AND its spawn was already delivered. A single HashMap
-    /// lookup from the caller provides this receiver, avoiding the 6+ HashMap
+    /// pending dirty bits AND its spawn was already delivered. A single `HashMap`
+    /// lookup from the caller provides this receiver, avoiding the 6+ `HashMap`
     /// chain of `is_component_updatable_for_entity` in the common steady-state case.
+    #[must_use]
     pub fn is_dirty_and_delivered(&self) -> bool {
         !self.mask.is_clear() && self.delivered.load(Ordering::Relaxed)
     }

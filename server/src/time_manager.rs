@@ -23,9 +23,9 @@ impl TimeManager {
     /// `now` instead of bursting the whole backlog. Bounds the worst-case
     /// catch-up after a long stall (debugger / severe overload) to a few sim
     /// steps; steady-state operation never approaches this.
-    const MAX_CATCHUP_TICKS: u32 = 4;
+    const MAX_CATCHUP_TICKS: f32 = 4.0;
 
-    /// Create a new TickManager with a given tick interval duration
+    /// Create a new `TickManager` with a given tick interval duration
     pub fn new(tick_interval: Duration) -> Self {
         let start_instant = Instant::now();
         let last_tick_instant = start_instant.clone();
@@ -65,6 +65,10 @@ impl TimeManager {
     /// Catch-up is bounded: if the clock has run more than [`Self::MAX_CATCHUP_TICKS`]
     /// behind (a long stall — debugger, severe overload), we resync the grid to
     /// `now` and emit a single tick rather than bursting the whole backlog.
+    // NOTE (clippy float casts): sub-millisecond tick intervals truncate
+    // here by design and are always non-negative (tick grid stays on whole
+    // millis); no float-to-int conversion API exists on this toolchain.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn recv_server_tick(&mut self, now: &Instant) -> bool {
         let time_since_tick_ms = self.last_tick_instant.elapsed(now).as_secs_f32() * 1000.0;
 
@@ -72,7 +76,7 @@ impl TimeManager {
             return false;
         }
 
-        if time_since_tick_ms > self.tick_interval_millis * (Self::MAX_CATCHUP_TICKS as f32) {
+        if time_since_tick_ms > self.tick_interval_millis * Self::MAX_CATCHUP_TICKS {
             // Pathological lag: drop the backlog, resync the grid to now.
             self.record_tick_duration(time_since_tick_ms);
             self.last_tick_instant = now.clone();
@@ -98,14 +102,14 @@ impl TimeManager {
     }
 
     pub fn average_tick_duration(&self) -> Duration {
-        Duration::from_millis(self.tick_duration_avg.round() as u64)
+        Duration::from_secs_f32(self.tick_duration_avg / 1000.0)
     }
 
     pub fn game_time_now(&self) -> GameInstant {
         GameInstant::new(&self.start_instant)
     }
 
-    pub fn game_time_since(&self, previous_instant: &GameInstant) -> GameDuration {
+    pub fn game_time_since(&self, previous_instant: GameInstant) -> GameDuration {
         self.game_time_now().time_since(previous_instant)
     }
 
@@ -132,6 +136,11 @@ impl TimeManager {
             .clamp(0.0, 10.0);
     }
 
+    // NOTE (clippy `cast_possible_truncation`): the microsecond quanta
+    // below serialize into ping packets, so their `as i128` bit behavior
+    // is load-bearing for byte-identity; no float-to-int conversion API
+    // exists on this toolchain to express the same conversion.
+    #[allow(clippy::cast_possible_truncation)]
     pub(crate) fn process_ping(&self, reader: &mut BitReader) -> Result<BitWriter, SerdeErr> {
         let server_received_time = self.game_time_now();
 

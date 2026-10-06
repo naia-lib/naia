@@ -1,6 +1,6 @@
 //! Send-thread state owned by the pipeline coordinator (step 4-E).
 //!
-//! After `InternalWorldServer::into_pipeline_states()` consumes the InternalWorldServer,
+//! After `InternalWorldServer::into_pipeline_states()` consumes the `InternalWorldServer`,
 //! `SendState<E>` carries every field the send thread needs:
 //! `send_user_connections` (the send halves of every connection), the
 //! per-user priority layer, the outbound `PacketSender`, and a clone of
@@ -28,12 +28,13 @@ use log::warn;
 
 use naia_shared::{
     BigMapKey, BitWriter, Channel, ChannelKind, ComponentKind, ConnectionRequestNonce,
-    EntityAndGlobalEntityConverter, EntityAuthStatus, GlobalEntity, GlobalEntityIndex,
-    GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId,
-    GlobalWorldManagerType, HostType, Instant, LocalEntityAndGlobalEntityConverter,
-    LocalResponseId, Message, MessageContainer, OutgoingPacket, OutgoingPriorityHook,
-    OwnedBitReader, PacketType, Replicate, SendPlan, SendUpdateEvents, Serde, SnapshotMap, Tick,
-    Timer, UpdateKinds, UserPriorityState, WorldMutType, WorldRefType,
+    EntityAndGlobalEntityConverter, EntityAuthStatus, FrozenGlobalDirty, GlobalDiffHandler,
+    GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState,
+    GlobalRequestId, GlobalWorldManagerType, HostType, Instant,
+    LocalEntityAndGlobalEntityConverter, LocalResponseId, Message, MessageContainer,
+    OutgoingPacket, OutgoingPriorityHook, OwnedBitReader, PacketType, Replicate, SendPlan,
+    SendUpdateEvents, Serde, SnapshotMap, Tick, Timer, UpdateKinds, UserDiffHandler,
+    UserPriorityState, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -98,7 +99,7 @@ pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     pub shared: Arc<ServerShared<E>>,
 
     /// Entity ↔ room membership index (relocated from `CoordinatorState`
-    /// in Phase A.3 of MISSION_SIM_OWNS_WORLD). Read by Iris during
+    /// in Phase A.3 of `MISSION_SIM_OWNS_WORLD`). Read by Iris during
     /// `send_all_packets` (room-gate decisions) and mutated when entities
     /// enter / leave rooms. Send-side because the dispatching code that
     /// reads it (Iris + per-user scope-policy hook) is already send-side.
@@ -132,7 +133,7 @@ pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     pub(crate) scope_changes_done_this_tick: bool,
 
     /// C.6 prep #6 — Send-side mirror of `User.room_keys()` (which lives
-    /// on sim_handle's `UserStore`). Maintained by `apply_pending_room_changes`
+    /// on `sim_handle`'s `UserStore`). Maintained by `apply_pending_room_changes`
     /// via the `RoomChange::UserAdded`/`UserRemoved`/`RoomDestroyed` data.
     /// Read by `apply_pending_scope_changes` when evaluating
     /// `ScopeToggled` (room-intersection logic) and `UserLeftRoom`.
@@ -151,12 +152,12 @@ pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     /// fan out a single user's scope evaluation).
     pub(crate) room_entities_map: HashMap<RoomKey, HashMap<GlobalEntity, E>>,
 
-    /// Phase A of MISSION_USER_ONLY_SEES_SIM (2026-05-19) — per-(user,
+    /// Phase A of `MISSION_USER_ONLY_SEES_SIM` (2026-05-19) — per-(user,
     /// entity) retry counter for `ScopeToggled` re-queues issued by
     /// `apply_scope_for_user` when `world.has_entity` returns false.
     ///
     /// Background: the 2026-05-19 f3-saga finding during
-    /// MISSION_SIM_OWNS_WORLD showed that an unbounded re-queue can
+    /// `MISSION_SIM_OWNS_WORLD` showed that an unbounded re-queue can
     /// retry indefinitely (memory growth) while the prior implementation
     /// effectively gave up after ~2 ticks (lost scope events on any
     /// pipeline-lag). Bounded retry (N=`SCOPE_RETRY_MAX`) restores
@@ -168,7 +169,7 @@ pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     pub(crate) scope_retry_counts: HashMap<(UserKey, GlobalEntity), u8>,
 }
 
-/// Phase A of MISSION_USER_ONLY_SEES_SIM (2026-05-19) — maximum number
+/// Phase A of `MISSION_USER_ONLY_SEES_SIM` (2026-05-19) — maximum number
 /// of retries an entry in the `scope_change_queue` may accumulate when
 /// the target world entity is not (yet) present in the snapshot world
 /// passed to `apply_pending_scope_changes`.
@@ -229,12 +230,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
 
             if self
                 .send_io
-                .send_packet(user_address, writer.to_packet())
+                .send_packet(user_address, &writer.to_packet())
                 .is_err()
             {
                 // Ping send failure is not fatal: the connection timeout
                 // will detect a persistently dead link via missed pongs.
-                warn!("Server Error: Cannot send ping packet to {}", user_address);
+                warn!("Server Error: Cannot send ping packet to {user_address}");
             }
             send_conn.base.mark_sent();
         }
@@ -303,17 +304,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 .read_messages(
                     &self.shared.channel_kinds,
                     &self.shared.message_kinds,
-                    &server_tick,
-                    &client_tick,
+                    server_tick,
+                    client_tick,
                     &send_conn.base.world_manager.entity_converter(),
                     &mut reader,
                 )
                 .is_err()
             {
-                warn!(
-                    "Server Error: cannot decode tick-buffered messages from {}",
-                    address
-                );
+                warn!("Server Error: cannot decode tick-buffered messages from {address}");
                 continue;
             }
 
@@ -336,7 +334,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 )
                 .is_err()
             {
-                warn!("Server Error: cannot decode data section from {}", address);
+                warn!("Server Error: cannot decode data section from {address}");
                 continue;
             }
 
@@ -356,7 +354,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
 
     /// Drain `ServerShared::pending_outbound_packets` and emit them via
     /// the send IO. Recv-side handlers (Ping → Pong, Handshake →
-    /// ConnectRequest response) enqueue here because they cannot touch
+    /// `ConnectRequest` response) enqueue here because they cannot touch
     /// `SendState::send_io` in pipeline mode.
     ///
     /// Relocated from `InternalWorldServer::flush_pending_outbound_packets` in
@@ -366,11 +364,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         let pending: Vec<(SocketAddr, OutgoingPacket)> =
             std::mem::take(&mut *self.shared.pending_outbound_packets.lock());
         for (address, packet) in pending {
-            if self.send_io.send_packet(&address, packet).is_err() {
-                warn!(
-                    "Server Error: cannot flush queued outbound packet to {}",
-                    address
-                );
+            if self.send_io.send_packet(&address, &packet).is_err() {
+                warn!("Server Error: cannot flush queued outbound packet to {address}");
             }
             if let Some(send_conn) = self.send_user_connections.get(&address) {
                 send_conn.shared.note_outbound_packet();
@@ -390,7 +385,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
 
         let tm_guard = self.shared.time_manager.read();
         let tm: &TimeManager = &tm_guard;
-        for (user_address, send_conn) in self.send_user_connections.iter_mut() {
+        for (user_address, send_conn) in &mut self.send_user_connections {
             if send_conn.base.should_send_heartbeat() {
                 Self::send_heartbeat_packet(user_address, send_conn, tm, &mut self.send_io);
             }
@@ -402,7 +397,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     pub(crate) fn handle_empty_acks(&mut self) {
         let tm_guard = self.shared.time_manager.read();
         let tm: &TimeManager = &tm_guard;
-        for (user_address, send_conn) in self.send_user_connections.iter_mut() {
+        for (user_address, send_conn) in &mut self.send_user_connections {
             if send_conn.base.should_send_empty_ack() {
                 Self::send_heartbeat_packet(user_address, send_conn, tm, &mut self.send_io);
             }
@@ -425,13 +420,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         time_manager.current_tick_instant().ser(&mut writer);
 
         send_conn.shared.note_outbound_packet();
-        if io.send_packet(user_address, writer.to_packet()).is_err() {
+        if io.send_packet(user_address, &writer.to_packet()).is_err() {
             // Heartbeat send failure is not fatal: the connection timeout
             // will detect a persistently dead link when heartbeats stop arriving.
-            warn!(
-                "Server Error: Cannot send heartbeat packet to {}",
-                user_address
-            );
+            warn!("Server Error: Cannot send heartbeat packet to {user_address}");
         }
         send_conn.base.mark_sent();
     }
@@ -450,7 +442,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     ///   3. `handle_heartbeats` + `handle_empty_acks` — periodic /
     ///      flag-driven ack carriers.
     ///   4. Iris Phase 1+2 — one-shot global dirty scan +
-    ///      UserDependent snapshot.
+    ///      `UserDependent` snapshot.
     ///   5. Iris Phase 3A — per-user dirty intersect + serial event
     ///      build.
     ///   6. Iris Phase 3B — parallel per-user packet build (rayon).
@@ -463,9 +455,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// mirror seeded in `new_connection_pair` and refreshed on every
     /// pong by `RecvState::receive`'s `Pong` handler).
     /// C.6 prep — split the per-tick send preamble out of
-    /// `send_all_packets` so cyberlith's Send SubApp can run it on the
+    /// `send_all_packets` so cyberlith's Send `SubApp` can run it on the
     /// Send-owned thread before constructing a `SnapshotWorld<E>`,
-    /// without first reassembling the InternalWorldServer.
+    /// without first reassembling the `InternalWorldServer`.
     ///
     /// The preamble:
     ///   1. Drains pending `RoomChange`s from `scope_change_queue` into
@@ -477,7 +469,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     ///   4. Sweeps `handle_heartbeats` + `handle_empty_acks`.
     ///
     /// All four steps need only `SendState` + `Arc<ServerShared>` — no
-    /// reassembled InternalWorldServer, no world snapshot. Idempotent within a
+    /// reassembled `InternalWorldServer`, no world snapshot. Idempotent within a
     /// tick: setting `preamble_done_this_tick = true` causes the
     /// subsequent `send_all_packets` to skip its inline preamble.
     ///
@@ -520,7 +512,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         self.preamble_done_this_tick = true;
     }
 
-    /// MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20) — recompute the cross-thread
+    /// `MISSION_SNAPSHOT_DIRTY_TRIM` (2026-05-20) — recompute the cross-thread
     /// `needed_entities` bitset from every connection's in-flight
     /// value-reading commands.
     ///
@@ -532,34 +524,35 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// read never race.
     ///
     /// Result: `needed_entities` = ⋃ over users of "entities whose Spawn /
-    /// SpawnWithComponents / InsertComponent isn't yet fully delivered". The
+    /// `SpawnWithComponents` / `InsertComponent` isn't yet fully delivered". The
     /// snapshot builder unions this with `global_dirty` (component updates)
     /// to get the full must-include set.
     pub fn refresh_needed_entities(&mut self) {
         let needed = &self.shared.needed_entities;
-        needed.clear();
+        let _ = needed.clear();
 
         let handler_arc = self.shared.global_world_manager.read().diff_handler();
         let guard = handler_arc.read().expect("GlobalDiffHandler lock poisoned");
         for send_conn in self.send_user_connections.values() {
             for global_entity in send_conn.base.world_manager.pending_outbound_entities() {
-                if let Some(idx) = guard.entity_to_global_idx(&global_entity) {
-                    needed.set_bit(idx.as_usize() as u32);
+                if let Some(idx) = guard.entity_to_global_idx(global_entity) {
+                    let _ = needed
+                        .set_bit(u32::try_from(idx.as_usize()).expect("global index fits in u32"));
                 }
             }
         }
     }
 
     /// C.6 prep — send a message to the user at `address` without
-    /// reassembling the InternalWorldServer.
+    /// reassembling the `InternalWorldServer`.
     ///
     /// `InternalWorldServer::send_message` looks up `user_key → address` via
     /// `sim_handle.user_store`, then dispatches against the send-side
     /// connection and message manager. In the pipeline architecture
-    /// (cyberlith Send SubApp permanently holds `SendHandle`), the
+    /// (cyberlith Send `SubApp` permanently holds `SendHandle`), the
     /// caller resolves `user_key → address` via
     /// [`crate::pipeline_actors::CoordHandle::user_address`] once and
-    /// then calls this method directly — no per-tick InternalWorldServer
+    /// then calls this method directly — no per-tick `InternalWorldServer`
     /// reassembly.
     ///
     /// Returns `true` if the message was queued. Returns `false` if
@@ -592,9 +585,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         message: MessageContainer,
     ) -> bool {
         let channel_settings = self.shared.channel_kinds.channel(channel_kind);
-        if !channel_settings.can_send_to_client() {
-            panic!("Cannot send message to Client on this Channel");
-        }
+        assert!(
+            channel_settings.can_send_to_client(),
+            "Cannot send message to Client on this Channel"
+        );
         let Some(send_conn) = self.send_user_connections.get_mut(address) else {
             return false;
         };
@@ -664,7 +658,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// earlier in the same tick (set via the C.6 prep split), this
     /// skips the inline preamble. Otherwise the preamble runs first
     /// for backward compatibility.
-    pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
+    pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: &W) {
         // The deterministic oracle prepares + transmits synchronously in the same
         // tick. Splitting it this way (vs the pre-Lever-3 monolithic
         // `send_all_packets_impl`) keeps the oracle byte-identical while sharing
@@ -694,7 +688,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         }
     }
 
-    /// MISSION_TICK_FLOOR Lever 3 — PREPARE half. Runs at the FREEZE point on the
+    /// `MISSION_TICK_FLOOR` Lever 3 — PREPARE half. Runs at the FREEZE point on the
     /// gameplay thread (the park window on the active path; inline for the
     /// oracle). Drains the send preamble + scope changes, FREEZES the dirty
     /// domain, then builds the per-user update plan: for every (user, entity,
@@ -706,6 +700,117 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// `world` is only consulted by the inline scope-change drain (skipped when
     /// the caller already ran `apply_pending_scope_changes` this tick); Phase 3A
     /// itself reads no world values.
+    /// Collect one entity's dirty component list in `kind_bit` ascending order
+    /// (`dirty_words` iteration is LSB-first = ascending `kind_bit`), applying
+    /// the fast/slow delivery gate and snapshotting each emitted component's
+    /// `DiffMask` into the returned list.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a component kind bit does not fit in `u16`, which cannot
+    /// happen for registered component kinds.
+    fn collect_entity_kinds(
+        send_conn: &SendConnection,
+        guard: &std::sync::RwLockReadGuard<GlobalDiffHandler>,
+        diff: &std::sync::RwLockReadGuard<UserDiffHandler>,
+        frozen_dirty: &FrozenGlobalDirty,
+        global_idx: GlobalEntityIndex,
+        global_entity: GlobalEntity,
+    ) -> UpdateKinds {
+        // Build this entity's component list in kind_bit ascending order
+        // (dirty_words iteration is LSB-first = ascending kind_bit).
+        let mut kinds: UpdateKinds = Vec::new();
+        for (word_idx, dirty_word) in frozen_dirty.dirty_words(global_idx).iter().enumerate() {
+            let mut remaining = *dirty_word;
+            while remaining != 0 {
+                let bit_pos = remaining.trailing_zeros() as usize;
+                remaining &= remaining - 1;
+                let kind_bit =
+                    u16::try_from(word_idx * 64 + bit_pos).expect("component kind bit fits in u16");
+                let Some(component_kind) = guard.kind_for_bit(kind_bit) else {
+                    continue;
+                };
+                #[cfg(feature = "bench_instrumentation")]
+                crate::server::world_server::bench_iris_counters::N_PHASE3_COMPONENT_VISITS
+                    .fetch_add(1, Ordering::Relaxed);
+
+                // Phase H deferred-followup measurement: `force_slow`
+                // skips the single-lookup fast path so every component
+                // pays the 6+-HashMap `is_component_updatable_for_entity`
+                // chain — the A/B isolates the CPU tax of hardening the
+                // gate. Const-false (folded away) outside bench builds.
+                #[cfg(feature = "bench_instrumentation")]
+                let force_slow = crate::server::world_server::bench_iris_counters::FORCE_SLOW_GATE
+                    .load(Ordering::Relaxed);
+                #[cfg(not(feature = "bench_instrumentation"))]
+                let force_slow = false;
+
+                if !force_slow && diff.is_receiver_dirty_and_delivered_fast(global_idx, kind_bit) {
+                    // fast path
+                    #[cfg(feature = "bench_instrumentation")]
+                    {
+                        use crate::server::world_server::bench_iris_counters as bic;
+                        if bic::MEASURE_LEAK.load(Ordering::Relaxed) {
+                            bic::N_FAST_EMIT.fetch_add(1, Ordering::Relaxed);
+                            // Ground-truth: did the fast flag emit a pre-delivery update?
+                            if !send_conn
+                                .base
+                                .world_manager
+                                .is_component_updatable_for_entity(global_entity, component_kind)
+                            {
+                                bic::N_FASTPATH_LEAK.fetch_add(1, Ordering::Relaxed);
+                            }
+                        }
+                    }
+                } else if diff.diff_mask_is_clear_fast(global_idx, kind_bit) {
+                    continue;
+                } else if !send_conn
+                    .base
+                    .world_manager
+                    .is_component_updatable_for_entity(global_entity, component_kind)
+                {
+                    #[cfg(feature = "bench_instrumentation")]
+                    {
+                        use crate::server::world_server::bench_iris_counters as bic;
+                        if bic::MEASURE_LEAK.load(Ordering::Relaxed) {
+                            bic::N_GATE_SUPPRESSED.fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
+                    continue;
+                } else {
+                    // slow-path emit (delivered; fast flag not yet set, or forced-slow)
+                    #[cfg(feature = "bench_instrumentation")]
+                    {
+                        use crate::server::world_server::bench_iris_counters as bic;
+                        if bic::MEASURE_LEAK.load(Ordering::Relaxed) {
+                            bic::N_SLOW_EMIT.fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
+                }
+
+                // MISSION_TICK_FLOOR Lever 3: capture the per-property
+                // mask NOW, then clear the live mask immediately. The
+                // captured (frozen) mask is what the lagged transmit
+                // serializes from.
+                let diff_mask = diff
+                    .diff_mask_snapshot_fast(global_idx, kind_bit)
+                    .unwrap_or_else(|| diff.diff_mask_snapshot(global_entity, component_kind));
+                diff.clear_diff_mask_fast(global_idx, kind_bit);
+
+                kinds.push((component_kind, kind_bit, diff_mask));
+            }
+        }
+        kinds
+    }
+
+    /// `MISSION_TICK_FLOOR` Lever 3 — PLAN half. Runs on the Sim thread: drains the
+    /// pending send preamble and entity-scope changes, freezes the dirty domain,
+    /// then builds the per-user update plan (`SendPlan`) that
+    /// [`transmit_send_job`][Self::transmit_send_job] later serializes.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the global diff handler lock is poisoned.
     pub fn prepare_send_job<W: WorldRefType<E> + Sync>(&mut self, world: &W) -> SendPlan {
         #[cfg(feature = "f3_diag")]
         eprintln!(
@@ -782,98 +887,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     crate::server::world_server::bench_iris_counters::N_PHASE3_ENTITY_VISITS
                         .fetch_add(1, Ordering::Relaxed);
 
-                    // Build this entity's component list in kind_bit ascending order
-                    // (dirty_words iteration is LSB-first = ascending kind_bit).
-                    let mut kinds: UpdateKinds = Vec::new();
-                    for (word_idx, dirty_word) in
-                        frozen_dirty.dirty_words(global_idx).iter().enumerate()
-                    {
-                        let mut word = *dirty_word;
-                        while word != 0 {
-                            let bit_pos = word.trailing_zeros() as usize;
-                            word &= word - 1;
-                            let kind_bit = (word_idx * 64 + bit_pos) as u16;
-                            let Some(component_kind) = guard.kind_for_bit(kind_bit) else {
-                                continue;
-                            };
-                            #[cfg(feature = "bench_instrumentation")]
-                            crate::server::world_server::bench_iris_counters::N_PHASE3_COMPONENT_VISITS
-                                .fetch_add(1, Ordering::Relaxed);
-
-                            // Phase H deferred-followup measurement: `force_slow`
-                            // skips the single-lookup fast path so every component
-                            // pays the 6+-HashMap `is_component_updatable_for_entity`
-                            // chain — the A/B isolates the CPU tax of hardening the
-                            // gate. Const-false (folded away) outside bench builds.
-                            #[cfg(feature = "bench_instrumentation")]
-                            let force_slow =
-                                crate::server::world_server::bench_iris_counters::FORCE_SLOW_GATE
-                                    .load(Ordering::Relaxed);
-                            #[cfg(not(feature = "bench_instrumentation"))]
-                            let force_slow = false;
-
-                            if !force_slow
-                                && diff.is_receiver_dirty_and_delivered_fast(global_idx, kind_bit)
-                            {
-                                // fast path
-                                #[cfg(feature = "bench_instrumentation")]
-                                {
-                                    use crate::server::world_server::bench_iris_counters as bic;
-                                    if bic::MEASURE_LEAK.load(Ordering::Relaxed) {
-                                        bic::N_FAST_EMIT.fetch_add(1, Ordering::Relaxed);
-                                        // Ground-truth: did the fast flag emit a pre-delivery update?
-                                        if !send_conn
-                                            .base
-                                            .world_manager
-                                            .is_component_updatable_for_entity(
-                                                &global_entity,
-                                                &component_kind,
-                                            )
-                                        {
-                                            bic::N_FASTPATH_LEAK.fetch_add(1, Ordering::Relaxed);
-                                        }
-                                    }
-                                }
-                            } else if diff.diff_mask_is_clear_fast(global_idx, kind_bit) {
-                                continue;
-                            } else if !send_conn
-                                .base
-                                .world_manager
-                                .is_component_updatable_for_entity(&global_entity, &component_kind)
-                            {
-                                #[cfg(feature = "bench_instrumentation")]
-                                {
-                                    use crate::server::world_server::bench_iris_counters as bic;
-                                    if bic::MEASURE_LEAK.load(Ordering::Relaxed) {
-                                        bic::N_GATE_SUPPRESSED.fetch_add(1, Ordering::Relaxed);
-                                    }
-                                }
-                                continue;
-                            } else {
-                                // slow-path emit (delivered; fast flag not yet set, or forced-slow)
-                                #[cfg(feature = "bench_instrumentation")]
-                                {
-                                    use crate::server::world_server::bench_iris_counters as bic;
-                                    if bic::MEASURE_LEAK.load(Ordering::Relaxed) {
-                                        bic::N_SLOW_EMIT.fetch_add(1, Ordering::Relaxed);
-                                    }
-                                }
-                            }
-
-                            // MISSION_TICK_FLOOR Lever 3: capture the per-property
-                            // mask NOW, then clear the live mask immediately. The
-                            // captured (frozen) mask is what the lagged transmit
-                            // serializes from.
-                            let diff_mask = diff
-                                .diff_mask_snapshot_fast(global_idx, kind_bit)
-                                .unwrap_or_else(|| {
-                                    diff.diff_mask_snapshot(&global_entity, &component_kind)
-                                });
-                            diff.clear_diff_mask_fast(global_idx, kind_bit);
-
-                            kinds.push((component_kind, kind_bit, diff_mask));
-                        }
-                    }
+                    let kinds = Self::collect_entity_kinds(
+                        send_conn,
+                        &guard,
+                        &diff,
+                        &frozen_dirty,
+                        global_idx,
+                        global_entity,
+                    );
                     if !kinds.is_empty() {
                         events.push((global_entity, global_idx, kinds));
                     }
@@ -904,14 +925,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         }
     }
 
-    /// MISSION_TICK_FLOOR Lever 3 — TRANSMIT half. Runs on the send worker (a
+    /// `MISSION_TICK_FLOOR` Lever 3 — TRANSMIT half. Runs on the send worker (a
     /// tick later, possibly overlapping the next Sim) or inline for the oracle.
     /// Reads ONLY the self-contained [`SendPlan`] + the snapshot `world`: it
     /// builds `snapshot_map` and clears the per-tick wire cache by iterating the
     /// plan's frozen dirty domain (Phase 1/2), then serializes each user's plan
     /// using the FROZEN `DiffMask`s and records the per-packet `sent_updates`
     /// ledger (Phase 3B). No live per-user diff state is read or cleared here.
-    pub fn transmit_send_job<W: WorldRefType<E> + Sync>(&mut self, world: W, plan: SendPlan) {
+    pub fn transmit_send_job<W: WorldRefType<E> + Sync>(&mut self, world: &W, plan: SendPlan) {
         let SendPlan {
             per_user,
             frozen_dirty,
@@ -945,7 +966,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     .shared
                     .global_world_manager
                     .read()
-                    .entity_is_replicating(&global_entity)
+                    .entity_is_replicating(global_entity)
                 {
                     continue;
                 }
@@ -959,15 +980,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 for (word_idx, dirty_word) in
                     frozen_dirty.dirty_words(global_idx).iter().enumerate()
                 {
-                    let mut word = *dirty_word;
-                    while word != 0 {
-                        let bit_pos = word.trailing_zeros() as usize;
-                        word &= word - 1;
-                        let kind_bit = (word_idx * 64 + bit_pos) as u16;
+                    let mut remaining = *dirty_word;
+                    while remaining != 0 {
+                        let bit_pos = remaining.trailing_zeros() as usize;
+                        remaining &= remaining - 1;
+                        let kind_bit = u16::try_from(word_idx * 64 + bit_pos)
+                            .expect("component kind bit fits in u16");
                         let Some(component_kind) = guard.kind_for_bit(kind_bit) else {
                             continue;
                         };
-                        if !world.has_component_of_kind(&world_entity, &component_kind) {
+                        if !world.has_component_of_kind(&world_entity, component_kind) {
                             continue;
                         }
 
@@ -976,7 +998,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                             .unwrap_or(false)
                         {
                             let snap = world
-                                .component_of_kind(&world_entity, &component_kind)
+                                .component_of_kind(&world_entity, component_kind)
                                 .expect("component verified above")
                                 .copy_to_box();
                             snapshot_map.insert((global_entity, component_kind), snap);
@@ -1057,7 +1079,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     let mut scored: Vec<(GlobalEntity, GlobalEntityIndex, f32, UpdateKinds)> =
                         update_events
                             .drain(..)
-                            .map(|(ge, idx, kinds)| (ge, idx, hook.advance(&ge), kinds))
+                            .map(|(ge, idx, kinds)| (ge, idx, hook.advance(ge), kinds))
                             .collect();
                     #[cfg(feature = "bench_instrumentation")]
                     let _sort_only_t0 = std::time::Instant::now();
@@ -1103,9 +1125,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     // exactly the un-transmitted set.
                     {
                         let ledger = send_conn.base.world_manager.replication_ledger();
-                        for (global_entity, _, _, kinds) in update_list.iter() {
-                            for (component_kind, _, diff_mask) in kinds.iter() {
-                                ledger.or_diff_mask(global_entity, component_kind, diff_mask);
+                        for (global_entity, _, _, kinds) in &update_list {
+                            for (component_kind, _, diff_mask) in kinds {
+                                ledger.or_diff_mask(*global_entity, *component_kind, diff_mask);
                             }
                         }
                     }
@@ -1115,7 +1137,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         update_list.iter().map(|(ge, _, _, _)| *ge).collect();
                     for ge in &initial_entities {
                         if !remaining.contains(ge) {
-                            hook.reset_after_send(ge, current_tick as u32);
+                            hook.reset_after_send(*ge, u32::from(current_tick));
                         }
                     }
 
@@ -1141,8 +1163,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 user_key, addr, packet_count
             );
             for packet in packets {
-                if self.send_io.send_packet(&addr, packet).is_err() {
-                    warn!("Server Error: Cannot send data packet to {}", addr);
+                if self.send_io.send_packet(&addr, &packet).is_err() {
+                    warn!("Server Error: Cannot send data packet to {addr}");
                 }
             }
         }
@@ -1224,7 +1246,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     users_in_room,
                 } => {
                     self.entity_room_map
-                        .entity_add_room(&global_entity, &room_key);
+                        .entity_add_room(global_entity, room_key);
                     self.scope_checks_cache.on_entity_added_to_room(
                         room_key,
                         world_entity,
@@ -1241,7 +1263,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     global_entity,
                 } => {
                     self.entity_room_map
-                        .remove_from_room(&global_entity, &room_key);
+                        .remove_from_room(global_entity, room_key);
                     self.scope_checks_cache
                         .on_entity_removed_from_room(room_key, world_entity);
                     if let Some(map) = self.room_entities_map.get_mut(&room_key) {
@@ -1254,7 +1276,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 } => {
                     for (_world_entity, global_entity) in &removed_entities {
                         self.entity_room_map
-                            .remove_from_room(global_entity, &room_key);
+                            .remove_from_room(*global_entity, room_key);
                     }
                     self.scope_checks_cache.on_room_destroyed(room_key);
                     // Drop room from mirrors. user_room_map: every user
@@ -1275,7 +1297,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         }
     }
 
-    /// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — drain
+    /// `MISSION_USER_ONLY_SEES_SIM` Phase D.2.2 (2026-05-19) — drain
     /// `ScopeChange::ConfigureReplication` payloads from
     /// `scope_change_queue` and execute their deferred Send-side leaf ops
     /// against `send_user_connections`.
@@ -1336,7 +1358,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     send_conn
                         .base
                         .world_manager
-                        .send_publish(HostType::Server, &global_entity);
+                        .send_publish(HostType::Server, global_entity);
                 }
             }
 
@@ -1349,7 +1371,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 // tick — same as the legacy synchronous behaviour.
                 let entity_rooms: Vec<RoomKey> = self
                     .entity_room_map
-                    .entity_get_rooms(&global_entity)
+                    .entity_get_rooms(global_entity)
                     .map(|rooms| rooms.iter().copied().collect())
                     .unwrap_or_default();
                 if !entity_rooms.is_empty() {
@@ -1371,21 +1393,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         send_conn
                             .base
                             .world_manager
-                            .send_unpublish(HostType::Server, &global_entity);
+                            .send_unpublish(HostType::Server, global_entity);
                     }
                 }
 
-                let entity_idx = self.configure_entity_global_idx(&global_entity);
-                for (addr, send_conn) in self.send_user_connections.iter_mut() {
+                let entity_idx = self.configure_entity_global_idx(global_entity);
+                for (addr, send_conn) in &mut self.send_user_connections {
                     if owner_addr == Some(*addr) {
                         continue;
                     }
                     if send_conn
                         .base
                         .world_manager
-                        .has_global_entity(&global_entity)
+                        .has_global_entity(global_entity)
                     {
-                        send_conn.base.world_manager.despawn_entity(&global_entity);
+                        send_conn.base.world_manager.despawn_entity(global_entity);
                         send_conn.clear_entity_visible(entity_idx);
                     }
                 }
@@ -1417,14 +1439,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     if !send_conn
                         .base
                         .world_manager
-                        .has_global_entity(&global_entity)
+                        .has_global_entity(global_entity)
                     {
                         continue;
                     }
                     send_conn.base.world_manager.send_enable_delegation(
                         HostType::Server,
                         client_origin.is_some(),
-                        &global_entity,
+                        global_entity,
                     );
                 }
             }
@@ -1434,7 +1456,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 world_entity,
                 client_key,
             } => {
-                self.apply_delegation_migrate(&global_entity, &world_entity, &client_key);
+                self.apply_delegation_migrate(global_entity, &world_entity, client_key);
             }
 
             ConfigureSendOp::DisableDelegationFanout { global_entity } => {
@@ -1448,23 +1470,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     if !send_conn
                         .base
                         .world_manager
-                        .has_global_entity(&global_entity)
+                        .has_global_entity(global_entity)
                     {
                         continue;
                     }
                     send_conn
                         .base
                         .world_manager
-                        .send_disable_delegation(&global_entity);
+                        .send_disable_delegation(global_entity);
                 }
             }
         }
     }
 
     /// Send-side equivalent of `InternalWorldServer::entity_global_idx`
-    /// (world_server.rs:3946) — resolve the dense `GlobalEntityIndex`
+    /// (`world_server.rs:3946`) — resolve the dense `GlobalEntityIndex`
     /// via the shared diff handler.
-    fn configure_entity_global_idx(&self, global_entity: &GlobalEntity) -> GlobalEntityIndex {
+    fn configure_entity_global_idx(&self, global_entity: GlobalEntity) -> GlobalEntityIndex {
         let handler = self.shared.global_world_manager.read().diff_handler();
         let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
         guard
@@ -1472,7 +1494,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             .unwrap_or(GlobalEntityIndex::INVALID)
     }
 
-    /// Send-side `UserKey` lookup for an address. The sim_handle `user_store`
+    /// Send-side `UserKey` lookup for an address. The `sim_handle` `user_store`
     /// is not reachable from `SendState`; the per-connection
     /// `SendConnection::user_key` (cached at finalize time) is the
     /// Send-owned source for the address→user mapping.
@@ -1481,19 +1503,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     }
 
     /// Mirror of `InternalWorldServer::enable_delegation_client_owned_entity`'s
-    /// Send-half (world_server.rs:2719) for the deferred drain. The gwm
+    /// Send-half (`world_server.rs:2719`) for the deferred drain. The gwm
     /// publicity/ownership/auth writes are performed HERE (not in the
     /// Coord method) because they are interleaved with per-connection
     /// migration state that only Send owns — keeping them adjacent to the
     /// `migrate_entity_remote_to_host` + `host_local_enable_delegation` +
     /// `host_send_migrate_response` sequence preserves legacy ordering and
-    /// the subcommand_id=0 MigrateResponse invariant (now made explicit by
+    /// the `subcommand_id=0` `MigrateResponse` invariant (now made explicit by
     /// D.2.3's `reserve_first_command`).
     fn apply_delegation_migrate(
         &mut self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
         world_entity: &E,
-        client_key: &UserKey,
+        client_key: UserKey,
     ) {
         use crate::server::configure_replication::ConfigureWorldOp;
 
@@ -1522,8 +1544,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     .entity_publish(global_entity);
                 if !result {
                     warn!(
-                        "apply_delegation_migrate: entity_publish failed for {:?}; aborting",
-                        global_entity
+                        "apply_delegation_migrate: entity_publish failed for {global_entity:?}; aborting"
                     );
                     return;
                 }
@@ -1536,10 +1557,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 user_key
             }
             EntityOwner::ClientPublic(user_key) => user_key,
-            _owner => {
+            owner => {
                 panic!(
-                    "entity should be owned by a public client at this point. Owner is: {:?}",
-                    _owner
+                    "entity should be owned by a public client at this point. Owner is: {owner:?}"
                 );
             }
         };
@@ -1550,15 +1570,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             .write()
             .migrate_entity_to_server(global_entity);
 
-        if self
-            .entity_scope_map
-            .get(&user_key, global_entity)
-            .is_none()
-        {
-            self.entity_scope_map.insert(user_key, *global_entity, true);
+        if self.entity_scope_map.get(user_key, global_entity).is_none() {
+            self.entity_scope_map.insert(user_key, global_entity, true);
         }
 
-        let Some(addr) = self.addr_for_user_key(&user_key) else {
+        let Some(addr) = self.addr_for_user_key(user_key) else {
             panic!("user should exist");
         };
         let Some(send_conn) = self.send_user_connections.get_mut(&addr) else {
@@ -1572,10 +1588,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             .global_entity_to_remote_entity(global_entity)
         {
             Ok(entity) => entity,
-            Err(_) => {
+            Err(error) => {
                 panic!(
-                    "Entity must exist as RemoteEntity before delegation: {:?}",
-                    global_entity
+                    "Entity must exist as RemoteEntity before delegation: {global_entity:?}: {error:?}"
                 );
             }
         };
@@ -1586,18 +1601,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         {
             Ok(entity) => entity,
             Err(e) => {
-                panic!("Failed to migrate entity during delegation: {}", e);
+                panic!("Failed to migrate entity during delegation: {e}");
             }
         };
         send_conn
             .base
             .world_manager
-            .host_local_enable_delegation(&new_host_entity);
+            .host_local_enable_delegation(new_host_entity);
         // MigrateResponse reserved at subcommand_id=0 (D.2.3).
         send_conn.base.world_manager.host_send_migrate_response(
             global_entity,
-            &old_remote_entity,
-            &new_host_entity,
+            old_remote_entity,
+            new_host_entity,
         );
 
         self.shared
@@ -1629,11 +1644,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 .global_world_manager
                 .write()
                 .client_request_authority(global_entity, &requester);
-            if result.is_err() {
-                panic!(
-                    "failed to grant authority of client-owned delegated entity to creating user"
-                );
-            }
+            assert!(
+                result.is_ok(),
+                "failed to grant authority of client-owned delegated entity to creating user"
+            );
             let user_snapshot: Vec<(UserKey, SocketAddr)> = self
                 .send_user_connections
                 .keys()
@@ -1651,7 +1665,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 {
                     continue;
                 }
-                let new_status = if uk == *client_key {
+                let new_status = if uk == client_key {
                     EntityAuthStatus::Granted
                 } else {
                     EntityAuthStatus::Denied
@@ -1666,9 +1680,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
 
     /// Resolve a connection address for a `UserKey` via the per-connection
     /// `user_key` cache (the coordination user store is not reachable here).
-    fn addr_for_user_key(&self, user_key: &UserKey) -> Option<SocketAddr> {
+    fn addr_for_user_key(&self, user_key: UserKey) -> Option<SocketAddr> {
         self.send_user_connections.iter().find_map(|(addr, conn)| {
-            if &conn.user_key == user_key {
+            if conn.user_key == user_key {
                 Some(*addr)
             } else {
                 None
@@ -1731,7 +1745,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     // skipped the preamble they survive here; re-queue them
                     // for the next preamble tick rather than mishandling.
                     ScopeChange::RoomChange(_) | ScopeChange::ConfigureReplication(_) => {
-                        keep.push_back(change)
+                        keep.push_back(change);
                     }
                     _ => out.push(change),
                 }
@@ -1792,8 +1806,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         self.apply_scope_for_user(
                             world,
                             &user_addresses,
-                            &user_key,
-                            global_entity,
+                            user_key,
+                            *global_entity,
                             world_entity,
                             false,
                         );
@@ -1823,7 +1837,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     };
                     for (global_entity, _world_entity) in &entity_list {
                         if let Some(entity_rooms) =
-                            self.entity_room_map.entity_get_rooms(global_entity)
+                            self.entity_room_map.entity_get_rooms(*global_entity)
                         {
                             if entity_rooms.iter().any(|rk| user_rooms.contains(rk)) {
                                 continue;
@@ -1832,7 +1846,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         if !send_conn
                             .base
                             .world_manager
-                            .has_global_entity(global_entity)
+                            .has_global_entity(*global_entity)
                         {
                             continue;
                         }
@@ -1841,22 +1855,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                                 .read()
                                 .expect("GlobalDiffHandler lock poisoned");
                             guard
-                                .entity_to_global_idx(global_entity)
+                                .entity_to_global_idx(*global_entity)
                                 .unwrap_or(GlobalEntityIndex::INVALID)
                         };
                         let scope_exit = self
                             .shared
                             .global_world_manager
                             .read()
-                            .entity_replication_config(global_entity)
-                            .map(|c| c.scope_exit)
-                            .unwrap_or(ScopeExit::Despawn);
+                            .entity_replication_config(*global_entity)
+                            .map_or(ScopeExit::Despawn, |c| c.scope_exit);
                         // One-shot per-(user, entity) override: firing
                         // consumes it, so the next exit follows the entity's
                         // own policy again.
                         let scope_exit = if self
                             .entity_scope_map
-                            .take_despawn_on_next_exit(&user_key, global_entity)
+                            .take_despawn_on_next_exit(user_key, *global_entity)
                         {
                             ScopeExit::Despawn
                         } else {
@@ -1864,11 +1877,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         };
                         match scope_exit {
                             ScopeExit::Persist => {
-                                send_conn.base.world_manager.pause_entity(global_entity);
+                                send_conn.base.world_manager.pause_entity(*global_entity);
                                 send_conn.clear_entity_visible(entity_idx);
                             }
                             ScopeExit::Despawn => {
-                                send_conn.base.world_manager.despawn_entity(global_entity);
+                                send_conn.base.world_manager.despawn_entity(*global_entity);
                                 send_conn.clear_entity_visible(entity_idx);
                             }
                         }
@@ -1889,7 +1902,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                             self.shared
                                 .global_entity_map
                                 .read()
-                                .global_entity_to_entity(&global_entity)
+                                .global_entity_to_entity(global_entity)
                                 .ok()
                         });
                     let Some(world_entity) = world_entity_opt else {
@@ -1899,8 +1912,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         self.apply_scope_for_user(
                             world,
                             &user_addresses,
-                            user_key,
-                            &global_entity,
+                            *user_key,
+                            global_entity,
                             &world_entity,
                             false,
                         );
@@ -1911,7 +1924,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         .shared
                         .global_entity_map
                         .read()
-                        .global_entity_to_entity(&global_entity)
+                        .global_entity_to_entity(global_entity)
                         .ok();
                     let Some(world_entity) = world_entity_opt else {
                         continue;
@@ -1919,8 +1932,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     self.apply_scope_for_user(
                         world,
                         &user_addresses,
-                        &user_key,
-                        &global_entity,
+                        user_key,
+                        global_entity,
                         &world_entity,
                         false,
                     );
@@ -1936,7 +1949,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     }
 
     /// Per-(user, entity) scope evaluator. Mirrors the body of legacy
-    /// `InternalWorldServer::apply_scope_for_user` (server/src/server/world_server.rs
+    /// `InternalWorldServer::apply_scope_for_user` (`server/src/server/world_server.rs`
     /// ~lines 3712-3894), but reads only from `SendState` + `shared` +
     /// the per-call `world` + `user_addresses` snapshot.
     ///
@@ -1955,8 +1968,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     pub(crate) fn apply_resource_scope_for_user<W: WorldRefType<E>>(
         &mut self,
         world: &W,
-        user_key: &UserKey,
-        global_entity: &GlobalEntity,
+        user_key: UserKey,
+        global_entity: GlobalEntity,
         world_entity: &E,
     ) {
         let user_addresses: HashMap<UserKey, SocketAddr> = self
@@ -1978,8 +1991,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         &mut self,
         world: &W,
         user_addresses: &HashMap<UserKey, SocketAddr>,
-        user_key: &UserKey,
-        global_entity: &GlobalEntity,
+        user_key: UserKey,
+        global_entity: GlobalEntity,
         world_entity: &E,
         is_resource: bool,
     ) {
@@ -1992,7 +2005,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 .unwrap_or(GlobalEntityIndex::INVALID)
         };
 
-        let Some(addr) = user_addresses.get(user_key).copied() else {
+        let Some(addr) = user_addresses.get(&user_key).copied() else {
             return;
         };
         let Some(send_conn) = self.send_user_connections.get_mut(&addr) else {
@@ -2021,7 +2034,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             // for next tick, but only up to `SCOPE_RETRY_MAX` times per
             // (user, entity) pair. See `SCOPE_RETRY_MAX` doc-comment
             // for the 2026-05-19 f3-saga motivation.
-            let key = (*user_key, *global_entity);
+            let key = (user_key, global_entity);
             let current = self.scope_retry_counts.get(&key).copied().unwrap_or(0);
             match scope_retry_decision(current) {
                 None => {
@@ -2038,18 +2051,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     // silent-drop defect in the consumer's entity routing.
                     debug_assert!(
                         false,
-                        "apply_scope_for_user: ScopeToggled for user={:?} \
-                         entity={:?} exhausted {} retries — entity never \
+                        "apply_scope_for_user: ScopeToggled for user={user_key:?} \
+                         entity={global_entity:?} exhausted {SCOPE_RETRY_MAX} retries — entity never \
                          appeared in the snapshot world (permanent per-peer \
                          spawn drop)",
-                        user_key, global_entity, SCOPE_RETRY_MAX,
                     );
                     warn!(
                         "apply_scope_for_user: dropping ScopeToggled for \
-                         user={:?} entity={:?} after {} retries — target \
+                         user={user_key:?} entity={global_entity:?} after {SCOPE_RETRY_MAX} retries — target \
                          world entity never became available in snapshot \
                          world. See MISSION_USER_ONLY_SEES_SIM §5 (Phase A).",
-                        user_key, global_entity, SCOPE_RETRY_MAX,
                     );
                     self.scope_retry_counts.remove(&key);
                 }
@@ -2058,7 +2069,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     self.shared
                         .scope_change_queue
                         .lock()
-                        .push_back(ScopeChange::ScopeToggled(*user_key, *global_entity, true));
+                        .push_back(ScopeChange::ScopeToggled(user_key, global_entity, true));
                 }
             }
             return;
@@ -2066,7 +2077,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         // Success path — `world.has_entity == true`. Reset the retry
         // counter for this (user, entity) pair so a future re-queue
         // starts fresh.
-        self.scope_retry_counts.remove(&(*user_key, *global_entity));
+        self.scope_retry_counts.remove(&(user_key, global_entity));
         // One `global_world_manager` read for the owner-based gates below (was
         // three separate `.read()` acquisitions + two `entity_owner` calls for
         // the same entity, here and at `server_owned_roomless_non_resource`).
@@ -2083,7 +2094,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         }
         if matches!(
             owner,
-            Some(EntityOwner::Client(_)) | Some(EntityOwner::ClientWaiting(_))
+            Some(EntityOwner::Client(_) | EntityOwner::ClientWaiting(_))
         ) {
             return;
         }
@@ -2098,7 +2109,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         let in_common_room =
             if let Some(entity_rooms) = self.entity_room_map.entity_get_rooms(global_entity) {
                 // user.room_keys() ↔ user_room_map
-                let user_rooms = self.user_room_map.get(user_key);
+                let user_rooms = self.user_room_map.get(&user_key);
                 match user_rooms {
                     Some(user_rooms) => entity_rooms.intersection(user_rooms).next().is_some(),
                     None => false,
@@ -2112,7 +2123,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             .entity_get_rooms(global_entity)
             .is_none();
         let server_owned_roomless_non_resource =
-            owner.map(|o| o.is_server()).unwrap_or(false) && !is_resource && entity_is_roomless;
+            owner.is_some_and(|o| o.is_server()) && !is_resource && entity_is_roomless;
         let should_be_in_scope = match explicit {
             Some(true) if server_owned_roomless_non_resource => false,
             Some(in_scope) => in_scope,
@@ -2202,8 +2213,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 .global_world_manager
                 .read()
                 .entity_replication_config(global_entity)
-                .map(|c| c.scope_exit)
-                .unwrap_or(ScopeExit::Despawn);
+                .map_or(ScopeExit::Despawn, |c| c.scope_exit);
             // One-shot per-(user, entity) override: firing consumes it, so
             // the next exit follows the entity's own policy again.
             let scope_exit = if self
@@ -2224,7 +2234,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     send_conn.clear_entity_visible(entity_idx);
                 }
             }
-            if let Some(layer) = self.user_priorities.get_mut(user_key) {
+            if let Some(layer) = self.user_priorities.get_mut(&user_key) {
                 layer.on_scope_exit(world_entity);
             }
         }
@@ -2280,7 +2290,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             .shared
             .global_world_manager
             .read()
-            .has_component_record(&global_entity, &component_kind)
+            .has_component_record(global_entity, &component_kind)
         {
             warn!(
                 "Attempted to add component `{:?}` to entity `{:?}` that already has it, this can happen if a delegated entity's auth is transferred to the Server before the Server Adapter has been able to process the newly inserted Component. Skipping this action.",
@@ -2299,26 +2309,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         self.shared
             .global_world_manager
             .write()
-            .insert_component_record(&global_entity, &component_kind);
+            .insert_component_record(global_entity, &component_kind);
         self.shared
             .global_world_manager
             .write()
-            .insert_component_diff_handler(&self.shared.component_kinds, &global_entity, component);
+            .insert_component_diff_handler(&self.shared.component_kinds, global_entity, component);
 
         // Inlined `insert_new_component_into_entity_scopes(.., None)`:
         // add component to connections already tracking entity.
-        for (_addr, send_conn) in self.send_user_connections.iter_mut() {
+        for send_conn in self.send_user_connections.values_mut() {
             let has_entity = send_conn
                 .base
                 .world_manager
-                .has_global_entity(&global_entity);
+                .has_global_entity(global_entity);
             if !has_entity {
                 continue;
             }
             send_conn
                 .base
                 .world_manager
-                .insert_component(&global_entity, &component_kind);
+                .insert_component(global_entity, component_kind);
         }
 
         // if entity is delegated, convert over
@@ -2326,14 +2336,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             .shared
             .global_world_manager
             .read()
-            .entity_is_delegated(&global_entity)
+            .entity_is_delegated(global_entity)
         {
             let accessor = self
                 .shared
                 .global_world_manager
                 .read()
-                .get_entity_auth_accessor(&global_entity);
-            component.enable_delegation(&accessor, None)
+                .get_entity_auth_accessor(global_entity);
+            component.enable_delegation(&accessor, None);
         }
     }
 
@@ -2352,29 +2362,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             .unwrap();
 
         // Inlined `remove_component_from_all_connections`.
-        for (_, send_conn) in self.send_user_connections.iter_mut() {
+        for send_conn in self.send_user_connections.values_mut() {
             if !send_conn
                 .base
                 .world_manager
-                .has_global_entity(&global_entity)
+                .has_global_entity(global_entity)
             {
                 continue;
             }
             send_conn
                 .base
                 .world_manager
-                .remove_component(&global_entity, component_kind);
+                .remove_component(global_entity, *component_kind);
         }
 
         // cleanup all other loose ends
         self.shared
             .global_world_manager
             .write()
-            .remove_component_record(&global_entity, component_kind);
+            .remove_component_record(global_entity, component_kind);
         self.shared
             .global_world_manager
             .write()
-            .remove_component_diff_handler(&global_entity, component_kind);
+            .remove_component_diff_handler(global_entity, component_kind);
     }
 
     /// Pipeline-mode `despawn_entity_worldless`. Byte-for-byte mirror of
@@ -2415,35 +2425,35 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         self.scope_checks_cache.on_entity_despawned(*world_entity);
 
         // Inlined `cleanup_entity_replication`.
-        self.despawn_entity_from_all_connections(&global_entity);
-        self.entity_scope_map.remove_entity(&global_entity);
-        if let Some(room_keys) = self.entity_room_map.remove_from_all_rooms(&global_entity) {
+        self.despawn_entity_from_all_connections(global_entity);
+        self.entity_scope_map.remove_entity(global_entity);
+        if let Some(room_keys) = self.entity_room_map.remove_from_all_rooms(global_entity) {
             for room_key in room_keys {
-                if let Some(room) = sim_handle.room_store.get_mut(&room_key) {
-                    room.remove_entity(&global_entity, true);
+                if let Some(room) = sim_handle.room_store.get_mut(room_key) {
+                    room.remove_entity(global_entity, true);
                 }
             }
         }
         self.shared
             .global_world_manager
             .write()
-            .remove_entity_diff_handlers(&global_entity);
+            .remove_entity_diff_handlers(global_entity);
 
         self.shared
             .global_world_manager
             .write()
-            .remove_entity_record(&global_entity);
+            .remove_entity_record(global_entity);
         self.shared
             .global_entity_map
             .write()
-            .despawn_by_global(&global_entity);
+            .despawn_by_global(global_entity);
     }
 
     /// Inlined `InternalWorldServer::despawn_entity_from_all_connections`
     /// (`world_server.rs:2199`). Resolves the global idx, clears
     /// `idx_to_world`, and despawns the entity from every connection that
     /// has it in scope.
-    fn despawn_entity_from_all_connections(&mut self, global_entity: &GlobalEntity) {
+    fn despawn_entity_from_all_connections(&mut self, global_entity: GlobalEntity) {
         let entity_idx = {
             let handler = self.shared.global_world_manager.read().diff_handler();
             let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
@@ -2454,7 +2464,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         if entity_idx.is_valid() {
             self.shared.set_idx_to_world(entity_idx, None);
         }
-        for (_, send_conn) in self.send_user_connections.iter_mut() {
+        for send_conn in self.send_user_connections.values_mut() {
             if !send_conn
                 .base
                 .world_manager
@@ -2482,8 +2492,8 @@ struct SendStatePriorityHook<'a, E: Copy + Eq + Hash + Send + Sync> {
     converter: &'a GlobalEntityMap<E>,
 }
 
-impl<'a, E: Copy + Eq + Hash + Send + Sync> OutgoingPriorityHook for SendStatePriorityHook<'a, E> {
-    fn advance(&mut self, entity: &GlobalEntity) -> f32 {
+impl<E: Copy + Eq + Hash + Send + Sync> OutgoingPriorityHook for SendStatePriorityHook<'_, E> {
+    fn advance(&mut self, entity: GlobalEntity) -> f32 {
         let Ok(world_entity) = self.converter.global_entity_to_entity(entity) else {
             return 0.0;
         };
@@ -2492,7 +2502,7 @@ impl<'a, E: Copy + Eq + Hash + Send + Sync> OutgoingPriorityHook for SendStatePr
         self.user.advance(world_entity, g * u)
     }
 
-    fn reset_after_send(&mut self, entity: &GlobalEntity, current_tick: u32) {
+    fn reset_after_send(&mut self, entity: GlobalEntity, current_tick: u32) {
         let Ok(world_entity) = self.converter.global_entity_to_entity(entity) else {
             return;
         };
@@ -2504,7 +2514,7 @@ impl<'a, E: Copy + Eq + Hash + Send + Sync> OutgoingPriorityHook for SendStatePr
 // (UDP and local transports) are Send. The HashMap fields are owned
 // outright. UserPriorityState contains POD numeric state.
 
-/// Phase A of MISSION_USER_ONLY_SEES_SIM (2026-05-19) — pure decision
+/// Phase A of `MISSION_USER_ONLY_SEES_SIM` (2026-05-19) — pure decision
 /// helper for the bounded `ScopeToggled` re-queue counter, factored
 /// out of [`SendState::apply_scope_for_user`] so the increment /
 /// exhaustion semantics can be unit-tested without fabricating a full
@@ -2524,7 +2534,7 @@ pub(crate) fn scope_retry_decision(current: u8) -> Option<u8> {
     }
 }
 
-/// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — drain the
+/// `MISSION_USER_ONLY_SEES_SIM` Phase D.2.2 (2026-05-19) — drain the
 /// `pending_world_hooks` queue on `shared`, applying each deferred
 /// World-side hook op onto `world`.
 ///

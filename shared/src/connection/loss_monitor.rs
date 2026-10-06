@@ -20,6 +20,7 @@ impl Default for LossMonitor {
 
 impl LossMonitor {
     /// Creates a new `LossMonitor` with a zeroed sliding window.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             outcomes: [false; WINDOW],
@@ -57,6 +58,7 @@ impl LossMonitor {
 
     /// Fraction of tracked packets that were lost (0.0–1.0).
     /// Returns 0.0 if no packets have been tracked yet.
+    #[must_use]
     pub fn packet_loss_pct(&self) -> f32 {
         if self.total == 0 {
             return 0.0;

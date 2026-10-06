@@ -54,7 +54,7 @@ impl PingManager {
             match self.sent_pings.remove(ping_index) {
                 None => {}
                 Some(game_instant) => {
-                    let rtt_millis = time_manager.game_time_since(&game_instant).as_millis();
+                    let rtt_millis = time_manager.game_time_since(game_instant).as_millis();
                     self.process_new_rtt(rtt_millis);
                 }
             }
@@ -82,18 +82,21 @@ impl PingManager {
         sorted[..count].copy_from_slice(&self.rtt_ring[..count]);
         sorted[..count].sort_unstable();
         let idx = ((pct * (count - 1)) / 100).min(count - 1);
-        sorted[idx] as f32
+        f32::from(sorted[idx])
     }
 
     /// Recompute rtt/jitter estimations
     fn process_new_rtt(&mut self, rtt_millis: u32) {
-        let rtt_millis_f32 = rtt_millis as f32;
+        // Saturate at u16::MAX (≈65s, adequate for any real RTT); the u16
+        // sample converts to f32 losslessly, unlike a direct `u32 as f32`.
+        let sample = u16::try_from(rtt_millis.min(u32::from(u16::MAX)))
+            .expect("RTT sample clamped to u16 range");
+        let rtt_millis_f32 = f32::from(sample);
         let new_jitter = ((rtt_millis_f32 - self.rtt_average) / 2.0).abs();
         self.jitter_average = (0.9 * self.jitter_average) + (0.1 * new_jitter);
         self.rtt_average = (0.9 * self.rtt_average) + (0.1 * rtt_millis_f32);
 
-        // Update ring buffer (saturate at u16::MAX ≈ 65s, adequate for any real RTT).
-        let sample = rtt_millis.min(u16::MAX as u32) as u16;
+        // Update ring buffer with the saturated sample above.
         if self.rtt_ring_count < RTT_RING_SIZE {
             self.rtt_ring[self.rtt_ring_count] = sample;
             self.rtt_ring_count += 1;

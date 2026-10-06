@@ -5,7 +5,7 @@ use naia_shared::{link_condition_logic, Instant, LinkConditionerConfig, TimeQueu
 use super::{PacketReceiver, RecvError};
 
 /// Used to receive packets from the Server Socket with link conditioning
-/// Works with any PacketReceiver implementation (UDP, local, etc.)
+/// Works with any `PacketReceiver` implementation (UDP, local, etc.)
 #[derive(Clone)]
 pub struct ConditionedPacketReceiver {
     inner_receiver: Box<dyn PacketReceiver>,
@@ -15,7 +15,8 @@ pub struct ConditionedPacketReceiver {
 }
 
 impl ConditionedPacketReceiver {
-    /// Creates a new ConditionedPacketReceiver
+    /// Creates a new `ConditionedPacketReceiver`
+    #[must_use]
     pub fn new(
         inner_receiver: Box<dyn PacketReceiver>,
         link_conditioner_config: &LinkConditionerConfig,

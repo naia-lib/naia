@@ -93,12 +93,12 @@ impl RecvConnection {
 
     /// Drain tick-buffered messages received from this user for `tick` into
     /// the shared `TickBufferMessages` accumulator (recv-only).
-    pub fn tick_buffer_messages(&mut self, tick: &Tick, messages: &mut TickBufferMessages) {
+    pub fn tick_buffer_messages(&mut self, tick: Tick, messages: &mut TickBufferMessages) {
         let user_key = self.user_key;
         let channel_messages = self.tick_buffer.receive_messages(tick);
         for (channel_kind, received_messages) in channel_messages {
             for message in received_messages {
-                messages.push_message(&user_key, &channel_kind, message);
+                messages.push_message(user_key, &channel_kind, message);
             }
         }
     }

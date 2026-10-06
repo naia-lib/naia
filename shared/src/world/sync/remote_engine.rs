@@ -18,7 +18,7 @@
 //! 2. **Local ordering** – relies on per‑channel state machines to decide
 //!    *when* a message is safe to surface; glues their outputs into a
 //!    single, ready‑to‑apply Vec.
-//! 3. **Zero HoLB guarantee** – because messages for unrelated entities
+//! 3. **Zero `HoLB` guarantee** – because messages for unrelated entities
 //!    never share the same queue, one delayed entity cannot stall others.
 //!
 //! ## API contracts
@@ -90,7 +90,7 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
 
         // If the entity channel does not exist, create it
         if !self.entity_channels.contains_key(&entity) {
-            self.insert_entity_channel(entity, RemoteEntityChannel::new(self.host_type))
+            self.insert_entity_channel(entity, RemoteEntityChannel::new(self.host_type));
         }
         let entity_channel = self.entity_channels.get_mut(&entity).unwrap();
 
@@ -114,19 +114,17 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
     }
 
     pub fn send_auth_command(&mut self, entity: E, command: EntityCommand) {
-        if !self.entity_channels.contains_key(&entity) {
-            panic!(
-                "Cannot send a command to an entity that does not exist in the engine: {:?}",
-                entity
-            );
-        }
+        assert!(
+            self.entity_channels.contains_key(&entity),
+            "Cannot send a command to an entity that does not exist in the engine: {entity:?}"
+        );
 
         let entity_channel = self.entity_channels.get_mut(&entity).unwrap();
         entity_channel.send_command(command);
         entity_channel.drain_outgoing_messages_into(&mut self.outgoing_commands);
     }
 
-    /// Update authority status in RemoteEntityChannel's AuthChannel (used after migration)
+    /// Update authority status in `RemoteEntityChannel`'s `AuthChannel` (used after migration)
     pub fn receive_set_auth_status(&mut self, entity: E, auth_status: EntityAuthStatus) {
         if let Some(channel) = self.entity_channels.get_mut(&entity) {
             channel.update_auth_status(auth_status);
@@ -137,16 +135,14 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
     pub fn get_entity_auth_status(&self, entity: &E) -> Option<EntityAuthStatus> {
         self.entity_channels
             .get(entity)
-            .and_then(|channel| channel.auth_status())
+            .and_then(super::remote_entity_channel::RemoteEntityChannel::auth_status)
     }
 
     pub fn send_entity_command(&mut self, entity: E, command: EntityCommand) {
-        if !self.entity_channels.contains_key(&entity) {
-            panic!(
-                "Cannot send a command to an entity that does not exist in the engine: {:?}",
-                entity
-            );
-        }
+        assert!(
+            self.entity_channels.contains_key(&entity),
+            "Cannot send a command to an entity that does not exist in the engine: {entity:?}"
+        );
 
         // Handle entity commands for RemoteEngine
         match command {
@@ -174,7 +170,7 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
 
     /// Queues a `Despawn` command for transmission to the server — called only from the
     /// intentional authority-held despawn path. MUST NOT be called during connection cleanup
-    /// (e.g. disable_delegation), which uses `send_entity_command` for local-only teardown.
+    /// (e.g. `disable_delegation`), which uses `send_entity_command` for local-only teardown.
     pub(crate) fn push_outgoing_despawn(&mut self, command: EntityCommand) {
         self.outgoing_commands.push(command);
     }
@@ -186,12 +182,11 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
     }
 
     pub(crate) fn insert_entity_channel(&mut self, entity: E, channel: RemoteEntityChannel) {
-        if self.entity_channels.contains_key(&entity) {
-            panic!(
-                "Cannot insert entity channel that already exists for entity: {:?}",
-                entity
-            );
-        }
+        assert!(
+            !self.entity_channels.contains_key(&entity),
+            "Cannot insert entity channel that already exists for entity: {entity:?}"
+        );
+
         self.entity_channels.insert(entity, channel);
     }
 
@@ -212,7 +207,7 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
 }
 
 impl InScopeEntities<RemoteEntity> for RemoteEngine<RemoteEntity> {
-    fn has_entity(&self, entity: &RemoteEntity) -> bool {
-        self.get_world().contains_key(entity)
+    fn has_entity(&self, entity: RemoteEntity) -> bool {
+        self.get_world().contains_key(&entity)
     }
 }

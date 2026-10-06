@@ -8,7 +8,7 @@ use crate::{ComponentKind, ComponentKinds};
 /// A Resource type `R` is registered via `Protocol::add_resource::<R>()`,
 /// which:
 /// 1. Calls `component_kinds.add_component::<R>()` to allocate a normal
-///    `ComponentKind` + NetId for `R`. Resources reuse the component wire
+///    `ComponentKind` + `NetId` for `R`. Resources reuse the component wire
 ///    encoding 100% — they ARE components, just on a hidden singleton
 ///    entity.
 /// 2. Records the resulting `ComponentKind` in this table so the receiver
@@ -22,15 +22,16 @@ use crate::{ComponentKind, ComponentKinds};
 #[derive(Clone, Default)]
 pub struct ResourceKinds {
     kinds: HashSet<ComponentKind>,
-    /// Type-id index for O(1) `kind_for::<R>()` lookups without a HashMap
-    /// allocation churn at registration time. Mirrors the (TypeId →
-    /// ComponentKind) relationship that `ComponentKind::of::<R>()`
-    /// already provides via TypeId equality, so this is informational.
+    /// Type-id index for O(1) `kind_for::<R>()` lookups without a `HashMap`
+    /// allocation churn at registration time. Mirrors the (`TypeId` →
+    /// `ComponentKind`) relationship that `ComponentKind::of::<R>()`
+    /// already provides via `TypeId` equality, so this is informational.
     type_ids: HashSet<TypeId>,
 }
 
 impl ResourceKinds {
     /// Creates an empty `ResourceKinds` table.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -48,8 +49,9 @@ impl ResourceKinds {
     }
 
     /// O(1) — is the given `ComponentKind` a registered resource?
-    pub fn is_resource(&self, kind: &ComponentKind) -> bool {
-        self.kinds.contains(kind)
+    #[must_use]
+    pub fn is_resource(&self, kind: ComponentKind) -> bool {
+        self.kinds.contains(&kind)
     }
 
     /// Return the `ComponentKind` registered for `R`, or `None` if `R`
@@ -58,6 +60,7 @@ impl ResourceKinds {
     /// Implementation note: `ComponentKind` is `TypeId`-keyed
     /// (`shared/src/world/component/component_kinds.rs:53`), so we
     /// construct the kind from `R`'s `TypeId` and check membership.
+    #[must_use]
     pub fn kind_for<R: 'static>(&self) -> Option<ComponentKind> {
         let kind = ComponentKind::from(TypeId::of::<R>());
         if self.kinds.contains(&kind) {
@@ -68,11 +71,13 @@ impl ResourceKinds {
     }
 
     /// Number of registered resource kinds.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.kinds.len()
     }
 
     /// Returns `true` if no resource kinds have been registered.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.kinds.is_empty()
     }
@@ -93,13 +98,22 @@ impl ResourceKinds {
     /// `Protocol::add_resource`, which calls `add_component` first); a kind
     /// missing there is a broken registration invariant, not a remote input,
     /// and panics.
+    ///
+    ///
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: every Replicated Resource must be registered as a component first.
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: every Replicated Resource must be registered as a component first.
+    #[must_use]
     pub fn member_net_ids(&self, components: &ComponentKinds) -> Vec<u16> {
         let mut ids: Vec<u16> = self
             .kinds
             .iter()
             .map(|kind| {
                 components
-                    .net_id_of(kind)
+                    .net_id_of(*kind)
                     .expect("every Replicated Resource must be registered as a component first")
             })
             .collect();
@@ -134,7 +148,7 @@ mod tests {
     #[test]
     fn unregistered_kind_is_not_resource() {
         let rk = ResourceKinds::new();
-        assert!(!rk.is_resource(&kind_from("a")));
+        assert!(!rk.is_resource(kind_from("a")));
         assert_eq!(rk.len(), 0);
     }
 
@@ -149,8 +163,8 @@ mod tests {
         rk.kinds.insert(k);
         rk.type_ids.insert(TypeId::of::<u8>());
 
-        assert!(rk.is_resource(&k));
-        assert!(!rk.is_resource(&kind_from("b")));
+        assert!(rk.is_resource(k));
+        assert!(!rk.is_resource(kind_from("b")));
         assert_eq!(rk.len(), 1);
     }
 }

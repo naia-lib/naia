@@ -24,7 +24,7 @@ impl RequestSender {
     /// Creates a new `RequestSender` with a 60-second local-ID recycle window.
     pub fn new() -> Self {
         Self {
-            local_key_generator: KeyGenerator::new(Duration::from_secs(60)),
+            local_key_generator: KeyGenerator::new(Duration::from_mins(1)),
             local_to_global_ids: HashMap::new(),
             local_to_nonce: HashMap::new(),
         }
@@ -68,21 +68,21 @@ impl RequestSender {
 
     pub(crate) fn process_incoming_response(
         &mut self,
-        local_request_id: &LocalRequestId,
+        local_request_id: LocalRequestId,
         wire_nonce: ConnectionRequestNonce,
     ) -> Option<GlobalRequestId> {
         // Both halves must name the outstanding exchange. A foreign nonce
         // recycles nothing: the exchange stays live so the real response
         // still resolves, and the packet drops on the unknown-id path.
         match (
-            self.local_to_global_ids.get(local_request_id),
-            self.local_to_nonce.get(local_request_id),
+            self.local_to_global_ids.get(&local_request_id),
+            self.local_to_nonce.get(&local_request_id),
         ) {
             (Some(global), Some(recorded)) if *recorded == wire_nonce => {
                 let global = *global;
-                self.local_key_generator.recycle_key(local_request_id);
-                self.local_to_global_ids.remove(local_request_id);
-                self.local_to_nonce.remove(local_request_id);
+                self.local_key_generator.recycle_key(&local_request_id);
+                self.local_to_global_ids.remove(&local_request_id);
+                self.local_to_nonce.remove(&local_request_id);
                 Some(global)
             }
             _ => None,
@@ -101,6 +101,7 @@ pub struct RequestOrResponse {
 
 impl RequestOrResponse {
     /// Wraps `bytes` as a request tagged with `id` and `nonce`.
+    #[must_use]
     pub fn request(id: LocalRequestId, nonce: ConnectionRequestNonce, bytes: Box<[u8]>) -> Self {
         Self {
             id: id.to_req_res_id(),
@@ -110,6 +111,7 @@ impl RequestOrResponse {
     }
 
     /// Wraps `bytes` as a response tagged with `id` and `nonce`.
+    #[must_use]
     pub fn response(id: LocalResponseId, nonce: ConnectionRequestNonce, bytes: Box<[u8]>) -> Self {
         Self {
             id: id.to_req_res_id(),
@@ -137,6 +139,7 @@ pub enum LocalRequestOrResponseId {
 
 impl LocalRequestOrResponseId {
     /// Returns `true` if this ID represents a request.
+    #[must_use]
     pub fn is_request(&self) -> bool {
         match self {
             LocalRequestOrResponseId::Request(_) => true,
@@ -145,6 +148,7 @@ impl LocalRequestOrResponseId {
     }
 
     /// Returns `true` if this ID represents a response.
+    #[must_use]
     pub fn is_response(&self) -> bool {
         match self {
             LocalRequestOrResponseId::Request(_) => false,
@@ -153,6 +157,15 @@ impl LocalRequestOrResponseId {
     }
 
     /// Returns the inner `LocalRequestId`. Panics if this is a response.
+    ///
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `LocalRequestOrResponseId` is a response.
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `LocalRequestOrResponseId` is a response.
+    #[must_use]
     pub fn to_request_id(&self) -> LocalRequestId {
         match self {
             LocalRequestOrResponseId::Request(id) => *id,
@@ -163,6 +176,11 @@ impl LocalRequestOrResponseId {
     }
 
     /// Returns the inner `LocalResponseId`. Panics if this is a request.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `LocalRequestOrResponseId` is a request.
+    #[must_use]
     pub fn to_response_id(&self) -> LocalResponseId {
         match self {
             LocalRequestOrResponseId::Request(_) => panic!("LocalRequestOrResponseId is a request"),
@@ -180,11 +198,13 @@ pub struct LocalRequestId {
 impl LocalRequestId {
     /// Wraps `self` as a `LocalRequestOrResponseId::Request`.
     #[allow(clippy::wrong_self_convention)]
+    #[must_use]
     pub fn to_req_res_id(&self) -> LocalRequestOrResponseId {
         LocalRequestOrResponseId::Request(*self)
     }
 
     /// Returns the `LocalResponseId` that the remote will use when replying to this request.
+    #[must_use]
     pub fn receive_from_remote(&self) -> LocalResponseId {
         LocalResponseId { id: self.id }
     }
@@ -198,7 +218,7 @@ impl From<u16> for LocalRequestId {
 
 impl From<LocalRequestId> for u16 {
     fn from(val: LocalRequestId) -> Self {
-        val.id as u16
+        u16::from(val.id)
     }
 }
 
@@ -211,11 +231,13 @@ pub struct LocalResponseId {
 impl LocalResponseId {
     /// Wraps `self` as a `LocalRequestOrResponseId::Response`.
     #[allow(clippy::wrong_self_convention)]
+    #[must_use]
     pub fn to_req_res_id(&self) -> LocalRequestOrResponseId {
         LocalRequestOrResponseId::Response(*self)
     }
 
     /// Returns the `LocalRequestId` that the remote assigned to the request this response answers.
+    #[must_use]
     pub fn receive_from_remote(&self) -> LocalRequestId {
         LocalRequestId { id: self.id }
     }
@@ -305,7 +327,7 @@ mod request_sender_tests {
 
         // Exact (id, nonce) match resolves to the global id.
         assert_eq!(
-            sender.process_incoming_response(&local_request_id, nonce),
+            sender.process_incoming_response(local_request_id, nonce),
             Some(global_id)
         );
     }
@@ -330,12 +352,12 @@ mod request_sender_tests {
         // not resolve the outstanding exchange.
         assert_eq!(
             sender
-                .process_incoming_response(&local_request_id, ConnectionRequestNonce::from_wire(8)),
+                .process_incoming_response(local_request_id, ConnectionRequestNonce::from_wire(8)),
             None
         );
         // The outstanding exchange survives the drop and still resolves.
         assert_eq!(
-            sender.process_incoming_response(&local_request_id, nonce),
+            sender.process_incoming_response(local_request_id, nonce),
             Some(GlobalRequestId::new(11))
         );
     }

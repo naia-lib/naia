@@ -5,7 +5,7 @@
 //! send on independent threads, so the two halves are now separate
 //! structs owned by `RecvState` and `SendState` respectively.
 
-use std::{net::SocketAddr, panic, time::Duration};
+use std::{net::SocketAddr, time::Duration};
 
 use naia_shared::{CompressionConfig, Decoder, Encoder, OutgoingPacket, OwnedBitReader};
 
@@ -39,19 +39,21 @@ pub struct SendIo {
 /// Construct a fresh recv/send pair from the bandwidth + compression config.
 /// Replaces the old `Io::new` (which returned a single combined struct).
 pub fn new_io_pair(
-    bandwidth_measure_duration: &Option<Duration>,
-    compression_config: &Option<CompressionConfig>,
+    bandwidth_measure_duration: Option<&Duration>,
+    compression_config: Option<&CompressionConfig>,
 ) -> (RecvIo, SendIo) {
-    let outgoing_bandwidth_monitor = bandwidth_measure_duration.map(BandwidthMonitor::new);
-    let incoming_bandwidth_monitor = bandwidth_measure_duration.map(BandwidthMonitor::new);
+    let outgoing_bandwidth_monitor =
+        bandwidth_measure_duration.map(|duration| BandwidthMonitor::new(*duration));
+    let incoming_bandwidth_monitor =
+        bandwidth_measure_duration.map(|duration| BandwidthMonitor::new(*duration));
 
-    let outgoing_encoder = compression_config.as_ref().and_then(|config| {
+    let outgoing_encoder = compression_config.and_then(|config| {
         config
             .server_to_client
             .as_ref()
             .map(|mode| Encoder::new(mode.clone()))
     });
-    let incoming_decoder = compression_config.as_ref().and_then(|config| {
+    let incoming_decoder = compression_config.and_then(|config| {
         config
             .client_to_server
             .as_ref()
@@ -74,9 +76,10 @@ pub fn new_io_pair(
 
 impl RecvIo {
     pub fn load(&mut self, packet_receiver: Box<dyn PacketReceiver>) {
-        if self.packet_receiver.is_some() {
-            panic!("Packet receiver already loaded! Cannot do this twice!");
-        }
+        assert!(
+            self.packet_receiver.is_none(),
+            "Packet receiver already loaded! Cannot do this twice!"
+        );
         self.packet_receiver = Some(packet_receiver);
     }
 
@@ -150,9 +153,10 @@ impl RecvIo {
 
 impl SendIo {
     pub fn load(&mut self, packet_sender: Box<dyn PacketSender>) {
-        if self.packet_sender.is_some() {
-            panic!("Packet sender already loaded! Cannot do this twice!");
-        }
+        assert!(
+            self.packet_sender.is_none(),
+            "Packet sender already loaded! Cannot do this twice!"
+        );
         self.packet_sender = Some(packet_sender);
     }
 
@@ -161,16 +165,17 @@ impl SendIo {
     }
 
     pub fn sender_cloned(&self) -> Box<dyn PacketSender> {
-        if self.packet_sender.is_none() {
-            panic!("Cannot call Server.sender_cloned() until you call Server.listen()!");
-        }
+        assert!(
+            self.packet_sender.is_some(),
+            "Cannot call Server.sender_cloned() until you call Server.listen()!"
+        );
         self.packet_sender.as_ref().unwrap().clone()
     }
 
     pub fn send_packet(
         &mut self,
         address: &SocketAddr,
-        packet: OutgoingPacket,
+        packet: &OutgoingPacket,
     ) -> Result<(), NaiaServerError> {
         let mut payload = packet.slice();
 

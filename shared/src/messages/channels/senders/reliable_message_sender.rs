@@ -76,7 +76,7 @@ impl ChannelSender<MessageContainer> for ReliableMessageSender {
         self.reliable_sender.send_message(message)
     }
 
-    fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
+    fn collect_messages(&mut self, now: &Instant, rtt_millis: f32) {
         self.reliable_sender.collect_messages(now, rtt_millis);
     }
 
@@ -84,7 +84,7 @@ impl ChannelSender<MessageContainer> for ReliableMessageSender {
         self.reliable_sender.has_messages()
     }
 
-    fn notify_message_delivered(&mut self, message_index: &MessageIndex) {
+    fn notify_message_delivered(&mut self, message_index: MessageIndex) {
         self.reliable_sender.notify_message_delivered(message_index);
     }
 }
@@ -150,7 +150,7 @@ impl MessageChannelSender for ReliableMessageSender {
 
     fn process_incoming_response(
         &mut self,
-        local_request_id: &LocalRequestId,
+        local_request_id: LocalRequestId,
         wire_nonce: ConnectionRequestNonce,
     ) -> Option<GlobalRequestId> {
         self.request_sender

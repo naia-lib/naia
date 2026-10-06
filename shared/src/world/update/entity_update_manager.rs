@@ -11,7 +11,7 @@ use crate::{
     GlobalWorldManagerType, WorldRefType,
 };
 
-/// Per-user diff-state accessor (MISSION_TICK_FLOOR Lever 3 / L3 send-state
+/// Per-user diff-state accessor (`MISSION_TICK_FLOOR` Lever 3 / L3 send-state
 /// seam). The inline `UserDiffHandler` it used to own now lives behind an
 /// `Arc<ReplicationLedger>` (RwLock-guarded, `&self`-atomic), so the diff-state
 /// is `Arc`-shareable and the drop path re-sets masks atomically without a
@@ -49,13 +49,12 @@ impl EntityUpdateManager {
         mut updatable_world: HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
         updatable_world.retain(|global_entity, component_kinds| {
-            if !global_world_manager.entity_is_replicating(global_entity) {
+            if !global_world_manager.entity_is_replicating(*global_entity) {
                 return false;
             }
-            let Ok(world_entity) = converter.global_entity_to_entity(global_entity) else {
+            let Ok(world_entity) = converter.global_entity_to_entity(*global_entity) else {
                 panic!(
-                    "World Channel: cannot convert global entity ({:?}) to world entity",
-                    global_entity
+                    "World Channel: cannot convert global entity ({global_entity:?}) to world entity"
                 )
             };
             if !world.has_entity(&world_entity) {
@@ -63,8 +62,8 @@ impl EntityUpdateManager {
             }
 
             component_kinds.retain(|kind| {
-                let has_component = world.has_component_of_kind(&world_entity, kind);
-                let diff_mask_clear = self.ledger.diff_mask_is_clear(global_entity, kind);
+                let has_component = world.has_component_of_kind(&world_entity, *kind);
+                let diff_mask_clear = self.ledger.diff_mask_is_clear(*global_entity, *kind);
                 has_component && !diff_mask_clear
             });
             !component_kinds.is_empty()
@@ -76,31 +75,31 @@ impl EntityUpdateManager {
 
     pub fn diff_handler_has_component(
         &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        entity: GlobalEntity,
+        component_kind: ComponentKind,
     ) -> bool {
         self.ledger.has_component(entity, component_kind)
     }
 
     pub fn or_diff_mask(
         &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        entity: GlobalEntity,
+        component_kind: ComponentKind,
         new_diff_mask: &DiffMask,
     ) {
         self.ledger
             .or_diff_mask(entity, component_kind, new_diff_mask);
     }
 
-    pub fn get_diff_mask(&self, entity: &GlobalEntity, component_kind: &ComponentKind) -> DiffMask {
+    pub fn get_diff_mask(&self, entity: GlobalEntity, component_kind: ComponentKind) -> DiffMask {
         self.ledger.diff_mask_snapshot(entity, component_kind)
     }
 
-    pub fn clear_diff_mask(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn clear_diff_mask(&self, entity: GlobalEntity, component_kind: ComponentKind) {
         self.ledger.clear_diff_mask(entity, component_kind);
     }
 
-    pub fn register_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn register_component(&mut self, entity: GlobalEntity, component_kind: ComponentKind) {
         self.ledger
             .register_component(&self.address, entity, component_kind);
     }
@@ -108,40 +107,36 @@ impl EntityUpdateManager {
     /// Forces a full-state update for `(entity, component_kind)` by setting
     /// every dirty bit on its receiver. Used at authority-grant time: see
     /// `UserDiffHandler::mark_receiver_fully_dirty`.
-    pub fn mark_component_fully_dirty(
-        &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
-    ) {
+    pub fn mark_component_fully_dirty(&self, entity: GlobalEntity, component_kind: ComponentKind) {
         self.ledger
             .mark_receiver_fully_dirty(entity, component_kind);
     }
 
-    pub fn deregister_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn deregister_component(&mut self, entity: GlobalEntity, component_kind: ComponentKind) {
         self.ledger.deregister_component(entity, component_kind);
     }
 
     /// Marks the receiver for `(entity, component_kind)` as delivered.
     /// Called when the spawn/insert-component ACK arrives, enabling the
     /// Phase 3 fast-path single-lookup check in `is_receiver_dirty_and_delivered`.
-    pub fn mark_component_delivered(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn mark_component_delivered(&self, entity: GlobalEntity, component_kind: ComponentKind) {
         self.ledger.mark_receiver_delivered(entity, component_kind);
     }
 
-    /// Phase 3 fast-path: single HashMap lookup that returns `true` iff the
+    /// Phase 3 fast-path: single `HashMap` lookup that returns `true` iff the
     /// component has pending dirty bits AND its spawn was delivered. Replaces the
-    /// 6+ HashMap chain of `is_component_updatable_for_entity` in steady state.
+    /// 6+ `HashMap` chain of `is_component_updatable_for_entity` in steady state.
     pub fn is_component_dirty_and_delivered(
         &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        entity: GlobalEntity,
+        component_kind: ComponentKind,
     ) -> bool {
         self.ledger
             .is_receiver_dirty_and_delivered(entity, component_kind)
     }
 
-    /// Hot-path version: no GlobalEntity→idx resolution, no RwLock.
-    /// Called from Phase 3 inner loop which already has entity_idx + kind_bit.
+    /// Hot-path version: no GlobalEntity→idx resolution, no `RwLock`.
+    /// Called from Phase 3 inner loop which already has `entity_idx` + `kind_bit`.
     pub fn is_component_dirty_and_delivered_fast(
         &self,
         entity_idx: GlobalEntityIndex,
@@ -181,15 +176,11 @@ impl EntityUpdateManager {
         self.ledger.dirty_receiver_candidates()
     }
 
-    pub fn diff_mask_is_clear(
-        &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
-    ) -> bool {
+    pub fn diff_mask_is_clear(&self, entity: GlobalEntity, component_kind: ComponentKind) -> bool {
         self.ledger.diff_mask_is_clear(entity, component_kind)
     }
 
-    /// MISSION_TICK_FLOOR Lever 3: clear the live per-user diff mask up-front
+    /// `MISSION_TICK_FLOOR` Lever 3: clear the live per-user diff mask up-front
     /// (compact-key). Called from `prepare_send_job` after the frozen
     /// mask has been captured into the plan.
     pub fn clear_diff_mask_fast(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) {

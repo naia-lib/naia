@@ -36,12 +36,13 @@ pub enum EntityCommand {
     ReleaseAuthority(Option<SubCommandId>, GlobalEntity),
     /// Client acknowledges that delegation has been enabled.
     EnableDelegationResponse(Option<SubCommandId>, GlobalEntity),
-    /// Server notifies that an entity has migrated from remote to host (subid, global, old_remote, new_host).
+    /// Server notifies that an entity has migrated from remote to host (subid, global, `old_remote`, `new_host`).
     MigrateResponse(Option<SubCommandId>, GlobalEntity, RemoteEntity, HostEntity),
 }
 
 impl EntityCommand {
     /// Returns the primary `GlobalEntity` this command targets.
+    #[must_use]
     pub fn entity(&self) -> GlobalEntity {
         match self {
             Self::Spawn(entity) => *entity,
@@ -62,6 +63,7 @@ impl EntityCommand {
     }
 
     /// Returns the `ComponentKind` for insert/remove commands, or `None` for all other variants.
+    #[must_use]
     pub fn component_kind(&self) -> Option<ComponentKind> {
         match self {
             Self::InsertComponent(_, component_kind) => Some(*component_kind),
@@ -71,6 +73,7 @@ impl EntityCommand {
     }
 
     /// Returns the `EntityMessageType` discriminant for this command.
+    #[must_use]
     pub fn get_type(&self) -> EntityMessageType {
         match self {
             Self::Spawn(_) => EntityMessageType::Spawn,
@@ -114,6 +117,7 @@ impl EntityCommand {
     }
 
     /// Returns `true` if this command can be applied to a remote (client-owned) entity.
+    #[must_use]
     pub fn is_valid_for_remote_entity(&self) -> bool {
         match self {
             Self::Publish(_, _)

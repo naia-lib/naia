@@ -1,4 +1,4 @@
-//! Convenience helpers consumed by cyberlith's Recv SubApp inside its
+//! Convenience helpers consumed by cyberlith's Recv `SubApp` inside its
 //! per-tick update schedule.
 //!
 //! Two pieces:
@@ -14,7 +14,7 @@
 //!
 //! These mirror what `InternalWorldServer::receive_with_world` does inline in
 //! the legacy serial path (`apply_receive_output` + tick-buffer-drain),
-//! but factored so the Recv SubApp can call them without holding a
+//! but factored so the Recv `SubApp` can call them without holding a
 //! `InternalWorldServer` or a `&mut World`.
 //!
 //! # Scope note
@@ -24,7 +24,7 @@
 //! [`drain_lifecycle`]. Cyberlith's Recv SubApp reads them directly
 //! from the auth receiver / `RecvHandle` machinery during the
 //! handshake-acceptance phase, not from this helper. This helper only
-//! covers post-handshake lifecycle (Connect / Disconnect / RecvError).
+//! covers post-handshake lifecycle (Connect / Disconnect / `RecvError`).
 
 use std::{hash::Hash, net::SocketAddr};
 
@@ -113,8 +113,8 @@ where
     E: Copy + Eq + Hash + Send + Sync,
 {
     let mut messages = TickBufferMessages::default();
-    for (_addr, recv_conn) in recv_handle.state.recv_user_connections.iter_mut() {
-        recv_conn.tick_buffer_messages(&tick, &mut messages);
+    for recv_conn in recv_handle.state.recv_user_connections.values_mut() {
+        recv_conn.tick_buffer_messages(tick, &mut messages);
     }
     messages
 }

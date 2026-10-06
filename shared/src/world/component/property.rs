@@ -76,7 +76,11 @@ impl<T: Serde> Property<T> {
         })
     }
 
-    /// Set an PropertyMutator to track changes to the Property
+    /// Set an `PropertyMutator` to track changes to the Property
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Remote Property should never call `set_mutator()`..
     pub fn set_mutator(&mut self, mutator: &PropertyMutator) {
         match &mut self.inner {
             PropertyImpl::HostOwned(inner) => {
@@ -97,6 +101,10 @@ impl<T: Serde> Property<T> {
     // Serialization / deserialization
 
     /// Writes contained value into outgoing byte stream
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Remote Private Property should never be written..
     pub fn write(&self, writer: &mut dyn BitWrite) {
         match &self.inner {
             PropertyImpl::HostOwned(inner) => {
@@ -118,6 +126,10 @@ impl<T: Serde> Property<T> {
     }
 
     /// Reads from a stream and immediately writes to a stream
+    ///
+    /// # Panics
+    ///
+    /// Panics on internal invariant violation.
     /// Used to buffer updates for later
     pub fn read_write(reader: &mut BitReader, writer: &mut BitWriter) -> Result<(), SerdeErr> {
         T::de(reader)?.ser(writer);
@@ -126,6 +138,10 @@ impl<T: Serde> Property<T> {
 
     /// Given a cursor into incoming packet data, updates the Property with the
     /// synced value
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Host Property should never read..
     pub fn read(&mut self, reader: &mut BitReader) -> Result<(), SerdeErr> {
         match &mut self.inner {
             PropertyImpl::HostOwned(_) => {
@@ -170,6 +186,10 @@ impl<T: Serde> Property<T> {
 
     /// Set value to the value of another Property, queues for update if value
     /// changes
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Remote Property should never be set manually..
     pub fn mirror(&mut self, other: &Self) {
         let other_inner = other.inner();
         match &mut self.inner {
@@ -189,6 +209,10 @@ impl<T: Serde> Property<T> {
     }
 
     /// Migrate Remote Property to Public version
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Host Property should never be made public..
     pub fn remote_publish(&mut self, mutator_index: u8, mutator: &PropertyMutator) {
         match &mut self.inner {
             PropertyImpl::HostOwned(_) => {
@@ -215,6 +239,10 @@ impl<T: Serde> Property<T> {
     }
 
     /// Migrate Remote Property to Private version
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Host Property should never be unpublished..
     pub fn remote_unpublish(&mut self) {
         match &mut self.inner {
             PropertyImpl::HostOwned(_) => {
@@ -237,6 +265,10 @@ impl<T: Serde> Property<T> {
     }
 
     /// Migrate Property to Delegated version
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Property of type `{:?}` should never enable delegation this way.
     pub fn enable_delegation(
         &mut self,
         accessor: &EntityAuthAccessor,
@@ -289,6 +321,10 @@ impl<T: Serde> Property<T> {
     }
 
     /// Migrate Delegated Property to Host-Owned (Public) version
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Host Property should never disable delegation..
     pub fn disable_delegation(&mut self) {
         match &mut self.inner {
             PropertyImpl::HostOwned(_) => {
@@ -313,6 +349,10 @@ impl<T: Serde> Property<T> {
     }
 
     /// Migrate Host Property to Local version
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Remote Property should never be made local..
     pub fn localize(&mut self) {
         match &mut self.inner {
             PropertyImpl::HostOwned(inner) => {
@@ -374,7 +414,7 @@ pub struct HostOwnedProperty<T: Serde> {
 }
 
 impl<T: Serde> HostOwnedProperty<T> {
-    /// Create a new HostOwnedProperty
+    /// Create a new `HostOwnedProperty`
     pub fn new(value: T, mutator_index: u8) -> Self {
         Self {
             inner: value,
@@ -384,7 +424,7 @@ impl<T: Serde> HostOwnedProperty<T> {
         }
     }
 
-    /// Create a new HostOwnedProperty for an immutable (seed-only) component —
+    /// Create a new `HostOwnedProperty` for an immutable (seed-only) component —
     /// see [`Property::immutable_host_owned`].
     pub fn new_immutable(value: T, mutator_index: u8) -> Self {
         Self {
@@ -440,7 +480,7 @@ pub struct LocalProperty<T: Serde> {
 }
 
 impl<T: Serde> LocalProperty<T> {
-    /// Create a new LocalProperty
+    /// Create a new `LocalProperty`
     pub fn new(value: T) -> Self {
         Self { inner: value }
     }
@@ -456,7 +496,7 @@ pub struct RemoteOwnedProperty<T: Serde> {
 }
 
 impl<T: Serde> RemoteOwnedProperty<T> {
-    /// Create a new RemoteOwnedProperty
+    /// Create a new `RemoteOwnedProperty`
     pub fn new(value: T) -> Self {
         Self { inner: value }
     }
@@ -475,7 +515,7 @@ pub struct RemotePublicProperty<T: Serde> {
 }
 
 impl<T: Serde> RemotePublicProperty<T> {
-    /// Create a new RemotePublicProperty
+    /// Create a new `RemotePublicProperty`
     pub fn new(value: T, mutator_index: u8, mutator: &PropertyMutator) -> Self {
         Self {
             inner: value,
@@ -508,7 +548,7 @@ pub struct DelegatedProperty<T: Serde> {
 }
 
 impl<T: Serde> DelegatedProperty<T> {
-    /// Create a new DelegatedProperty
+    /// Create a new `DelegatedProperty`
     pub fn new(
         value: T,
         auth_accessor: &EntityAuthAccessor,
@@ -537,9 +577,7 @@ impl<T: Serde> DelegatedProperty<T> {
     }
 
     pub fn write(&self, writer: &mut dyn BitWrite) {
-        if !self.can_write() {
-            panic!("Must have Authority over Entity before performing this operation. Current Authority: {:?}", self.auth_accessor.auth_status());
-        }
+        assert!(self.can_write(), "Must have Authority over Entity before performing this operation. Current Authority: {:?}", self.auth_accessor.auth_status());
         self.inner.ser(writer);
     }
 
@@ -549,9 +587,10 @@ impl<T: Serde> DelegatedProperty<T> {
     }
 
     fn mutate(&mut self) {
-        if !self.can_mutate() {
-            panic!("Must request authority to mutate a Delegated Property.");
-        }
+        assert!(
+            self.can_mutate(),
+            "Must request authority to mutate a Delegated Property."
+        );
         let _success = self.mutator.mutate(self.index);
     }
 

@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU64, Ordering};
 /// SPSC atomics — no mutex required. Both `ConnectionRecv` and
 /// `ConnectionSend` hold an `Arc<ConnectionShared>` for the same user.
 ///
-/// Field placement matches the naia field audit (2026-05-15 in MISSION_CAPACITY_UPLIFT.md).
+/// Field placement matches the naia field audit (2026-05-15 in `MISSION_CAPACITY_UPLIFT.md`).
 pub struct ConnectionShared {
     /// `last_recv_packet_index` — the highest-sequence packet the remote has
     /// confirmed seeing. Recv writes after `process_incoming_header`;
@@ -47,6 +47,7 @@ pub struct ConnectionShared {
 
 impl ConnectionShared {
     /// Creates a `ConnectionShared` with all fields zeroed (RTT defaults to `0.0 ms`).
+    #[must_use]
     pub fn new() -> Self {
         Self {
             remote_ack_seq: AtomicU16::new(0),

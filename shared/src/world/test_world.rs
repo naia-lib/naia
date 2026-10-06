@@ -57,9 +57,9 @@ impl TestWorld {
     fn dyn_mut_of_kind(
         &mut self,
         entity: &TestEntity,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
     ) -> Option<ReplicaDynMutWrapper<'_>> {
-        let component = self.entities.get_mut(entity)?.get_mut(component_kind)?;
+        let component = self.entities.get_mut(entity)?.get_mut(&component_kind)?;
         Some(ReplicaDynMutWrapper::new(component.dyn_mut()))
     }
 }
@@ -96,13 +96,13 @@ impl WorldRefType<TestEntity> for TestWorld {
     }
 
     fn has_component<R: ReplicatedComponent>(&self, entity: &TestEntity) -> bool {
-        self.has_component_of_kind(entity, &ComponentKind::of::<R>())
+        self.has_component_of_kind(entity, ComponentKind::of::<R>())
     }
 
-    fn has_component_of_kind(&self, entity: &TestEntity, component_kind: &ComponentKind) -> bool {
+    fn has_component_of_kind(&self, entity: &TestEntity, component_kind: ComponentKind) -> bool {
         self.entities
             .get(entity)
-            .is_some_and(|map| map.contains_key(component_kind))
+            .is_some_and(|map| map.contains_key(&component_kind))
     }
 
     fn component<'a, R: ReplicatedComponent>(
@@ -116,9 +116,9 @@ impl WorldRefType<TestEntity> for TestWorld {
     fn component_of_kind<'a>(
         &'a self,
         entity: &TestEntity,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
     ) -> Option<ReplicaDynRefWrapper<'a>> {
-        let component = self.entities.get(entity)?.get(component_kind)?;
+        let component = self.entities.get(entity)?.get(&component_kind)?;
         Some(ReplicaDynRefWrapper::new(component.dyn_ref()))
     }
 }
@@ -139,7 +139,7 @@ impl WorldMutType<TestEntity> for TestWorld {
     fn local_duplicate_components(&mut self, new_entity: &TestEntity, old_entity: &TestEntity) {
         for component_kind in WorldMutType::<TestEntity>::component_kinds(self, old_entity) {
             let copied = self
-                .component_of_kind(old_entity, &component_kind)
+                .component_of_kind(old_entity, component_kind)
                 .map(|component| component.copy_to_box());
             if let Some(boxed) = copied {
                 self.insert_boxed_component(new_entity, boxed);
@@ -174,7 +174,7 @@ impl WorldMutType<TestEntity> for TestWorld {
     fn component_mut_of_kind<'a>(
         &'a mut self,
         entity: &TestEntity,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
     ) -> Option<ReplicaDynMutWrapper<'a>> {
         self.dyn_mut_of_kind(entity, component_kind)
     }
@@ -183,7 +183,7 @@ impl WorldMutType<TestEntity> for TestWorld {
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         entity: &TestEntity,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
         update: PendingComponentUpdate,
     ) -> Result<(), SerdeErr> {
         if let Some(mut component) = self.dyn_mut_of_kind(entity, component_kind) {
@@ -196,7 +196,7 @@ impl WorldMutType<TestEntity> for TestWorld {
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         entity: &TestEntity,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
         update: ComponentFieldUpdate,
     ) -> Result<(), SerdeErr> {
         if let Some(mut component) = self.dyn_mut_of_kind(entity, component_kind) {
@@ -207,7 +207,7 @@ impl WorldMutType<TestEntity> for TestWorld {
 
     fn mirror_entities(&mut self, new_entity: &TestEntity, old_entity: &TestEntity) {
         for component_kind in WorldMutType::<TestEntity>::component_kinds(self, old_entity) {
-            self.mirror_components(new_entity, old_entity, &component_kind);
+            self.mirror_components(new_entity, old_entity, component_kind);
         }
     }
 
@@ -215,12 +215,12 @@ impl WorldMutType<TestEntity> for TestWorld {
         &mut self,
         mutable_entity: &TestEntity,
         immutable_entity: &TestEntity,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
     ) {
         let copied = self
             .entities
             .get(immutable_entity)
-            .and_then(|map| map.get(component_kind))
+            .and_then(|map| map.get(&component_kind))
             .map(|component| component.copy_to_box());
         let Some(source) = copied else {
             return;
@@ -228,7 +228,7 @@ impl WorldMutType<TestEntity> for TestWorld {
         if let Some(target) = self
             .entities
             .get_mut(mutable_entity)
-            .and_then(|map| map.get_mut(component_kind))
+            .and_then(|map| map.get_mut(&component_kind))
         {
             target.mirror(source.as_ref());
         }
@@ -250,7 +250,7 @@ impl WorldMutType<TestEntity> for TestWorld {
     }
 
     fn remove_component<R: ReplicatedComponent>(&mut self, entity: &TestEntity) -> Option<R> {
-        let boxed = self.remove_component_of_kind(entity, &ComponentKind::of::<R>())?;
+        let boxed = self.remove_component_of_kind(entity, ComponentKind::of::<R>())?;
         Box::<dyn Any + 'static>::downcast::<R>(boxed.to_boxed_any())
             .ok()
             .map(|boxed| *boxed)
@@ -259,9 +259,9 @@ impl WorldMutType<TestEntity> for TestWorld {
     fn remove_component_of_kind(
         &mut self,
         entity: &TestEntity,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
     ) -> Option<Box<dyn Replicate>> {
-        self.entities.get_mut(entity)?.remove(component_kind)
+        self.entities.get_mut(entity)?.remove(&component_kind)
     }
 
     fn entity_publish(
@@ -277,7 +277,7 @@ impl WorldMutType<TestEntity> for TestWorld {
                 converter,
                 global_world_manager,
                 entity,
-                &component_kind,
+                component_kind,
             );
         }
     }
@@ -288,7 +288,7 @@ impl WorldMutType<TestEntity> for TestWorld {
         converter: &dyn EntityAndGlobalEntityConverter<TestEntity>,
         global_world_manager: &dyn GlobalWorldManagerType,
         entity: &TestEntity,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
     ) {
         let Ok(global_entity) = converter.entity_to_global_entity(entity) else {
             return;
@@ -296,14 +296,14 @@ impl WorldMutType<TestEntity> for TestWorld {
         let Some(component) = self
             .entities
             .get_mut(entity)
-            .and_then(|map| map.get_mut(component_kind))
+            .and_then(|map| map.get_mut(&component_kind))
         else {
             return;
         };
         let diff_mask_size = component.diff_mask_size();
         let mutator = global_world_manager.register_component(
             component_kinds,
-            &global_entity,
+            global_entity,
             component_kind,
             diff_mask_size,
         );
@@ -312,15 +312,15 @@ impl WorldMutType<TestEntity> for TestWorld {
 
     fn entity_unpublish(&mut self, entity: &TestEntity) {
         for component_kind in WorldMutType::<TestEntity>::component_kinds(self, entity) {
-            self.component_unpublish(entity, &component_kind);
+            self.component_unpublish(entity, component_kind);
         }
     }
 
-    fn component_unpublish(&mut self, entity: &TestEntity, component_kind: &ComponentKind) {
+    fn component_unpublish(&mut self, entity: &TestEntity, component_kind: ComponentKind) {
         if let Some(component) = self
             .entities
             .get_mut(entity)
-            .and_then(|map| map.get_mut(component_kind))
+            .and_then(|map| map.get_mut(&component_kind))
         {
             component.unpublish();
         }
@@ -339,7 +339,7 @@ impl WorldMutType<TestEntity> for TestWorld {
                 converter,
                 global_world_manager,
                 entity,
-                &component_kind,
+                component_kind,
             );
         }
     }
@@ -350,14 +350,13 @@ impl WorldMutType<TestEntity> for TestWorld {
         converter: &dyn EntityAndGlobalEntityConverter<TestEntity>,
         global_world_manager: &dyn GlobalWorldManagerType,
         entity: &TestEntity,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
     ) {
         let Ok(global_entity) = converter.entity_to_global_entity(entity) else {
             return;
         };
-        let accessor = global_world_manager.get_entity_auth_accessor(&global_entity);
-        let needs_mutator =
-            global_world_manager.entity_needs_mutator_for_delegation(&global_entity);
+        let accessor = global_world_manager.get_entity_auth_accessor(global_entity);
+        let needs_mutator = global_world_manager.entity_needs_mutator_for_delegation(global_entity);
         let Some(mut component) = self.dyn_mut_of_kind(entity, component_kind) else {
             return;
         };
@@ -365,7 +364,7 @@ impl WorldMutType<TestEntity> for TestWorld {
             let diff_mask_size = component.diff_mask_size();
             Some(global_world_manager.register_component(
                 component_kinds,
-                &global_entity,
+                global_entity,
                 component_kind,
                 diff_mask_size,
             ))
@@ -377,15 +376,11 @@ impl WorldMutType<TestEntity> for TestWorld {
 
     fn entity_disable_delegation(&mut self, entity: &TestEntity) {
         for component_kind in WorldMutType::<TestEntity>::component_kinds(self, entity) {
-            self.component_disable_delegation(entity, &component_kind);
+            self.component_disable_delegation(entity, component_kind);
         }
     }
 
-    fn component_disable_delegation(
-        &mut self,
-        entity: &TestEntity,
-        component_kind: &ComponentKind,
-    ) {
+    fn component_disable_delegation(&mut self, entity: &TestEntity, component_kind: ComponentKind) {
         if let Some(mut component) = self.dyn_mut_of_kind(entity, component_kind) {
             component.disable_delegation();
         }
@@ -399,7 +394,7 @@ pub struct IdentityConverter;
 impl EntityAndGlobalEntityConverter<TestEntity> for IdentityConverter {
     fn global_entity_to_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<TestEntity, EntityDoesNotExistError> {
         Ok(global_entity.to_u64())
     }
@@ -477,7 +472,7 @@ impl Default for TestSpawner {
 impl EntityAndGlobalEntityConverter<TestEntity> for TestSpawner {
     fn global_entity_to_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<TestEntity, EntityDoesNotExistError> {
         Ok(global_entity.to_u64())
     }
@@ -508,7 +503,7 @@ impl crate::GlobalEntitySpawner<TestEntity> for TestSpawner {
         global_entity
     }
 
-    fn despawn_by_global(&mut self, _global_entity: &GlobalEntity) {}
+    fn despawn_by_global(&mut self, _global_entity: GlobalEntity) {}
 
     fn despawn_by_world(&mut self, _world_entity: &TestEntity) {}
 

@@ -53,6 +53,7 @@ pub struct AtomicBitSet {
 impl AtomicBitSet {
     /// Create a new bitset with capacity for at least `bit_capacity`
     /// bits. Always allocates at least one word.
+    #[must_use]
     pub fn new(bit_capacity: usize) -> Self {
         let n_words = words_for_bits(bit_capacity);
         let words: Box<[AtomicU64]> = (0..n_words).map(|_| AtomicU64::new(0)).collect();
@@ -62,9 +63,10 @@ impl AtomicBitSet {
         }
     }
 
-    /// Number of bytes needed to encode the bit_capacity (rounded up
+    /// Number of bytes needed to encode the `bit_capacity` (rounded up
     /// to whole bytes — matches `DiffMask::byte_number()`).
     #[inline]
+    #[must_use]
     pub fn byte_number(&self) -> usize {
         self.bit_capacity.div_ceil(8)
     }
@@ -100,6 +102,7 @@ impl AtomicBitSet {
     /// Panicking on OOB would create a hot-path crash surface for
     /// stale dirty indices across schema evolution.
     #[inline]
+    #[must_use]
     pub fn set_bit(&self, index: u32) -> bool {
         let word_idx = (index / 64) as usize;
         let bit_in_word = index % 64;
@@ -133,10 +136,11 @@ impl AtomicBitSet {
     /// must force a full-state update of a component (any bits beyond
     /// the component's property count are never serialized —
     /// `write_update` walks the property list, not the mask).
+    #[must_use]
     pub fn set_all(&self) -> bool {
         let was_clear_before = self.is_clear();
         let mut remaining = self.bit_capacity;
-        for word in self.words.iter() {
+        for word in &self.words {
             if remaining == 0 {
                 break;
             }
@@ -154,9 +158,10 @@ impl AtomicBitSet {
 
     /// Clear all bits. Returns `true` iff the bitset had any bit set
     /// (any word non-zero) before the clear.
+    #[must_use]
     pub fn clear(&self) -> bool {
         let mut was_dirty = false;
-        for word in self.words.iter() {
+        for word in &self.words {
             let prev = word.swap(0, Ordering::Relaxed);
             if prev != 0 {
                 was_dirty = true;
@@ -166,6 +171,7 @@ impl AtomicBitSet {
     }
 
     /// True iff every word is zero.
+    #[must_use]
     pub fn is_clear(&self) -> bool {
         self.words.iter().all(|w| w.load(Ordering::Relaxed) == 0)
     }
@@ -174,6 +180,7 @@ impl AtomicBitSet {
     /// representation) into this set. Returns `true` iff this set was
     /// clear AND the merge introduced new bits (clean→dirty signal,
     /// race-tolerant).
+    #[must_use]
     pub fn or_with(&self, other: &DiffMask) -> bool {
         let other_byte_count = other.byte_number() as usize;
         if other_byte_count == 0 {
@@ -190,7 +197,7 @@ impl AtomicBitSet {
                 if abs_byte >= other_byte_count {
                     break;
                 }
-                let byte = other.byte(abs_byte) as u64;
+                let byte = u64::from(other.byte(abs_byte));
                 if byte != 0 {
                     word_value |= byte << (byte_offset * 8);
                 }
@@ -205,6 +212,7 @@ impl AtomicBitSet {
 
     /// Snapshot the current bitset into an owned `DiffMask` (wire
     /// representation = `Vec<u8>`).
+    #[must_use]
     pub fn snapshot(&self) -> DiffMask {
         let byte_n = self.byte_number();
         let mut mask = DiffMask::new(byte_n as u8);
@@ -238,6 +246,7 @@ impl AtomicBitSet {
     /// and not synchronized against concurrent `set_bit`/`clear`. Used by
     /// the send-side needed-entity set, which is written and read on the
     /// same thread inside the park window (no concurrency at the read).
+    #[must_use]
     pub fn collect_set_bits(&self) -> Vec<u32> {
         let mut out = Vec::new();
         for (word_idx, word) in self.words.iter().enumerate() {
@@ -255,6 +264,7 @@ impl AtomicBitSet {
     /// Read one byte of the bitset (matches the `DiffMask::byte`
     /// little-endian byte layout).
     #[inline]
+    #[must_use]
     pub fn byte(&self, index: usize) -> u8 {
         let word_idx = index / 8;
         let byte_in_word = index % 8;
@@ -319,7 +329,7 @@ mod tests {
     fn clear_returns_was_dirty() {
         let m = AtomicBitSet::new(128);
         assert!(!m.clear());
-        m.set_bit(70);
+        assert!(m.set_bit(70));
         assert!(m.clear());
         assert!(m.is_clear());
     }
@@ -328,7 +338,7 @@ mod tests {
     fn snapshot_round_trips_through_diff_mask() {
         let m = AtomicBitSet::new(256);
         for &bit in &[0u32, 7, 8, 63, 64, 127, 128, 255] {
-            m.set_bit(bit);
+            let _ = m.set_bit(bit);
         }
         let snap = m.snapshot();
         assert_eq!(snap.byte_number(), 32);
@@ -367,8 +377,8 @@ mod tests {
     #[test]
     fn drain_words_returns_per_word_values_and_zeroes() {
         let m = AtomicBitSet::new(128);
-        m.set_bit(3);
-        m.set_bit(70);
+        assert!(m.set_bit(3));
+        assert!(!m.set_bit(70));
         let drained = m.drain_words();
         assert_eq!(drained.len(), 2);
         assert_eq!(drained[0], 1u64 << 3);
@@ -380,7 +390,7 @@ mod tests {
     fn full_256_bits_supported() {
         let m = AtomicBitSet::new(256);
         for i in 0..256u32 {
-            m.set_bit(i);
+            let _ = m.set_bit(i);
         }
         assert_eq!(m.byte_number(), 32);
         for i in 0..32 {
@@ -414,7 +424,7 @@ mod tests {
     #[test]
     fn set_all_on_already_dirty_mask_reports_not_clear() {
         let m = AtomicBitSet::new(16);
-        m.set_bit(3);
+        assert!(m.set_bit(3));
         assert!(!m.set_all(), "mask was already dirty");
         assert_eq!(m.byte(0), 0xFF);
         assert_eq!(m.byte(1), 0xFF);

@@ -52,7 +52,7 @@ pub mod dirty_scan_counters {
 ///
 /// `entity_kind_to_key` maps `(GlobalEntity, ComponentKind) → (GlobalEntityIndex, u16)`.
 /// It is populated at registration time and used by cold-path methods, eliminating
-/// any RwLock acquisition on `GlobalDiffHandler` for the per-connection diff paths.
+/// any `RwLock` acquisition on `GlobalDiffHandler` for the per-connection diff paths.
 ///
 /// `kinds_by_bit` records `kind_bit → ComponentKind` so `dirty_receiver_candidates`
 /// can rebuild the `HashMap<GlobalEntity, HashSet<ComponentKind>>` shape that
@@ -62,20 +62,20 @@ pub mod dirty_scan_counters {
 /// Cold-path methods take `(&GlobalEntity, &ComponentKind)` and resolve via `entity_kind_to_key`.
 #[derive(Clone)]
 pub struct UserDiffHandler {
-    /// Stride-indexed flat receiver array. Slot = entity_idx * kind_count + kind_bit.
+    /// Stride-indexed flat receiver array. Slot = `entity_idx` * `kind_count` + `kind_bit`.
     /// `None` for unregistered (entity, component) pairs.
     receivers_dense: Vec<Option<MutReceiver>>,
     /// Number of component kinds. Fixed at construction (protocol is locked before
     /// any connection is established). Used as the stride for slot calculation.
     kind_count: usize,
-    /// Reverse lookup: (GlobalEntity, ComponentKind) → (GlobalEntityIndex, kind_bit).
+    /// Reverse lookup: (`GlobalEntity`, `ComponentKind`) → (`GlobalEntityIndex`, `kind_bit`).
     /// Populated at `register_component`; removed at `deregister_component`.
     /// Used by cold-path methods and by `deregister_component` to avoid needing the
-    /// GlobalDiffHandler RwLock after the entity may already have been freed.
+    /// `GlobalDiffHandler` `RwLock` after the entity may already have been freed.
     entity_kind_to_key: HashMap<(GlobalEntity, ComponentKind), (GlobalEntityIndex, u16)>,
     global_diff_handler: Arc<RwLock<GlobalDiffHandler>>,
     /// Reverse table for rebuilding `ComponentKind` from a `kind_bit`
-    /// at snapshot time. Bit position == NetId per
+    /// at snapshot time. Bit position == `NetId` per
     /// `ComponentKinds::add_component`. `None` at indices not yet
     /// registered. `Vec` (was fixed-size `[_; 64]`) since the
     /// 2026-05-05 unlimited-kind-count refactor — sized to the
@@ -97,6 +97,8 @@ pub struct UserDiffHandler {
 }
 
 impl UserDiffHandler {
+    /// Creates an empty per-user diff handler, sizing its dense tables from
+    /// `global_world_manager`'s component-kind count.
     pub fn new(global_world_manager: &dyn GlobalWorldManagerType) -> Self {
         // Read the protocol's component-kind count under a brief read
         // guard. Used to size the per-user `DirtyQueue`'s stride and
@@ -107,8 +109,7 @@ impl UserDiffHandler {
         let global_diff_handler = global_world_manager.diff_handler();
         let kind_count = global_diff_handler
             .read()
-            .map(|h| h.kind_count() as usize)
-            .unwrap_or(0);
+            .map_or(0, |h| h.kind_count() as usize);
         let global_dirty_arc = global_world_manager.global_dirty_bitset();
         let global_dirty = global_dirty_arc
             .as_ref()
@@ -152,11 +153,17 @@ impl UserDiffHandler {
     }
 
     // Component Registration
+    /// Registers (`entity`, `component_kind`) for per-user diff tracking,
+    /// allocating its receiver and reverse-lookup entries.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the global diff handler lock is poisoned.
     pub fn register_component(
         &mut self,
         address: &Option<SocketAddr>,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        entity: GlobalEntity,
+        component_kind: ComponentKind,
     ) {
         let Ok(global_handler) = self.global_diff_handler.as_ref().read() else {
             panic!("Be sure you can get self.global_diff_handler before calling this!");
@@ -184,8 +191,7 @@ impl UserDiffHandler {
         // that issued the receiver above). Bail with a no-op if not.
         let Some(kind_bit) = kind_bit else {
             warn!(
-                "UserDiffHandler: kind_bit unresolved for {:?}; notifier not attached",
-                component_kind
+                "UserDiffHandler: kind_bit unresolved for {component_kind:?}; notifier not attached"
             );
             return;
         };
@@ -217,7 +223,7 @@ impl UserDiffHandler {
             self.kinds_by_bit.resize(bit_idx + 1, None);
         }
         if self.kinds_by_bit[bit_idx].is_none() {
-            self.kinds_by_bit[bit_idx] = Some(*component_kind);
+            self.kinds_by_bit[bit_idx] = Some(component_kind);
         }
 
         // Server path: dirty_set is None — pass a dead Weak so DirtyNotifier's
@@ -238,12 +244,14 @@ impl UserDiffHandler {
         let slot = self.slot(entity_idx, kind_bit);
         self.receivers_dense[slot] = Some(receiver);
         self.entity_kind_to_key
-            .insert((*entity, *component_kind), (entity_idx, kind_bit));
+            .insert((entity, component_kind), (entity_idx, kind_bit));
     }
 
-    pub fn deregister_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    /// Deregisters (`entity`, `component_kind`), clearing its mask first so no
+    /// dirty refcount leaks. No-op if the pair was never registered.
+    pub fn deregister_component(&mut self, entity: GlobalEntity, component_kind: ComponentKind) {
         let Some((entity_idx, kind_bit)) =
-            self.entity_kind_to_key.remove(&(*entity, *component_kind))
+            self.entity_kind_to_key.remove(&(entity, component_kind))
         else {
             // Never registered (or already deregistered) — nothing to clean up.
             return;
@@ -279,20 +287,27 @@ impl UserDiffHandler {
         }
     }
 
-    pub fn has_component(&self, entity: &GlobalEntity, component: &ComponentKind) -> bool {
-        self.entity_kind_to_key.contains_key(&(*entity, *component))
+    /// Returns whether (`entity`, `component`) is currently registered.
+    pub fn has_component(&self, entity: GlobalEntity, component: ComponentKind) -> bool {
+        self.entity_kind_to_key.contains_key(&(entity, component))
     }
 
     // Diff masks — cold paths resolve via entity_kind_to_key (no RwLock required).
 
+    /// Returns a snapshot of the diff mask for (`entity`, `component_kind`).
+    /// Cold path: resolves via `entity_kind_to_key`, no `RwLock` required.
+    ///
+    /// # Panics
+    ///
+    /// Panics if no receiver is registered for (`entity`, `component_kind`).
     pub fn diff_mask_snapshot(
         &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        entity: GlobalEntity,
+        component_kind: ComponentKind,
     ) -> DiffMask {
         let (entity_idx, kind_bit) = self
             .entity_kind_to_key
-            .get(&(*entity, *component_kind))
+            .get(&(entity, component_kind))
             .copied()
             .expect("Should not call this unless we're sure there's a receiver");
         let slot = self.slot(entity_idx, kind_bit);
@@ -302,14 +317,12 @@ impl UserDiffHandler {
         receiver.mask_snapshot()
     }
 
-    pub fn diff_mask_is_clear(
-        &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
-    ) -> bool {
+    /// Returns whether the diff mask for (`entity`, `component_kind`) is clear.
+    /// Unregistered pairs report clear.
+    pub fn diff_mask_is_clear(&self, entity: GlobalEntity, component_kind: ComponentKind) -> bool {
         let Some((entity_idx, kind_bit)) = self
             .entity_kind_to_key
-            .get(&(*entity, *component_kind))
+            .get(&(entity, component_kind))
             .copied()
         else {
             return true;
@@ -326,10 +339,10 @@ impl UserDiffHandler {
     /// granted: optimistic mutations made between the authority request and
     /// the grant fanned out before this receiver existed and were lost, so
     /// the new authority publishes its complete component state once.
-    pub fn mark_receiver_fully_dirty(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn mark_receiver_fully_dirty(&self, entity: GlobalEntity, component_kind: ComponentKind) {
         let Some((entity_idx, kind_bit)) = self
             .entity_kind_to_key
-            .get(&(*entity, *component_kind))
+            .get(&(entity, component_kind))
             .copied()
         else {
             return;
@@ -342,10 +355,10 @@ impl UserDiffHandler {
 
     /// Marks the receiver for `(entity, component_kind)` as delivered.
     /// Called by the delivery-confirmation path when a spawn/insert ACK arrives.
-    pub fn mark_receiver_delivered(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn mark_receiver_delivered(&self, entity: GlobalEntity, component_kind: ComponentKind) {
         let Some((entity_idx, kind_bit)) = self
             .entity_kind_to_key
-            .get(&(*entity, *component_kind))
+            .get(&(entity, component_kind))
             .copied()
         else {
             return;
@@ -356,15 +369,15 @@ impl UserDiffHandler {
         }
     }
 
-    /// Cold-path combined check — resolves via entity_kind_to_key.
+    /// Cold-path combined check — resolves via `entity_kind_to_key`.
     pub fn is_receiver_dirty_and_delivered(
         &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        entity: GlobalEntity,
+        component_kind: ComponentKind,
     ) -> bool {
         let Some((entity_idx, kind_bit)) = self
             .entity_kind_to_key
-            .get(&(*entity, *component_kind))
+            .get(&(entity, component_kind))
             .copied()
         else {
             return false;
@@ -376,7 +389,7 @@ impl UserDiffHandler {
         }
     }
 
-    /// Hot-path combined check for Phase 3: O(1) array access, no hashing, no RwLock.
+    /// Hot-path combined check for Phase 3: O(1) array access, no hashing, no `RwLock`.
     /// `entity_idx` and `kind_bit` are pre-resolved by the Phase 3 bitset scan.
     pub fn is_receiver_dirty_and_delivered_fast(
         &self,
@@ -390,7 +403,7 @@ impl UserDiffHandler {
         }
     }
 
-    /// Hot-path diff mask check for Phase 3: O(1) array access, no hashing, no RwLock.
+    /// Hot-path diff mask check for Phase 3: O(1) array access, no hashing, no `RwLock`.
     pub fn diff_mask_is_clear_fast(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) -> bool {
         let slot = entity_idx.as_usize() * self.kind_count + kind_bit as usize;
         match self.receivers_dense.get(slot) {
@@ -399,8 +412,8 @@ impl UserDiffHandler {
         }
     }
 
-    /// Hot-path mask snapshot for write_update: O(1) array access, no hashing, no RwLock.
-    /// Returns `None` if no receiver is registered for this (entity_idx, kind_bit).
+    /// Hot-path mask snapshot for `write_update`: O(1) array access, no hashing, no `RwLock`.
+    /// Returns `None` if no receiver is registered for this (`entity_idx`, `kind_bit`).
     pub fn diff_mask_snapshot_fast(
         &self,
         entity_idx: GlobalEntityIndex,
@@ -413,15 +426,20 @@ impl UserDiffHandler {
         }
     }
 
+    /// Merges `other_mask` into the diff mask for (`entity`, `component_kind`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if no receiver is registered for (`entity`, `component_kind`).
     pub fn or_diff_mask(
         &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        entity: GlobalEntity,
+        component_kind: ComponentKind,
         other_mask: &DiffMask,
     ) {
         let (entity_idx, kind_bit) = self
             .entity_kind_to_key
-            .get(&(*entity, *component_kind))
+            .get(&(entity, component_kind))
             .copied()
             .expect("Should not call this unless we're sure there's a receiver");
         let slot = self.slot(entity_idx, kind_bit);
@@ -431,10 +449,15 @@ impl UserDiffHandler {
         receiver.or_mask(other_mask);
     }
 
-    pub fn clear_diff_mask(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    /// Clears the diff mask for (`entity`, `component_kind`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if no receiver is registered for (`entity`, `component_kind`).
+    pub fn clear_diff_mask(&self, entity: GlobalEntity, component_kind: ComponentKind) {
         let (entity_idx, kind_bit) = self
             .entity_kind_to_key
-            .get(&(*entity, *component_kind))
+            .get(&(entity, component_kind))
             .copied()
             .expect("Should not call this unless we're sure there's a receiver");
         let slot = self.slot(entity_idx, kind_bit);
@@ -444,7 +467,7 @@ impl UserDiffHandler {
         receiver.clear_mask();
     }
 
-    /// Hot-path clear: O(1) array access, no hashing, no RwLock.
+    /// Hot-path clear: O(1) array access, no hashing, no `RwLock`.
     pub fn clear_diff_mask_fast(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
         let slot = entity_idx.as_usize() * self.kind_count + kind_bit as usize;
         if let Some(Some(receiver)) = self.receivers_dense.get(slot) {
@@ -466,9 +489,9 @@ impl UserDiffHandler {
             .count()
     }
 
-    /// Builds the dirty candidate set for this connection from the per-user DirtySet.
+    /// Builds the dirty candidate set for this connection from the per-user `DirtySet`.
     /// CLIENT PATH ONLY — returns an empty map on the server, which uses the
-    /// GlobalDirtyBitset + ConnectionVisibilityBitset three-phase loop instead.
+    /// `GlobalDirtyBitset` + `ConnectionVisibilityBitset` three-phase loop instead.
     pub fn dirty_receiver_candidates(&self) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
         // Server path: no DirtySet allocated — the Iris three-phase loop drives candidate
         // selection from GlobalDirtyBitset directly. This path should never be called
@@ -714,16 +737,16 @@ mod user_diff_handler_tests {
     }
 
     impl InScopeEntities<GlobalEntity> for TestGwm {
-        fn has_entity(&self, _: &GlobalEntity) -> bool {
+        fn has_entity(&self, _: GlobalEntity) -> bool {
             true
         }
     }
 
     impl GlobalWorldManagerType for TestGwm {
-        fn component_kinds(&self, _: &GlobalEntity) -> Option<Vec<ComponentKind>> {
+        fn component_kinds(&self, _: GlobalEntity) -> Option<Vec<ComponentKind>> {
             None
         }
-        fn entity_can_relate_to_user(&self, _: &GlobalEntity, _: &u64) -> bool {
+        fn entity_can_relate_to_user(&self, _: GlobalEntity, _: &u64) -> bool {
             true
         }
         fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>> {
@@ -739,22 +762,22 @@ mod user_diff_handler_tests {
         fn register_component(
             &self,
             _: &ComponentKinds,
-            _: &GlobalEntity,
-            _: &ComponentKind,
+            _: GlobalEntity,
+            _: ComponentKind,
             _: u8,
         ) -> PropertyMutator {
             unreachable!("not exercised by these tests")
         }
-        fn get_entity_auth_accessor(&self, _: &GlobalEntity) -> EntityAuthAccessor {
+        fn get_entity_auth_accessor(&self, _: GlobalEntity) -> EntityAuthAccessor {
             unreachable!("not exercised by these tests")
         }
-        fn entity_needs_mutator_for_delegation(&self, _: &GlobalEntity) -> bool {
+        fn entity_needs_mutator_for_delegation(&self, _: GlobalEntity) -> bool {
             false
         }
-        fn entity_is_replicating(&self, _: &GlobalEntity) -> bool {
+        fn entity_is_replicating(&self, _: GlobalEntity) -> bool {
             true
         }
-        fn entity_is_static(&self, _: &GlobalEntity) -> bool {
+        fn entity_is_static(&self, _: GlobalEntity) -> bool {
             false
         }
         fn global_dirty_bitset(&self) -> Option<Arc<GlobalDirtyBitset>> {
@@ -815,29 +838,29 @@ mod user_diff_handler_tests {
         fx: &Fixture,
         udh: &mut UserDiffHandler,
         entity: GlobalEntity,
-        kind: &ComponentKind,
+        kind: ComponentKind,
     ) -> (GlobalEntityIndex, u16) {
         let (idx, kind_bit) = {
             let mut gdh = fx.gwm.diff_handler.write().unwrap();
             let idx = gdh
-                .entity_to_global_idx(&entity)
+                .entity_to_global_idx(entity)
                 .unwrap_or_else(|| gdh.alloc_entity(entity));
-            gdh.register_component(&fx.kinds, &fx.gwm, &entity, kind, 1);
+            gdh.register_component(&fx.kinds, &fx.gwm, entity, kind, 1);
             let kind_bit = gdh.kind_bit(kind).expect("kind_bit must resolve");
             (idx, kind_bit)
         };
-        udh.register_component(&fx.addr, &entity, kind);
+        udh.register_component(&fx.addr, entity, kind);
         (idx, kind_bit)
     }
 
     /// Dirties an already-registered `(entity, kind)` pair through the real
     /// mutation fan-out.
-    fn dirty(fx: &Fixture, entity: GlobalEntity, kind: &ComponentKind) {
+    fn dirty(fx: &Fixture, entity: GlobalEntity, kind: ComponentKind) {
         fx.gwm
             .diff_handler
             .read()
             .unwrap()
-            .receiver(&fx.addr, &entity, kind)
+            .receiver(&fx.addr, entity, kind)
             .expect("receiver must exist after registration")
             .mutate(0);
     }
@@ -852,18 +875,18 @@ mod user_diff_handler_tests {
         let (idx, kind_bit) = {
             let mut gdh = fx.gwm.diff_handler.write().unwrap();
             let idx = gdh.alloc_entity(entity);
-            gdh.register_component(&fx.kinds, &fx.gwm, &entity, &fx.kind, 1);
-            let kind_bit = gdh.kind_bit(&fx.kind).expect("kind_bit must resolve");
+            gdh.register_component(&fx.kinds, &fx.gwm, entity, fx.kind, 1);
+            let kind_bit = gdh.kind_bit(fx.kind).expect("kind_bit must resolve");
             (idx, kind_bit)
         };
-        udh.register_component(&fx.addr, &entity, &fx.kind);
+        udh.register_component(&fx.addr, entity, fx.kind);
 
         let receiver = fx
             .gwm
             .diff_handler
             .read()
             .unwrap()
-            .receiver(&fx.addr, &entity, &fx.kind)
+            .receiver(&fx.addr, entity, fx.kind)
             .expect("receiver must exist after registration");
         receiver.mutate(0);
 
@@ -883,7 +906,7 @@ mod user_diff_handler_tests {
 
         let (idx, kind_bit) = register_and_dirty(&fx, &mut udh, entity);
 
-        udh.deregister_component(&entity, &fx.kind);
+        udh.deregister_component(entity, fx.kind);
 
         assert!(
             !fx.gwm.global_dirty.is_component_dirty(idx, kind_bit),
@@ -901,11 +924,11 @@ mod user_diff_handler_tests {
         let (idx_a, kind_bit) = register_and_dirty(&fx, &mut udh, entity_a);
 
         // Despawn A while it is still dirty, exactly as the server does.
-        udh.deregister_component(&entity_a, &fx.kind);
+        udh.deregister_component(entity_a, fx.kind);
         {
             let mut gdh = fx.gwm.diff_handler.write().unwrap();
-            gdh.deregister_component(&entity_a, &fx.kind);
-            gdh.free_entity(&entity_a);
+            gdh.deregister_component(entity_a, fx.kind);
+            gdh.free_entity(entity_a);
         }
 
         // B takes over A's index.
@@ -942,7 +965,7 @@ mod user_diff_handler_tests {
         for raw in 1u64..=3 {
             let entity = GlobalEntity::from_u64(raw);
             for kind in [fx.kind, fx.kind2] {
-                let (idx, kind_bit) = register(fx, udh, entity, &kind);
+                let (idx, kind_bit) = register(fx, udh, entity, kind);
                 grid.push((entity, kind, idx, kind_bit));
             }
         }
@@ -981,9 +1004,9 @@ mod user_diff_handler_tests {
             .unwrap();
 
         for (entity, kind, _, _) in &grid {
-            udh.mark_receiver_delivered(entity, kind);
+            udh.mark_receiver_delivered(*entity, *kind);
         }
-        dirty(&fx, target_entity, &target_kind);
+        dirty(&fx, target_entity, target_kind);
 
         for (entity, kind, idx, bit) in &grid {
             let is_target = *idx == target_idx && *bit == target_bit;
@@ -1000,12 +1023,12 @@ mod user_diff_handler_tests {
                 !is_target,
             );
             assert_eq!(
-                udh.is_receiver_dirty_and_delivered(entity, kind),
+                udh.is_receiver_dirty_and_delivered(*entity, *kind),
                 is_target,
                 "the cold path must agree with the fast path at ({idx:?}, {bit})",
             );
             assert_eq!(
-                udh.diff_mask_is_clear(entity, kind),
+                udh.diff_mask_is_clear(*entity, *kind),
                 !is_target,
                 "the cold path must agree with the fast path at ({idx:?}, {bit})",
             );
@@ -1020,12 +1043,12 @@ mod user_diff_handler_tests {
 
         // Dirty every pair, so each receiver has a mask worth comparing.
         for (entity, kind, _, _) in &grid {
-            dirty(&fx, *entity, kind);
+            dirty(&fx, *entity, *kind);
         }
         for (entity, kind, idx, bit) in &grid {
             assert_eq!(
                 udh.diff_mask_snapshot_fast(*idx, *bit),
-                Some(udh.diff_mask_snapshot(entity, kind)),
+                Some(udh.diff_mask_snapshot(*entity, *kind)),
                 "fast and cold snapshots must resolve to the same receiver at \
                  ({idx:?}, {bit})",
             );
@@ -1052,7 +1075,7 @@ mod user_diff_handler_tests {
         let grid = register_grid(&fx, &mut udh);
 
         for (entity, kind, _, _) in &grid {
-            dirty(&fx, *entity, kind);
+            dirty(&fx, *entity, *kind);
         }
         let (_, _, target_idx, target_bit) = *grid
             .iter()
@@ -1078,19 +1101,19 @@ mod user_diff_handler_tests {
         let grid = register_grid(&fx, &mut udh);
 
         for (entity, kind, _, _) in &grid {
-            assert!(udh.has_component(entity, kind));
+            assert!(udh.has_component(*entity, *kind));
         }
         let (entity, kind, _, _) = grid[0];
-        udh.deregister_component(&entity, &kind);
-        assert!(!udh.has_component(&entity, &kind));
+        udh.deregister_component(entity, kind);
+        assert!(!udh.has_component(entity, kind));
         for (other_entity, other_kind, _, _) in &grid[1..] {
             assert!(
-                udh.has_component(other_entity, other_kind),
+                udh.has_component(*other_entity, *other_kind),
                 "deregistering one pair must not disturb the others",
             );
         }
         // Deregistering again is a no-op rather than a panic.
-        udh.deregister_component(&entity, &kind);
+        udh.deregister_component(entity, kind);
     }
 
     #[test]
@@ -1098,12 +1121,12 @@ mod user_diff_handler_tests {
         let fx = fixture();
         let udh = UserDiffHandler::new(&fx.gwm);
         let entity = GlobalEntity::from_u64(9);
-        assert!(!udh.has_component(&entity, &fx.kind));
-        assert!(udh.diff_mask_is_clear(&entity, &fx.kind));
-        assert!(!udh.is_receiver_dirty_and_delivered(&entity, &fx.kind));
+        assert!(!udh.has_component(entity, fx.kind));
+        assert!(udh.diff_mask_is_clear(entity, fx.kind));
+        assert!(!udh.is_receiver_dirty_and_delivered(entity, fx.kind));
         // Neither of these has a receiver to reach; both must simply return.
-        udh.mark_receiver_fully_dirty(&entity, &fx.kind);
-        udh.mark_receiver_delivered(&entity, &fx.kind);
+        udh.mark_receiver_fully_dirty(entity, fx.kind);
+        udh.mark_receiver_delivered(entity, fx.kind);
     }
 
     #[test]
@@ -1116,7 +1139,7 @@ mod user_diff_handler_tests {
             .max_by_key(|(_, _, idx, bit)| (idx.as_usize(), *bit))
             .unwrap();
 
-        udh.mark_receiver_fully_dirty(&target_entity, &target_kind);
+        udh.mark_receiver_fully_dirty(target_entity, target_kind);
 
         for (_, _, idx, bit) in &grid {
             let is_target = *idx == target_idx && *bit == target_bit;
@@ -1135,8 +1158,8 @@ mod user_diff_handler_tests {
         let fx = client_fixture();
         let mut udh = UserDiffHandler::new(&fx.gwm);
         let entity = GlobalEntity::from_u64(1);
-        let (_, ghost_bit) = register(&fx, &mut udh, entity, &fx.kind);
-        let (_, phantom_bit) = register(&fx, &mut udh, entity, &fx.kind2);
+        let (_, ghost_bit) = register(&fx, &mut udh, entity, fx.kind);
+        let (_, phantom_bit) = register(&fx, &mut udh, entity, fx.kind2);
 
         // Anti-vacuity: the bit-decode loop below is only interesting if the
         // two kinds sit at different bit positions, one of them nonzero.
@@ -1148,7 +1171,7 @@ mod user_diff_handler_tests {
             "nothing has been mutated yet",
         );
 
-        dirty(&fx, entity, &fx.kind2);
+        dirty(&fx, entity, fx.kind2);
 
         let candidates = udh.dirty_receiver_candidates();
         let kinds = candidates
@@ -1171,11 +1194,11 @@ mod user_diff_handler_tests {
         let fx = client_fixture();
         let mut udh = UserDiffHandler::new(&fx.gwm);
         let entity = GlobalEntity::from_u64(1);
-        register(&fx, &mut udh, entity, &fx.kind);
-        register(&fx, &mut udh, entity, &fx.kind2);
+        register(&fx, &mut udh, entity, fx.kind);
+        register(&fx, &mut udh, entity, fx.kind2);
 
-        dirty(&fx, entity, &fx.kind);
-        dirty(&fx, entity, &fx.kind2);
+        dirty(&fx, entity, fx.kind);
+        dirty(&fx, entity, fx.kind2);
 
         let candidates = udh.dirty_receiver_candidates();
         let kinds = candidates.get(&entity).expect("entity must be a candidate");
@@ -1192,8 +1215,8 @@ mod user_diff_handler_tests {
         let fx = fixture();
         let mut udh = UserDiffHandler::new(&fx.gwm);
         let entity = GlobalEntity::from_u64(1);
-        register(&fx, &mut udh, entity, &fx.kind);
-        dirty(&fx, entity, &fx.kind);
+        register(&fx, &mut udh, entity, fx.kind);
+        dirty(&fx, entity, fx.kind);
         assert!(
             udh.dirty_receiver_candidates().is_empty(),
             "the server drives candidate selection from GlobalDirtyBitset, so this \

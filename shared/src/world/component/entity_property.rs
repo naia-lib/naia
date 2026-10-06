@@ -119,12 +119,11 @@ impl EntityRelation {
         let inner_global_entity = self.get_global_entity();
 
         if let Some(global_entity) = inner_global_entity {
-            if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
+            if let Ok(world_entity) = converter.global_entity_to_entity(global_entity) {
                 return Some(world_entity);
-            } else {
-                warn!("Could not find World Entity from Global Entity `{:?}`, in order to get the EntityRelation value!", global_entity);
-                return None;
             }
+            warn!("Could not find World Entity from Global Entity `{global_entity:?}`, in order to get the EntityRelation value!");
+            return None;
         }
         warn!("Could not get EntityRelation value, because EntityRelation has no GlobalEntity!");
         None
@@ -312,6 +311,7 @@ pub struct EntityProperty {
 impl EntityProperty {
     /// Creates an `EntityProperty` initialized for use inside a `Message` (no mutator).
     // Should only be used by Messages
+    #[must_use]
     pub fn new_for_message() -> Self {
         Self {
             inner: EntityRelation::HostCreated(HostCreatedRelation::new()),
@@ -320,6 +320,7 @@ impl EntityProperty {
 
     /// Creates an `EntityProperty` initialized for use inside a `Component` at the given property index.
     // Should only be used by Components
+    #[must_use]
     pub fn new_for_component(mutator_index: u8) -> Self {
         Self {
             inner: EntityRelation::HostCreated(HostCreatedRelation::with_mutator(mutator_index)),
@@ -340,7 +341,7 @@ impl EntityProperty {
             // CRITICAL: Apply entity redirects for migrated entities
             // If an entity was migrated (e.g., RemoteEntity → HostEntity), the EntityProperty
             // might reference the old entity ID. The redirect system ensures we use the new ID.
-            let redirected_entity = converter.apply_entity_redirect(&local_entity);
+            let redirected_entity = converter.apply_entity_redirect(local_entity);
 
             // info!("EntityProperty::new_read() local_entity: {:?}, redirected: {:?}", local_entity, redirected_entity);
 
@@ -389,6 +390,10 @@ impl EntityProperty {
     }
 
     /// Updates this property's inner relation from the remote host's bit stream.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: This shouldn't be possible. Unknown read case for `EntityProperty`..
     pub fn read(
         &mut self,
         reader: &mut BitReader,
@@ -470,10 +475,18 @@ impl EntityProperty {
     /// Returns `true` when the property resolved (or was already complete).
     /// Returns `false` when the awaited entity is still unresolvable — the
     /// redirect may have expired or the mapping may never have arrived — and
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Can't complete `EntityProperty` of type: `{:?}`!.
     /// leaves the property parked as `RemoteWaiting` so the caller can drop
     /// the stale component/message. Never panics on a data condition: a
     /// library aborting the host process on a recoverable stale mapping
     /// turns one dead entity into total transport loss.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Can't complete `EntityProperty` of type: `{:?}`!.
     pub fn waiting_complete(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -493,17 +506,15 @@ impl EntityProperty {
                     // CRITICAL: Apply entity redirects for migrated entities
                     // The RemoteEntity stored here might reference an old entity ID before migration
                     let owned_entity = inner.remote_entity.copy_to_owned();
-                    let redirected_entity = converter.apply_entity_redirect(&owned_entity);
+                    let redirected_entity = converter.apply_entity_redirect(owned_entity);
 
-                    match redirected_entity.convert_to_global(converter) {
-                        Ok(global_entity) => Some(global_entity),
-                        Err(_) => {
-                            warn!(
-                                "Dropping stale waiting EntityProperty! Could not convert RemoteEntity to GlobalEntity! Original: {:?}, Redirected: {:?}",
-                                owned_entity, redirected_entity
-                            );
-                            return false;
-                        }
+                    if let Ok(global_entity) = redirected_entity.convert_to_global(converter) {
+                        Some(global_entity)
+                    } else {
+                        warn!(
+                            "Dropping stale waiting EntityProperty! Could not convert RemoteEntity to GlobalEntity! Original: {owned_entity:?}, Redirected: {redirected_entity:?}"
+                        );
+                        return false;
                     }
                 };
 
@@ -538,6 +549,10 @@ impl EntityProperty {
     }
 
     /// Migrate Remote Property to Public version
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `EntityProperty` of type: `{:?}` should never be made public twice..
     pub fn remote_publish(&mut self, mutator_index: u8, mutator: &PropertyMutator) {
         match &mut self.inner {
             EntityRelation::RemoteCreated(inner) => {
@@ -565,6 +580,10 @@ impl EntityProperty {
     }
 
     /// Migrate Remote Property to Public version
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `EntityProperty` of type: `{:?}` should never be unpublished..
     pub fn remote_unpublish(&mut self) {
         match &mut self.inner {
             EntityRelation::RemotePublic(inner) => {
@@ -590,6 +609,10 @@ impl EntityProperty {
     }
 
     /// Migrate Host/RemotePublic Property to Delegated version
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `EntityProperty` of type `{:?}` should never enable delegation..
     pub fn enable_delegation(
         &mut self,
         accessor: &EntityAuthAccessor,
@@ -651,6 +674,10 @@ impl EntityProperty {
     }
 
     /// Migrate Delegated Property to Host-Owned (Public) version
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `EntityProperty` of type: `{:?}` should never disable delegation..
     pub fn disable_delegation(&mut self) {
         match &mut self.inner {
             EntityRelation::Delegated(inner) => {
@@ -677,6 +704,10 @@ impl EntityProperty {
     }
 
     /// Migrate Host Property to Local version
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `EntityProperty` of type: `{:?}` should never be made local..
     pub fn localize(&mut self) {
         match &mut self.inner {
             EntityRelation::HostCreated(inner) => {
@@ -732,6 +763,7 @@ impl EntityProperty {
     }
 
     /// Returns the raw `GlobalEntity` stored in this property, or `None`.
+    #[must_use]
     pub fn get_inner(&self) -> Option<GlobalEntity> {
         self.inner.get_global_entity()
     }
@@ -756,6 +788,7 @@ impl EntityProperty {
     }
 
     /// Returns the `RemoteEntity` this property is still waiting to resolve, or `None` if already resolved.
+    #[must_use]
     pub fn waiting_remote_entity(&self) -> Option<RemoteEntity> {
         self.inner.waiting_remote_entity()
     }
@@ -812,7 +845,7 @@ impl HostCreatedRelation {
 
         // info!("HostCreatedRelation::write() `global_entity`: {:?}", global_entity);
 
-        let Ok(owned_local_entity) = converter.get_or_reserve_entity(global_entity) else {
+        let Ok(owned_local_entity) = converter.get_or_reserve_entity(*global_entity) else {
             false.ser(writer);
             return;
         };
@@ -896,7 +929,7 @@ impl RemoteCreatedRelation {
             false.ser(writer);
             return;
         };
-        let Ok(owned_entity) = converter.global_entity_to_owned_entity(global_entity) else {
+        let Ok(owned_entity) = converter.global_entity_to_owned_entity(*global_entity) else {
             warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
             false.ser(writer);
             return;
@@ -987,7 +1020,7 @@ impl RemotePublicRelation {
             false.ser(writer);
             return;
         };
-        let Ok(local_entity) = converter.get_or_reserve_entity(global_entity) else {
+        let Ok(local_entity) = converter.get_or_reserve_entity(*global_entity) else {
             false.ser(writer);
             return;
         };
@@ -1009,7 +1042,7 @@ impl RemotePublicRelation {
             false.ser(writer);
             return;
         };
-        let Ok(owned_entity) = converter.global_entity_to_owned_entity(global_entity) else {
+        let Ok(owned_entity) = converter.global_entity_to_owned_entity(*global_entity) else {
             warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
             false.ser(writer);
             return;
@@ -1029,7 +1062,7 @@ struct DelegatedRelation {
 }
 
 impl DelegatedRelation {
-    /// Create a new DelegatedRelation
+    /// Create a new `DelegatedRelation`
     pub fn new(
         global_entity: Option<GlobalEntity>,
         auth_accessor: &EntityAuthAccessor,
@@ -1102,9 +1135,10 @@ impl DelegatedRelation {
     }
 
     pub fn bit_length(&self, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) -> u32 {
-        if !self.can_write() {
-            panic!("Must have Authority over Entity before performing this operation.");
-        }
+        assert!(
+            self.can_write(),
+            "Must have Authority over Entity before performing this operation."
+        );
         let mut bit_counter = BitCounter::new(0, 0, u32::MAX);
         self.write(&mut bit_counter, converter);
         bit_counter.bits_needed()
@@ -1115,15 +1149,16 @@ impl DelegatedRelation {
         writer: &mut dyn BitWrite,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     ) {
-        if !self.can_write() {
-            panic!("Must have Authority over Entity before performing this operation.");
-        }
+        assert!(
+            self.can_write(),
+            "Must have Authority over Entity before performing this operation."
+        );
 
         let Some(global_entity) = &self.global_entity else {
             false.ser(writer);
             return;
         };
-        let Ok(local_entity) = converter.get_or_reserve_entity(global_entity) else {
+        let Ok(local_entity) = converter.get_or_reserve_entity(*global_entity) else {
             false.ser(writer);
             return;
         };
@@ -1145,7 +1180,7 @@ impl DelegatedRelation {
             false.ser(writer);
             return;
         };
-        let Ok(host_entity) = converter.global_entity_to_owned_entity(global_entity) else {
+        let Ok(host_entity) = converter.global_entity_to_owned_entity(*global_entity) else {
             warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
             false.ser(writer);
             return;
@@ -1155,9 +1190,10 @@ impl DelegatedRelation {
     }
 
     fn mutate(&mut self) {
-        if !self.can_mutate() {
-            panic!("Must request authority to mutate a Delegated EntityProperty.");
-        }
+        assert!(
+            self.can_mutate(),
+            "Must request authority to mutate a Delegated EntityProperty."
+        );
         let _success = self.mutator.mutate(self.index);
     }
 
@@ -1437,8 +1473,8 @@ mod relation_state_machine_tests {
 
     // -- fixtures ----------------------------------------------------------
 
-    /// Named entity-property builders for the mirror tables below.
-    type BuilderTable<const N: usize> = [(&'static str, fn() -> EntityProperty); N];
+    /// One named mirror-matrix case: a label plus a builder for the property.
+    type CaseBuilder = (&'static str, fn() -> EntityProperty);
 
     #[derive(Clone)]
     struct CountingMutator(Arc<AtomicUsize>);
@@ -1503,52 +1539,52 @@ mod relation_state_machine_tests {
     impl LocalEntityAndGlobalEntityConverter for MapConverter {
         fn global_entity_to_host_entity(
             &self,
-            global_entity: &GlobalEntity,
+            global_entity: GlobalEntity,
         ) -> Result<HostEntity, EntityDoesNotExistError> {
             self.check(global_entity.to_u64())
                 .map(|_| HostEntity::new(global_entity.to_u64() as u32))
         }
         fn global_entity_to_remote_entity(
             &self,
-            global_entity: &GlobalEntity,
+            global_entity: GlobalEntity,
         ) -> Result<RemoteEntity, EntityDoesNotExistError> {
             self.check(global_entity.to_u64())
                 .map(|_| RemoteEntity::new(global_entity.to_u64() as u32))
         }
         fn global_entity_to_owned_entity(
             &self,
-            global_entity: &GlobalEntity,
+            global_entity: GlobalEntity,
         ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
             self.check(global_entity.to_u64())
                 .map(|_| OwnedLocalEntity::new_host_dynamic(global_entity.to_u64() as u32))
         }
         fn host_entity_to_global_entity(
             &self,
-            host_entity: &HostEntity,
+            host_entity: HostEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             self.check(host_entity.value() as u64)
         }
         fn static_host_entity_to_global_entity(
             &self,
-            host_entity: &HostEntity,
+            host_entity: HostEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             self.check(host_entity.value() as u64)
         }
         fn remote_entity_to_global_entity(
             &self,
-            remote_entity: &RemoteEntity,
+            remote_entity: RemoteEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             self.check(remote_entity.value() as u64)
         }
-        fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
-            self.redirects.get(entity).copied().unwrap_or(*entity)
+        fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity {
+            self.redirects.get(&entity).copied().unwrap_or(entity)
         }
     }
 
     impl LocalEntityAndGlobalEntityConverterMut for MapConverter {
         fn get_or_reserve_entity(
             &mut self,
-            global_entity: &GlobalEntity,
+            global_entity: GlobalEntity,
         ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
             self.global_entity_to_owned_entity(global_entity)
         }
@@ -1557,7 +1593,7 @@ mod relation_state_machine_tests {
     impl EntityAndGlobalEntityConverter<u64> for MapConverter {
         fn global_entity_to_entity(
             &self,
-            global_entity: &GlobalEntity,
+            global_entity: GlobalEntity,
         ) -> Result<u64, EntityDoesNotExistError> {
             self.check(global_entity.to_u64()).map(|g| g.to_u64())
         }
@@ -2351,7 +2387,7 @@ mod relation_state_machine_tests {
         // Age out the redirect and lose the new mapping: the old id is now
         // unresolvable with Original == Redirected, the live shape.
         map.cleanup_old_redirects(&Instant::now(), 0);
-        map.remove_remote_mapping_if_exists(&RemoteEntity::new(7));
+        map.remove_remote_mapping_if_exists(RemoteEntity::new(7));
         let mut stale = waiting(4);
         assert!(!stale.waiting_complete(&map));
         assert_eq!(stale.inner.name(), "RemoteWaiting");
@@ -2650,14 +2686,14 @@ mod relation_state_machine_tests {
 
     #[test]
     fn mirroring_copies_the_entity_into_every_settable_relation() {
-        let sources: BuilderTable<5> = [
+        let sources: [CaseBuilder; 5] = [
             ("host", || host_created(Some(7))),
             ("remote", || remote_created(Some(7))),
             ("public", || remote_public(Some(7)).0),
             ("local", || local(Some(7))),
             ("delegated", || delegated(Some(7)).0),
         ];
-        let targets: BuilderTable<3> = [
+        let targets: [CaseBuilder; 3] = [
             ("host", || host_created(None)),
             ("local", || local(None)),
             ("delegated", || delegated(None).0),
@@ -2677,7 +2713,7 @@ mod relation_state_machine_tests {
 
     #[test]
     fn mirroring_a_waiting_property_clears_the_target() {
-        let targets: BuilderTable<3> = [
+        let targets: [CaseBuilder; 3] = [
             ("host", || host_created(Some(7))),
             ("local", || local(Some(7))),
             ("delegated", || delegated(Some(7)).0),
@@ -2695,7 +2731,7 @@ mod relation_state_machine_tests {
 
     #[test]
     fn mirroring_an_invalid_property_panics() {
-        let targets: BuilderTable<3> = [
+        let targets: [CaseBuilder; 3] = [
             ("host", || host_created(Some(7))),
             ("local", || local(Some(7))),
             ("delegated", || delegated(Some(7)).0),

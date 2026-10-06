@@ -39,8 +39,8 @@ impl IndexedMessageWriter {
                 message_kinds,
                 converter,
                 &mut counter,
-                &last_written_id,
-                message_index,
+                last_written_id,
+                *message_index,
                 message,
             );
             if counter.overflowed() {
@@ -62,8 +62,8 @@ impl IndexedMessageWriter {
                 message_kinds,
                 converter,
                 writer,
-                &last_written_id,
-                message_index,
+                last_written_id,
+                *message_index,
                 message,
             );
 
@@ -78,15 +78,13 @@ impl IndexedMessageWriter {
 
     pub fn write_message_index(
         writer: &mut dyn BitWrite,
-        last_written_id: &Option<MessageIndex>,
-        message_index: &MessageIndex,
+        last_written_id: Option<MessageIndex>,
+        message_index: MessageIndex,
     ) {
         if let Some(last_id) = last_written_id {
             // write message id diff
-            let id_diff = wrapping_diff(*last_id, *message_index);
-            if id_diff < 0 {
-                panic!("Packet Write Error: Message Index diff is negative in subsequent message.. Previous: {}, Current: {}, Diff: {}", last_id, message_index, id_diff);
-            }
+            let id_diff = wrapping_diff(last_id, message_index);
+            assert!(id_diff >= 0, "Packet Write Error: Message Index diff is negative in subsequent message.. Previous: {last_id}, Current: {message_index}, Diff: {id_diff}");
             let id_diff_encoded = UnsignedVariableInteger::<3>::new(id_diff);
             id_diff_encoded.ser(writer);
         } else {
@@ -99,8 +97,8 @@ impl IndexedMessageWriter {
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         writer: &mut dyn BitWrite,
-        last_written_id: &Option<MessageIndex>,
-        message_index: &MessageIndex,
+        last_written_id: Option<MessageIndex>,
+        message_index: MessageIndex,
         message: &MessageContainer,
     ) {
         Self::write_message_index(writer, last_written_id, message_index);
@@ -133,7 +131,7 @@ mod tests {
         let mut writer = BitWriter::new();
         let mut last = None;
         for id in [1u16, 2, 3, 7, 100, 101, 200] {
-            IndexedMessageWriter::write_message_index(&mut writer, &last, &id);
+            IndexedMessageWriter::write_message_index(&mut writer, last, id);
             last = Some(id);
         }
     }
@@ -144,7 +142,7 @@ mod tests {
         let mut writer = BitWriter::new();
         let mut last = None;
         for id in [42u16, 42, 42] {
-            IndexedMessageWriter::write_message_index(&mut writer, &last, &id);
+            IndexedMessageWriter::write_message_index(&mut writer, last, id);
             last = Some(id);
         }
     }
@@ -158,7 +156,7 @@ mod tests {
         let mut writer = BitWriter::new();
         let mut last = None;
         for id in [10u16, 5u16] {
-            IndexedMessageWriter::write_message_index(&mut writer, &last, &id);
+            IndexedMessageWriter::write_message_index(&mut writer, last, id);
             last = Some(id);
         }
     }

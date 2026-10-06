@@ -54,8 +54,8 @@ pub struct MainServer {
 }
 
 impl MainServer {
-    /// Create a new MainServer
-    pub fn new<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
+    /// Create a new `MainServer`
+    pub fn new<P: Into<Protocol>>(server_config: &ServerConfig, protocol: P) -> Self {
         let mut protocol: Protocol = protocol.into();
         protocol.lock();
         let protocol_id = protocol.protocol_id();
@@ -63,8 +63,9 @@ impl MainServer {
     }
 
     /// Creates a new `MainServer` using a pre-computed protocol ID (used by adapters sharing a protocol).
+    #[must_use]
     pub fn new_with_protocol_id(
-        server_config: ServerConfig,
+        server_config: &ServerConfig,
         protocol: Protocol,
         protocol_id: ProtocolId,
     ) -> Self {
@@ -76,8 +77,8 @@ impl MainServer {
         } = protocol;
 
         let (recv_io, send_io) = new_io_pair(
-            &server_config.connection.bandwidth_measure_duration,
-            &compression,
+            server_config.connection.bandwidth_measure_duration.as_ref(),
+            compression.as_ref(),
         );
 
         Self {
@@ -119,6 +120,7 @@ impl MainServer {
     }
 
     /// Returns a cloned handle to the underlying packet sender.
+    #[must_use]
     pub fn sender_cloned(&self) -> Box<dyn PacketSender> {
         self.send_io.sender_cloned()
     }
@@ -133,11 +135,13 @@ impl MainServer {
 
     /// Returns whether or not the Server has initialized correctly and is
     /// listening for Clients
+    #[must_use]
     pub fn is_listening(&self) -> bool {
         self.send_io.is_loaded()
     }
 
     /// Returns socket config
+    #[must_use]
     pub fn socket_config(&self) -> &SocketConfig {
         &self.socket_config
     }
@@ -174,7 +178,7 @@ impl MainServer {
         // info!("adding authenticated user {}", &auth_addr);
         let identity_token = naia_shared::IdentityToken::generate();
         self.handshake_manager
-            .authenticate_user(&identity_token, user_key);
+            .authenticate_user(&identity_token, *user_key);
 
         let (auth_sender, _) = self
             .auth_io
@@ -205,12 +209,13 @@ impl MainServer {
         let container = MessageContainer::new(Box::new(message));
         let mut writer = BitWriter::new();
         container.write(&self.message_kinds, &mut writer, &mut FakeEntityConverter);
-        self.reject_connection_with_payload(user_key, Some(writer.to_bytes().to_vec()));
+        let payload_bytes = writer.to_bytes().to_vec();
+        self.reject_connection_with_payload(user_key, Some(payload_bytes.as_slice()));
     }
 
     /// Rejects an incoming Client User, optionally handing them an
     /// already-serialized message explaining why (naia-lib/naia#133).
-    pub fn reject_connection_with_payload(&mut self, user_key: &UserKey, payload: Option<Vec<u8>>) {
+    pub fn reject_connection_with_payload(&mut self, user_key: &UserKey, payload: Option<&[u8]>) {
         if let Some(user) = self.users.get_mut(user_key) {
             let Some(auth_addr) = user.take_auth_address() else {
                 warn!(
@@ -226,7 +231,7 @@ impl MainServer {
                 .auth_io
                 .as_mut()
                 .expect("Auth should be set up by this point");
-            if auth_sender.reject(&auth_addr, payload.as_deref()).is_err() {
+            if auth_sender.reject(&auth_addr, payload).is_err() {
                 warn!(
                     "Server Error: Cannot send auth reject message to {:?}",
                     &auth_addr
@@ -234,53 +239,57 @@ impl MainServer {
                 // TODO: handle destroying any threads waiting on this response
             }
 
-            self.user_delete(user_key);
+            self.user_delete(*user_key);
         }
     }
 
-    fn finalize_connection(&mut self, user_key: &UserKey, user_address: &SocketAddr) {
-        let Some(user) = self.users.get_mut(user_key) else {
+    fn finalize_connection(&mut self, user_key: UserKey, user_address: &SocketAddr) {
+        let Some(user) = self.users.get_mut(&user_key) else {
             warn!("unknown user is finalizing connection...");
             return;
         };
         user.set_address(user_address);
 
-        self.user_connections.insert(user.address(), *user_key);
-        self.pending_auth_users.remove(user_key);
+        self.user_connections.insert(user.address(), user_key);
+        self.pending_auth_users.remove(&user_key);
 
         self.incoming_events.push_connection(user_key);
     }
 
     // Users
 
-    /// Returns whether or not a User exists for the given RoomKey
+    /// Returns whether or not a User exists for the given `RoomKey`
+    #[must_use]
     pub fn user_exists(&self, user_key: &UserKey) -> bool {
         self.users.contains_key(user_key)
     }
 
-    /// Retrieves an UserRef that exposes read-only operations for the User
-    /// associated with the given UserKey.
+    /// Retrieves an `UserRef` that exposes read-only operations for the User
+    /// associated with the given `UserKey`.
     ///
     /// # Panics
     /// Panics if no user exists for the given key. Prefer [`user_opt`](Self::user_opt)
     /// when the key may be stale.
+    #[must_use]
     pub fn user(&'_ self, user_key: &UserKey) -> MainUserRef<'_> {
         if self.users.contains_key(user_key) {
-            return MainUserRef::new(self, user_key);
+            return MainUserRef::new(self, *user_key);
         }
         panic!("No User exists for given Key!");
     }
 
     /// Returns `Some(MainUserRef)` if the user exists, or `None` if the key is stale.
+    #[must_use]
     pub fn user_opt(&'_ self, user_key: &UserKey) -> Option<MainUserRef<'_>> {
         if self.users.contains_key(user_key) {
-            Some(MainUserRef::new(self, user_key))
+            Some(MainUserRef::new(self, *user_key))
         } else {
             None
         }
     }
 
     /// Return a list of all currently connected Users' keys
+    #[must_use]
     pub fn user_keys(&self) -> Vec<UserKey> {
         let mut output = Vec::new();
 
@@ -297,13 +306,14 @@ impl MainServer {
     }
 
     /// Get the number of Users currently connected
+    #[must_use]
     pub fn users_count(&self) -> usize {
         self.users.len()
     }
 
-    /// Get a User's Socket Address, given the associated UserKey
-    pub(crate) fn user_address(&self, user_key: &UserKey) -> Option<SocketAddr> {
-        if let Some(user) = self.users.get(user_key) {
+    /// Get a User's Socket Address, given the associated `UserKey`
+    pub(crate) fn user_address(&self, user_key: UserKey) -> Option<SocketAddr> {
+        if let Some(user) = self.users.get(&user_key) {
             if user.has_address() {
                 return Some(user.address());
             }
@@ -313,6 +323,7 @@ impl MainServer {
 
     /// The registered message kinds, for serializing a message against this
     /// server's protocol.
+    #[must_use]
     pub fn message_kinds(&self) -> &MessageKinds {
         &self.message_kinds
     }
@@ -329,28 +340,28 @@ impl MainServer {
     ) {
         // Send disconnect packets to the client before removing them
         // This mirrors the client-initiated disconnect flow
-        if let Some(address) = self.user_address(user_key) {
+        if let Some(address) = self.user_address(*user_key) {
             // Send multiple times for reliability (like client does)
             for _ in 0..10 {
                 let disconnect_packet = self.handshake_manager.write_disconnect(reason, payload);
                 if self
                     .send_io
-                    .send_packet(&address, disconnect_packet)
+                    .send_packet(&address, &disconnect_packet)
                     .is_err()
                 {
-                    log::warn!("Server Error: Cannot send disconnect packet to {}", address);
+                    log::warn!("Server Error: Cannot send disconnect packet to {address}");
                     break;
                 }
             }
         }
-        self.user_delete(user_key);
+        self.user_delete(*user_key);
     }
 
-    pub(crate) fn user_delete(&mut self, user_key: &UserKey) -> MainUser {
-        let Some(user) = self.users.remove(user_key) else {
+    pub(crate) fn user_delete(&mut self, user_key: UserKey) -> MainUser {
+        let Some(user) = self.users.remove(&user_key) else {
             panic!("Attempting to delete non-existant user!");
         };
-        self.pending_auth_users.remove(user_key);
+        self.pending_auth_users.remove(&user_key);
 
         if let Some(user_addr) = user.address_opt() {
             info!("deleting authenticated user for {}", user.address());
@@ -367,6 +378,18 @@ impl MainServer {
 
     /// Maintain connection with a client and read all incoming packet data
     fn maintain_socket(&mut self) {
+        self.drain_auth_events();
+        self.drain_socket_packets();
+        self.sweep_pending_auth_timeouts();
+    }
+
+    /// Drain inbound auth requests into user records and auth events.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a just-inserted user record is missing, which cannot
+    /// happen single-threaded between insert and lookup.
+    fn drain_auth_events(&mut self) {
         // receive auth events
         //
         // Every request that arrives here has already had its protocol
@@ -409,14 +432,14 @@ impl MainServer {
                                 warn!("Server Error: cannot read auth message");
                                 continue;
                             };
-                            self.incoming_events.push_auth(&user_key, auth_message);
+                            self.incoming_events.push_auth(user_key, auth_message);
                         } else {
                             // auto-accept: no ServerAuthEvent; generate token and send immediately
                             let user = self.users.get_mut(&user_key).expect("user just inserted");
                             let _ = user.take_auth_address(); // consume the auth address
                             let identity_token = naia_shared::IdentityToken::generate();
                             self.handshake_manager
-                                .authenticate_user(&identity_token, &user_key);
+                                .authenticate_user(&identity_token, user_key);
                             if auth_sender.accept(&auth_addr, &identity_token).is_err() {
                                 warn!(
                                     "Server Error: Cannot send auto-accept packet to {:?}",
@@ -439,7 +462,10 @@ impl MainServer {
                 }
             }
         }
+    }
 
+    /// Drain inbound socket packets into world/handshake events.
+    fn drain_socket_packets(&mut self) {
         // receive socket events
         loop {
             match self.recv_io.recv_reader() {
@@ -489,10 +515,10 @@ impl MainServer {
                                 Ok(HandshakeAction::DisconnectUser(user_key)) => {
                                     // Verified disconnect request - queue disconnect in world server
                                     // The Server struct will handle queuing it properly
-                                    self.incoming_events.push_queued_disconnect(&user_key);
+                                    self.incoming_events.push_queued_disconnect(user_key);
                                 }
                                 Ok(HandshakeAction::SendPacket(packet)) => {
-                                    if self.send_io.send_packet(&address, packet).is_err() {
+                                    if self.send_io.send_packet(&address, &packet).is_err() {
                                         // Single send failure is not fatal: the client will
                                         // retry the handshake on its own timeout. Persistent
                                         // failures will surface via connection timeout.
@@ -503,8 +529,11 @@ impl MainServer {
                                     user_key,
                                     validate_packet,
                                 )) => {
-                                    self.finalize_connection(&user_key, &address);
-                                    if self.send_io.send_packet(&address, validate_packet).is_err()
+                                    self.finalize_connection(user_key, &address);
+                                    if self
+                                        .send_io
+                                        .send_packet(&address, &validate_packet)
+                                        .is_err()
                                     {
                                         // Same rationale as SendPacket above: client retries.
                                         warn!(
@@ -535,7 +564,11 @@ impl MainServer {
                 }
             }
         }
+    }
 
+    /// Auto-reject network-handshaked connections the application never
+    /// accepted or rejected within the pending-auth timeout.
+    fn sweep_pending_auth_timeouts(&mut self) {
         // Auto-reject connections that completed the network handshake but where the
         // application never called accept_connection/reject_connection within the timeout.
         if self.auth_io.is_some() {
@@ -550,15 +583,12 @@ impl MainServer {
                 .collect();
             for (user_key, auth_addr_opt) in timed_out {
                 if let Some(auth_addr) = auth_addr_opt {
-                    warn!(
-                        "pending-auth timeout for {}: auto-rejecting after {:?}",
-                        auth_addr, timeout
-                    );
+                    warn!("pending-auth timeout for {auth_addr}: auto-rejecting after {timeout:?}");
                     if let Some((auth_sender, _)) = self.auth_io.as_mut() {
                         let _ = auth_sender.reject(&auth_addr, None);
                     }
                 }
-                self.user_delete(&user_key);
+                self.user_delete(user_key);
             }
         }
     }
@@ -649,7 +679,7 @@ mod pending_auth_capacity_tests {
         let protocol = Protocol::builder().build();
         let rejects = Arc::new(AtomicU32::new(0));
 
-        let mut server = MainServer::new(config, protocol);
+        let mut server = MainServer::new(&config, protocol);
         server.recv_io.load(Box::new(SilentPacketIo));
         server.send_io.load(Box::new(SilentPacketIo));
         server.auth_io = Some((
@@ -763,7 +793,7 @@ mod pending_auth_capacity_tests {
         let graduating: Vec<UserKey> = server.pending_auth_users.iter().copied().take(10).collect();
         for (i, user_key) in graduating.iter().enumerate() {
             let addr: SocketAddr = format!("10.0.0.{}:2", i).parse().unwrap();
-            server.finalize_connection(user_key, &addr);
+            server.finalize_connection(*user_key, &addr);
         }
         assert_eq!(server.pending_auth_users.len(), cap - 10);
 
@@ -882,7 +912,7 @@ mod drain_termination_tests {
 
     #[test]
     fn maintain_socket_terminates_on_persistent_transport_error() {
-        let mut server = MainServer::new(ServerConfig::default(), Protocol::builder().build());
+        let mut server = MainServer::new(&ServerConfig::default(), Protocol::builder().build());
         server.listen(FailSocket);
 
         let server = Arc::new(Mutex::new(server));

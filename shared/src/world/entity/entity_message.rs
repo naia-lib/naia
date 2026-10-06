@@ -87,6 +87,10 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
     }
 
     /// Returns a copy of this message with the entity replaced by `()`, preserving all other fields.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Cannot strip entity from a Noop message.
     pub fn strip_entity(self) -> EntityMessage<()> {
         match self {
             Self::Spawn(_) => EntityMessage::Spawn(()),
@@ -118,6 +122,10 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
     }
 
     /// Returns this message re-typed with `entity` replacing the original entity field.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Cannot add entity to a Noop message.
     pub fn with_entity<O: Copy + Eq + PartialEq>(self, entity: O) -> EntityMessage<O> {
         match self {
             EntityMessage::Spawn(_) => EntityMessage::Spawn(entity),
@@ -233,18 +241,24 @@ impl EntityMessage<RemoteEntity> {
     //
     /// Converts this remote-entity message into an `EntityEvent`, resolving the entity via `local_entity_map`,
     /// or `None` if the entity is not found in the map (stale mapping after churn -- the caller drops it).
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `EnableDelegationResponse` should not be sent by remote.
+    #[must_use]
     pub fn to_event(self, local_entity_map: &LocalEntityMap) -> Option<EntityEvent> {
         let remote_entity = self.entity().unwrap();
-        let global_entity = match local_entity_map.global_entity_from_remote(&remote_entity) {
-            Some(ge) => *ge,
-            None => {
-                error!(
-                    "to_event() failed to find RemoteEntity({:?}) in entity_map — message type: {:?}; skipping",
-                    remote_entity,
-                    self.get_type()
-                );
-                return None;
-            }
+        let global_entity = if let Some(ge) =
+            local_entity_map.global_entity_from_remote(remote_entity)
+        {
+            *ge
+        } else {
+            error!(
+                "to_event() failed to find RemoteEntity({:?}) in entity_map — message type: {:?}; skipping",
+                remote_entity,
+                self.get_type()
+            );
+            return None;
         };
         Some(match self {
             EntityMessage::Publish(_, _) => EntityEvent::Publish(global_entity),
@@ -274,20 +288,26 @@ impl EntityMessage<RemoteEntity> {
     }
 }
 
+//
 impl EntityMessage<HostEntity> {
     /// Converts this host-entity message into an `EntityEvent`, or `None` if the entity is not found in the map.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Handled elsewhere.
+    #[must_use]
     pub fn to_event(self, local_entity_map: &LocalEntityMap) -> Option<EntityEvent> {
         let host_entity = self.entity().unwrap();
-        let global_entity = match local_entity_map.global_entity_from_host(&host_entity) {
-            Some(ge) => *ge,
-            None => {
-                error!(
-                    "to_event() failed to find HostEntity({:?}) in entity_map — message type: {:?}; skipping",
-                    host_entity,
-                    self.get_type()
-                );
-                return None;
-            }
+        let global_entity = if let Some(ge) = local_entity_map.global_entity_from_host(host_entity)
+        {
+            *ge
+        } else {
+            error!(
+                "to_event() failed to find HostEntity({:?}) in entity_map — message type: {:?}; skipping",
+                host_entity,
+                self.get_type()
+            );
+            return None;
         };
         Some(match self {
             EntityMessage::Publish(_, _) => EntityEvent::Publish(global_entity),

@@ -30,7 +30,7 @@ pub struct EntityPriorityRef<'a, E: Copy + Eq + Hash> {
     pub(crate) entity: E,
 }
 
-impl<'a, E: Copy + Eq + Hash> EntityPriorityRef<'a, E> {
+impl<E: Copy + Eq + Hash> EntityPriorityRef<'_, E> {
     /// Construct an empty read-only handle (no backing entry). Reads return
     /// defaults: `accumulated() == 0.0`, `gain() == None`. Used when the
     /// caller wants a handle for an entity whose layer doesn't yet exist.
@@ -49,7 +49,7 @@ impl<'a, E: Copy + Eq + Hash> EntityPriorityRef<'a, E> {
     /// Current accumulated priority value for this layer. Higher = more urgent.
     /// Returns `0.0` if this entity has no accumulator entry yet.
     pub fn accumulated(&self) -> f32 {
-        self.state.map(|s| s.accumulated).unwrap_or(0.0)
+        self.state.map_or(0.0, |s| s.accumulated)
     }
 
     /// Current per-tick gain override for this layer. `None` means the default
@@ -76,7 +76,7 @@ pub struct EntityPriorityMut<'a, E: Copy + Eq + Hash> {
     pub(crate) entity: E,
 }
 
-impl<'a, E: Copy + Eq + Hash> EntityPriorityMut<'a, E> {
+impl<E: Copy + Eq + Hash> EntityPriorityMut<'_, E> {
     // --- Reads (mirror Ref) ---
 
     /// Returns the entity this handle refers to.
@@ -88,8 +88,7 @@ impl<'a, E: Copy + Eq + Hash> EntityPriorityMut<'a, E> {
     pub fn accumulated(&self) -> f32 {
         self.entries
             .get(&self.entity)
-            .map(|s| s.accumulated)
-            .unwrap_or(0.0)
+            .map_or(0.0, |s| s.accumulated)
     }
 
     /// Current per-tick gain override. `None` means the default (1.0) applies.

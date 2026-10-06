@@ -73,7 +73,8 @@ pub struct MessageManager {
 }
 
 impl MessageManager {
-    /// Creates a new MessageManager
+    /// Creates a new `MessageManager`
+    #[must_use]
     pub fn new(host_type: HostType, channel_kinds: &ChannelKinds) -> Self {
         // initialize all reliable channels
 
@@ -117,7 +118,7 @@ impl MessageManager {
                 ChannelMode::TickBuffered(_) => {
                     // Tick buffered channel uses another manager, skip
                 }
-            };
+            }
         }
 
         // initialize receivers
@@ -172,7 +173,7 @@ impl MessageManager {
                 ChannelMode::TickBuffered(_) => {
                     // Tick buffered channel uses another manager, skip
                 }
-            };
+            }
         }
 
         // initialize settings
@@ -207,6 +208,10 @@ impl MessageManager {
     /// if the message was accepted, `false` if the channel queue was full and
     /// the message was dropped (reliable channels only — unreliable channels
     /// always return `true`, evicting the oldest queued message if needed).
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Channel not configured correctly! Cannot send message..
     pub fn send_message(
         &mut self,
         message_kinds: &MessageKinds,
@@ -254,10 +259,18 @@ impl MessageManager {
     /// Queues a request with `global_request_id` into the given channel's send buffer.
     ///
     /// H3: `nonce` names the exchange on the wire (envelope cutover, codec
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Channel not configured correctly! Cannot send message..
     /// grammar 2) and keys the transport's (local id, nonce) match.
     ///
     /// Returns `false` if the channel refused it (reliable queue-depth cap
     /// reached); nothing was enqueued and the caller must retry later.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Channel not configured correctly! Cannot send message..
     pub fn send_request(
         &mut self,
         message_kinds: &MessageKinds,
@@ -280,6 +293,10 @@ impl MessageManager {
     ///
     /// Returns `false` if the channel refused it (reliable queue-depth cap
     /// reached); nothing was enqueued and the caller must retry later.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Channel not configured correctly! Cannot send message..
     pub fn send_response(
         &mut self,
         message_kinds: &MessageKinds,
@@ -296,14 +313,19 @@ impl MessageManager {
     }
 
     /// Advances all channel senders, re-queuing any messages due for retransmission given current RTT.
-    pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {
+    pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: f32) {
         for channel in self.channel_senders.values_mut() {
             channel.collect_messages(now, rtt_millis);
         }
     }
 
     /// Returns whether the Manager has queued Messages that can be transmitted
+    ///
+    /// # Panics
+    ///
+    /// Panics on internal invariant violation.
     /// to the remote host
+    #[must_use]
     pub fn has_outgoing_messages(&self) -> bool {
         for channel in self.channel_senders.values() {
             if channel.has_messages() {
@@ -314,6 +336,10 @@ impl MessageManager {
     }
 
     /// Encodes all pending outgoing messages across all channels into `writer`, ordered by channel criticality.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a value expected to be present is missing.
     pub fn write_messages(
         &mut self,
         channel_kinds: &ChannelKinds,
@@ -335,8 +361,7 @@ impl MessageManager {
                 let gain = self
                     .channel_settings
                     .get(k)
-                    .map(|s| s.criticality.base_gain())
-                    .unwrap_or(1.0);
+                    .map_or(1.0, |s| s.criticality.base_gain());
                 (*k, gain)
             })
             .collect();
@@ -436,6 +461,10 @@ impl MessageManager {
     }
 
     /// Retrieve all requests from the channel buffers
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Channel not configured correctly! Cannot send message on channel: {`channel_kind`:?}.
     pub fn receive_requests_and_responses(&mut self) -> RequestsAndResponsesOut {
         let mut request_output = Vec::new();
         let mut response_output = Vec::new();
@@ -457,8 +486,7 @@ impl MessageManager {
             if !responses.is_empty() {
                 let Some(channel_sender) = self.channel_senders.get_mut(channel_kind) else {
                     panic!(
-                        "Channel not configured correctly! Cannot send message on channel: {:?}",
-                        channel_kind
+                        "Channel not configured correctly! Cannot send message on channel: {channel_kind:?}"
                     );
                 };
                 for (local_request_id, wire_nonce, response) in responses {
@@ -471,11 +499,10 @@ impl MessageManager {
                     // must also name the outstanding exchange, or the packet
                     // drops without touching the mapping.
                     let Some(global_request_id) =
-                        channel_sender.process_incoming_response(&local_request_id, wire_nonce)
+                        channel_sender.process_incoming_response(local_request_id, wire_nonce)
                     else {
                         warn!(
-                            "dropping a response on channel {:?} that answers no outstanding request",
-                            channel_kind
+                            "dropping a response on channel {channel_kind:?} that answers no outstanding request"
                         );
                         continue;
                     };
@@ -495,7 +522,7 @@ impl PacketNotifiable for MessageManager {
             for (channel_kind, message_indices) in channel_list {
                 if let Some(channel) = self.channel_senders.get_mut(channel_kind) {
                     for message_index in message_indices {
-                        channel.notify_message_delivered(message_index);
+                        channel.notify_message_delivered(*message_index);
                     }
                 }
             }
@@ -928,7 +955,7 @@ mod message_manager_tests {
         kinds: &ChannelKinds,
         messages: &MessageKinds,
     ) {
-        from.collect_outgoing_messages(&Instant::now(), &200.0);
+        from.collect_outgoing_messages(&Instant::now(), 200.0);
         let mut writer = BitWriter::new();
         let mut has_written = false;
         from.write_messages(
@@ -1203,7 +1230,7 @@ mod message_manager_tests {
              collected: `send_message` enqueues, `collect_outgoing_messages` is \
              what makes it eligible for a packet"
         );
-        manager.collect_outgoing_messages(&Instant::now(), &200.0);
+        manager.collect_outgoing_messages(&Instant::now(), 200.0);
         assert!(
             manager.has_outgoing_messages(),
             "once collected, the fragments are ready to write"
@@ -1368,7 +1395,7 @@ mod message_manager_tests {
             ping(2),
         );
         // A reliable sender only offers collected messages to a packet.
-        client.collect_outgoing_messages(&Instant::now(), &200.0);
+        client.collect_outgoing_messages(&Instant::now(), 200.0);
 
         let mut writer = BitWriter::new();
         let mut has_written = false;
@@ -1467,7 +1494,7 @@ mod message_manager_tests {
         );
 
         let now = Instant::now();
-        manager.collect_outgoing_messages(&now, &200.0);
+        manager.collect_outgoing_messages(&now, 200.0);
         let mut writer = BitWriter::new();
         let mut has_written = false;
         manager.write_messages(
@@ -1485,7 +1512,7 @@ mod message_manager_tests {
         // Advance well past any resend timeout.
         let mut later = Instant::now();
         later.add_millis(10_000);
-        manager.collect_outgoing_messages(&later, &200.0);
+        manager.collect_outgoing_messages(&later, 200.0);
         assert!(
             !manager.has_outgoing_messages(),
             "an acked reliable message must not be re-queued for retransmission"
@@ -1508,7 +1535,7 @@ mod message_manager_tests {
         );
 
         let now = Instant::now();
-        manager.collect_outgoing_messages(&now, &200.0);
+        manager.collect_outgoing_messages(&now, 200.0);
         let mut writer = BitWriter::new();
         let mut has_written = false;
         manager.write_messages(
@@ -1526,7 +1553,7 @@ mod message_manager_tests {
 
         let mut later = Instant::now();
         later.add_millis(10_000);
-        manager.collect_outgoing_messages(&later, &200.0);
+        manager.collect_outgoing_messages(&later, 200.0);
         assert!(
             manager.has_outgoing_messages(),
             "an unacked reliable message must come back for another attempt"

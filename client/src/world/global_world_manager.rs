@@ -62,8 +62,7 @@ impl GlobalWorldManager {
     pub fn entity_is_static(&self, global_entity: &GlobalEntity) -> bool {
         self.entity_records
             .get(global_entity)
-            .map(|r| r.is_static)
-            .unwrap_or(false)
+            .is_some_and(|r| r.is_static)
     }
 
     pub fn entity_owner(&self, global_entity: &GlobalEntity) -> Option<EntityOwner> {
@@ -75,9 +74,10 @@ impl GlobalWorldManager {
 
     // Spawn
     pub fn host_spawn_entity(&mut self, global_entity: &GlobalEntity) {
-        if self.entity_records.contains_key(global_entity) {
-            panic!("entity already initialized!");
-        }
+        assert!(
+            !self.entity_records.contains_key(global_entity),
+            "entity already initialized!"
+        );
         self.entity_records
             .insert(*global_entity, GlobalEntityRecord::new(EntityOwner::Client));
         self.diff_handler
@@ -87,9 +87,10 @@ impl GlobalWorldManager {
     }
 
     pub fn host_spawn_static_entity(&mut self, global_entity: &GlobalEntity) {
-        if self.entity_records.contains_key(global_entity) {
-            panic!("entity already initialized!");
-        }
+        assert!(
+            !self.entity_records.contains_key(global_entity),
+            "entity already initialized!"
+        );
         self.entity_records.insert(
             *global_entity,
             GlobalEntityRecord::new_static(EntityOwner::Client),
@@ -118,14 +119,15 @@ impl GlobalWorldManager {
         }
 
         // Despawn from World Record
-        if !self.entity_records.contains_key(global_entity) {
-            panic!("entity does not exist!");
-        }
+        assert!(
+            self.entity_records.contains_key(global_entity),
+            "entity does not exist!"
+        );
 
         self.diff_handler
             .write()
             .expect("GlobalDiffHandler lock poisoned")
-            .free_entity(global_entity);
+            .free_entity(*global_entity);
         self.entity_records.remove(global_entity)
     }
 
@@ -153,9 +155,10 @@ impl GlobalWorldManager {
         let component_kind = component.kind();
         let diff_mask_length: u8 = component.diff_mask_size();
 
-        if !self.entity_records.contains_key(global_entity) {
-            panic!("entity does not exist!");
-        }
+        assert!(
+            self.entity_records.contains_key(global_entity),
+            "entity does not exist!"
+        );
         self.entity_records
             .get_mut(global_entity)
             .unwrap()
@@ -163,8 +166,8 @@ impl GlobalWorldManager {
 
         let prop_mutator = self.register_component(
             component_kinds,
-            global_entity,
-            &component_kind,
+            *global_entity,
+            component_kind,
             diff_mask_length,
         );
 
@@ -172,7 +175,7 @@ impl GlobalWorldManager {
     }
 
     /// Returns true if this component was already registered for host-side
-    /// tracking (i.e. the entity is delegated and the GlobalDiffHandler
+    /// tracking (i.e. the entity is delegated and the `GlobalDiffHandler`
     /// already has this entity+component registered).  Used by callers to
     /// skip redundant setup when authority is granted to a client for an
     /// entity whose delegation was already enabled.
@@ -186,7 +189,7 @@ impl GlobalWorldManager {
                 .diff_handler
                 .read()
                 .expect("GlobalDiffHandler lock")
-                .has_component(global_entity, component_kind)
+                .has_component(*global_entity, *component_kind)
     }
 
     // Remove Component
@@ -195,9 +198,10 @@ impl GlobalWorldManager {
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) {
-        if !self.entity_records.contains_key(global_entity) {
-            panic!("entity does not exist!");
-        }
+        assert!(
+            self.entity_records.contains_key(global_entity),
+            "entity does not exist!"
+        );
         self.entity_records
             .get_mut(global_entity)
             .unwrap()
@@ -207,13 +211,14 @@ impl GlobalWorldManager {
             .as_ref()
             .write()
             .expect("Haven't initialized DiffHandler")
-            .deregister_component(global_entity, component_kind);
+            .deregister_component(*global_entity, *component_kind);
     }
 
     pub fn remote_spawn_entity(&mut self, global_entity: &GlobalEntity) {
-        if self.entity_records.contains_key(global_entity) {
-            panic!("entity already initialized!");
-        }
+        assert!(
+            !self.entity_records.contains_key(global_entity),
+            "entity already initialized!"
+        );
         // info!("Remote spawning entity record for {:?}", global_entity);
         self.entity_records
             .insert(*global_entity, GlobalEntityRecord::new(EntityOwner::Server));
@@ -227,7 +232,7 @@ impl GlobalWorldManager {
         self.diff_handler
             .write()
             .expect("GlobalDiffHandler lock poisoned")
-            .free_entity(global_entity);
+            .free_entity(*global_entity);
         self.entity_records
             .remove(global_entity)
             .expect("Cannot despawn non-existant entity!");
@@ -240,9 +245,10 @@ impl GlobalWorldManager {
     ) {
         // info!("Remote inserting component {:?} for {:?}", component_kind, global_entity);
 
-        if !self.entity_records.contains_key(global_entity) {
-            panic!("entity does not exist!");
-        }
+        assert!(
+            self.entity_records.contains_key(global_entity),
+            "entity does not exist!"
+        );
         self.entity_records
             .get_mut(global_entity)
             .unwrap()
@@ -254,9 +260,10 @@ impl GlobalWorldManager {
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) {
-        if !self.entity_records.contains_key(global_entity) {
-            panic!("entity does not exist!");
-        }
+        assert!(
+            self.entity_records.contains_key(global_entity),
+            "entity does not exist!"
+        );
         self.entity_records
             .get_mut(global_entity)
             .unwrap()
@@ -309,14 +316,13 @@ impl GlobalWorldManager {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
         };
-        if record.replication_config() != Publicity::Public {
-            panic!(
-                "Can only enable delegation on an Entity that is Public! Config: {:?}",
-                record.replication_config()
-            );
-        }
+        assert!(
+            record.replication_config() == Publicity::Public,
+            "Can only enable delegation on an Entity that is Public! Config: {:?}",
+            record.replication_config()
+        );
         self.auth_handler
-            .register_entity(HostType::Client, global_entity);
+            .register_entity(HostType::Client, *global_entity);
     }
 
     pub(crate) fn entity_enable_delegation(&mut self, global_entity: &GlobalEntity) {
@@ -325,9 +331,10 @@ impl GlobalWorldManager {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
         };
-        if record.replication_config() != Publicity::Public {
-            panic!("Can only enable delegation on an Entity that is Public!");
-        }
+        assert!(
+            record.replication_config() == Publicity::Public,
+            "Can only enable delegation on an Entity that is Public!"
+        );
 
         record.set_replication_config(Publicity::Delegated);
 
@@ -341,12 +348,13 @@ impl GlobalWorldManager {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
         };
-        if record.replication_config() != Publicity::Delegated {
-            panic!("Can only disable delegation on an Entity that is Delegated!");
-        }
+        assert!(
+            record.replication_config() == Publicity::Delegated,
+            "Can only disable delegation on an Entity that is Delegated!"
+        );
 
         record.set_replication_config(Publicity::Public);
-        self.auth_handler.deregister_entity(global_entity);
+        self.auth_handler.deregister_entity(*global_entity);
     }
 
     pub(crate) fn entity_authority_status(
@@ -354,7 +362,7 @@ impl GlobalWorldManager {
         global_entity: &GlobalEntity,
     ) -> Option<EntityAuthStatus> {
         self.auth_handler
-            .auth_status(global_entity)
+            .auth_status(*global_entity)
             .map(|host_status| host_status.status())
     }
 
@@ -369,14 +377,14 @@ impl GlobalWorldManager {
         if !self.entity_is_delegated(global_entity) {
             return Err(AuthorityError::NotDelegated);
         }
-        let Some(auth_status) = self.auth_handler.auth_status(global_entity) else {
+        let Some(auth_status) = self.auth_handler.auth_status(*global_entity) else {
             return Err(AuthorityError::NotInScope);
         };
         if !auth_status.can_request() {
             return Err(AuthorityError::NotAvailable);
         }
         self.auth_handler
-            .set_auth_status(global_entity, EntityAuthStatus::Requested);
+            .set_auth_status(*global_entity, EntityAuthStatus::Requested);
         Ok(())
     }
 
@@ -401,14 +409,14 @@ impl GlobalWorldManager {
         if !self.entity_is_delegated(global_entity) {
             return Err(AuthorityError::NotDelegated);
         }
-        let Some(auth_status) = self.auth_handler.auth_status(global_entity) else {
+        let Some(auth_status) = self.auth_handler.auth_status(*global_entity) else {
             return Err(AuthorityError::NotInScope);
         };
         if !auth_status.can_release() {
             return Err(AuthorityError::NotHolder);
         }
         self.auth_handler
-            .set_auth_status(global_entity, EntityAuthStatus::Releasing);
+            .set_auth_status(*global_entity, EntityAuthStatus::Releasing);
         Ok(())
     }
 
@@ -428,17 +436,17 @@ impl GlobalWorldManager {
         new_auth_status: EntityAuthStatus,
     ) {
         self.auth_handler
-            .set_auth_status(global_entity, new_auth_status);
+            .set_auth_status(*global_entity, new_auth_status);
     }
 }
 
 impl GlobalWorldManagerType for GlobalWorldManager {
-    fn component_kinds(&self, global_entity: &GlobalEntity) -> Option<Vec<ComponentKind>> {
-        self.component_kinds(global_entity)
+    fn component_kinds(&self, global_entity: GlobalEntity) -> Option<Vec<ComponentKind>> {
+        self.component_kinds(&global_entity)
     }
 
-    fn entity_can_relate_to_user(&self, global_entity: &GlobalEntity, _user_key: &u64) -> bool {
-        if let Some(record) = self.entity_records.get(global_entity) {
+    fn entity_can_relate_to_user(&self, global_entity: GlobalEntity, _user_key: &u64) -> bool {
+        if let Some(record) = self.entity_records.get(&global_entity) {
             return match record.owner() {
                 EntityOwner::Server | EntityOwner::Client => true,
                 EntityOwner::Local => false,
@@ -459,8 +467,8 @@ impl GlobalWorldManagerType for GlobalWorldManager {
     fn register_component(
         &self,
         component_kinds: &ComponentKinds,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        global_entity: GlobalEntity,
+        component_kind: ComponentKind,
         diff_mask_length: u8,
     ) -> PropertyMutator {
         let mut_sender = self
@@ -479,16 +487,16 @@ impl GlobalWorldManagerType for GlobalWorldManager {
         PropertyMutator::new(mut_sender)
     }
 
-    fn get_entity_auth_accessor(&self, global_entity: &GlobalEntity) -> EntityAuthAccessor {
+    fn get_entity_auth_accessor(&self, global_entity: GlobalEntity) -> EntityAuthAccessor {
         self.auth_handler.get_accessor(global_entity)
     }
 
-    fn entity_auth_status(&self, global_entity: &GlobalEntity) -> Option<HostEntityAuthStatus> {
+    fn entity_auth_status(&self, global_entity: GlobalEntity) -> Option<HostEntityAuthStatus> {
         self.auth_handler.auth_status(global_entity)
     }
 
-    fn entity_needs_mutator_for_delegation(&self, global_entity: &GlobalEntity) -> bool {
-        if let Some(record) = self.entity_records.get(global_entity) {
+    fn entity_needs_mutator_for_delegation(&self, global_entity: GlobalEntity) -> bool {
+        if let Some(record) = self.entity_records.get(&global_entity) {
             let server_owned = record.owner() == EntityOwner::Server;
             let is_public = record.replication_config() == Publicity::Public;
 
@@ -498,20 +506,20 @@ impl GlobalWorldManagerType for GlobalWorldManager {
         false
     }
 
-    fn entity_is_replicating(&self, global_entity: &GlobalEntity) -> bool {
-        let Some(record) = self.entity_records.get(global_entity) else {
+    fn entity_is_replicating(&self, global_entity: GlobalEntity) -> bool {
+        let Some(record) = self.entity_records.get(&global_entity) else {
             panic!("entity does not have record");
         };
         record.is_replicating()
     }
 
-    fn entity_is_static(&self, global_entity: &GlobalEntity) -> bool {
-        Self::entity_is_static(self, global_entity)
+    fn entity_is_static(&self, global_entity: GlobalEntity) -> bool {
+        Self::entity_is_static(self, &global_entity)
     }
 }
 
 impl InScopeEntities<GlobalEntity> for GlobalWorldManager {
-    fn has_entity(&self, global_entity: &GlobalEntity) -> bool {
-        self.entity_records.contains_key(global_entity)
+    fn has_entity(&self, global_entity: GlobalEntity) -> bool {
+        self.entity_records.contains_key(&global_entity)
     }
 }

@@ -91,7 +91,7 @@ pub fn new_connection_pair(
     connection_config: &ConnectionConfig,
     ping_config: &PingConfig,
     user_address: &SocketAddr,
-    user_key: &UserKey,
+    user_key: UserKey,
     channel_kinds: &ChannelKinds,
     global_world_manager: &GlobalWorldManager,
     max_replicated_entities: usize,
@@ -109,7 +109,7 @@ pub fn new_connection_pair(
         connection_config,
         ping_config,
         *user_address,
-        *user_key,
+        user_key,
         channel_kinds,
         base_recv,
         Arc::clone(&shared),
@@ -120,7 +120,7 @@ pub fn new_connection_pair(
     shared.set_rtt_avg_ms(recv.ping_manager.rtt_average);
     let send = SendConnection::new(
         *user_address,
-        *user_key,
+        user_key,
         base_send,
         max_replicated_entities,
         shared,

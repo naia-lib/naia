@@ -15,9 +15,9 @@ use crate::{
     ComponentKinds, EntityAndGlobalEntityConverter, GlobalWorldManagerType, ReplicatedComponent,
 };
 
-/// Structures that implement the WorldMutType trait will be able to be loaded
+/// Structures that implement the `WorldMutType` trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep
-/// the WorldMutType in-sync with it's own Entities/Components
+/// the `WorldMutType` in-sync with it's own Entities/Components
 pub trait WorldRefType<E> {
     // Entities
     /// check whether entity exists
@@ -29,7 +29,7 @@ pub trait WorldRefType<E> {
     /// check whether entity contains component
     fn has_component<R: ReplicatedComponent>(&self, world_entity: &E) -> bool;
     /// check whether entity contains component, dynamically
-    fn has_component_of_kind(&self, world_entity: &E, component_kind: &ComponentKind) -> bool;
+    fn has_component_of_kind(&self, world_entity: &E, component_kind: ComponentKind) -> bool;
     /// gets an entity's component
     fn component<'a, R: ReplicatedComponent>(
         &'a self,
@@ -39,13 +39,44 @@ pub trait WorldRefType<E> {
     fn component_of_kind<'a>(
         &'a self,
         entity: &E,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
     ) -> Option<ReplicaDynRefWrapper<'a>>;
 }
 
-/// Structures that implement the WorldMutType trait will be able to be loaded
+/// Blanket `WorldRefType` for shared borrows, so send-path APIs can take
+/// `world: &W` without forcing callers to give up ownership (clippy
+/// `needless_pass_by_value`). Delegates to the owned implementation.
+impl<E, W: WorldRefType<E>> WorldRefType<E> for &W {
+    fn has_entity(&self, world_entity: &E) -> bool {
+        (**self).has_entity(world_entity)
+    }
+    fn entities(&self) -> Vec<E> {
+        (**self).entities()
+    }
+    fn has_component<R: ReplicatedComponent>(&self, world_entity: &E) -> bool {
+        (**self).has_component::<R>(world_entity)
+    }
+    fn has_component_of_kind(&self, world_entity: &E, component_kind: ComponentKind) -> bool {
+        (**self).has_component_of_kind(world_entity, component_kind)
+    }
+    fn component<'a, R: ReplicatedComponent>(
+        &'a self,
+        entity: &E,
+    ) -> Option<ReplicaRefWrapper<'a, R>> {
+        (**self).component::<R>(entity)
+    }
+    fn component_of_kind<'a>(
+        &'a self,
+        entity: &E,
+        component_kind: ComponentKind,
+    ) -> Option<ReplicaDynRefWrapper<'a>> {
+        (**self).component_of_kind(entity, component_kind)
+    }
+}
+
+/// Structures that implement the `WorldMutType` trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep
-/// the WorldMutType in-sync with it's own Entities/Components
+/// the `WorldMutType` in-sync with it's own Entities/Components
 pub trait WorldMutType<E>: WorldRefType<E> {
     // Entities
     /// spawn an entity
@@ -69,14 +100,14 @@ pub trait WorldMutType<E>: WorldRefType<E> {
     fn component_mut_of_kind<'a>(
         &'a mut self,
         world_entity: &E,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
     ) -> Option<ReplicaDynMutWrapper<'a>>;
     /// reads an incoming stream into a component
     fn component_apply_update(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         world_entity: &E,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
         update: PendingComponentUpdate,
     ) -> Result<(), SerdeErr>;
     /// reads an incoming stream into a component
@@ -84,7 +115,7 @@ pub trait WorldMutType<E>: WorldRefType<E> {
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         world_entity: &E,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
         update: ComponentFieldUpdate,
     ) -> Result<(), SerdeErr>;
     /// mirrors the whole state of two different entities
@@ -96,7 +127,7 @@ pub trait WorldMutType<E>: WorldRefType<E> {
         &mut self,
         mutable_entity: &E,
         immutable_entity: &E,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
     );
     /// insert a component
     fn insert_component<R: ReplicatedComponent>(&mut self, world_entity: &E, component_ref: R);
@@ -108,7 +139,7 @@ pub trait WorldMutType<E>: WorldRefType<E> {
     fn remove_component_of_kind(
         &mut self,
         world_entity: &E,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
     ) -> Option<Box<dyn Replicate>>;
 
     /// publish entity
@@ -126,12 +157,12 @@ pub trait WorldMutType<E>: WorldRefType<E> {
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
         world_entity: &E,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
     );
     /// unpublish entity
     fn entity_unpublish(&mut self, world_entity: &E);
     /// unpublish component
-    fn component_unpublish(&mut self, world_entity: &E, component_kind: &ComponentKind);
+    fn component_unpublish(&mut self, world_entity: &E, component_kind: ComponentKind);
     /// enable delegation on entity
     fn entity_enable_delegation(
         &mut self,
@@ -147,10 +178,10 @@ pub trait WorldMutType<E>: WorldRefType<E> {
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
         world_entity: &E,
-        component_kind: &ComponentKind,
+        component_kind: ComponentKind,
     );
     /// disable delegation on entity
     fn entity_disable_delegation(&mut self, world_entity: &E);
     /// disable delegation on component
-    fn component_disable_delegation(&mut self, world_entity: &E, component_kind: &ComponentKind);
+    fn component_disable_delegation(&mut self, world_entity: &E, component_kind: ComponentKind);
 }

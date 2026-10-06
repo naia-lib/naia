@@ -77,7 +77,7 @@ mod inner {
 
     /// Used to clone Box<dyn PacketSender>
     pub trait PacketSenderClone {
-        /// Clone the boxed PacketSender
+        /// Clone the boxed `PacketSender`
         fn clone_box(&self) -> Box<dyn PacketSender>;
     }
 
@@ -105,6 +105,7 @@ mod inner {
 
     impl PacketReadiness {
         /// Construct from the receiving half of a sender-pinged `()` channel.
+        #[must_use]
         pub fn new(rx: smol::channel::Receiver<()>) -> Self {
             Self(rx)
         }
@@ -122,6 +123,7 @@ mod inner {
         /// recv worker treats this as terminal (PF1-B) rather than
         /// spinning on an instantly-resolving `wait()` while flooding the
         /// undrained out-queue.
+        #[must_use]
         pub fn is_closed(&self) -> bool {
             self.0.is_closed()
         }
@@ -155,7 +157,7 @@ mod inner {
 
     /// Used to clone Box<dyn PacketReceiver>
     pub trait PacketReceiverClone {
-        /// Clone the boxed PacketReceiver
+        /// Clone the boxed `PacketReceiver`
         fn clone_box(&self) -> Box<dyn PacketReceiver>;
     }
 
@@ -208,7 +210,7 @@ mod inner {
 
     /// Used to clone Box<dyn AuthReceiver>
     pub trait AuthReceiverClone {
-        /// Clone the boxed AuthReceiver
+        /// Clone the boxed `AuthReceiver`
         fn clone_box(&self) -> Box<dyn AuthReceiver>;
     }
 

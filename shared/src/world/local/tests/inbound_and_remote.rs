@@ -58,7 +58,7 @@ impl Fixture {
         let mut component_kinds = HashSet::new();
         component_kinds.insert(ComponentKind::of::<Ghost>());
         self.manager
-            .insert_remote_entity(&global(id), remote_entity, component_kinds);
+            .insert_remote_entity(global(id), remote_entity, component_kinds);
         world.spawn_at(id);
         world.insert_boxed_component(&id, remote_component(&self.kinds, &Ghost::new_complete(0)));
         remote_entity.copy_to_owned()
@@ -69,7 +69,7 @@ impl Fixture {
     fn drain_command_types(&mut self) -> Vec<crate::EntityMessageType> {
         let now = crate::Instant::now();
         self.manager
-            .take_outgoing_commands(&now, &200.0)
+            .take_outgoing_commands(&now, 200.0)
             .into_iter()
             .map(|(_, command)| command.get_type())
             .collect()
@@ -96,7 +96,7 @@ fn a_buffered_update_is_drained_and_applied_to_the_world() {
     let owned = fx.adopt_remote(&mut world, 7);
 
     let update = full_update(&fx.kinds, &Ghost::new_complete(42));
-    fx.manager.insert_received_update(3, &owned, update);
+    fx.manager.insert_received_update(3, owned, update);
 
     let taken = fx
         .manager
@@ -131,7 +131,7 @@ fn updates_of_other_kinds_are_left_in_the_buffer() {
     world.insert_boxed_component(&7, remote_component(&fx.kinds, &Wraith::new_complete(0)));
 
     fx.manager
-        .insert_received_update(1, &owned, full_update(&fx.kinds, &Wraith::new_complete(9)));
+        .insert_received_update(1, owned, full_update(&fx.kinds, &Wraith::new_complete(9)));
 
     let ghosts = fx
         .manager
@@ -167,7 +167,7 @@ fn a_drained_update_is_not_returned_a_second_time() {
     let owned = fx.adopt_remote(&mut world, 7);
 
     fx.manager
-        .insert_received_update(1, &owned, full_update(&fx.kinds, &Ghost::new_complete(5)));
+        .insert_received_update(1, owned, full_update(&fx.kinds, &Ghost::new_complete(5)));
     let _ = fx
         .manager
         .take_received_updates_of_kind::<u64, TestWorld, Ghost>(&IdentityConverter, &mut world);
@@ -188,11 +188,8 @@ fn an_update_for_an_unmapped_entity_is_dropped() {
     let _ = fx.adopt_remote(&mut world, 7);
 
     let stranger = RemoteEntity::new(99).copy_to_owned();
-    fx.manager.insert_received_update(
-        1,
-        &stranger,
-        full_update(&fx.kinds, &Ghost::new_complete(5)),
-    );
+    fx.manager
+        .insert_received_update(1, stranger, full_update(&fx.kinds, &Ghost::new_complete(5)));
 
     let taken = fx
         .manager
@@ -220,7 +217,7 @@ fn updates_are_applied_in_buffer_order() {
     for (tick, value) in [(1u16, 10u8), (2, 20), (3, 30)] {
         fx.manager.insert_received_update(
             tick,
-            &owned,
+            owned,
             full_update(&fx.kinds, &Ghost::new_complete(value)),
         );
     }
@@ -252,7 +249,7 @@ fn inserting_a_remote_entity_maps_it_and_opens_a_channel() {
     let converter = fx.manager.entity_converter();
     assert_eq!(
         converter
-            .global_entity_to_remote_entity(&global(7))
+            .global_entity_to_remote_entity(global(7))
             .expect("the global entity should be mapped"),
         RemoteEntity::new(7),
         "the entity map should resolve the global entity to its remote id"
@@ -261,7 +258,7 @@ fn inserting_a_remote_entity_maps_it_and_opens_a_channel() {
 
     assert!(
         fx.manager
-            .get_remote_entity_auth_status(&global(7))
+            .get_remote_entity_auth_status(global(7))
             .is_some(),
         "the remote engine should have opened a delegated channel for it"
     );
@@ -277,11 +274,11 @@ fn despawning_a_remote_entity_notifies_the_waitlist_but_keeps_the_mapping() {
     let mut world = TestWorld::new();
     let _ = fx.adopt_remote(&mut world, 7);
 
-    fx.manager.remote_despawn_entity(&global(7));
+    fx.manager.remote_despawn_entity(global(7));
 
     let converter = fx.manager.entity_converter();
     assert!(
-        converter.global_entity_to_remote_entity(&global(7)).is_ok(),
+        converter.global_entity_to_remote_entity(global(7)).is_ok(),
         "the entity map entry survives the remote despawn"
     );
 }
@@ -322,13 +319,13 @@ fn the_remote_auth_senders_each_queue_their_own_command() {
     let _ = fx.adopt_remote(&mut world, 7);
     let entity = global(7);
 
-    fx.manager.remote_send_request_auth(&entity);
+    fx.manager.remote_send_request_auth(entity);
     assert_eq!(
         fx.drain_command_types(),
         vec![crate::EntityMessageType::RequestAuthority],
     );
 
-    fx.manager.send_enable_delegation_response(&entity);
+    fx.manager.send_enable_delegation_response(entity);
     assert_eq!(
         fx.drain_command_types(),
         vec![
@@ -347,9 +344,9 @@ fn receiving_a_set_authority_updates_the_channels_auth_status() {
     let entity = global(7);
 
     fx.manager
-        .remote_receive_set_auth(&entity, crate::EntityAuthStatus::Granted);
+        .remote_receive_set_auth(entity, crate::EntityAuthStatus::Granted);
     assert_eq!(
-        fx.manager.get_remote_entity_auth_status(&entity),
+        fx.manager.get_remote_entity_auth_status(entity),
         Some(crate::EntityAuthStatus::Granted),
         "the channel should report the status it was just handed"
     );
@@ -448,7 +445,7 @@ fn a_queued_message_is_released_once_its_remote_entity_spawns() {
     );
 
     fx.adopt_remote(&mut world, 3);
-    fx.manager.remote_spawn_entity(&global(3));
+    fx.manager.remote_spawn_entity(global(3));
 
     let items = fx
         .manager
@@ -465,7 +462,7 @@ fn a_queued_message_is_released_once_its_remote_entity_spawns() {
 fn spawning_a_remote_entity_the_map_no_longer_knows_is_a_no_op() {
     let mut fx = Fixture::client();
 
-    fx.manager.remote_spawn_entity(&global(404));
+    fx.manager.remote_spawn_entity(global(404));
 
     let now = crate::Instant::now();
     let mut store: crate::world::remote::remote_entity_waitlist::WaitlistStore<u32> =
@@ -490,10 +487,10 @@ fn an_authority_holding_client_tells_the_server_about_its_despawn() {
     let mut world = TestWorld::new();
     fx.adopt_remote(&mut world, 3);
     fx.manager
-        .remote_receive_set_auth(&global(3), crate::EntityAuthStatus::Granted);
+        .remote_receive_set_auth(global(3), crate::EntityAuthStatus::Granted);
     let _ = fx.drain_command_types();
 
-    fx.manager.despawn_entity_and_notify_server(&global(3));
+    fx.manager.despawn_entity_and_notify_server(global(3));
 
     assert!(
         fx.drain_command_types()
@@ -512,7 +509,7 @@ fn an_authority_holding_client_tells_the_server_about_its_despawn() {
 fn despawning_a_remote_entity_the_map_never_knew_panics() {
     let mut fx = Fixture::client();
 
-    fx.manager.remote_despawn_entity(&global(404));
+    fx.manager.remote_despawn_entity(global(404));
 }
 
 /// `replay_entity_command` re-submits a command through the remote engine
@@ -527,9 +524,9 @@ fn replaying_a_despawn_retires_the_remote_channel() {
     fx.adopt_remote(&mut world, 3);
 
     fx.manager
-        .replay_entity_command(&global(3), crate::EntityCommand::Despawn(global(3)));
+        .replay_entity_command(global(3), crate::EntityCommand::Despawn(global(3)));
     fx.manager
-        .replay_entity_command(&global(3), crate::EntityCommand::Despawn(global(3)));
+        .replay_entity_command(global(3), crate::EntityCommand::Despawn(global(3)));
 }
 
 /// A component that arrives in a scope-entry bundle is buffered in
@@ -544,8 +541,8 @@ fn a_received_component_is_buffered_and_then_applied_to_the_world() {
 
     fx.manager.insert_received_component(
         1,
-        &local_entity,
-        &ComponentKind::of::<Wraith>(),
+        local_entity,
+        ComponentKind::of::<Wraith>(),
         remote_component(&fx.kinds, &Wraith::new_complete(9)),
     );
     // The buffer is only drained when the matching InsertComponent message is

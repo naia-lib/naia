@@ -16,7 +16,7 @@ pub struct PingConfig {
 }
 
 impl PingConfig {
-    /// Creates a new PingConfig, used to monitor statistics about the
+    /// Creates a new `PingConfig`, used to monitor statistics about the
     /// network
     pub fn new(
         ping_interval: Duration,

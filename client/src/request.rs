@@ -75,7 +75,7 @@ impl GlobalRequestManager {
     pub(crate) fn create_request_id(
         &mut self,
     ) -> Result<(GlobalRequestId, ConnectionRequestNonce), NonceExhaustion> {
-        let nonce = self.nonces.next()?;
+        let nonce = self.nonces.next_nonce()?;
         let id = GlobalRequestId::new(self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
 
@@ -94,8 +94,7 @@ impl GlobalRequestManager {
     pub(crate) fn has_response(&self, request_id: &GlobalRequestId) -> bool {
         self.slots
             .get(request_id)
-            .map(|slot| slot.response.is_some())
-            .unwrap_or(false)
+            .is_some_and(|slot| slot.response.is_some())
     }
 
     /// Non-destructive read of a slot: live without a response is Pending,
@@ -149,7 +148,7 @@ impl GlobalRequestManager {
         if let Some(slot) = self.slots.get_mut(request_id) {
             slot.response = Some(response);
         } else {
-            warn!("receive_response: dropping response for unknown request_id {:?}; request was likely cancelled or the connection was reset", request_id);
+            warn!("receive_response: dropping response for unknown request_id {request_id:?}; request was likely cancelled or the connection was reset");
         }
     }
 }
@@ -220,9 +219,8 @@ impl GlobalResponseManager {
             let oldest = self.order.pop_front().unwrap();
             self.map.remove(&oldest);
             warn!(
-                "server has more than {} unanswered requests outstanding; dropping the oldest. \
-                 Responding to it will now report Undeliverable.",
-                MAX_OUTSTANDING_RESPONSES
+                "server has more than {MAX_OUTSTANDING_RESPONSES} unanswered requests outstanding; dropping the oldest. \
+                 Responding to it will now report Undeliverable."
             );
         }
 
@@ -238,7 +236,7 @@ impl GlobalResponseManager {
         &self,
         global_response_id: &GlobalResponseId,
     ) -> Option<(ChannelKind, LocalResponseId, ConnectionRequestNonce)> {
-        self.map.get(global_response_id).cloned()
+        self.map.get(global_response_id).copied()
     }
 
     pub(crate) fn destroy_response_id(

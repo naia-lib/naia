@@ -59,15 +59,15 @@ pub struct HandshakeManager {
 }
 
 impl Handshaker for HandshakeManager {
-    fn authenticate_user(&mut self, identity_token: &IdentityToken, user_key: &UserKey) {
+    fn authenticate_user(&mut self, identity_token: &IdentityToken, user_key: UserKey) {
         self.authenticated_unidentified_users
-            .insert(identity_token.clone(), *user_key);
+            .insert(identity_token.clone(), user_key);
         self.identity_token_map
-            .insert(*user_key, identity_token.clone());
+            .insert(user_key, identity_token.clone());
     }
 
-    fn delete_user(&mut self, user_key: &UserKey, address_opt: Option<SocketAddr>) {
-        if let Some(identity_token) = self.identity_token_map.remove(user_key) {
+    fn delete_user(&mut self, user_key: UserKey, address_opt: Option<SocketAddr>) {
+        if let Some(identity_token) = self.identity_token_map.remove(&user_key) {
             self.authenticated_unidentified_users
                 .remove(&identity_token);
         }
@@ -98,140 +98,17 @@ impl Handshaker for HandshakeManager {
         match handshake_header {
             #[cfg(feature = "transport_udp")]
             HandshakeHeader::ClientChallengeRequest(protocol_id) => {
-                if protocol_id != self.protocol_id {
-                    warn!(
-                        "Server: Protocol Mismatch! Client: {}, Server: {}",
-                        protocol_id, self.protocol_id
-                    );
-                    let reject_response =
-                        Self::write_reject_response(RejectReason::ProtocolMismatch).to_packet();
-                    return Ok(HandshakeAction::SendPacket(reject_response));
-                }
-                if let Ok((timestamp, id_token)) = self.recv_challenge_request(reader) {
-                    if let Some(user_key) = self.authenticated_unidentified_users.remove(&id_token)
-                    {
-                        // remove identity token from map
-                        if self.identity_token_map.remove(&user_key).is_none() {
-                            panic!("Server Error: Identity Token not found for user_key: {:?}. Shouldn't be possible.", user_key);
-                        }
-
-                        // User is authenticated and identified
-                        self.authenticated_and_identified_users
-                            .insert(*address, user_key);
-                    } else if !self
-                        .authenticated_and_identified_users
-                        .contains_key(address)
-                    {
-                        // Unknown retry: never authenticated and never
-                        // finalized — stay silent as before. A retry for an
-                        // already-finalized address falls through and gets
-                        // the response re-sent below: the client retransmits
-                        // over an unreliable channel, so the first response
-                        // is routinely lost.
-                        return Ok(HandshakeAction::None);
-                    }
-
-                    let identify_response = self.write_challenge_response(&timestamp).to_packet();
-
-                    Ok(HandshakeAction::SendPacket(identify_response))
-                } else {
-                    Ok(HandshakeAction::None)
-                }
+                self.handle_challenge_request(address, reader, protocol_id)
             }
             #[cfg(feature = "transport_udp")]
-            HandshakeHeader::ClientValidateRequest => {
-                if self.recv_validate_request(address, reader) {
-                    if self.been_handshaked_users.contains_key(address) {
-                        // send validate response
-                        let writer = self.write_validate_response();
-                        Ok(HandshakeAction::SendPacket(writer.to_packet()))
-                    } else {
-                        // info!("checking authenticated users for {}", address);
-                        if let Some(user_key) = self.authenticated_and_identified_users.get(address)
-                        {
-                            let user_key = *user_key;
-                            let address = *address;
-                            let packet = self.user_finish_handshake(&address, &user_key);
-                            Ok(HandshakeAction::SendPacket(packet))
-                        } else {
-                            warn!("Server Error: Cannot find user by address {}", address);
-                            Ok(HandshakeAction::None)
-                        }
-                    }
-                } else {
-                    // do nothing
-                    Ok(HandshakeAction::None)
-                }
-            }
+            HandshakeHeader::ClientValidateRequest => self.handle_validate_request(address, reader),
             #[cfg(not(feature = "transport_udp"))]
             HandshakeHeader::ClientIdentifyRequest(protocol_id) => {
-                if protocol_id != self.protocol_id {
-                    warn!(
-                        "Server: Protocol Mismatch! Client: {}, Server: {}",
-                        protocol_id, self.protocol_id
-                    );
-                    let reject_response =
-                        Self::write_reject_response(RejectReason::ProtocolMismatch).to_packet();
-                    return Ok(HandshakeAction::SendPacket(reject_response));
-                }
-                if has_connection {
-                    let identify_response = Self::write_identity_response().to_packet();
-                    Ok(HandshakeAction::SendPacket(identify_response))
-                } else {
-                    let Ok(id_token) = self.recv_identify_request(reader) else {
-                        return Ok(HandshakeAction::None);
-                    };
-                    let Some(user_key) = self.authenticated_unidentified_users.remove(&id_token)
-                    else {
-                        // Duplicate of a consumed identify for an address
-                        // that already finalized: resend the response without
-                        // re-finalizing (finalize emits a downstream
-                        // connection event and must run exactly once).
-                        // Anything else is still an Auth reject.
-                        if self
-                            .authenticated_and_identified_users
-                            .contains_key(address)
-                        {
-                            let identify_response = Self::write_identity_response().to_packet();
-                            return Ok(HandshakeAction::SendPacket(identify_response));
-                        }
-                        let reject_response =
-                            Self::write_reject_response(RejectReason::Auth).to_packet();
-                        return Ok(HandshakeAction::SendPacket(reject_response));
-                    };
-                    // Verify identity token exists (but keep it for disconnect verification)
-                    if !self.identity_token_map.contains_key(&user_key) {
-                        panic!("Server Error: Identity Token not found for user_key: {:?}. Shouldn't be possible.", user_key);
-                    }
-
-                    // User is authenticated
-                    self.authenticated_and_identified_users
-                        .insert(*address, user_key);
-
-                    // send identify response
-                    let identify_response = Self::write_identity_response().to_packet();
-                    Ok(HandshakeAction::FinalizeConnection(
-                        user_key,
-                        identify_response,
-                    ))
-                }
+                Ok(self.handle_identify_request(address, reader, protocol_id, has_connection))
             }
             #[cfg(feature = "transport_udp")]
             HandshakeHeader::ClientConnectRequest => {
-                // send connect response
-                let writer = Self::write_connect_response();
-                let packet = writer.to_packet();
-
-                if has_connection {
-                    Ok(HandshakeAction::SendPacket(packet))
-                } else {
-                    let user_key = *self
-                        .been_handshaked_users
-                        .get(address)
-                        .expect("should be a user by now, from validation step");
-
-                    Ok(HandshakeAction::FinalizeConnection(user_key, packet))
-                }
+                self.handle_connect_request(address, has_connection)
             }
             #[cfg(not(feature = "transport_udp"))]
             HandshakeHeader::ClientConnectRequest => Ok(HandshakeAction::ForwardPacket),
@@ -249,8 +126,7 @@ impl Handshaker for HandshakeManager {
             }
             _ => {
                 warn!(
-                    "Server Error: Unexpected handshake header: {:?} from {}",
-                    handshake_header, address
+                    "Server Error: Unexpected handshake header: {handshake_header:?} from {address}"
                 );
                 Ok(HandshakeAction::None)
             }
@@ -273,12 +149,185 @@ impl Handshaker for HandshakeManager {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
         HandshakeHeader::ServerDisconnect(reason).ser(&mut writer);
-        payload.map(|bytes| bytes.to_vec()).ser(&mut writer);
+        payload.map(<[u8]>::to_vec).ser(&mut writer);
         writer.to_packet()
     }
 }
 
 impl HandshakeManager {
+    #[cfg(feature = "transport_udp")]
+    /// Handle a client challenge request: reject protocol mismatches and
+    /// answer identified clients with a challenge response.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the identity token map lost the user's token, which
+    /// cannot happen for an authenticated user.
+    fn handle_challenge_request(
+        &mut self,
+        address: &SocketAddr,
+        reader: &mut BitReader,
+        protocol_id: ProtocolId,
+    ) -> Result<HandshakeAction, SerdeErr> {
+        if protocol_id != self.protocol_id {
+            warn!(
+                "Server: Protocol Mismatch! Client: {}, Server: {}",
+                protocol_id, self.protocol_id
+            );
+            let reject_response =
+                Self::write_reject_response(RejectReason::ProtocolMismatch).to_packet();
+            return Ok(HandshakeAction::SendPacket(reject_response));
+        }
+        if let Ok((timestamp, id_token)) = self.recv_challenge_request(reader) {
+            if let Some(user_key) = self.authenticated_unidentified_users.remove(&id_token) {
+                // remove identity token from map
+                if self.identity_token_map.remove(&user_key).is_none() {
+                    panic!("Server Error: Identity Token not found for user_key: {:?}. Shouldn't be possible.", user_key);
+                }
+
+                // User is authenticated and identified
+                self.authenticated_and_identified_users
+                    .insert(*address, user_key);
+            } else if !self
+                .authenticated_and_identified_users
+                .contains_key(address)
+            {
+                // Unknown retry: never authenticated and never
+                // finalized — stay silent as before. A retry for an
+                // already-finalized address falls through and gets
+                // the response re-sent below: the client retransmits
+                // over an unreliable channel, so the first response
+                // is routinely lost.
+                return Ok(HandshakeAction::None);
+            }
+
+            let identify_response = self.write_challenge_response(&timestamp).to_packet();
+
+            Ok(HandshakeAction::SendPacket(identify_response))
+        } else {
+            Ok(HandshakeAction::None)
+        }
+    }
+
+    #[cfg(feature = "transport_udp")]
+    /// Handle a client validate request: finish validated handshakes or
+    /// answer with a validate response.
+    fn handle_validate_request(
+        &mut self,
+        address: &SocketAddr,
+        reader: &mut BitReader,
+    ) -> Result<HandshakeAction, SerdeErr> {
+        if self.recv_validate_request(address, reader) {
+            if self.been_handshaked_users.contains_key(address) {
+                // send validate response
+                let writer = self.write_validate_response();
+                Ok(HandshakeAction::SendPacket(writer.to_packet()))
+            } else {
+                // info!("checking authenticated users for {}", address);
+                if let Some(user_key) = self.authenticated_and_identified_users.get(address) {
+                    let user_key = *user_key;
+                    let address = *address;
+                    let packet = self.user_finish_handshake(&address, &user_key);
+                    Ok(HandshakeAction::SendPacket(packet))
+                } else {
+                    warn!("Server Error: Cannot find user by address {}", address);
+                    Ok(HandshakeAction::None)
+                }
+            }
+        } else {
+            // do nothing
+            Ok(HandshakeAction::None)
+        }
+    }
+
+    #[cfg(not(feature = "transport_udp"))]
+    /// Handle a client identify request: reject protocol mismatches and
+    /// unknown identity tokens, otherwise finalize the connection.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the identity token map lost the user's token, which
+    /// cannot happen for an authenticated user.
+    fn handle_identify_request(
+        &mut self,
+        address: &SocketAddr,
+        reader: &mut BitReader,
+        protocol_id: ProtocolId,
+        has_connection: bool,
+    ) -> HandshakeAction {
+        if protocol_id != self.protocol_id {
+            warn!(
+                "Server: Protocol Mismatch! Client: {}, Server: {}",
+                protocol_id, self.protocol_id
+            );
+            let reject_response =
+                Self::write_reject_response(RejectReason::ProtocolMismatch).to_packet();
+            return HandshakeAction::SendPacket(reject_response);
+        }
+        if has_connection {
+            let identify_response = Self::write_identity_response().to_packet();
+            HandshakeAction::SendPacket(identify_response)
+        } else {
+            let Ok(id_token) = Self::recv_identify_request(reader) else {
+                return HandshakeAction::None;
+            };
+            let Some(user_key) = self.authenticated_unidentified_users.remove(&id_token) else {
+                // Duplicate of a consumed identify for an address
+                // that already finalized: resend the response without
+                // re-finalizing (finalize emits a downstream
+                // connection event and must run exactly once).
+                // Anything else is still an Auth reject.
+                if self
+                    .authenticated_and_identified_users
+                    .contains_key(address)
+                {
+                    let identify_response = Self::write_identity_response().to_packet();
+                    return HandshakeAction::SendPacket(identify_response);
+                }
+                let reject_response = Self::write_reject_response(RejectReason::Auth).to_packet();
+                return HandshakeAction::SendPacket(reject_response);
+            };
+            // Verify identity token exists (but keep it for disconnect verification)
+            assert!(self.identity_token_map.contains_key(&user_key), "Server Error: Identity Token not found for user_key: {user_key:?}. Shouldn't be possible.");
+
+            // User is authenticated
+            self.authenticated_and_identified_users
+                .insert(*address, user_key);
+
+            // send identify response
+            let identify_response = Self::write_identity_response().to_packet();
+            HandshakeAction::FinalizeConnection(user_key, identify_response)
+        }
+    }
+
+    #[cfg(feature = "transport_udp")]
+    /// Handle a client connect request: finalize a validated connection.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the address was never validated, which the validation
+    /// step guarantees.
+    fn handle_connect_request(
+        &mut self,
+        address: &SocketAddr,
+        has_connection: bool,
+    ) -> Result<HandshakeAction, SerdeErr> {
+        // send connect response
+        let writer = Self::write_connect_response();
+        let packet = writer.to_packet();
+
+        if has_connection {
+            Ok(HandshakeAction::SendPacket(packet))
+        } else {
+            let user_key = *self
+                .been_handshaked_users
+                .get(address)
+                .expect("should be a user by now, from validation step");
+
+            Ok(HandshakeAction::FinalizeConnection(user_key, packet))
+        }
+    }
+
     pub fn new(protocol_id: ProtocolId) -> Self {
         #[cfg(feature = "transport_udp")]
         let connection_hash_key =
@@ -362,7 +411,7 @@ impl HandshakeManager {
 
     // Step 1 of Handshake (builds without address validation)
     #[cfg(not(feature = "transport_udp"))]
-    fn recv_identify_request(&mut self, reader: &mut BitReader) -> Result<IdentityToken, SerdeErr> {
+    fn recv_identify_request(reader: &mut BitReader) -> Result<IdentityToken, SerdeErr> {
         IdentityToken::de(reader)
     }
 

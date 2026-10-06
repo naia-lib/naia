@@ -17,9 +17,9 @@ pub enum AuthOwner {
 }
 
 impl AuthOwner {
-    pub fn from_user_key(user_key: Option<&UserKey>) -> Self {
+    pub fn from_user_key(user_key: Option<UserKey>) -> Self {
         match user_key {
-            Some(user_key) => AuthOwner::Client(*user_key),
+            Some(user_key) => AuthOwner::Client(user_key),
             None => AuthOwner::Server,
         }
     }
@@ -40,22 +40,22 @@ impl ServerAuthHandler {
         }
     }
 
-    pub fn get_accessor(&self, entity: &GlobalEntity) -> EntityAuthAccessor {
+    pub fn get_accessor(&self, entity: GlobalEntity) -> EntityAuthAccessor {
         self.host_auth_handler.get_accessor(entity)
     }
 
-    pub fn register_entity(&mut self, entity: &GlobalEntity) {
+    pub fn register_entity(&mut self, entity: GlobalEntity) {
         self.host_auth_handler
             .register_entity(HostType::Server, entity);
-        self.entity_auth_map.insert(*entity, AuthOwner::None);
+        self.entity_auth_map.insert(entity, AuthOwner::None);
     }
 
-    pub fn deregister_entity(&mut self, entity: &GlobalEntity) {
+    pub fn deregister_entity(&mut self, entity: GlobalEntity) {
         self.host_auth_handler.deregister_entity(entity);
-        self.entity_auth_map.remove(entity);
+        self.entity_auth_map.remove(&entity);
     }
 
-    pub(crate) fn authority_status(&self, entity: &GlobalEntity) -> Option<EntityAuthStatus> {
+    pub(crate) fn authority_status(&self, entity: GlobalEntity) -> Option<EntityAuthStatus> {
         self.host_auth_handler
             .auth_status(entity)
             .map(|host_status| host_status.status())
@@ -63,21 +63,21 @@ impl ServerAuthHandler {
 
     /// True iff some user (or the server) currently holds authority on `entity`.
     /// Returns false for entities with no current holder (Available) and
-    /// for non-delegated entities (which have no auth_owner record at all).
-    pub(crate) fn entity_has_holder(&self, entity: &GlobalEntity) -> bool {
-        match self.entity_auth_map.get(entity) {
+    /// for non-delegated entities (which have no `auth_owner` record at all).
+    pub(crate) fn entity_has_holder(&self, entity: GlobalEntity) -> bool {
+        match self.entity_auth_map.get(&entity) {
             Some(AuthOwner::None) | None => false,
-            Some(AuthOwner::Server) | Some(AuthOwner::Client(_)) => true,
+            Some(AuthOwner::Server | AuthOwner::Client(_)) => true,
         }
     }
 
     #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn client_request_authority(
         &mut self,
-        entity: &GlobalEntity,
+        entity: GlobalEntity,
         requester: &AuthOwner,
     ) -> Result<(), AuthorityError> {
-        let Some(owner) = self.entity_auth_map.get_mut(entity) else {
+        let Some(owner) = self.entity_auth_map.get_mut(&entity) else {
             return Err(AuthorityError::NotDelegated);
         };
         if *owner == AuthOwner::None {
@@ -93,7 +93,7 @@ impl ServerAuthHandler {
                     self.user_to_entity_map
                         .entry(*user_key)
                         .or_default()
-                        .insert(*entity);
+                        .insert(entity);
                     // If a Client is requesting Authority, restrict the Server's local Authority
                     self.host_auth_handler
                         .set_auth_status(entity, EntityAuthStatus::Denied);
@@ -110,10 +110,10 @@ impl ServerAuthHandler {
     #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn client_release_authority(
         &mut self,
-        entity: &GlobalEntity,
+        entity: GlobalEntity,
         releaser: &AuthOwner,
     ) -> Result<(), AuthorityError> {
-        let Some(owner) = self.entity_auth_map.get_mut(entity) else {
+        let Some(owner) = self.entity_auth_map.get_mut(&entity) else {
             return Err(AuthorityError::NotDelegated);
         };
 
@@ -134,10 +134,10 @@ impl ServerAuthHandler {
         }
     }
 
-    /// Server-priority give_authority: assign `target_user` as the
+    /// Server-priority `give_authority`: assign `target_user` as the
     /// authority holder regardless of who currently holds it.
     /// Implements contract [entity-authority-10] ("server priority:
-    /// give_authority overrides current holder"). Unlike
+    /// `give_authority` overrides current holder"). Unlike
     /// `client_request_authority` (which fails with `NotAvailable`
     /// when the slot is held), this is sovereign and never fails on
     /// the holder check.
@@ -148,20 +148,20 @@ impl ServerAuthHandler {
     #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn server_give_authority_to_client(
         &mut self,
-        entity: &GlobalEntity,
-        target_user: &UserKey,
+        entity: GlobalEntity,
+        target_user: UserKey,
     ) -> Result<AuthOwner, AuthorityError> {
-        let Some(owner) = self.entity_auth_map.get_mut(entity) else {
+        let Some(owner) = self.entity_auth_map.get_mut(&entity) else {
             return Err(AuthorityError::NotDelegated);
         };
         let previous_owner = *owner;
         // Idempotent: if the target user already holds, return without
         // touching state. Re-issuing SetAuthority would otherwise drive
         // an illegal Granted→Granted transition through the auth channel.
-        if previous_owner == AuthOwner::Client(*target_user) {
+        if previous_owner == AuthOwner::Client(target_user) {
             return Ok(previous_owner);
         }
-        *owner = AuthOwner::Client(*target_user);
+        *owner = AuthOwner::Client(target_user);
         // Clear bookkeeping for the previous holder. release_all_authority
         // sets host_auth_status to Available as a side effect; the per-user
         // SetAuthority messages in the caller will overwrite that with
@@ -169,9 +169,9 @@ impl ServerAuthHandler {
         self.release_all_authority(entity, previous_owner);
         // Track the new client holder.
         self.user_to_entity_map
-            .entry(*target_user)
+            .entry(target_user)
             .or_default()
-            .insert(*entity);
+            .insert(entity);
         // Restrict the server's local Authority — a client now holds it.
         self.host_auth_handler
             .set_auth_status(entity, EntityAuthStatus::Denied);
@@ -181,9 +181,9 @@ impl ServerAuthHandler {
     #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn server_take_authority(
         &mut self,
-        entity: &GlobalEntity,
+        entity: GlobalEntity,
     ) -> Result<AuthOwner, AuthorityError> {
-        let Some(owner) = self.entity_auth_map.get_mut(entity) else {
+        let Some(owner) = self.entity_auth_map.get_mut(&entity) else {
             return Err(AuthorityError::NotDelegated);
         };
 
@@ -202,7 +202,7 @@ impl ServerAuthHandler {
     }
 
     #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
-    fn release_all_authority(&mut self, entity: &GlobalEntity, owner: AuthOwner) -> bool {
+    fn release_all_authority(&mut self, entity: GlobalEntity, owner: AuthOwner) -> bool {
         if owner == AuthOwner::None {
             // no change was made
             return false;
@@ -211,7 +211,7 @@ impl ServerAuthHandler {
         if let AuthOwner::Client(user_key) = owner {
             let mut remove_user = false;
             if let Some(entities) = self.user_to_entity_map.get_mut(&user_key) {
-                entities.remove(entity);
+                entities.remove(&entity);
                 remove_user = true;
             }
             if remove_user {
@@ -227,23 +227,18 @@ impl ServerAuthHandler {
 
     pub(crate) fn user_all_owned_entities(
         &self,
-        user_key: &UserKey,
+        user_key: UserKey,
     ) -> Option<&HashSet<GlobalEntity>> {
-        if let Some(entities) = self.user_to_entity_map.get(user_key) {
+        if let Some(entities) = self.user_to_entity_map.get(&user_key) {
             return Some(entities);
         }
         None
     }
 
     /// Check if a user is the authority holder for a specific entity
-    pub(crate) fn user_is_authority_holder(
-        &self,
-        user_key: &UserKey,
-        entity: &GlobalEntity,
-    ) -> bool {
+    pub(crate) fn user_is_authority_holder(&self, user_key: UserKey, entity: GlobalEntity) -> bool {
         self.entity_auth_map
-            .get(entity)
-            .map(|owner| *owner == AuthOwner::Client(*user_key))
-            .unwrap_or(false)
+            .get(&entity)
+            .is_some_and(|owner| *owner == AuthOwner::Client(user_key))
     }
 }

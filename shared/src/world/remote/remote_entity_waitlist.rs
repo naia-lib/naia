@@ -50,7 +50,7 @@ pub struct RemoteEntityWaitlist {
 
 impl RemoteEntityWaitlist {
     pub fn new() -> Self {
-        Self::with_recycle_timeout(Duration::from_secs(60))
+        Self::with_recycle_timeout(Duration::from_mins(1))
     }
 
     fn with_recycle_timeout(recycle_timeout: Duration) -> Self {
@@ -61,7 +61,7 @@ impl RemoteEntityWaitlist {
             ready_handles: HashSet::new(),
             removed_handles: HashSet::new(),
             handle_ttls: VecDeque::new(),
-            handle_ttl: Duration::from_secs(60),
+            handle_ttl: Duration::from_mins(1),
         }
     }
 
@@ -71,7 +71,7 @@ impl RemoteEntityWaitlist {
         entities: &HashSet<RemoteEntity>,
     ) -> bool {
         for entity in entities {
-            if !in_scope_entities.has_entity(entity) {
+            if !in_scope_entities.has_entity(*entity) {
                 return false;
             }
         }
@@ -102,12 +102,11 @@ impl RemoteEntityWaitlist {
         while self.handle_ttls.len() >= TOTAL_WAITLIST_CAP {
             let (_, oldest) = self.handle_ttls.pop_front().unwrap();
             warn!(
-                "entity waitlist full ({} items); evicting the oldest waiting handle {:?}. \
-                 A peer can reach this by referencing entities that never come into scope.",
-                TOTAL_WAITLIST_CAP, oldest
+                "entity waitlist full ({TOTAL_WAITLIST_CAP} items); evicting the oldest waiting handle {oldest:?}. \
+                 A peer can reach this by referencing entities that never come into scope."
             );
             self.removed_handles.insert(oldest);
-            self.drop_waiting_handle_indexes(&oldest);
+            self.drop_waiting_handle_indexes(oldest);
         }
 
         // Enforce per-entity FIFO cap: evict oldest handles before inserting.
@@ -123,7 +122,7 @@ impl RemoteEntityWaitlist {
         }
         for evicted in evictions {
             self.removed_handles.insert(evicted);
-            self.remove_waiting_handle(&evicted);
+            self.remove_waiting_handle(evicted);
         }
         for entity in entities {
             self.waiting_entity_to_handles
@@ -172,7 +171,7 @@ impl RemoteEntityWaitlist {
         &mut self,
         in_scope_entities: &dyn InScopeEntities<RemoteEntity>,
         // converter: &dyn LocalEntityAndGlobalEntityConverter,
-        entity: &RemoteEntity,
+        entity: RemoteEntity,
     ) {
         // let remote_entity = converter.global_entity_to_remote_entity(global_entity).unwrap();
         // warn!("Waitlist is tracking in-scope entity ({:?}, {:?}) .. should have been added to GlobalWorldManager", remote_entity, global_entity);
@@ -180,8 +179,8 @@ impl RemoteEntityWaitlist {
         // get a list of handles ready to send
         let mut outgoing_handles = Vec::new();
 
-        if let Some(message_set) = self.waiting_entity_to_handles.get(entity) {
-            for message_handle in message_set.iter() {
+        if let Some(message_set) = self.waiting_entity_to_handles.get(&entity) {
+            for message_handle in message_set {
                 if let Some(entities) = self.handle_to_required_entities.get(message_handle) {
                     if self.required_entities_are_in_scope(in_scope_entities, entities) {
                         // info!("Entity's dependencies {:?} are in scope", entities);
@@ -195,20 +194,20 @@ impl RemoteEntityWaitlist {
         for outgoing_handle in outgoing_handles {
             // push outgoing message
             self.ready_handles.insert(outgoing_handle);
-            self.remove_waiting_handle(&outgoing_handle);
+            self.remove_waiting_handle(outgoing_handle);
         }
     }
 
-    pub fn despawn_entity(&mut self, _entity: &RemoteEntity) {
+    pub fn despawn_entity(&mut self, _entity: RemoteEntity) {
         // stub
     }
 
-    pub fn remove_waiting_handle(&mut self, handle: &WaitlistHandle) {
+    pub fn remove_waiting_handle(&mut self, handle: WaitlistHandle) {
         // remove handle from ttl list
         if let Some(ttl_index) = self
             .handle_ttls
             .iter()
-            .position(|(_, ttl_handle)| ttl_handle == handle)
+            .position(|(_, ttl_handle)| *ttl_handle == handle)
         {
             self.handle_ttls.remove(ttl_index);
         }
@@ -224,15 +223,15 @@ impl RemoteEntityWaitlist {
     /// the entry they just popped -- paying for the scan again would make every
     /// eviction cost O(cap), which a peer sitting at the cap could drive once per
     /// message it sends.
-    fn drop_waiting_handle_indexes(&mut self, handle: &WaitlistHandle) {
+    fn drop_waiting_handle_indexes(&mut self, handle: WaitlistHandle) {
         // remove handle from required entities map
-        let entities = self.handle_to_required_entities.remove(handle).unwrap();
+        let entities = self.handle_to_required_entities.remove(&handle).unwrap();
 
         // for all associated entities, remove from waitlist
         for entity in entities {
             let mut remove = false;
             if let Some(queue) = self.waiting_entity_to_handles.get_mut(&entity) {
-                queue.retain(|h| h != handle);
+                queue.retain(|h| *h != handle);
                 if queue.is_empty() {
                     remove = true;
                 }
@@ -250,7 +249,7 @@ impl RemoteEntityWaitlist {
             }
             let (_, handle) = self.handle_ttls.pop_front().unwrap();
             self.removed_handles.insert(handle);
-            self.drop_waiting_handle_indexes(&handle);
+            self.drop_waiting_handle_indexes(handle);
         }
     }
 }
@@ -280,7 +279,7 @@ impl<T> WaitlistStore<T> {
         let intersection: HashSet<WaitlistHandle> = self
             .item_handles
             .intersection(ready_handles)
-            .cloned()
+            .copied()
             .collect();
 
         if intersection.is_empty() {
@@ -293,7 +292,7 @@ impl<T> WaitlistStore<T> {
 
         for handle in intersection {
             ready_handles.remove(&handle);
-            let item = self.remove(&handle).unwrap();
+            let item = self.remove(handle).unwrap();
             collected_handles.push(handle);
             ready_messages.push(item);
         }
@@ -308,21 +307,21 @@ impl<T> WaitlistStore<T> {
         let intersection: HashSet<WaitlistHandle> = self
             .item_handles
             .intersection(expired_handles)
-            .cloned()
+            .copied()
             .collect();
 
         let mut removed = Vec::with_capacity(intersection.len());
         for handle in intersection {
             expired_handles.remove(&handle);
-            self.remove(&handle);
+            self.remove(handle);
             removed.push(handle);
         }
         removed
     }
 
-    pub fn remove(&mut self, handle: &WaitlistHandle) -> Option<T> {
-        self.item_handles.remove(handle);
-        self.items.remove(handle)
+    pub fn remove(&mut self, handle: WaitlistHandle) -> Option<T> {
+        self.item_handles.remove(&handle);
+        self.items.remove(&handle)
     }
 }
 
@@ -334,8 +333,8 @@ mod tests {
     struct Scope(HashSet<RemoteEntity>);
 
     impl InScopeEntities<RemoteEntity> for Scope {
-        fn has_entity(&self, entity: &RemoteEntity) -> bool {
-            self.0.contains(entity)
+        fn has_entity(&self, entity: RemoteEntity) -> bool {
+            self.0.contains(&entity)
         }
     }
 
@@ -354,7 +353,7 @@ mod tests {
 
         waitlist.queue(&scope, &dependencies(entity_a), &mut store_a, "a");
         scope.0.insert(entity_a);
-        waitlist.spawn_entity(&scope, &entity_a);
+        waitlist.spawn_entity(&scope, entity_a);
         waitlist.queue(&scope, &dependencies(entity_b), &mut store_b, "b");
 
         // Channel B polls first. It must not consume A's global ready marker;
@@ -384,7 +383,7 @@ mod tests {
 
         waitlist.queue(&scope, &dependencies(entity_a), &mut store_a, "a");
         scope.0.insert(entity_a);
-        waitlist.spawn_entity(&scope, &entity_a);
+        waitlist.spawn_entity(&scope, entity_a);
 
         // Queue B after A becomes ready but before A's store is polled. B must
         // receive a distinct handle and must not inherit A's ready marker.
@@ -403,7 +402,7 @@ mod tests {
         );
 
         scope.0.insert(entity_b);
-        waitlist.spawn_entity(&scope, &entity_b);
+        waitlist.spawn_entity(&scope, entity_b);
         assert_eq!(
             waitlist.collect_ready_items(&Instant::now(), &mut store_b),
             Some(vec!["b"]),
@@ -453,7 +452,7 @@ mod tests {
             None,
         );
         scope.0.insert(later_entity);
-        waitlist.spawn_entity(&scope, &later_entity);
+        waitlist.spawn_entity(&scope, later_entity);
         assert_eq!(
             waitlist.collect_ready_items(&Instant::now(), &mut later_store),
             Some(vec!["later"]),
@@ -469,7 +468,7 @@ mod tests {
 
     struct EmptyScope;
     impl InScopeEntities<RemoteEntity> for EmptyScope {
-        fn has_entity(&self, _entity: &RemoteEntity) -> bool {
+        fn has_entity(&self, _entity: RemoteEntity) -> bool {
             false
         }
     }

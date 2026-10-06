@@ -11,7 +11,7 @@ pub struct SequenceBuffer<T> {
 }
 
 impl<T> SequenceBuffer<T> {
-    /// Creates a SequenceBuffer with a desired capacity.
+    /// Creates a `SequenceBuffer` with a desired capacity.
     pub fn with_capacity(size: u16) -> Self {
         let mut entries = Vec::<Option<T>>::new();
         for _ in 0..size {

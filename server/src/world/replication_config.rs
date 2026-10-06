@@ -62,6 +62,7 @@ impl ReplicationConfig {
     /// [`Despawn`](ScopeExit::Despawn) scope-exit.
     ///
     /// This is the default for server-spawned entities.
+    #[must_use]
     pub const fn public() -> Self {
         Self {
             publicity: Publicity::Public,
@@ -74,6 +75,7 @@ impl ReplicationConfig {
     ///
     /// Used for client-spawned entities that have not yet been published to
     /// other peers.
+    #[must_use]
     pub const fn private() -> Self {
         Self {
             publicity: Publicity::Private,
@@ -85,9 +87,9 @@ impl ReplicationConfig {
     /// [`Despawn`](ScopeExit::Despawn) scope-exit.
     ///
     /// Marks the entity as open for client authority requests. Clients may
-    /// call `entity_request_authority` to request ownership; the server
-    /// grants or denies via an event.
-    ///
+    /// call `entity_request_authority` (on the client) to request ownership;
+    /// the server grants or denies via an event.
+    #[must_use]
     pub const fn delegated() -> Self {
         Self {
             publicity: Publicity::Delegated,
@@ -101,6 +103,7 @@ impl ReplicationConfig {
     /// When this entity leaves a user's scope it stays in their networked
     /// entity pool with updates frozen, rather than being despawned and
     /// respawned on re-entry.
+    #[must_use]
     pub const fn persist_on_scope_exit(self) -> Self {
         Self {
             scope_exit: ScopeExit::Persist,

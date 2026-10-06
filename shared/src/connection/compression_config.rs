@@ -9,6 +9,7 @@ pub struct CompressionConfig {
 
 impl CompressionConfig {
     /// Creates a `CompressionConfig` with the given per-direction modes.
+    #[must_use]
     pub fn new(
         server_to_client: Option<CompressionMode>,
         client_to_server: Option<CompressionMode>,

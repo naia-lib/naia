@@ -19,9 +19,9 @@ use crate::{
 /// Global world state queries needed during message and component serialization.
 pub trait GlobalWorldManagerType: InScopeEntities<GlobalEntity> {
     /// Returns the list of component kinds currently attached to `entity`, or `None` if the entity is not known.
-    fn component_kinds(&self, entity: &GlobalEntity) -> Option<Vec<ComponentKind>>;
-    /// Whether or not a given user can receive a Message/Component with an EntityProperty relating to the given Entity
-    fn entity_can_relate_to_user(&self, global_entity: &GlobalEntity, user_key: &u64) -> bool;
+    fn component_kinds(&self, entity: GlobalEntity) -> Option<Vec<ComponentKind>>;
+    /// Whether or not a given user can receive a Message/Component with an `EntityProperty` relating to the given Entity
+    fn entity_can_relate_to_user(&self, global_entity: GlobalEntity, user_key: &u64) -> bool;
     /// Creates a new `MutChannelType` of `diff_mask_length` bytes for a component's mutation tracking.
     fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>>;
     /// Returns a handle to the global diff handler used to fan out property mutations.
@@ -30,25 +30,25 @@ pub trait GlobalWorldManagerType: InScopeEntities<GlobalEntity> {
     fn register_component(
         &self,
         component_kinds: &ComponentKinds,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        global_entity: GlobalEntity,
+        component_kind: ComponentKind,
         diff_mask_length: u8,
     ) -> PropertyMutator;
     /// Returns an [`EntityAuthAccessor`] for reading the delegation authority state of `global_entity`.
-    fn get_entity_auth_accessor(&self, global_entity: &GlobalEntity) -> EntityAuthAccessor;
+    fn get_entity_auth_accessor(&self, global_entity: GlobalEntity) -> EntityAuthAccessor;
     /// Returns `true` if `global_entity` requires a `PropertyMutator` to notify authority changes during delegation.
-    fn entity_needs_mutator_for_delegation(&self, global_entity: &GlobalEntity) -> bool;
+    fn entity_needs_mutator_for_delegation(&self, global_entity: GlobalEntity) -> bool;
     /// Returns `true` if `global_entity` is actively being replicated.
-    fn entity_is_replicating(&self, global_entity: &GlobalEntity) -> bool;
+    fn entity_is_replicating(&self, global_entity: GlobalEntity) -> bool;
     /// Returns `true` if `global_entity` was spawned as a static entity.
-    fn entity_is_static(&self, global_entity: &GlobalEntity) -> bool;
+    fn entity_is_static(&self, global_entity: GlobalEntity) -> bool;
     /// Authority status for `global_entity`, or `None` when the entity has no
     /// delegation authority state to consult.
     ///
     /// Unlike [`Self::get_entity_auth_accessor`], this never panics on an
     /// unregistered entity, so the send path can ask about any entity it is
     /// about to serialize. The default returns `None` ("no constraint").
-    fn entity_auth_status(&self, _global_entity: &GlobalEntity) -> Option<HostEntityAuthStatus> {
+    fn entity_auth_status(&self, _global_entity: GlobalEntity) -> Option<HostEntityAuthStatus> {
         None
     }
     /// Returns the global dirty bitset for mutation tracking, or `None` on the client side.
@@ -62,7 +62,7 @@ pub trait EntityAndGlobalEntityConverter<E: Copy + Eq + Hash + Sync + Send> {
     /// Resolves `global_entity` to the corresponding world-local entity `E`, or returns an error if not found.
     fn global_entity_to_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<E, EntityDoesNotExistError>;
     /// Resolves a world-local `entity` to its stable [`GlobalEntity`] identifier, or returns an error if not found.
     fn entity_to_global_entity(&self, entity: &E) -> Result<GlobalEntity, EntityDoesNotExistError>;
@@ -73,59 +73,59 @@ pub trait LocalEntityAndGlobalEntityConverter {
     /// Returns the [`HostEntity`] for `global_entity` if one is registered, or an error otherwise.
     fn global_entity_to_host_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<HostEntity, EntityDoesNotExistError>;
     /// Returns the [`RemoteEntity`] for `global_entity` if one is registered, or an error otherwise.
     fn global_entity_to_remote_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<RemoteEntity, EntityDoesNotExistError>;
     /// Returns the [`OwnedLocalEntity`] (host or remote) for `global_entity`, or an error if not found.
     fn global_entity_to_owned_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError>;
     /// Returns the [`GlobalEntity`] for a dynamic `host_entity`, or an error if not found.
     fn host_entity_to_global_entity(
         &self,
-        host_entity: &HostEntity,
+        host_entity: HostEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError>;
     /// Returns the [`GlobalEntity`] for a static `host_entity`, or an error if not found.
     fn static_host_entity_to_global_entity(
         &self,
-        host_entity: &HostEntity,
+        host_entity: HostEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError>;
     /// Returns the [`GlobalEntity`] for `remote_entity`, or an error if not found.
     fn remote_entity_to_global_entity(
         &self,
-        remote_entity: &RemoteEntity,
+        remote_entity: RemoteEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError>;
     /// Returns the [`GlobalEntity`] for `owned_entity`, dispatching to the appropriate host or remote lookup.
     fn owned_entity_to_global_entity(
         &self,
-        owned_entity: &OwnedLocalEntity,
+        owned_entity: OwnedLocalEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         match owned_entity {
             OwnedLocalEntity::Host {
                 id,
                 is_static: true,
-            } => self.static_host_entity_to_global_entity(&HostEntity::new(*id)),
+            } => self.static_host_entity_to_global_entity(HostEntity::new(id)),
             OwnedLocalEntity::Host {
                 id,
                 is_static: false,
-            } => self.host_entity_to_global_entity(&HostEntity::new(*id)),
+            } => self.host_entity_to_global_entity(HostEntity::new(id)),
             OwnedLocalEntity::Remote { id, is_static } => {
-                let remote = if *is_static {
-                    RemoteEntity::new_static(*id)
+                let remote = if is_static {
+                    RemoteEntity::new_static(id)
                 } else {
-                    RemoteEntity::new(*id)
+                    RemoteEntity::new(id)
                 };
-                self.remote_entity_to_global_entity(&remote)
+                self.remote_entity_to_global_entity(remote)
             }
         }
     }
     /// Returns the current redirect target for `entity`, or `entity` unchanged if no redirect is installed.
-    fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity;
+    fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity;
 }
 
 /// No-op converter that always succeeds with entity ID 0; useful in test contexts where real mapping is not needed.
@@ -134,21 +134,21 @@ pub struct FakeEntityConverter;
 impl LocalEntityAndGlobalEntityConverter for FakeEntityConverter {
     fn global_entity_to_host_entity(
         &self,
-        _: &GlobalEntity,
+        _: GlobalEntity,
     ) -> Result<HostEntity, EntityDoesNotExistError> {
         Ok(HostEntity::new(0))
     }
 
     fn global_entity_to_remote_entity(
         &self,
-        _: &GlobalEntity,
+        _: GlobalEntity,
     ) -> Result<RemoteEntity, EntityDoesNotExistError> {
         Ok(RemoteEntity::new(0))
     }
 
     fn global_entity_to_owned_entity(
         &self,
-        _global_entity: &GlobalEntity,
+        _global_entity: GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
         Ok(OwnedLocalEntity::Host {
             id: 0,
@@ -158,34 +158,34 @@ impl LocalEntityAndGlobalEntityConverter for FakeEntityConverter {
 
     fn host_entity_to_global_entity(
         &self,
-        _: &HostEntity,
+        _: HostEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         Ok(GlobalEntity::from_u64(0))
     }
 
     fn static_host_entity_to_global_entity(
         &self,
-        _: &HostEntity,
+        _: HostEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         Ok(GlobalEntity::from_u64(0))
     }
 
     fn remote_entity_to_global_entity(
         &self,
-        _: &RemoteEntity,
+        _: RemoteEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         Ok(GlobalEntity::from_u64(0))
     }
 
-    fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
-        *entity // No redirects in fake converter
+    fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity {
+        entity // No redirects in fake converter
     }
 }
 
 impl LocalEntityAndGlobalEntityConverterMut for FakeEntityConverter {
     fn get_or_reserve_entity(
         &mut self,
-        _global_entity: &GlobalEntity,
+        _global_entity: GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
         Ok(OwnedLocalEntity::Host {
             id: 0,
@@ -199,7 +199,7 @@ pub trait LocalEntityAndGlobalEntityConverterMut: LocalEntityAndGlobalEntityConv
     /// Looks up the local entity for `global_entity`, reserving a new host slot if none exists yet.
     fn get_or_reserve_entity(
         &mut self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError>;
 }
 
@@ -225,10 +225,10 @@ impl<'a, 'b> EntityConverterMut<'a, 'b> {
     }
 }
 
-impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b> {
+impl LocalEntityAndGlobalEntityConverter for EntityConverterMut<'_, '_> {
     fn global_entity_to_host_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<HostEntity, EntityDoesNotExistError> {
         self.local_entity_map
             .entity_converter()
@@ -237,7 +237,7 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b> 
 
     fn global_entity_to_remote_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<RemoteEntity, EntityDoesNotExistError> {
         self.local_entity_map
             .entity_converter()
@@ -246,7 +246,7 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b> 
 
     fn global_entity_to_owned_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
         self.local_entity_map
             .entity_converter()
@@ -255,7 +255,7 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b> 
 
     fn host_entity_to_global_entity(
         &self,
-        host_entity: &HostEntity,
+        host_entity: HostEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         self.local_entity_map
             .entity_converter()
@@ -264,7 +264,7 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b> 
 
     fn static_host_entity_to_global_entity(
         &self,
-        host_entity: &HostEntity,
+        host_entity: HostEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         self.local_entity_map
             .entity_converter()
@@ -273,24 +273,24 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b> 
 
     fn remote_entity_to_global_entity(
         &self,
-        remote_entity: &RemoteEntity,
+        remote_entity: RemoteEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         self.local_entity_map
             .entity_converter()
             .remote_entity_to_global_entity(remote_entity)
     }
 
-    fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
+    fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity {
         self.local_entity_map
             .entity_converter()
             .apply_entity_redirect(entity)
     }
 }
 
-impl<'a, 'b> LocalEntityAndGlobalEntityConverterMut for EntityConverterMut<'a, 'b> {
+impl LocalEntityAndGlobalEntityConverterMut for EntityConverterMut<'_, '_> {
     fn get_or_reserve_entity(
         &mut self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
         if !self
             .global_world_manager
@@ -331,6 +331,7 @@ pub struct EntityMapReadConverter<'a> {
 
 impl<'a> EntityMapReadConverter<'a> {
     /// Wrap a read guard on the shared entity map as a read-only converter.
+    #[must_use]
     pub fn new(guard: RwLockReadGuard<'a, LocalEntityMap>) -> Self {
         Self { guard }
     }
@@ -339,41 +340,41 @@ impl<'a> EntityMapReadConverter<'a> {
 impl LocalEntityAndGlobalEntityConverter for EntityMapReadConverter<'_> {
     fn global_entity_to_host_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<HostEntity, EntityDoesNotExistError> {
         self.guard.global_entity_to_host_entity(global_entity)
     }
     fn global_entity_to_remote_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<RemoteEntity, EntityDoesNotExistError> {
         self.guard.global_entity_to_remote_entity(global_entity)
     }
     fn global_entity_to_owned_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
         self.guard.global_entity_to_owned_entity(global_entity)
     }
     fn host_entity_to_global_entity(
         &self,
-        host_entity: &HostEntity,
+        host_entity: HostEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         self.guard.host_entity_to_global_entity(host_entity)
     }
     fn static_host_entity_to_global_entity(
         &self,
-        host_entity: &HostEntity,
+        host_entity: HostEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         self.guard.static_host_entity_to_global_entity(host_entity)
     }
     fn remote_entity_to_global_entity(
         &self,
-        remote_entity: &RemoteEntity,
+        remote_entity: RemoteEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         self.guard.remote_entity_to_global_entity(remote_entity)
     }
-    fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
+    fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity {
         self.guard.apply_entity_redirect(entity)
     }
 }
@@ -407,41 +408,41 @@ impl<'a, 'b> EntityMapConverterMut<'a, 'b> {
 impl LocalEntityAndGlobalEntityConverter for EntityMapConverterMut<'_, '_> {
     fn global_entity_to_host_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<HostEntity, EntityDoesNotExistError> {
         self.guard.global_entity_to_host_entity(global_entity)
     }
     fn global_entity_to_remote_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<RemoteEntity, EntityDoesNotExistError> {
         self.guard.global_entity_to_remote_entity(global_entity)
     }
     fn global_entity_to_owned_entity(
         &self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
         self.guard.global_entity_to_owned_entity(global_entity)
     }
     fn host_entity_to_global_entity(
         &self,
-        host_entity: &HostEntity,
+        host_entity: HostEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         self.guard.host_entity_to_global_entity(host_entity)
     }
     fn static_host_entity_to_global_entity(
         &self,
-        host_entity: &HostEntity,
+        host_entity: HostEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         self.guard.static_host_entity_to_global_entity(host_entity)
     }
     fn remote_entity_to_global_entity(
         &self,
-        remote_entity: &RemoteEntity,
+        remote_entity: RemoteEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         self.guard.remote_entity_to_global_entity(remote_entity)
     }
-    fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
+    fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity {
         self.guard.apply_entity_redirect(entity)
     }
 }
@@ -449,7 +450,7 @@ impl LocalEntityAndGlobalEntityConverter for EntityMapConverterMut<'_, '_> {
 impl LocalEntityAndGlobalEntityConverterMut for EntityMapConverterMut<'_, '_> {
     fn get_or_reserve_entity(
         &mut self,
-        global_entity: &GlobalEntity,
+        global_entity: GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
         if !self
             .global_world_manager
@@ -496,39 +497,39 @@ mod entity_converter_tests {
     impl LocalEntityAndGlobalEntityConverter for Signposts {
         fn global_entity_to_host_entity(
             &self,
-            _: &GlobalEntity,
+            _: GlobalEntity,
         ) -> Result<HostEntity, EntityDoesNotExistError> {
             unreachable!("not part of the dispatch under test")
         }
         fn global_entity_to_remote_entity(
             &self,
-            _: &GlobalEntity,
+            _: GlobalEntity,
         ) -> Result<RemoteEntity, EntityDoesNotExistError> {
             unreachable!("not part of the dispatch under test")
         }
         fn global_entity_to_owned_entity(
             &self,
-            _: &GlobalEntity,
+            _: GlobalEntity,
         ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
             unreachable!("not part of the dispatch under test")
         }
         fn host_entity_to_global_entity(
             &self,
-            host_entity: &HostEntity,
+            host_entity: HostEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             assert_eq!(host_entity.value(), 7, "the id must survive the dispatch");
             Ok(global(BY_HOST))
         }
         fn static_host_entity_to_global_entity(
             &self,
-            host_entity: &HostEntity,
+            host_entity: HostEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             assert_eq!(host_entity.value(), 7, "the id must survive the dispatch");
             Ok(global(BY_STATIC_HOST))
         }
         fn remote_entity_to_global_entity(
             &self,
-            remote_entity: &RemoteEntity,
+            remote_entity: RemoteEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             assert_eq!(remote_entity.value(), 7, "the id must survive the dispatch");
             Ok(global(if remote_entity.is_static() {
@@ -537,8 +538,8 @@ mod entity_converter_tests {
                 BY_REMOTE
             }))
         }
-        fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
-            *entity
+        fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity {
+            entity
         }
     }
 
@@ -577,7 +578,7 @@ mod entity_converter_tests {
 
         for (owned, expected) in cases {
             assert_eq!(
-                Signposts.owned_entity_to_global_entity(&owned),
+                Signposts.owned_entity_to_global_entity(owned),
                 Ok(global(expected)),
                 "{owned:?} must not be resolved by another form's lookup",
             );
@@ -590,22 +591,22 @@ mod entity_converter_tests {
     fn the_fake_converter_answers_everything_with_entity_zero() {
         let entity = global(123);
         assert_eq!(
-            FakeEntityConverter.global_entity_to_host_entity(&entity),
+            FakeEntityConverter.global_entity_to_host_entity(entity),
             Ok(HostEntity::new(0)),
         );
         assert_eq!(
-            FakeEntityConverter.global_entity_to_remote_entity(&entity),
+            FakeEntityConverter.global_entity_to_remote_entity(entity),
             Ok(RemoteEntity::new(0)),
         );
         assert_eq!(
-            FakeEntityConverter.global_entity_to_owned_entity(&entity),
+            FakeEntityConverter.global_entity_to_owned_entity(entity),
             Ok(OwnedLocalEntity::Host {
                 id: 0,
                 is_static: false,
             }),
         );
         assert_eq!(
-            FakeEntityConverter.get_or_reserve_entity(&entity),
+            FakeEntityConverter.get_or_reserve_entity(entity),
             Ok(OwnedLocalEntity::Host {
                 id: 0,
                 is_static: false,
@@ -614,15 +615,15 @@ mod entity_converter_tests {
              not read back as itself",
         );
         assert_eq!(
-            FakeEntityConverter.host_entity_to_global_entity(&HostEntity::new(9)),
+            FakeEntityConverter.host_entity_to_global_entity(HostEntity::new(9)),
             Ok(global(0)),
         );
         assert_eq!(
-            FakeEntityConverter.static_host_entity_to_global_entity(&HostEntity::new(9)),
+            FakeEntityConverter.static_host_entity_to_global_entity(HostEntity::new(9)),
             Ok(global(0)),
         );
         assert_eq!(
-            FakeEntityConverter.remote_entity_to_global_entity(&RemoteEntity::new(9)),
+            FakeEntityConverter.remote_entity_to_global_entity(RemoteEntity::new(9)),
             Ok(global(0)),
         );
     }
@@ -633,7 +634,7 @@ mod entity_converter_tests {
             id: 3,
             is_static: true,
         };
-        assert_eq!(FakeEntityConverter.apply_entity_redirect(&entity), entity);
+        assert_eq!(FakeEntityConverter.apply_entity_redirect(entity), entity);
     }
 
     // -- the map-backed converters -----------------------------------------
@@ -660,34 +661,34 @@ mod entity_converter_tests {
     /// Every answer the populated map gives, so a wrapper can be held to it.
     fn assert_answers_like_the_map(converter: &dyn LocalEntityAndGlobalEntityConverter) {
         assert_eq!(
-            converter.global_entity_to_host_entity(&global(1)),
+            converter.global_entity_to_host_entity(global(1)),
             Ok(HostEntity::new(11)),
         );
         assert_eq!(
-            converter.global_entity_to_remote_entity(&global(3)),
+            converter.global_entity_to_remote_entity(global(3)),
             Ok(RemoteEntity::new(33)),
         );
         assert_eq!(
-            converter.global_entity_to_owned_entity(&global(1)),
+            converter.global_entity_to_owned_entity(global(1)),
             Ok(OwnedLocalEntity::Host {
                 id: 11,
                 is_static: false,
             }),
         );
         assert_eq!(
-            converter.host_entity_to_global_entity(&HostEntity::new(11)),
+            converter.host_entity_to_global_entity(HostEntity::new(11)),
             Ok(global(1)),
         );
         assert_eq!(
-            converter.static_host_entity_to_global_entity(&HostEntity::new(22)),
+            converter.static_host_entity_to_global_entity(HostEntity::new(22)),
             Ok(global(2)),
         );
         assert_eq!(
-            converter.remote_entity_to_global_entity(&RemoteEntity::new(33)),
+            converter.remote_entity_to_global_entity(RemoteEntity::new(33)),
             Ok(global(3)),
         );
         assert_eq!(
-            converter.apply_entity_redirect(&OwnedLocalEntity::Remote {
+            converter.apply_entity_redirect(OwnedLocalEntity::Remote {
                 id: 33,
                 is_static: false,
             }),
@@ -698,7 +699,7 @@ mod entity_converter_tests {
             "a migrated entity must be looked up under its new address",
         );
         assert_eq!(
-            converter.global_entity_to_host_entity(&global(99)),
+            converter.global_entity_to_host_entity(global(99)),
             Err(EntityDoesNotExistError),
         );
     }
@@ -731,18 +732,18 @@ mod entity_converter_tests {
     fn an_entity_the_user_may_not_see_is_refused_rather_than_reserved() {
         let kinds = ComponentKinds::new();
         let gwm = TestGwm::new(&kinds);
-        gwm.deny_relation(&global(5));
+        gwm.deny_relation(global(5));
 
         let mut map = LocalEntityMap::new(HostType::Server);
         let mut generator = HostEntityGenerator::new(1);
         let mut converter = EntityConverterMut::new(&gwm, &mut map, &mut generator);
 
         assert_eq!(
-            converter.get_or_reserve_entity(&global(5)),
+            converter.get_or_reserve_entity(global(5)),
             Err(EntityDoesNotExistError),
         );
         assert!(
-            !map.contains_global_entity(&global(5)),
+            !map.contains_global_entity(global(5)),
             "a refused entity must not be left holding a reservation",
         );
     }
@@ -758,7 +759,7 @@ mod entity_converter_tests {
         let owned = {
             let mut converter = EntityConverterMut::new(&gwm, &mut map, &mut generator);
             converter
-                .get_or_reserve_entity(&global(3))
+                .get_or_reserve_entity(global(3))
                 .expect("the entity is mapped")
         };
         assert_eq!(
@@ -783,7 +784,7 @@ mod entity_converter_tests {
         let first = {
             let mut converter = EntityConverterMut::new(&gwm, &mut map, &mut generator);
             converter
-                .get_or_reserve_entity(&global(5))
+                .get_or_reserve_entity(global(5))
                 .expect("an unmapped entity is reserved, not refused")
         };
         let OwnedLocalEntity::Host { id, is_static } = first else {
@@ -791,7 +792,7 @@ mod entity_converter_tests {
         };
         assert!(!is_static, "a reserved address is not a static one");
         assert_eq!(
-            map.global_entity_from_host(&HostEntity::new(id)),
+            map.global_entity_from_host(HostEntity::new(id)),
             Some(&global(5)),
             "the reservation must be recorded in the map, not just returned",
         );
@@ -799,7 +800,7 @@ mod entity_converter_tests {
         let second = {
             let mut converter = EntityConverterMut::new(&gwm, &mut map, &mut generator);
             converter
-                .get_or_reserve_entity(&global(5))
+                .get_or_reserve_entity(global(5))
                 .expect("the entity is mapped now")
         };
         assert_eq!(
@@ -814,7 +815,7 @@ mod entity_converter_tests {
     fn the_guard_owning_converter_reserves_under_the_same_rules() {
         let kinds = ComponentKinds::new();
         let gwm = TestGwm::new(&kinds);
-        gwm.deny_relation(&global(5));
+        gwm.deny_relation(global(5));
 
         let shared = Arc::new(RwLock::new(LocalEntityMap::new(HostType::Server)));
         let mut generator = HostEntityGenerator::new(1);
@@ -823,12 +824,12 @@ mod entity_converter_tests {
             let mut converter =
                 EntityMapConverterMut::new(&gwm, shared.write().unwrap(), &mut generator);
             assert_eq!(
-                converter.get_or_reserve_entity(&global(5)),
+                converter.get_or_reserve_entity(global(5)),
                 Err(EntityDoesNotExistError),
             );
         }
         assert!(
-            !shared.read().unwrap().contains_global_entity(&global(5)),
+            !shared.read().unwrap().contains_global_entity(global(5)),
             "a refused entity must not be left holding a reservation",
         );
 
@@ -836,7 +837,7 @@ mod entity_converter_tests {
             let mut converter =
                 EntityMapConverterMut::new(&gwm, shared.write().unwrap(), &mut generator);
             converter
-                .get_or_reserve_entity(&global(6))
+                .get_or_reserve_entity(global(6))
                 .expect("an entity the user may see is reserved, not refused")
         };
         let OwnedLocalEntity::Host { id, .. } = reserved else {
@@ -846,7 +847,7 @@ mod entity_converter_tests {
             shared
                 .read()
                 .unwrap()
-                .global_entity_from_host(&HostEntity::new(id)),
+                .global_entity_from_host(HostEntity::new(id)),
             Some(&global(6)),
             "the reservation must be recorded in the shared map",
         );
