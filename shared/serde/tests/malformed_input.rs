@@ -81,6 +81,34 @@ fn forged_lengths_do_not_preallocate() {
     );
 }
 
+/// A huge declared count over a large-but-bounded reader must not convert the
+/// reader's remaining bits into a large upfront reservation. The filler here
+/// fails element decode fast (0xFF runs the inner length past the accumulator
+/// bound), so the only allocation a correct decoder may hold is for elements
+/// it actually decoded -- effectively none. The pre-existing bound reserves
+/// `min(declared, bits_remaining)` *elements*, which on this input is ~12 MiB
+/// for `Vec<String>` before a single element validates.
+#[test]
+fn large_bounded_input_does_not_reserve_upfront() {
+    PEAK_ALLOC.store(0, Ordering::Relaxed);
+
+    let mut writer = BitWriter::new();
+    UnsignedVariableInteger::<5>::new(u32::MAX as u64).ser(&mut writer);
+    let mut input = writer.to_bytes().to_vec();
+    // Large but bounded: 64 KiB of filler, far below any OOM regime; the
+    // assertion is on the *request*, observed at the allocator.
+    input.extend(std::iter::repeat_n(0xFF, 64 * 1024));
+
+    assert!(Vec::<String>::de(&mut BitReader::new(&input)).is_err());
+
+    let peak = PEAK_ALLOC.load(Ordering::Relaxed);
+    assert!(
+        peak < PEAK_LIMIT,
+        "a {}-byte packet caused a {peak}-byte upfront reservation",
+        input.len(),
+    );
+}
+
 /// A truncated but honest-looking length still has to decode the elements it
 /// promised, so a short read remains an error rather than a short `Vec`.
 #[test]
