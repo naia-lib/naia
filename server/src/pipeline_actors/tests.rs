@@ -2630,6 +2630,59 @@ fn refinalize_live_client_emits_no_duplicate_spawn() {
     );
 }
 
+/// R4 (room_store.rs remove_entity): removing an entity from a room must
+/// drive a scope exit for every user that held it visible — i.e. exactly
+/// one Despawn emission and no further Spawn. The removal currently
+/// re-emits `ScopeChange::EntityEnteredRoom` for the removed entity; if the
+/// exit path never runs, the client keeps a stale Spawned channel (bare
+/// entity that never Despawns) while the server has already forgotten the
+/// membership. RED if the Despawn does not flow.
+#[test]
+fn room_remove_entity_despawns_for_visible_users() {
+    use crate::server::world_server::InternalWorldServer;
+    use naia_shared::Protocol;
+
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+
+    let mut server = InternalWorldServer::<u64>::new(ServerConfig::default(), protocol);
+    let world_entity: u64 = 7;
+    let _global_entity = register_scope_entity(&mut server, world_entity);
+    let world = ScopeWorld {
+        entities: [world_entity].into_iter().collect(),
+    };
+
+    // Join: exactly one Spawn.
+    let user_key = UserKey::from_u64(11);
+    let addr1: std::net::SocketAddr = "127.0.0.1:41001".parse().unwrap();
+    server.receive_user(user_key, addr1);
+    handshake_finalize(&mut server, user_key, addr1);
+    let room_key = join_room(&mut server, &user_key, &world_entity, &world);
+    let (spawns1, _) = drain_spawn_counts(&mut server, &addr1);
+    assert_eq!(
+        spawns1, 1,
+        "first join must emit exactly one Spawn (sanity of the harness)"
+    );
+
+    // Remove the entity from the room, then tick.
+    server
+        .sim_handle
+        .room_remove_entity(&room_key, &world_entity);
+    scope_tick(&mut server, &world);
+
+    // Exactly one Despawn, no further Spawn.
+    let (spawns2, despawns2) = drain_spawn_counts(&mut server, &addr1);
+    assert_eq!(
+        despawns2, 1,
+        "removing a visible entity from its room must emit exactly one Despawn"
+    );
+    assert_eq!(
+        spawns2, 0,
+        "removal must not re-fire Spawn for the removed entity"
+    );
+}
+
 /// T2 (Usher 48217 hazard guard): a FRESH client process finalizes under an
 /// already-live `user_key` (second tab / restarted device before the old
 /// connection times out). It has empty remote-entity state, so it must
