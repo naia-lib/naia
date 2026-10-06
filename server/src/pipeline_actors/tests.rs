@@ -2738,12 +2738,7 @@ fn refinalize_fresh_client_respawns_and_closes_old() {
     );
     // ... and the superseded old connection must be closed.
     assert!(
-        server
-            .send
-            .state
-            .send_user_connections
-            .get(&addr1)
-            .is_none(),
+        !server.send.state.send_user_connections.contains_key(&addr1),
         "superseded connection must be closed on a fresh finalize under a live user_key"
     );
 }
