@@ -2408,3 +2408,286 @@ fn recv_worker_exits_on_closed_readiness() {
         "recv worker did not exit on closed transport readiness — spinning into an undrained queue (PF1-B)"
     );
 }
+
+// ============================================================================
+// Usher 48217 red-first tests: re-finalize duplicate-Spawn wedge (LE-LOBBY).
+// ============================================================================
+
+/// Stub world for scope-drain tests: the entities under test exist, and the
+/// scope path reads nothing else (component data comes from the global
+/// registry, not the world).
+struct ScopeWorld {
+    /// World entities treated as present.
+    entities: HashSet<u64>,
+}
+
+impl naia_shared::WorldRefType<u64> for ScopeWorld {
+    fn has_entity(&self, entity: &u64) -> bool {
+        self.entities.contains(entity)
+    }
+
+    fn entities(&self) -> Vec<u64> {
+        self.entities.iter().copied().collect()
+    }
+
+    fn has_component<R: naia_shared::ReplicatedComponent>(&self, _: &u64) -> bool {
+        unreachable!("scope drain must not read world components")
+    }
+
+    fn has_component_of_kind(&self, _: &u64, _: &naia_shared::ComponentKind) -> bool {
+        unreachable!("scope drain must not read world components")
+    }
+
+    fn component<'a, R: naia_shared::ReplicatedComponent>(
+        &'a self,
+        _: &u64,
+    ) -> Option<naia_shared::ReplicaRefWrapper<'a, R>> {
+        unreachable!("scope drain must not read world components")
+    }
+
+    fn component_of_kind<'a>(
+        &'a self,
+        _: &u64,
+        _: &naia_shared::ComponentKind,
+    ) -> Option<naia_shared::ReplicaDynRefWrapper<'a>> {
+        unreachable!("scope drain must not read world components")
+    }
+}
+
+/// Distinct component kind for scope tests (kinds are TypeId-derived).
+struct ScopeKindA;
+
+/// Registers one server-owned world entity with a single component record,
+/// returning its global id.
+fn register_scope_entity(
+    server: &mut crate::server::world_server::InternalWorldServer<u64>,
+    world_entity: u64,
+) -> naia_shared::GlobalEntity {
+    use crate::world::entity_owner::EntityOwner;
+    use naia_shared::{ComponentKind, GlobalEntitySpawner};
+
+    let global_entity = server
+        .sim_handle
+        .shared
+        .global_entity_map
+        .write()
+        .spawn(world_entity, None);
+    {
+        let mut gwm = server.sim_handle.shared.global_world_manager.write();
+        gwm.insert_entity_record(&global_entity, EntityOwner::Server);
+        gwm.insert_component_record(&global_entity, &ComponentKind::of::<ScopeKindA>());
+    }
+    global_entity
+}
+
+/// Runs one serial-tick scope pass: room-change preamble, then the send
+/// preamble (scope drain). Mirrors the fused-engine tick order — the scope
+/// drain panics if room changes are still queued.
+fn scope_tick(
+    server: &mut crate::server::world_server::InternalWorldServer<u64>,
+    world: &ScopeWorld,
+) {
+    let shared = server.send.state.shared.clone();
+    server
+        .send
+        .state
+        .apply_pending_room_changes(&shared.scope_change_queue);
+    server.run_send_preamble(world);
+}
+
+/// Simulates the recv path's handshake intake for `addr`: registers the
+/// address as disconnected under `user_key` and finalizes the connection,
+/// exactly as a (re)handshake does.
+fn handshake_finalize(
+    server: &mut crate::server::world_server::InternalWorldServer<u64>,
+    user_key: crate::user::UserKey,
+    addr: std::net::SocketAddr,
+) {
+    server
+        .sim_handle
+        .state
+        .user_store
+        .register_disconnected(addr, user_key);
+    server
+        .send
+        .state
+        .shared
+        .pending_handshakes
+        .lock()
+        .push(addr);
+    server.drain_pending_handshakes();
+}
+
+/// Drains one connection's outgoing entity commands, returning the
+/// (spawn, despawn) emission counts. Spawn covers both `Spawn` and
+/// `SpawnWithComponents`.
+fn drain_spawn_counts(
+    server: &mut crate::server::world_server::InternalWorldServer<u64>,
+    addr: &std::net::SocketAddr,
+) -> (usize, usize) {
+    use naia_shared::EntityMessageType;
+
+    let send_conn = server
+        .send
+        .state
+        .send_user_connections
+        .get_mut(addr)
+        .expect("expected a live send connection");
+    let out = send_conn
+        .base
+        .world_manager
+        .take_outgoing_commands(&naia_shared::Instant::now(), &0.0);
+    let mut spawns = 0;
+    let mut despawns = 0;
+    for (_, command) in &out {
+        match command.get_type() {
+            EntityMessageType::Spawn | EntityMessageType::SpawnWithComponents => {
+                spawns += 1;
+            }
+            EntityMessageType::Despawn => {
+                despawns += 1;
+            }
+            _ => {}
+        }
+    }
+    (spawns, despawns)
+}
+
+/// Joins `user_key` to a fresh room holding `world_entity`, then runs one
+/// scope tick. Returns the room key for later rejoins.
+fn join_room(
+    server: &mut crate::server::world_server::InternalWorldServer<u64>,
+    user_key: &crate::user::UserKey,
+    world_entity: &u64,
+    world: &ScopeWorld,
+) -> crate::room::RoomKey {
+    let room_key = server.sim_handle.create_room();
+    server.sim_handle.room_add_user(&room_key, user_key);
+    server.sim_handle.room_add_entity(&room_key, world_entity);
+    scope_tick(server, world);
+    room_key
+}
+
+/// T1 (Usher 48217): the same client process re-finalizes while live (new
+/// address, retained entity channels). The server must not re-fire Spawn
+/// for entities the client already holds — a second, newer-id Spawn stalls
+/// that entity's client channel forever (remote_entity_channel.rs:220-223),
+/// wedging every later Insert behind it with no signal. RED today: the
+/// re-finalize builds a fresh connection pair and re-fires Spawn.
+#[test]
+fn refinalize_live_client_emits_no_duplicate_spawn() {
+    use crate::server::world_server::InternalWorldServer;
+    use naia_shared::Protocol;
+
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+
+    let mut server = InternalWorldServer::<u64>::new(ServerConfig::default(), protocol);
+    let world_entity: u64 = 7;
+    let _global_entity = register_scope_entity(&mut server, world_entity);
+    let world = ScopeWorld {
+        entities: [world_entity].into_iter().collect(),
+    };
+
+    // First finalize + join: exactly one Spawn.
+    let user_key = UserKey::from_u64(11);
+    let addr1: std::net::SocketAddr = "127.0.0.1:41001".parse().unwrap();
+    server.receive_user(user_key, addr1);
+    handshake_finalize(&mut server, user_key, addr1);
+    let room_key = join_room(&mut server, &user_key, &world_entity, &world);
+    let (spawns1, _) = drain_spawn_counts(&mut server, &addr1);
+    assert_eq!(
+        spawns1, 1,
+        "first join must emit exactly one Spawn (sanity of the harness)"
+    );
+
+    // Same live client re-finalizes from a new address (reconnect with
+    // retained channels), and the app rejoins the room.
+    let addr2: std::net::SocketAddr = "127.0.0.1:41002".parse().unwrap();
+    handshake_finalize(&mut server, user_key, addr2);
+    server
+        .send
+        .state
+        .shared
+        .scope_change_queue
+        .lock()
+        .push_back(crate::server::scope_change::ScopeChange::UserEnteredRoom(
+            user_key, room_key,
+        ));
+    scope_tick(&mut server, &world);
+
+    // No Despawn went out around the re-finalize, so any second Spawn lands
+    // on the client's still-Spawned channel and wedges it.
+    let (spawns2, despawns2) = drain_spawn_counts(&mut server, &addr2);
+    assert_eq!(
+        despawns2, 0,
+        "no Despawn was sent around the re-finalize (premise of the wedge)"
+    );
+    assert_eq!(
+        spawns2, 0,
+        "re-finalize must not re-fire Spawn for an already-held entity (client channel wedge)"
+    );
+}
+
+/// T2 (Usher 48217 hazard guard): a FRESH client process finalizes under an
+/// already-live `user_key` (second tab / restarted device before the old
+/// connection times out). It has empty remote-entity state, so it must
+/// receive a Spawn for every entity in scope — and the superseded old
+/// connection must be closed. The T1 fix must not pass by starving this
+/// client. RED today on the close half: finalize never closes the old
+/// connection.
+#[test]
+fn refinalize_fresh_client_respawns_and_closes_old() {
+    use crate::server::world_server::InternalWorldServer;
+    use naia_shared::Protocol;
+
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+
+    let mut server = InternalWorldServer::<u64>::new(ServerConfig::default(), protocol);
+    let world_entity: u64 = 7;
+    let _global_entity = register_scope_entity(&mut server, world_entity);
+    let world = ScopeWorld {
+        entities: [world_entity].into_iter().collect(),
+    };
+
+    // First client finalizes + joins: exactly one Spawn.
+    let user_key = UserKey::from_u64(11);
+    let addr1: std::net::SocketAddr = "127.0.0.1:41001".parse().unwrap();
+    server.receive_user(user_key, addr1);
+    handshake_finalize(&mut server, user_key, addr1);
+    let _room_key = join_room(&mut server, &user_key, &world_entity, &world);
+    let (spawns1, _) = drain_spawn_counts(&mut server, &addr1);
+    assert_eq!(
+        spawns1, 1,
+        "first join must emit exactly one Spawn (sanity of the harness)"
+    );
+
+    // A fresh client under the same user_key finalizes from a new address
+    // while the old connection is still live, then joins the room.
+    let addr3: std::net::SocketAddr = "127.0.0.1:41003".parse().unwrap();
+    handshake_finalize(&mut server, user_key, addr3);
+    let room_key = server.sim_handle.create_room();
+    server.sim_handle.room_add_user(&room_key, &user_key);
+    server.sim_handle.room_add_entity(&room_key, &world_entity);
+    scope_tick(&mut server, &world);
+
+    // The fresh client must receive the world ...
+    let (spawns3, _) = drain_spawn_counts(&mut server, &addr3);
+    assert!(
+        spawns3 >= 1,
+        "fresh client with empty state must receive Spawn (fix must not starve it)"
+    );
+    // ... and the superseded old connection must be closed.
+    assert!(
+        server
+            .send
+            .state
+            .send_user_connections
+            .get(&addr1)
+            .is_none(),
+        "superseded connection must be closed on a fresh finalize under a live user_key"
+    );
+}
