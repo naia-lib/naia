@@ -7,12 +7,15 @@
 
 use crate::SerdeErr;
 
+/// Reads bits, LSB-first, out of a borrowed byte buffer, matching the
+/// encoding written by [`crate::BitWriter`].
 pub struct BitReader<'b> {
     state: BitReaderState,
     buffer: &'b [u8],
 }
 
 impl<'b> BitReader<'b> {
+    /// Creates a reader positioned at the start of `buffer`.
     pub fn new(buffer: &'b [u8]) -> Self {
         Self {
             state: BitReaderState {
@@ -24,6 +27,7 @@ impl<'b> BitReader<'b> {
         }
     }
 
+    /// Total length of the underlying byte buffer.
     pub fn bytes_len(&self) -> usize {
         self.buffer.len()
     }
@@ -37,6 +41,8 @@ impl<'b> BitReader<'b> {
         self.state.scratch_bits as usize + (self.buffer.len() - self.state.buffer_index) * 8
     }
 
+    /// Copies this reader's remaining buffer and cursor state into a heap-owned
+    /// [`OwnedBitReader`].
     pub fn to_owned(&self) -> OwnedBitReader {
         OwnedBitReader {
             state: self.state,
@@ -44,6 +50,8 @@ impl<'b> BitReader<'b> {
         }
     }
 
+    /// Reads a single bit, refilling the scratch register one byte at a time
+    /// from the buffer. Returns `Err(SerdeErr)` once the buffer is exhausted.
     #[inline(always)]
     pub fn read_bit(&mut self) -> Result<bool, SerdeErr> {
         if self.state.scratch_bits == 0 {
@@ -82,6 +90,8 @@ impl<'b> BitReader<'b> {
 
 // OwnedBitReader
 
+/// A [`BitReader`] whose buffer is owned (boxed) rather than borrowed, so it
+/// can outlive the data it was built from.
 #[derive(Clone)]
 pub struct OwnedBitReader {
     state: BitReaderState,
@@ -89,6 +99,7 @@ pub struct OwnedBitReader {
 }
 
 impl OwnedBitReader {
+    /// Creates an owned reader by copying `buffer` into a boxed slice.
     pub fn new(buffer: &[u8]) -> Self {
         Self {
             state: BitReaderState {
@@ -100,6 +111,8 @@ impl OwnedBitReader {
         }
     }
 
+    /// Borrows this owned reader as a [`BitReader`], sharing its current
+    /// cursor position.
     pub fn borrow(&'_ self) -> BitReader<'_> {
         BitReader {
             state: self.state,
@@ -107,6 +120,7 @@ impl OwnedBitReader {
         }
     }
 
+    /// Consumes the reader, returning its underlying buffer.
     pub fn take_buffer(self) -> Box<[u8]> {
         self.buffer
     }

@@ -2,6 +2,8 @@ use crate::BitWrite;
 
 // FileBitWriter — heap-backed writer for files/snapshots, no MTU cap.
 // Uses the same u32-scratch word-aligned approach as BitWriter.
+/// A [`BitWrite`] implementation backed by a growable `Vec<u8>`, with no MTU
+/// size cap, for serializing to files or snapshots.
 pub struct FileBitWriter {
     scratch: u32,
     scratch_bits: u32,
@@ -9,6 +11,7 @@ pub struct FileBitWriter {
 }
 
 impl FileBitWriter {
+    /// Creates an empty writer.
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
@@ -32,11 +35,15 @@ impl FileBitWriter {
         }
     }
 
+    /// Flushes any pending scratch bits and returns the written bytes as a
+    /// boxed slice.
     pub fn to_bytes(mut self) -> Box<[u8]> {
         self.finalize();
         Box::from(self.buffer)
     }
 
+    /// Flushes any pending scratch bits and returns the written bytes as a
+    /// `Vec<u8>`.
     pub fn to_vec(mut self) -> Vec<u8> {
         self.finalize();
         self.buffer

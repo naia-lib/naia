@@ -23,8 +23,10 @@
 //!
 //! For Bevy apps, use `naia-bevy-metrics` instead — it handles emission
 //! automatically via a plugin.
+#![warn(missing_docs)]
 
 mod client;
+/// Metric name constants used by [`emit_client_connection_stats`] and the server emitters.
 pub mod names;
 mod server;
 

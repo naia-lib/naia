@@ -12,7 +12,11 @@ pub trait Serde: Sized + Clone + PartialEq {
     fn bit_length(&self) -> u32;
 }
 
+/// A trait for types whose serialized bit length is the same for every value
+/// (fixed-width encodings only; variable-width and collection types do not
+/// implement this).
 pub trait ConstBitLength {
+    /// The number of bits every value of `Self` serializes to.
     fn const_bit_length() -> u32;
 }
 
@@ -41,6 +45,7 @@ pub const UNBOUNDED_BIT_LENGTH: u32 = u32::MAX;
 pub struct MaxBits<T>(core::marker::PhantomData<T>);
 
 impl<T> MaxBits<T> {
+    /// Creates a probe for `T`.
     pub const fn new() -> Self {
         Self(core::marker::PhantomData)
     }
@@ -62,6 +67,7 @@ impl<T: ConstBitLength> MaxBits<T> {
 /// The fallback arm of [`MaxBits`] — see its docs. Must be in scope for the
 /// probe to resolve for unbounded types.
 pub trait MaxBitsFallback {
+    /// Reports [`UNBOUNDED_BIT_LENGTH`] for any `T` that is not `ConstBitLength`.
     fn probe(&self) -> u32 {
         UNBOUNDED_BIT_LENGTH
     }
@@ -80,31 +86,54 @@ use std::any::TypeId;
 /// fingerprint preimage, a packet, or another grammar's bytes.
 pub const WIRE_SCHEMA_DOMAIN: &[u8] = b"naia:wire-schema:v1";
 
-/// Fixed `u8` node tags for the canonical descriptor encoding. Hand-pinned:
-/// a reorder must never silently move them.
+// Fixed `u8` node tags for the canonical descriptor encoding. Hand-pinned:
+// a reorder must never silently move them.
+/// Tag for a struct node.
 pub const SCHEMA_TAG_STRUCT: u8 = 0x01;
+/// Tag for an enum node.
 pub const SCHEMA_TAG_ENUM: u8 = 0x02;
+/// Tag for a tuple node.
 pub const SCHEMA_TAG_TUPLE: u8 = 0x03;
+/// Tag for an `Option` node.
 pub const SCHEMA_TAG_OPTION: u8 = 0x04;
+/// Tag for a fixed-length array node.
 pub const SCHEMA_TAG_ARRAY: u8 = 0x05;
+/// Tag for a `Vec` node.
 pub const SCHEMA_TAG_VECTOR: u8 = 0x06;
+/// Tag for a hash-map node.
 pub const SCHEMA_TAG_HASH_MAP: u8 = 0x07;
+/// Tag for a hash-set node.
 pub const SCHEMA_TAG_HASH_SET: u8 = 0x08;
+/// Tag for a `String` node.
 pub const SCHEMA_TAG_STRING: u8 = 0x09;
+/// Tag for a `bool` node.
 pub const SCHEMA_TAG_BOOL: u8 = 0x0A;
+/// Tag for a unit (zero-bit) node.
 pub const SCHEMA_TAG_UNIT: u8 = 0x0B;
+/// Tag for a `char` node.
 pub const SCHEMA_TAG_CHAR: u8 = 0x0C;
+/// Tag for an integer node ([`UnsignedInteger`](crate::UnsignedInteger) and its sibling aliases).
 pub const SCHEMA_TAG_INTEGER: u8 = 0x0D;
+/// Tag for a fixed-point float node ([`UnsignedFloat`](crate::UnsignedFloat) and its sibling aliases).
 pub const SCHEMA_TAG_FLOAT: u8 = 0x0E;
+/// Tag for a native-endian primitive node.
 pub const SCHEMA_TAG_NATIVE: u8 = 0x0F;
+/// Tag for a hand-written `Serde` impl's custom-leaf node.
 pub const SCHEMA_TAG_CUSTOM_LEAF: u8 = 0x10;
+/// Tag for an `EntityProperty` node.
 pub const SCHEMA_TAG_ENTITY_PROPERTY: u8 = 0x11;
+/// Tag for a back-reference to an already-active traversal node.
 pub const SCHEMA_TAG_BACKREF: u8 = 0x12;
+/// Tag for a `PhantomData` node.
 pub const SCHEMA_TAG_PHANTOM: u8 = 0x13;
+/// Tag for a `Bytes`-like node.
 pub const SCHEMA_TAG_BYTES: u8 = 0x14;
 
-/// Collection order classes. Hand-pinned like the node tags.
+// Collection order classes. Hand-pinned like the node tags.
+/// Marks a collection whose element order is part of its wire identity.
 pub const SCHEMA_ORDERED: u8 = 0x00;
+/// Marks a collection whose element order is not part of its wire identity
+/// (e.g. a hash map or hash set).
 pub const SCHEMA_UNORDERED: u8 = 0x01;
 
 /// The describing host's endianness, resolved at compile time: `0x00` little,

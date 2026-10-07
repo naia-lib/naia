@@ -4,11 +4,20 @@ use crate::{
 };
 
 // BitWrite
+/// Common interface for writing a bitstream, implemented by the real writers
+/// ([`BitWriter`], [`VecBitWriter`], [`crate::FileBitWriter`]) and by
+/// [`BitCounter`], which only tallies bits.
 pub trait BitWrite {
+    /// Writes a single bit.
     fn write_bit(&mut self, bit: bool);
+    /// Writes a full byte (8 bits).
     fn write_byte(&mut self, byte: u8);
 
+    /// True for a counting implementation ([`BitCounter`]) that tallies bits
+    /// rather than writing them.
     fn is_counter(&self) -> bool;
+    /// Tallies `bits` additional bits without writing them. Only valid on a
+    /// counting implementation; real writers panic if this is called.
     fn count_bits(&mut self, bits: u32);
 }
 
@@ -19,6 +28,9 @@ pub trait BitWrite {
 // operations native on wasm32 targets where 64-bit arithmetic is emulated.
 // The approach eliminates the per-byte reverse_bits call of the old u8 design.
 // (Inspired by Gaffer on Games, "Reading and Writing Packets", 2015.)
+/// A [`BitWrite`] implementation backed by a fixed, MTU-sized stack buffer.
+/// Panics on write past its capacity; see [`VecBitWriter`] or
+/// [`crate::FileBitWriter`] for an unbounded alternative.
 pub struct BitWriter {
     scratch: u32,
     scratch_bits: u32,
@@ -29,6 +41,7 @@ pub struct BitWriter {
 }
 
 impl BitWriter {
+    /// Creates a writer capped at [`MTU_SIZE_BITS`].
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
@@ -41,6 +54,8 @@ impl BitWriter {
         }
     }
 
+    /// Creates a writer capped at `bit_capacity` bits rather than the default
+    /// MTU size. The backing buffer is still [`MTU_SIZE_BYTES`] bytes.
     pub fn with_capacity(bit_capacity: u32) -> Self {
         Self {
             scratch: 0,
@@ -52,6 +67,7 @@ impl BitWriter {
         }
     }
 
+    /// Creates a writer with no effective bit cap (`u32::MAX`).
     pub fn with_max_capacity() -> Self {
         Self::with_capacity(u32::MAX)
     }
@@ -75,33 +91,47 @@ impl BitWriter {
         self.max_bits = 0;
     }
 
+    /// Flushes any pending scratch bits and wraps the written bytes as an
+    /// [`OutgoingPacket`].
     pub fn to_packet(mut self) -> OutgoingPacket {
         self.finalize();
         OutgoingPacket::new(self.byte_count, self.buffer)
     }
 
+    /// Flushes any pending scratch bits and returns an [`OwnedBitReader`]
+    /// over the written bytes.
     pub fn to_owned_reader(mut self) -> OwnedBitReader {
         self.finalize();
         OwnedBitReader::new(&self.buffer[0..self.byte_count])
     }
 
+    /// Flushes any pending scratch bits and returns the written bytes as a
+    /// boxed slice.
     pub fn to_bytes(mut self) -> Box<[u8]> {
         self.finalize();
         Box::from(&self.buffer[0..self.byte_count])
     }
 
+    /// A [`BitCounter`] seeded with this writer's current bit position and
+    /// remaining capacity, for measuring how many more bits a value would
+    /// take without writing it.
     pub fn counter(&self) -> BitCounter {
         BitCounter::new(self.current_bits, self.current_bits, self.max_bits)
     }
 
+    /// Lowers the writer's bit cap by `bits`, reserving room for something
+    /// to be written later.
     pub fn reserve_bits(&mut self, bits: u32) {
         self.max_bits -= bits;
     }
 
+    /// Raises the writer's bit cap by `bits`, undoing a prior
+    /// [`reserve_bits`](Self::reserve_bits).
     pub fn release_bits(&mut self, bits: u32) {
         self.max_bits += bits;
     }
 
+    /// Bits still available before hitting the writer's cap.
     pub fn bits_free(&self) -> u32 {
         self.max_bits - self.current_bits
     }
@@ -190,6 +220,7 @@ impl Default for VecBitWriter {
 }
 
 impl VecBitWriter {
+    /// Creates an empty writer.
     pub fn new() -> Self {
         Self {
             scratch: 0,
@@ -204,6 +235,8 @@ impl VecBitWriter {
         self.scratch_bits = 0;
     }
 
+    /// Flushes any pending scratch bits and returns the written bytes as a
+    /// boxed slice.
     pub fn to_bytes(mut self) -> Box<[u8]> {
         if self.scratch_bits > 0 {
             let remaining_bytes = (self.scratch_bits as usize).div_ceil(8);
@@ -277,7 +310,10 @@ pub const CACHED_UPDATE_BITS: u32 = (CACHED_UPDATE_BYTES * 8) as u32;
 /// Replicate::max_bit_length()).
 #[derive(Copy, Clone)]
 pub struct CachedComponentUpdate {
+    /// Inline backing storage; only the first [`bit_count`](Self::bit_count)
+    /// bits are valid.
     pub bytes: [u8; CACHED_UPDATE_BYTES],
+    /// Number of valid bits captured in [`bytes`](Self::bytes).
     pub bit_count: u32,
 }
 
@@ -317,6 +353,7 @@ pub mod bench_serde_counters {
     /// Calls where writer scratch_bits != 0 at entry (bit-unaligned; must bit-shift).
     pub static N_APPEND_UNALIGNED: AtomicU64 = AtomicU64::new(0);
 
+    /// Resets both counters to zero.
     pub fn reset() {
         N_APPEND_ALIGNED.store(0, Ordering::Relaxed);
         N_APPEND_UNALIGNED.store(0, Ordering::Relaxed);

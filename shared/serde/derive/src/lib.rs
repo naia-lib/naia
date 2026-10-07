@@ -16,12 +16,15 @@
 //! bug from reappearing.
 //!
 //! This crate contains only the naia_shared / crate-internal (naia_serde) flavors.
+#![warn(missing_docs)]
 //! Adapter and facade flavors live in their own adapter-owned derive crates.
 
 use naia_serde_derive_core::derive_serde_common;
 use quote::quote;
 use syn::parse_macro_input;
 
+/// Derives `Serde` and `WireSchema` for a struct, tuple struct, or enum, with
+/// paths rooted at `naia_shared`.
 #[proc_macro_derive(Serde)]
 pub fn derive_serde(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
@@ -29,6 +32,8 @@ pub fn derive_serde(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     derive_serde_common(input, serde_crate_name).into()
 }
 
+/// Derives `Serde` and `WireSchema` like `Serde`, with paths rooted at
+/// `naia_serde` (for use inside naia-serde).
 #[proc_macro_derive(SerdeInternal)]
 pub fn derive_serde_internal(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);

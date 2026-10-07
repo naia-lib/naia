@@ -6,6 +6,10 @@ use syn::{
 
 use super::shared::{get_builder_generic_fields, get_generics, get_struct_type, StructType};
 
+/// Generates the `Message` derive output for `input` (struct or enum): a builder
+/// struct with a `MessageBuilder` impl, and `Message`, `Named`, and `Clone` impls,
+/// with paths rooted at `shared_crate_name`. `is_fragment` and `is_request` set
+/// the generated `is_fragment` and `is_request` methods.
 pub fn message_impl(
     input: DeriveInput,
     shared_crate_name: TokenStream,
@@ -524,6 +528,8 @@ fn get_bit_length_method(fields: &[Field], struct_type: &StructType) -> TokenStr
     }
 }
 
+/// Generates `create_builder`, returning `Box::new(builder_name::new())` as a
+/// `Box<dyn MessageBuilder>`.
 pub fn get_builder_create_method(builder_name: &Ident, turbofish: &TokenStream) -> TokenStream {
     let builder_new = quote! {
         #builder_name #turbofish::new()
@@ -611,6 +617,8 @@ fn get_field_name(field: &Field, index: usize, struct_type: &StructType) -> Memb
     }
 }
 
+/// Generates an inherent `pub fn new()` on the builder, initializing one
+/// `PhantomData` field per type parameter.
 pub fn get_builder_new_method(
     typed_generics: &TokenStream,
     builder_name: &Ident,
@@ -655,6 +663,8 @@ pub fn get_builder_new_method(
     }
 }
 
+/// Generates the builder's `read` method, which reads each field from a
+/// `BitReader` and returns a `MessageContainer`.
 pub fn get_builder_read_method(
     struct_name: &Ident,
     fields: &[Field],
@@ -730,6 +740,8 @@ pub fn get_builder_read_method(
     }
 }
 
+/// Generates the builder's `box_clone` method returning `Box<dyn MessageBuilder>`,
+/// initializing one `PhantomData` field per type parameter.
 pub fn get_builder_box_clone_method(input_generics: &Generics) -> TokenStream {
     let fn_impl = if input_generics.gt_token.is_none() {
         quote! { Self }
@@ -773,28 +785,38 @@ fn get_variable_name_for_unnamed_field(index: usize, span: Span) -> Ident {
     Ident::new(&format!("{}{}", UNNAMED_FIELD_PREFIX, index), span)
 }
 
+/// A message field declared as `EntityProperty`.
 pub struct EntityProperty {
+    /// Field identifier.
     pub variable_name: Ident,
 }
 
+/// A message field of any other type.
 pub struct Normal {
+    /// Field identifier.
     pub variable_name: Ident,
+    /// Declared field type.
     pub field_type: Type,
 }
 
+/// One field of a `Message` derive input, classified by its declared type.
 #[allow(clippy::large_enum_variant)]
 pub enum Field {
+    /// An `EntityProperty` field.
     EntityProperty(EntityProperty),
+    /// Any other field.
     Normal(Normal),
 }
 
 impl Field {
+    /// Builds a `Field::EntityProperty`.
     pub fn entity_property(variable_name: Ident) -> Self {
         Self::EntityProperty(EntityProperty {
             variable_name: variable_name.clone(),
         })
     }
 
+    /// Builds a `Field::Normal`.
     pub fn normal(variable_name: Ident, field_type: Type) -> Self {
         Self::Normal(Normal {
             variable_name: variable_name.clone(),
@@ -802,6 +824,7 @@ impl Field {
         })
     }
 
+    /// Returns the field identifier.
     pub fn variable_name(&self) -> &Ident {
         match self {
             Self::EntityProperty(property) => &property.variable_name,

@@ -19,11 +19,18 @@ use super::{
     system_set::HostSyncChangeTracking,
 };
 
+/// Marker trait implemented once per bevy-adapter tier (client/server) to
+/// wire a [`ComponentAccess`] into that tier's `App`.
 pub trait AppTag: Send + Sync + 'static {
+    /// Registers `boxed_component`'s change-tracking systems on `app`.
     fn add_systems(boxed_component: Box<dyn ComponentAccess>, app: &mut App);
 }
 
+/// Type-erased access to a single replicated component type, letting
+/// naia's generic replication code operate on components without knowing
+/// their concrete type.
 pub trait ComponentAccess: Send + Sync {
+    /// Registers this component's change-tracking systems under `Update`.
     fn add_systems(&self, app: &mut App);
     /// Register `on_component_added::<R>` / `on_component_removed::<R>` in
     /// `schedule` instead of the default `Update`. Used by callers (e.g.
@@ -38,34 +45,47 @@ pub trait ComponentAccess: Send + Sync {
         let _ = schedule;
         self.add_systems(app);
     }
+    /// Clones this accessor into a new boxed trait object.
     fn box_clone(&self) -> Box<dyn ComponentAccess>;
+    /// Returns a read-only dynamic reference to this component on
+    /// `world_entity`, if present.
     fn component<'w>(
         &self,
         world: &'w World,
         world_entity: &Entity,
     ) -> Option<ReplicaDynRefWrapper<'w>>;
+    /// Returns a mutable dynamic reference to this component on
+    /// `world_entity`, if present.
     fn component_mut<'w>(
         &self,
         world: &'w mut World,
         world_entity: &Entity,
     ) -> Option<ReplicaDynMutWrapper<'w>>;
+    /// Removes this component from `world_entity` and returns it boxed, if
+    /// it was present.
     fn remove_component(
         &self,
         world: &mut World,
         world_entity: &Entity,
     ) -> Option<Box<dyn Replicate>>;
+    /// Copies this component's value from `immutable_world_entity` onto
+    /// `mutable_world_entity`, if both have it.
     fn mirror_components(
         &self,
         world: &mut World,
         mutable_world_entity: &Entity,
         immutable_world_entity: &Entity,
     );
+    /// Downcasts `boxed_component` to this component's concrete type and
+    /// inserts it onto `world_entity`.
     fn insert_component(
         &self,
         world: &mut World,
         world_entity: &Entity,
         boxed_component: Box<dyn Replicate>,
     );
+    /// Registers this component with the global world manager so its
+    /// diffs are published to remote peers.
     fn component_publish(
         &self,
         component_kinds: &ComponentKinds,
@@ -74,7 +94,10 @@ pub trait ComponentAccess: Send + Sync {
         world: &mut World,
         world_entity: &Entity,
     );
+    /// Unpublishes this component from the global world manager.
     fn component_unpublish(&self, world: &mut World, world_entity: &Entity);
+    /// Enables auth-delegation for this component on `world_entity`,
+    /// registering it first if it has no mutator yet.
     fn component_enable_delegation(
         &self,
         component_kinds: &ComponentKinds,
@@ -83,9 +106,12 @@ pub trait ComponentAccess: Send + Sync {
         world: &mut World,
         world_entity: &Entity,
     );
+    /// Disables auth-delegation for this component on `world_entity`.
     fn component_disable_delegation(&self, world: &mut World, world_entity: &Entity);
 }
 
+/// Type-erased [`ComponentAccess`] implementation for a single component
+/// type `R`.
 pub struct ComponentAccessor<R: Replicate> {
     phantom_r: PhantomData<R>,
 }
@@ -97,6 +123,7 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccessor<R> {
         }
     }
 
+    /// Boxes a new `ComponentAccessor<R>` as a type-erased [`ComponentAccess`].
     pub fn create() -> Box<dyn ComponentAccess> {
         Box::new(ComponentAccessor::<R>::new())
     }

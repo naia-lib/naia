@@ -26,6 +26,7 @@
 //! Enable `server` for `NaiaServerMetricsPlugin`; `client` for
 //! `NaiaClientMetricsPlugin`. Both can be enabled simultaneously for
 //! listen-server setups.
+#![warn(missing_docs)]
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "server")] {
@@ -39,6 +40,7 @@ cfg_if::cfg_if! {
         mod client_plugin;
         pub use client_plugin::NaiaClientMetricsPlugin;
         pub use naia_bevy_client::DefaultClientTag;
+        /// [`NaiaClientMetricsPlugin`] pinned to [`DefaultClientTag`], for single-client apps.
         pub type DefaultClientMetricsPlugin = NaiaClientMetricsPlugin<DefaultClientTag>;
     }
 }

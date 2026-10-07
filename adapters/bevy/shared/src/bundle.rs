@@ -2,7 +2,10 @@ use std::collections::HashSet;
 
 use crate::{ComponentKind, Replicate};
 
+/// Trait for tuples (up to 8 elements) of `Replicate` component types,
+/// giving the set of component kinds the tuple contains.
 pub trait ReplicateBundle: Send + Sync + 'static {
+    /// Returns the set of component kinds in this bundle.
     fn kind_set() -> HashSet<ComponentKind>;
 }
 

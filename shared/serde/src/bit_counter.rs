@@ -1,6 +1,9 @@
 use crate::BitWrite;
 
 // BitCounter
+/// A [`BitWrite`] implementation that only tallies bits instead of writing
+/// them, used to measure how many bits a value would take before committing
+/// it to a real writer.
 pub struct BitCounter {
     start_bits: u32,
     current_bits: u32,
@@ -8,6 +11,8 @@ pub struct BitCounter {
 }
 
 impl BitCounter {
+    /// Creates a counter starting at `start_bits`/`current_bits` already
+    /// tallied, capped at `max_bits`.
     pub fn new(start_bits: u32, current_bits: u32, max_bits: u32) -> Self {
         Self {
             start_bits,
@@ -16,10 +21,12 @@ impl BitCounter {
         }
     }
 
+    /// True once the tallied bit count has passed `max_bits`.
     pub fn overflowed(&self) -> bool {
         self.current_bits > self.max_bits
     }
 
+    /// Bits tallied since this counter was created (`current_bits - start_bits`).
     pub fn bits_needed(&self) -> u32 {
         self.current_bits - self.start_bits
     }

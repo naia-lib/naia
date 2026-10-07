@@ -15,6 +15,10 @@ use crate::{snapshot_reader_registry::SnapshotReaderRegistry, ProtocolPlugin, Wo
 /// four places and reads as noise at each of them.
 pub type EventInstaller = Arc<dyn Fn(&mut App) + Send + Sync>;
 
+/// Bevy-facing builder for the wire protocol: wraps `naia_shared::Protocol`
+/// and additionally tracks `WorldData`, the snapshot-reader registry, and
+/// the deferred client/server event-installer closures that `add_component`
+/// extension methods register.
 #[derive(Clone)]
 pub struct Protocol {
     inner: InnerProtocol,
@@ -37,54 +41,68 @@ impl Default for Protocol {
 }
 
 impl Protocol {
+    /// Creates a new `Protocol` builder (alias for [`Protocol::default`]).
     pub fn builder() -> Self {
         Self::default()
     }
 
+    /// Takes the `WorldData` out of this `Protocol`. Panics if called more
+    /// than once.
     pub fn take_world_data(&mut self) -> WorldData {
         self.world_data.take().expect("should only call this once")
     }
 
+    /// Applies a [`ProtocolPlugin`], letting it register its own channels,
+    /// messages, and components on this `Protocol`.
     pub fn add_plugin<P: ProtocolPlugin>(&mut self, plugin: P) -> &mut Self {
         self.check_lock();
         plugin.build(self);
         self
     }
 
+    /// Configures simulated network conditions (latency, jitter, loss) for
+    /// local testing.
     pub fn link_condition(&mut self, config: LinkConditionerConfig) -> &mut Self {
         self.inner.link_condition(config);
         self
     }
 
+    /// Allows clients to spawn and have authority over their own entities.
     pub fn enable_client_authoritative_entities(&mut self) -> &mut Self {
         self.inner.enable_client_authoritative_entities();
         self
     }
 
+    /// Sets the HTTP path the server exposes for WebRTC session negotiation.
     pub fn rtc_endpoint(&mut self, path: String) -> &mut Self {
         self.inner.rtc_endpoint(path);
         self
     }
 
+    /// Returns the configured WebRTC session-negotiation path.
     pub fn get_rtc_endpoint(&self) -> String {
         self.inner.get_rtc_endpoint()
     }
 
+    /// Sets how often the server advances a network tick.
     pub fn tick_interval(&mut self, duration: Duration) -> &mut Self {
         self.inner.tick_interval(duration);
         self
     }
 
+    /// Configures wire compression.
     pub fn compression(&mut self, config: CompressionConfig) -> &mut Self {
         self.inner.compression(config);
         self
     }
 
+    /// Registers naia's built-in default channels.
     pub fn add_default_channels(&mut self) -> &mut Self {
         self.inner.add_default_channels();
         self
     }
 
+    /// Registers channel `C` with the given direction and delivery mode.
     pub fn add_channel<C: Channel>(
         &mut self,
         direction: ChannelDirection,
@@ -94,11 +112,13 @@ impl Protocol {
         self
     }
 
+    /// Registers message type `M` for wire (de)serialization.
     pub fn add_message<M: Message>(&mut self) -> &mut Self {
         self.inner.add_message::<M>();
         self
     }
 
+    /// Registers request type `Q` for the request/response RPC path.
     pub fn add_request<Q: Request>(&mut self) -> &mut Self {
         self.inner.add_request::<Q>();
         self
@@ -158,14 +178,18 @@ impl Protocol {
         self
     }
 
+    /// Locks the protocol against further registration; later mutating
+    /// calls (e.g. `add_plugin`) will panic.
     pub fn lock(&mut self) {
         self.inner.lock();
     }
 
+    /// Consumes this `Protocol`, returning the wrapped `naia_shared::Protocol`.
     pub fn into(self) -> InnerProtocol {
         self.inner
     }
 
+    /// Returns a reference to the wrapped `naia_shared::Protocol`.
     pub fn inner(&self) -> &InnerProtocol {
         &self.inner
     }
@@ -206,6 +230,7 @@ impl Protocol {
         std::mem::take(&mut self.server_event_installers)
     }
 
+    /// Takes this `Protocol` out, leaving a default one in its place.
     pub fn build(&mut self) -> Self {
         std::mem::take(self)
     }

@@ -4,6 +4,9 @@ use syn::{DeriveInput, LitStr};
 
 use super::shared::{get_struct_type, StructType};
 
+/// Generates `impl Channel` (empty) and `impl Named` for `input`, with `name()`
+/// and `protocol_name()` both returning the struct's identifier as a string.
+/// Paths are rooted at `shared_crate_name`. Panics unless `input` is a unit struct.
 pub fn channel_impl(input: DeriveInput, shared_crate_name: TokenStream) -> TokenStream {
     // Helper Properties
     let struct_type = get_struct_type(&input);

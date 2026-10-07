@@ -1,3 +1,9 @@
+//! Bit-level serialization for naia: `BitWriter`/`BitReader` pack values as a
+//! packed bitstream (not byte-aligned), with fixed-width and variable-width
+//! integer and float encodings, and the `Serde` trait that types implement to
+//! read and write themselves against that stream.
+#![warn(missing_docs)]
+
 pub use naia_serde_derive::{Serde, SerdeInternal};
 
 mod bit_counter;

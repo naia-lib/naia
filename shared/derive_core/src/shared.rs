@@ -2,9 +2,13 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Data, DeriveInput, Fields, GenericParam, Generics};
 
+/// Shape of a derive input struct.
 pub enum StructType {
+    /// Struct with named fields.
     Struct,
+    /// Unit struct (no fields).
     UnitStruct,
+    /// Tuple struct (unnamed fields).
     TupleStruct,
 }
 
@@ -20,6 +24,9 @@ pub(crate) fn get_struct_type(input: &DeriveInput) -> StructType {
     panic!("Can only derive on a struct")
 }
 
+/// Returns `(untyped_generics, typed_generics, turbofish)` token streams for
+/// `input`'s generics: the type generics, the impl generics, and the type
+/// generics in turbofish form. All three are empty when `input` has no generics.
 pub fn get_generics(input: &DeriveInput) -> (TokenStream, TokenStream, TokenStream) {
     let generics = &input.generics;
     if generics.lt_token.is_none() {
@@ -40,6 +47,9 @@ pub fn get_generics(input: &DeriveInput) -> (TokenStream, TokenStream, TokenStre
     (untyped_generics, typed_generics, turbofish)
 }
 
+/// Returns the builder struct body: `;` when `generics` is empty, otherwise a
+/// braced list of `phantom_<t>: PhantomData<T>` fields, one per type parameter.
+/// Panics on a non-type generic parameter.
 pub fn get_builder_generic_fields(generics: &Generics) -> TokenStream {
     if generics.gt_token.is_none() {
         return quote! { ; };

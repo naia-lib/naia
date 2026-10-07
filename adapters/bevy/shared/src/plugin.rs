@@ -11,6 +11,11 @@ use crate::{
     HostOwnedMap,
 };
 
+/// Bevy plugin shared by the client and server tiers: installs the
+/// `HostOwnedMap` resource, the `HostSyncEvent` message, and the
+/// `on_host_owned_added` / `on_despawn` systems that keep host-authority
+/// bookkeeping in sync. Generic over phantom tag `T` so client and server
+/// can each register their own instance.
 pub struct SharedPlugin<T: Send + Sync + 'static> {
     phantom_t: PhantomData<T>,
 }
@@ -24,6 +29,7 @@ impl<T: Send + Sync + 'static> Default for SharedPlugin<T> {
 }
 
 impl<T: Send + Sync + 'static> SharedPlugin<T> {
+    /// Creates a new `SharedPlugin<T>`.
     pub fn new() -> Self {
         Self::default()
     }

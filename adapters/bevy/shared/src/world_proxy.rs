@@ -55,7 +55,9 @@ impl<'a, R: Replicate> ReplicaMutTrait<R> for DynMutDowncast<'a, R> {
 
 // WorldProxy
 
+/// Wraps a `&World` reference as a naia-compatible [`WorldRef`].
 pub trait WorldProxy<'w> {
+    /// Wraps `self` as a [`WorldRef`].
     fn proxy(self) -> WorldRef<'w>;
 }
 
@@ -67,7 +69,9 @@ impl<'w> WorldProxy<'w> for &'w World {
 
 // WorldProxyMut
 
+/// Wraps a `&mut World` reference as a naia-compatible [`WorldMut`].
 pub trait WorldProxyMut<'w> {
+    /// Wraps `self` as a [`WorldMut`].
     fn proxy_mut(self) -> WorldMut<'w>;
 }
 
@@ -79,11 +83,13 @@ impl<'w> WorldProxyMut<'w> for &'w mut World {
 
 // WorldRef //
 
+/// Read-only naia `WorldRefType` view over a bevy `World`.
 pub struct WorldRef<'w> {
     world: &'w World,
 }
 
 impl<'w> WorldRef<'w> {
+    /// Wraps `world` as a `WorldRef`.
     pub fn new(world: &'w World) -> Self {
         WorldRef { world }
     }
@@ -124,11 +130,13 @@ impl<'w> WorldRefType<Entity> for WorldRef<'w> {
 
 // WorldMut
 
+/// Mutable naia `WorldMutType` view over a bevy `World`.
 pub struct WorldMut<'w> {
     world: &'w mut World,
 }
 
 impl<'w> WorldMut<'w> {
+    /// Wraps `world` as a `WorldMut`.
     pub fn new(world: &'w mut World) -> Self {
         Self { world }
     }

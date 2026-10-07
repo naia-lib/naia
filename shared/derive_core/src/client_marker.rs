@@ -2,6 +2,10 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::DeriveInput;
 
+/// For marker type `M` = `input`'s identifier, generates `pub type` aliases
+/// `{M}Client` and `{M}{Event}` for the `root::events` types parameterized by `M`,
+/// plus a `{M}AppBundleExt` trait (`add_bundle_events`, `add_world_component_events`)
+/// implemented for `bevy_app::App` that forwards to `root::AppRegisterComponentEvents`.
 pub fn client_marker_impl(input: DeriveInput, root: TokenStream) -> TokenStream {
     let m = &input.ident;
 

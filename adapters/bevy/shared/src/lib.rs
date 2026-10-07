@@ -1,3 +1,8 @@
+//! Bevy-facing facade over `naia_shared`: re-exports its types under
+//! bevy-flavored derive macros and adds the ECS glue (plugins, system sets,
+//! world proxies, change-detection events) naia needs inside a Bevy `App`.
+#![warn(missing_docs)]
+
 pub use bevy_ecs;
 
 // Bevy-adapter `Replicate` derive: component=false flavor (users add their own

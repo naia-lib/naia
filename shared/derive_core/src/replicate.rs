@@ -12,28 +12,44 @@ use crate::{
 
 const UNNAMED_FIELD_PREFIX: &str = "unnamed_field_";
 
+/// A replicated field declared as `Property<T>`.
 pub struct NormalProperty {
+    /// Field identifier.
     pub variable_name: Ident,
+    /// The `T` in `Property<T>`.
     pub inner_type: Type,
+    /// Field identifier in uppercase.
     pub uppercase_variable_name: Ident,
+    /// Index of the field among the struct's fields.
     pub index: usize,
 }
 
+/// A replicated field declared as `EntityProperty`.
 pub struct EntityProperty {
+    /// Field identifier.
     pub variable_name: Ident,
+    /// Field identifier in uppercase.
     pub uppercase_variable_name: Ident,
+    /// Index of the field among the struct's fields.
     pub index: usize,
 }
 
+/// A field of any other type, which is not replicated.
 pub struct NonReplicatedProperty {
+    /// Field identifier.
     pub variable_name: Ident,
+    /// Declared field type.
     pub field_type: Type,
 }
 
+/// One field of a `Replicate` derive input, classified by its declared type.
 #[allow(clippy::large_enum_variant)]
 pub enum Property {
+    /// A `Property<T>` field.
     Normal(NormalProperty),
+    /// An `EntityProperty` field.
     Entity(EntityProperty),
+    /// A non-replicated field.
     NonReplicated(NonReplicatedProperty),
 }
 
@@ -48,6 +64,11 @@ fn is_immutable_attr(input: &DeriveInput) -> bool {
     })
 }
 
+/// Generates the `Replicate` derive output for `input`: a builder struct with
+/// `ReplicateBuilder` and `Named` impls, an inherent impl, and `Named`,
+/// `Replicate`, `Clone`, and `HostComponent` impls, with paths rooted at
+/// `shared_crate_name`. Reads `#[replicate(immutable)]` on the struct.
+/// The `_auto_emit_bevy_component` argument is not read.
 pub fn replicate_impl(
     input: DeriveInput,
     shared_crate_name: TokenStream,
@@ -310,6 +331,7 @@ fn get_field_name(property: &Property, struct_type: &StructType) -> Member {
 }
 
 impl Property {
+    /// Builds a `Property::Normal`; the uppercase name is derived from `variable_name`.
     pub fn normal(index: usize, variable_name: Ident, inner_type: Type) -> Self {
         Self::Normal(NormalProperty {
             index,
@@ -322,6 +344,7 @@ impl Property {
         })
     }
 
+    /// Builds a `Property::Entity`; the uppercase name is derived from `variable_name`.
     pub fn entity(index: usize, variable_name: Ident) -> Self {
         Self::Entity(EntityProperty {
             index,
@@ -333,6 +356,7 @@ impl Property {
         })
     }
 
+    /// Builds a `Property::NonReplicated`.
     pub fn nonreplicated(variable_name: Ident, field_type: Type) -> Self {
         Self::NonReplicated(NonReplicatedProperty {
             variable_name: variable_name.clone(),
@@ -340,6 +364,7 @@ impl Property {
         })
     }
 
+    /// Returns true for `Normal` and `Entity`, false for `NonReplicated`.
     pub fn is_replicated(&self) -> bool {
         match self {
             Self::Normal(_) | Self::Entity(_) => true,
@@ -347,6 +372,7 @@ impl Property {
         }
     }
 
+    /// Returns the field identifier.
     pub fn variable_name(&self) -> &Ident {
         match self {
             Self::Normal(property) => &property.variable_name,
@@ -355,6 +381,7 @@ impl Property {
         }
     }
 
+    /// Returns the uppercase field identifier. Panics for `NonReplicated`.
     pub fn uppercase_variable_name(&self) -> &Ident {
         match self {
             Self::Normal(property) => &property.uppercase_variable_name,
@@ -363,6 +390,7 @@ impl Property {
         }
     }
 
+    /// Returns the field index. Panics for `NonReplicated`.
     pub fn index(&self) -> usize {
         match self {
             Self::Normal(property) => property.index,
@@ -600,6 +628,7 @@ pub fn get_component_facts_method(properties: &[Property], diff_mask_size: u8) -
     }
 }
 
+/// Generates `dyn_ref`, returning `ReplicaDynRef::new(self)`.
 pub fn get_dyn_ref_method() -> TokenStream {
     quote! {
         fn dyn_ref(&self) -> ReplicaDynRef<'_> {
@@ -608,6 +637,7 @@ pub fn get_dyn_ref_method() -> TokenStream {
     }
 }
 
+/// Generates `dyn_mut`, returning `ReplicaDynMut::new(self)`.
 pub fn get_dyn_mut_method() -> TokenStream {
     quote! {
         fn dyn_mut(&mut self) -> ReplicaDynMut<'_> {
@@ -891,6 +921,9 @@ fn get_localize_method(properties: &[Property], struct_type: &StructType) -> Tok
     }
 }
 
+/// Generates the `pub fn new_complete` constructor for `enum_name`, taking one
+/// argument per property. When `is_immutable`, host properties are built with
+/// `immutable_host_owned` instead of `host_owned`.
 pub fn get_new_complete_method(
     enum_name: &Ident,
     properties: &[Property],
@@ -1040,6 +1073,8 @@ pub fn get_new_complete_method(
     }
 }
 
+/// Generates `create_builder`, returning `Box::new(builder_name::new())` as a
+/// `Box<dyn ReplicateBuilder>`.
 pub fn get_builder_create_method(builder_name: &Ident, turbofish: &TokenStream) -> TokenStream {
     let builder_new = quote! {
         #builder_name #turbofish::new()
@@ -1052,6 +1087,8 @@ pub fn get_builder_create_method(builder_name: &Ident, turbofish: &TokenStream) 
     }
 }
 
+/// Generates the builder's `read` method, which reads each property from a
+/// `BitReader` and returns the component as `Box<dyn Replicate>`.
 pub fn get_builder_read_method(
     replica_name: &Ident,
     properties: &[Property],
@@ -1133,6 +1170,8 @@ pub fn get_builder_read_method(
     }
 }
 
+/// Generates `read_create_update`, which reads per-property update data from a
+/// `BitReader` into a `PendingComponentUpdate`.
 pub fn get_read_create_update_method(
     replica_name: &Ident,
     properties: &[Property],
@@ -1629,6 +1668,8 @@ fn get_relations_complete_method(fields: &[Property], struct_type: &StructType) 
     }
 }
 
+/// Generates the builder's `box_clone` method returning `Box<dyn ReplicateBuilder>`,
+/// initializing one `PhantomData` field per type parameter.
 pub fn get_builder_box_clone_method(input_generics: &Generics) -> TokenStream {
     let fn_impl = if input_generics.gt_token.is_none() {
         quote! { Self }

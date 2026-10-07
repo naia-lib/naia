@@ -8,15 +8,29 @@ use crate::{
 
 // Integers
 
+/// Converts a `SerdeInteger` to a concrete Rust integer type, panicking if
+/// its current value does not fit. Blanket-implemented for every
+/// `T: TryFrom<i128>`.
 pub trait SerdeIntegerConversion<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> {
+    /// Converts `value` to `Self`, panicking if it is out of range.
     fn from(value: &SerdeInteger<SIGNED, VARIABLE, BITS>) -> Self;
 }
 
+/// Fixed-width unsigned integer encoded in exactly `BITS` bits.
 pub type UnsignedInteger<const BITS: u8> = SerdeInteger<false, false, BITS>;
+/// Fixed-width signed integer encoded as a sign bit plus `BITS` magnitude bits.
 pub type SignedInteger<const BITS: u8> = SerdeInteger<true, false, BITS>;
+/// Variable-width unsigned integer encoded in `BITS`-bit chunks, each
+/// preceded by a continuation bit.
 pub type UnsignedVariableInteger<const BITS: u8> = SerdeInteger<false, true, BITS>;
+/// Variable-width signed integer: a sign bit, then `BITS`-bit chunks, each
+/// preceded by a continuation bit.
 pub type SignedVariableInteger<const BITS: u8> = SerdeInteger<true, true, BITS>;
 
+/// An integer serialized with const-generic sign, variable-width, and
+/// bit-width parameters. Construct through the [`UnsignedInteger`],
+/// [`SignedInteger`], [`UnsignedVariableInteger`], or [`SignedVariableInteger`]
+/// aliases.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct SerdeInteger<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> {
     inner: SerdeNumberInner,
@@ -25,20 +39,26 @@ pub struct SerdeInteger<const SIGNED: bool, const VARIABLE: bool, const BITS: u8
 impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8>
     SerdeInteger<SIGNED, VARIABLE, BITS>
 {
+    /// Creates a value, panicking if it is negative on an unsigned type or
+    /// out of range for a fixed-width type's `BITS`.
     pub fn new<T: Into<i128>>(value: T) -> Self {
         Self {
             inner: SerdeNumberInner::new(SIGNED, VARIABLE, BITS, 0, value.into()),
         }
     }
 
+    /// Returns the current value as `i128`.
     pub fn get(&self) -> i128 {
         self.inner.get()
     }
 
+    /// Overwrites the current value in place.
     pub fn set<T: Into<i128>>(&mut self, value: T) {
         self.inner.set(value.into());
     }
 
+    /// Converts to a concrete integer type `T`, panicking if the value is
+    /// out of range for `T`.
     pub fn to<T: SerdeIntegerConversion<SIGNED, VARIABLE, BITS>>(&self) -> T {
         T::from(self)
     }
@@ -92,6 +112,9 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, T: TryFrom<i128>>
 
 // Floats
 
+/// Converts a `SerdeFloat` to a concrete Rust float type, panicking if its
+/// current value does not fit. Blanket-implemented for every
+/// `T: TryFrom<f32>`.
 pub trait SerdeFloatConversion<
     const SIGNED: bool,
     const VARIABLE: bool,
@@ -99,18 +122,33 @@ pub trait SerdeFloatConversion<
     const FRACTION_DIGITS: u8,
 >
 {
+    /// Converts `value` to `Self`, panicking if it is out of range.
     fn from(value: &SerdeFloat<SIGNED, VARIABLE, BITS, FRACTION_DIGITS>) -> Self;
 }
 
+/// Fixed-width unsigned float: stored as an unsigned fixed-point integer
+/// scaled by `10^FRACTION_DIGITS`, encoded in `BITS` bits.
 pub type UnsignedFloat<const BITS: u8, const FRACTION_DIGITS: u8> =
     SerdeFloat<false, false, BITS, FRACTION_DIGITS>;
+/// Fixed-width signed float: a sign bit plus `BITS` magnitude bits of a
+/// fixed-point value scaled by `10^FRACTION_DIGITS`.
 pub type SignedFloat<const BITS: u8, const FRACTION_DIGITS: u8> =
     SerdeFloat<true, false, BITS, FRACTION_DIGITS>;
+/// Variable-width unsigned float: a fixed-point value scaled by
+/// `10^FRACTION_DIGITS`, encoded in `BITS`-bit chunks, each preceded by a
+/// continuation bit.
 pub type UnsignedVariableFloat<const BITS: u8, const FRACTION_DIGITS: u8> =
     SerdeFloat<false, true, BITS, FRACTION_DIGITS>;
+/// Variable-width signed float: a sign bit, then `BITS`-bit chunks of a
+/// fixed-point value scaled by `10^FRACTION_DIGITS`, each preceded by a
+/// continuation bit.
 pub type SignedVariableFloat<const BITS: u8, const FRACTION_DIGITS: u8> =
     SerdeFloat<true, true, BITS, FRACTION_DIGITS>;
 
+/// A float serialized as a fixed-point integer (value * `10^FRACTION_DIGITS`,
+/// rounded) with const-generic sign, variable-width, and bit-width
+/// parameters. Construct through the [`UnsignedFloat`], [`SignedFloat`],
+/// [`UnsignedVariableFloat`], or [`SignedVariableFloat`] aliases.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct SerdeFloat<
     const SIGNED: bool,
@@ -124,6 +162,9 @@ pub struct SerdeFloat<
 impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, const FRACTION_DIGITS: u8>
     SerdeFloat<SIGNED, VARIABLE, BITS, FRACTION_DIGITS>
 {
+    /// Creates a value by scaling `value` by `10^FRACTION_DIGITS` and
+    /// rounding to the nearest fixed-point integer, panicking if that integer
+    /// is out of range for this type's encoding.
     pub fn new<T: Into<f32>>(value: T) -> Self {
         let float_val = value.into();
         let scale = 10f32.powi(FRACTION_DIGITS as i32);
@@ -132,11 +173,15 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, const FRACTION_DI
         Self { inner }
     }
 
+    /// Returns the current value as `f32`, dividing the stored fixed-point
+    /// integer back down by `10^FRACTION_DIGITS`.
     pub fn get(&self) -> f32 {
         let scale = 10f32.powi(FRACTION_DIGITS as i32);
         (self.inner.get() as f32) / scale
     }
 
+    /// Overwrites the current value in place, scaling and rounding as in
+    /// [`new`](Self::new).
     pub fn set<T: Into<f32>>(&mut self, value: T) {
         let float_val = value.into();
         let scale = 10f32.powi(FRACTION_DIGITS as i32);

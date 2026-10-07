@@ -12,6 +12,10 @@ use naia_shared::{ComponentKind, Replicate};
 
 use super::component_access::{ComponentAccess, ComponentAccessor};
 
+/// Per-`Protocol` bevy-world bookkeeping: tracks spawned entities, the
+/// `ComponentAccess` for each registered component kind, and which kinds
+/// and entities are Replicated Resources (so the despawn chokepoint can
+/// emulate bevy's resource lifecycle instead of calling `World::despawn`).
 #[derive(Resource, Default)]
 pub struct WorldData {
     entities: HashSet<Entity>,
@@ -52,10 +56,13 @@ impl Clone for WorldData {
 }
 
 impl WorldData {
+    /// Creates an empty `WorldData`.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Merges `other`'s registered component kinds and resource kinds into
+    /// `self`. Panics if either side already has spawned entities.
     pub fn merge(&mut self, other: Self) {
         if !self.entities.is_empty() || !other.entities.is_empty() {
             panic!("merging world data with non-empty entities");
@@ -64,6 +71,8 @@ impl WorldData {
         self.resource_kinds.extend(other.resource_kinds);
     }
 
+    /// Registers every component kind's `on_component_added` /
+    /// `on_component_removed` systems under `Update` on `app`.
     pub fn add_systems(&self, app: &mut App) {
         for accessor in self.kind_to_accessor_map.values() {
             accessor.add_systems(app);
@@ -83,6 +92,7 @@ impl WorldData {
 
     // Entities //
 
+    /// Returns every entity currently tracked as spawned.
     pub fn entities(&self) -> Vec<Entity> {
         let mut output = Vec::new();
 
@@ -93,10 +103,12 @@ impl WorldData {
         output
     }
 
+    /// Records `entity` as spawned.
     pub fn spawn_entity(&mut self, entity: &Entity) {
         self.entities.insert(*entity);
     }
 
+    /// Stops tracking `entity` as spawned.
     pub fn despawn_entity(&mut self, entity: &Entity) {
         self.entities.remove(entity);
     }
@@ -110,6 +122,7 @@ impl WorldData {
         self.kind_to_accessor_map.keys()
     }
 
+    /// Returns the registered `ComponentAccess` for `component_kind`, if any.
     #[allow(clippy::borrowed_box)]
     pub fn component_access(
         &self,

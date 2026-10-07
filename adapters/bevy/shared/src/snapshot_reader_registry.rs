@@ -48,6 +48,7 @@ impl Clone for SnapshotReaderRegistry {
 }
 
 impl SnapshotReaderRegistry {
+    /// Creates an empty registry.
     pub fn new() -> Self {
         Self::default()
     }
@@ -79,14 +80,17 @@ impl SnapshotReaderRegistry {
         self.readers.keys()
     }
 
+    /// Returns the number of registered component kinds.
     pub fn len(&self) -> usize {
         self.readers.len()
     }
 
+    /// Returns `true` if no component kinds are registered.
     pub fn is_empty(&self) -> bool {
         self.readers.is_empty()
     }
 
+    /// Returns `true` if `kind` has a registered read-and-box closure.
     pub fn contains(&self, kind: &ComponentKind) -> bool {
         self.readers.contains_key(kind)
     }

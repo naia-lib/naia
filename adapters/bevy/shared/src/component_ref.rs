@@ -5,7 +5,12 @@ use bevy_ecs::world::Mut as BevyMut;
 use naia_shared::{ReplicaDynMutTrait, ReplicaDynRefTrait, Replicate};
 
 // ComponentDynRef
-pub struct ComponentDynRef<'a, T>(pub &'a T);
+/// Wraps a read-only reference to a concrete `Replicate` component so it
+/// can be handed out as a [`naia_shared::ReplicaDynRefTrait`] trait object.
+pub struct ComponentDynRef<'a, T>(
+    /// The wrapped read-only component reference.
+    pub &'a T,
+);
 
 impl<'a, R: Replicate> ReplicaDynRefTrait for ComponentDynRef<'a, R> {
     fn to_dyn_ref(&self) -> &dyn Replicate {
@@ -15,7 +20,12 @@ impl<'a, R: Replicate> ReplicaDynRefTrait for ComponentDynRef<'a, R> {
 }
 
 // ComponentDynMut
-pub struct ComponentDynMut<'a, T>(pub BevyMut<'a, T>);
+/// Wraps a mutable Bevy component reference so it can be handed out as a
+/// [`naia_shared::ReplicaDynMutTrait`] trait object.
+pub struct ComponentDynMut<'a, T>(
+    /// The wrapped mutable component reference.
+    pub BevyMut<'a, T>,
+);
 
 impl<'a, R: Replicate> ReplicaDynRefTrait for ComponentDynMut<'a, R> {
     fn to_dyn_ref(&self) -> &dyn Replicate {
