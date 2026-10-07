@@ -8,6 +8,7 @@
     unused_import_braces,
     unused_qualifications
 )]
+#![warn(missing_docs)]
 
 #[macro_use]
 extern crate cfg_if;
@@ -46,8 +47,13 @@ pub use url_parse::{parse_server_url, url_to_socket_addr};
 #[cfg(feature = "test_time")]
 pub use backends::TestClock;
 
+/// Error returned when a send or receive fails because the other end of a
+/// channel has been dropped. Wraps the value that could not be delivered.
 #[derive(Debug, Eq, PartialEq)]
-pub struct ChannelClosedError<T>(pub T);
+pub struct ChannelClosedError<T>(
+    /// The value that could not be delivered because the channel was closed.
+    pub T,
+);
 
 impl<T: std::fmt::Debug> std::error::Error for ChannelClosedError<T> {}
 

@@ -42,11 +42,13 @@ impl PacketSender {
         self.server_addr.get()
     }
 
+    /// Whether the underlying sender channel to the socket task is still open.
     #[must_use]
     pub fn connected(&self) -> bool {
         !self.sender_channel.is_closed()
     }
 
+    /// Signals the socket task to disconnect from the server.
     pub fn disconnect(&mut self) {
         let _ = self.disconnect_channel.blocking_send(());
     }

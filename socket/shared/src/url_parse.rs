@@ -14,6 +14,10 @@ use std::net::SocketAddr;
 //
 // All of that is achievable with simple ASCII string parsing.
 
+/// A parsed server URL (`ws://host:port` / `http://host:port`), produced by
+/// [`parse_server_url`]. Keeps the original string and parses components on
+/// demand with simple ASCII string matching instead of full IDNA/Unicode
+/// parsing.
 #[derive(Debug, Clone)]
 pub struct Url {
     original: String,
@@ -53,6 +57,9 @@ impl Url {
             .map_or(s.len(), |i| after_scheme + i)
     }
 
+    /// Iterator over the URL's path segments (the parts between `/`), or
+    /// `None` if the authority is not followed by a `/`. Empty segments are
+    /// filtered out.
     pub fn path_segments(&self) -> Option<impl Iterator<Item = &str>> {
         let s = self.original.as_str();
         let auth_end = self.authority_end();
@@ -64,6 +71,8 @@ impl Url {
         Some(path[..path_end].split('/').filter(|seg| !seg.is_empty()))
     }
 
+    /// The URL's query string (the part after `?`, before any `#`), or
+    /// `None` if there is no query string or it is empty.
     pub fn query(&self) -> Option<&str> {
         let s = self.original.as_str();
         s.find('?').and_then(|i| {
@@ -77,6 +86,8 @@ impl Url {
         })
     }
 
+    /// The URL's fragment (the part after `#`), or `None` if there is no
+    /// fragment or it is empty.
     pub fn fragment(&self) -> Option<&str> {
         let s = self.original.as_str();
         s.find('#').and_then(|i| {
@@ -89,6 +100,8 @@ impl Url {
         })
     }
 
+    /// The URL's scheme (the part before `://`), or an empty string if there
+    /// is none.
     pub fn scheme(&self) -> &str {
         let s = self.original.as_str();
         s.find("://").map_or("", |i| &s[..i])
@@ -182,6 +195,11 @@ cfg_if! {
             addrs[0]
         }
     } else {
+        /// Wasm stub: native DNS resolution is not available on this target.
+        ///
+        /// # Panics
+        ///
+        /// Always panics; wasm apps do not need this method.
         pub fn url_to_socket_addr(_url: &Url) -> SocketAddr {
             panic!("should not need this method for Wasm apps");
         }

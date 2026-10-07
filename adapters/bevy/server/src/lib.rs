@@ -80,6 +80,7 @@
 //!
 //! [`Commands`]: bevy_ecs::system::Commands
 //! [`Replicate`]: naia_bevy_shared::Replicate
+#![warn(missing_docs)]
 
 // Re-exported so consumers (e.g. cyberlith `game_cell`) depend only on this
 // adapter crate and never reach past it into `naia-bevy-shared` / `naia-shared`

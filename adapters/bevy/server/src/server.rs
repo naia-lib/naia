@@ -309,6 +309,7 @@ impl ServerImpl {
 
 // Server
 
+/// Bevy system parameter giving access to the naia server resource.
 #[derive(SystemParam)]
 pub struct Server<'w> {
     server_impl: ResMut<'w, ServerImpl>,
@@ -319,14 +320,18 @@ impl<'w> Server<'w> {
 
     //// Connections ////
 
+    /// Start listening on `socket`.
     pub fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
         self.server_impl.listen(socket);
     }
 
+    /// Whether the server is listening.
     pub fn is_listening(&self) -> bool {
         self.server_impl.is_listening()
     }
 
+    /// Accept the pending connection from `user_key`.
+    /// Panics on a world-only server.
     pub fn accept_connection(&mut self, user_key: &UserKey) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(_server) => {
@@ -336,6 +341,8 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Reject the pending connection from `user_key`.
+    /// Panics on a world-only server.
     pub fn reject_connection(&mut self, user_key: &UserKey) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(_server) => {
@@ -346,6 +353,7 @@ impl<'w> Server<'w> {
     }
 
     // Config
+    /// The server's [`SocketConfig`]. Panics on a world-only server.
     pub fn socket_config(&self) -> &SocketConfig {
         match &*self.server_impl {
             ServerImpl::WorldOnly(_server) => {
@@ -356,6 +364,12 @@ impl<'w> Server<'w> {
     }
 
     //// Messages ////
+    /// Sends `message` to `user_key` on channel `C`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`NaiaServerError::UserNotFound`] if `user_key` does not
+    /// correspond to a currently connected user.
     pub fn send_message<C: Channel, M: Message>(
         &mut self,
         user_key: &UserKey,
@@ -375,6 +389,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Take the tick-buffered messages received for `tick`.
     pub fn receive_tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.receive_tick_buffer_messages(tick),
@@ -382,7 +397,13 @@ impl<'w> Server<'w> {
         }
     }
 
-    /// Requests ///
+    //// Requests ////
+    /// Sends `request` to `user_key` on channel `C` and returns a key for
+    /// polling the response with [`Self::receive_response`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`NaiaServerError::UserNotFound`] if `user_key` is invalid.
     pub fn send_request<C: Channel, Q: Request>(
         &mut self,
         user_key: &UserKey,
@@ -394,6 +415,8 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Send `response` for `response_key`. Returns `false` if the response was not
+    /// enqueued (the requesting user is gone, or the channel's send queue is full).
     pub fn send_response<S: Response>(
         &mut self,
         response_key: &ResponseSendKey<S>,
@@ -419,6 +442,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Receive the response for `response_key`, with the responding [`UserKey`], if available.
     pub fn receive_response<S: Response>(
         &mut self,
         response_key: &ResponseReceiveKey<S>,
@@ -431,6 +455,7 @@ impl<'w> Server<'w> {
 
     //// Updates ////
 
+    /// Pending scope checks as `(room, user, entity)` tuples.
     pub fn scope_checks_pending(&self) -> Vec<(RoomKey, UserKey, Entity)> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.scope_checks_pending(),
@@ -438,6 +463,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Mark the pending scope checks as handled.
     pub fn mark_scope_checks_pending_handled(&mut self) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.mark_scope_checks_pending_handled(),
@@ -445,6 +471,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Mark all scope checks as pending.
     pub fn mark_all_scope_checks_pending(&mut self) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.mark_all_scope_checks_pending(),
@@ -454,6 +481,7 @@ impl<'w> Server<'w> {
 
     //// Users ////
 
+    /// Whether a user with `user_key` exists.
     pub fn user_exists(&self, user_key: &UserKey) -> bool {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_exists(user_key),
@@ -461,6 +489,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Read access to the user `user_key`.
     pub fn user(&'_ self, user_key: &UserKey) -> UserRef<'_, Entity> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user(user_key),
@@ -468,6 +497,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Read access to the user `user_key`, or `None`.
     pub fn user_opt(&'_ self, user_key: &UserKey) -> Option<UserRef<'_, Entity>> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_opt(user_key),
@@ -475,6 +505,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Mutable access to the user `user_key`.
     pub fn user_mut(&'_ mut self, user_key: &UserKey) -> UserMut<'_, Entity> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_mut(user_key),
@@ -482,6 +513,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Mutable access to the user `user_key`, or `None`.
     pub fn user_mut_opt(&'_ mut self, user_key: &UserKey) -> Option<UserMut<'_, Entity>> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_mut_opt(user_key),
@@ -489,6 +521,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Keys of all users.
     pub fn user_keys(&self) -> Vec<UserKey> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_keys(),
@@ -496,6 +529,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Number of users currently tracked, including those mid-handshake.
     pub fn users_count(&self) -> usize {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.users_count(),
@@ -503,6 +537,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Number of fully-connected users (handshake complete).
     pub fn user_count(&self) -> usize {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_count(),
@@ -510,6 +545,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Number of entities.
     pub fn entity_count(&self) -> usize {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.entity_count(),
@@ -517,6 +553,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Read access to the scope of user `user_key`.
     pub fn user_scope(&'_ self, user_key: &UserKey) -> UserScopeRef<'_, Entity> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_scope(user_key),
@@ -524,6 +561,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Mutable access to the scope of user `user_key`.
     pub fn user_scope_mut(&'_ mut self, user_key: &UserKey) -> UserScopeMut<'_, Entity> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_scope_mut(user_key),
@@ -533,6 +571,7 @@ impl<'w> Server<'w> {
 
     //// Priority ////
 
+    /// Global priority of `entity`.
     pub fn global_entity_priority(&self, entity: Entity) -> EntityPriorityRef<'_, Entity> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.global_entity_priority(entity),
@@ -540,6 +579,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Mutable global priority of `entity`.
     pub fn global_entity_priority_mut(&mut self, entity: Entity) -> EntityPriorityMut<'_, Entity> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.global_entity_priority_mut(entity),
@@ -547,6 +587,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Priority of `entity` for user `user_key`.
     pub fn user_entity_priority(
         &self,
         user_key: &UserKey,
@@ -558,6 +599,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Mutable priority of `entity` for user `user_key`.
     pub fn user_entity_priority_mut(
         &mut self,
         user_key: &UserKey,
@@ -571,6 +613,7 @@ impl<'w> Server<'w> {
 
     //// Rooms ////
 
+    /// Create a new room.
     pub fn create_room(&'_ mut self) -> RoomMut<'_, Entity> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.create_room(),
@@ -578,6 +621,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Whether a room with `room_key` exists.
     pub fn room_exists(&self, room_key: &RoomKey) -> bool {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.room_exists(room_key),
@@ -585,6 +629,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Read access to the room `room_key`.
     pub fn room(&'_ self, room_key: &RoomKey) -> RoomRef<'_, Entity> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.room(room_key),
@@ -592,6 +637,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Mutable access to the room `room_key`.
     pub fn room_mut(&'_ mut self, room_key: &RoomKey) -> RoomMut<'_, Entity> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.room_mut(room_key),
@@ -599,6 +645,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Keys of all rooms.
     pub fn room_keys(&self) -> Vec<RoomKey> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.room_keys(),
@@ -606,6 +653,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Number of rooms that currently exist.
     pub fn rooms_count(&self) -> usize {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.rooms_count(),
@@ -613,6 +661,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Number of rooms that currently exist; same value as [`Self::rooms_count`].
     pub fn room_count(&self) -> usize {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.room_count(),
@@ -622,6 +671,7 @@ impl<'w> Server<'w> {
 
     //// Ticks ////
 
+    /// The server's current tick.
     pub fn current_tick(&self) -> Tick {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.current_tick(),
@@ -629,6 +679,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Average tick duration.
     pub fn average_tick_duration(&self) -> Duration {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.average_tick_duration(),
@@ -638,6 +689,7 @@ impl<'w> Server<'w> {
 
     //// Network Conditions ////
 
+    /// Jitter for user `user_key`, or `None`.
     pub fn jitter(&self, user_key: &UserKey) -> Option<f32> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.jitter(user_key),
@@ -645,6 +697,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Round-trip time for user `user_key`, or `None`.
     pub fn rtt(&self, user_key: &UserKey) -> Option<f32> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.rtt(user_key),
@@ -652,6 +705,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Connection statistics for user `user_key`, or `None`.
     pub fn connection_stats(&self, user_key: &UserKey) -> Option<ConnectionStats> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.connection_stats(user_key),
@@ -659,6 +713,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Enable the historian, keeping up to `max_ticks` ticks.
     pub fn enable_historian(&mut self, max_ticks: u16) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.enable_historian(max_ticks),
@@ -666,6 +721,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Record `world` into the historian at `tick`.
     pub fn record_historian_tick<W: WorldRefType<Entity>>(&mut self, world: &W, tick: Tick) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.record_historian_tick(world, tick),
@@ -673,6 +729,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// The historian, if enabled.
     pub fn historian(&self) -> Option<&Historian> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.historian(),
@@ -717,6 +774,7 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Take authority over `entity`; the result is discarded.
     pub fn entity_take_authority(&mut self, entity: &Entity) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => {
@@ -788,6 +846,8 @@ impl<'w> Server<'w> {
         self.server_impl.resource_authority_status::<R>()
     }
 
+    /// Run `f` with the [`World`] and the world-only naia server resource.
+    /// Panics if the server is a full server.
     pub fn world_only_resource_scope<R>(
         world: &mut World,
         f: impl FnOnce(&mut World, &mut NaiaWorldServer<Entity>) -> R,

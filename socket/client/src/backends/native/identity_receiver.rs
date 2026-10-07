@@ -26,6 +26,8 @@ impl IdentityReceiver {
 }
 
 impl IdentityReceiver {
+    /// Polls for the identity token, or the auth rejection, the server sends
+    /// over the signaling channel. Returns `Waiting` until a result arrives.
     pub fn receive(&mut self) -> IdentityReceiverResult {
         if let Ok(mut receiver) = self.receiver_channel.lock() {
             if let Ok(recv_result) = receiver.try_recv() {

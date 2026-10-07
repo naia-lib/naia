@@ -34,11 +34,18 @@ use crate::app_ext::AppRegisterComponentEvents;
 /// protocol.add_bundle::<Game, (AvatarUnit, NetworkedTileTarget)>();
 /// ```
 pub trait ProtocolClientExt {
+    /// Registers component `C` for wire replication and bakes in a
+    /// client-side event-installer closure that calls
+    /// `app.add_component_events::<T, C>()` when the plugin builds its App.
     fn add_component<T, C>(&mut self) -> &mut Self
     where
         T: Send + Sync + 'static,
         C: Replicate + Component<Mutability = Mutable>;
 
+    /// Bakes in a client-side event-installer closure that calls
+    /// `app.add_bundle_events::<T, B>()` when the plugin builds its App.
+    /// Performs no wire registration — `B`'s components must already be
+    /// registered.
     fn add_bundle<T, B>(&mut self) -> &mut Self
     where
         T: Send + Sync + 'static,

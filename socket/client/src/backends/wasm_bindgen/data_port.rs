@@ -6,7 +6,9 @@ use std::{
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{MessageEvent, MessagePort};
 
-// DataChannel
+/// A `MessagePort` paired with the queue of inbound messages its `onmessage`
+/// handler fills, so the packet receiver can drain it without touching the
+/// port directly.
 #[derive(Clone)]
 pub struct DataPort {
     message_port: MessagePort,
@@ -14,6 +16,8 @@ pub struct DataPort {
 }
 
 impl DataPort {
+    /// Wraps a `MessagePort`, installing an `onmessage` handler that copies
+    /// each incoming `ArrayBuffer` into the message queue.
     pub fn new(message_port: MessagePort) -> Self {
         let message_queue = Arc::new(Mutex::new(VecDeque::new()));
 
@@ -40,10 +44,12 @@ impl DataPort {
         }
     }
 
+    /// Returns a clone of the underlying `MessagePort`.
     pub fn message_port(&self) -> MessagePort {
         self.message_port.clone()
     }
 
+    /// Returns a handle to the queue of messages received so far.
     pub fn message_queue(&self) -> Arc<Mutex<VecDeque<Box<[u8]>>>> {
         self.message_queue.clone()
     }

@@ -10,6 +10,7 @@
     unused_import_braces,
     unused_qualifications
 )]
+#![warn(missing_docs)]
 
 extern crate log;
 

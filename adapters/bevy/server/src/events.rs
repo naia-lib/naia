@@ -1,3 +1,4 @@
+//! Bevy message types the server plugin emits for naia server events.
 use std::{any::Any, collections::HashMap, hash::Hash, marker::PhantomData, net::SocketAddr};
 
 use bevy_ecs::{
@@ -19,14 +20,17 @@ type RequestsInner =
     HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>>;
 
 // ConnectEvent
+/// A client connection event, carrying that client's [`UserKey`].
 #[derive(bevy_ecs::message::Message)]
 pub struct ConnectEvent(pub UserKey);
 
 // DisconnectEvent
+/// A client disconnected: its [`UserKey`], socket address and [`DisconnectReason`].
 #[derive(bevy_ecs::message::Message)]
 pub struct DisconnectEvent(pub UserKey, pub SocketAddr, pub DisconnectReason);
 
 // ErrorEvent
+/// A naia server error.
 #[derive(bevy_ecs::message::Message)]
 pub struct ErrorEvent(pub NaiaServerError);
 
@@ -41,10 +45,12 @@ pub(crate) struct CachedTickEventsState {
 }
 
 // TickEvent
+/// A server tick event, carrying the [`Tick`].
 #[derive(bevy_ecs::message::Message)]
 pub struct TickEvent(pub Tick);
 
 // AuthEvents
+/// Auth messages received this frame, grouped by message kind.
 #[derive(bevy_ecs::message::Message)]
 pub struct AuthEvents {
     inner: HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>,
@@ -59,6 +65,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> From<&mut Events<E>> for AuthEvents {
 }
 
 impl AuthEvents {
+    /// Every auth message of type `M`, with the sending [`UserKey`].
     pub fn read<M: Message>(&self) -> Vec<(UserKey, M)> {
         let message_kind = MessageKind::of::<M>();
 
@@ -71,6 +78,7 @@ impl AuthEvents {
 }
 
 // MessageEvents
+/// Messages received this frame, grouped by channel and message kind.
 #[derive(bevy_ecs::message::Message)]
 pub struct MessageEvents {
     inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
@@ -98,6 +106,7 @@ impl MessageEvents {
         Self { inner }
     }
 
+    /// Every message of type `M` received on channel `C`, with the sending [`UserKey`].
     pub fn read<C: Channel, M: Message>(&self) -> Vec<(UserKey, M)> {
         let channel_kind = ChannelKind::of::<C>();
         if let Some(message_map) = self.inner.get(&channel_kind) {
@@ -128,6 +137,7 @@ fn convert_messages<M: Message>(
 }
 
 // RequestEvents
+/// Requests received this frame, grouped by channel and message kind.
 #[derive(bevy_ecs::message::Message)]
 pub struct RequestEvents {
     inner: RequestsInner,
@@ -142,6 +152,8 @@ impl<E: Hash + Copy + Eq + Sync + Send> From<&mut Events<E>> for RequestEvents {
 }
 
 impl RequestEvents {
+    /// Every request of type `Q` received on channel `C`, with the sending
+    /// [`UserKey`] and the [`ResponseSendKey`] for its response.
     pub fn read<C: Channel, Q: Request>(&self) -> Vec<(UserKey, ResponseSendKey<Q::Response>, Q)> {
         let channel_kind = ChannelKind::of::<C>();
         let Some(request_map) = self.inner.get(&channel_kind) else {
@@ -171,29 +183,37 @@ impl RequestEvents {
 }
 
 // SpawnEntityEvent
+/// An entity spawn event: the [`UserKey`] and the Bevy [`Entity`].
 #[derive(bevy_ecs::message::Message)]
 pub struct SpawnEntityEvent(pub UserKey, pub Entity);
 
 // DespawnEntityEvent
+/// An entity despawn event: the [`UserKey`] and the Bevy [`Entity`].
 #[derive(bevy_ecs::message::Message)]
 pub struct DespawnEntityEvent(pub UserKey, pub Entity);
 
 // PublishEntityEvent
+/// An entity publish event: the [`UserKey`] and the Bevy [`Entity`].
 #[derive(bevy_ecs::message::Message)]
 pub struct PublishEntityEvent(pub UserKey, pub Entity);
 
 // UnpublishEntityEvent
+/// An entity unpublish event: the [`UserKey`] and the Bevy [`Entity`].
 #[derive(bevy_ecs::message::Message)]
 pub struct UnpublishEntityEvent(pub UserKey, pub Entity);
 
+/// Fires when component `C` is inserted on an entity.
 #[derive(bevy_ecs::message::Message)]
 pub struct InsertComponentEvent<C: Replicate> {
+    /// The user associated with the event.
     pub user_key: UserKey,
+    /// The entity the component was inserted on.
     pub entity: Entity,
     phantom_c: PhantomData<C>,
 }
 
 impl<C: Replicate> InsertComponentEvent<C> {
+    /// Construct the event for `user_key` and `entity`.
     pub fn new(user_key: UserKey, entity: Entity) -> Self {
         Self {
             user_key,
@@ -203,14 +223,18 @@ impl<C: Replicate> InsertComponentEvent<C> {
     }
 }
 
+/// Fires when bundle `B` is inserted on an entity.
 #[derive(bevy_ecs::message::Message)]
 pub struct InsertBundleEvent<B: ReplicateBundle> {
+    /// The user associated with the event.
     pub user_key: UserKey,
+    /// The entity the bundle was inserted on.
     pub entity: Entity,
     phantom_c: PhantomData<B>,
 }
 
 impl<B: ReplicateBundle> InsertBundleEvent<B> {
+    /// Construct the event for `user_key` and `entity`.
     pub fn new(user_key: UserKey, entity: Entity) -> Self {
         Self {
             user_key,
@@ -220,14 +244,18 @@ impl<B: ReplicateBundle> InsertBundleEvent<B> {
     }
 }
 
+/// Fires when component `C` is updated on an entity.
 #[derive(bevy_ecs::message::Message)]
 pub struct UpdateComponentEvent<C: Replicate> {
+    /// The user associated with the event.
     pub user_key: UserKey,
+    /// The entity whose component was updated.
     pub entity: Entity,
     phantom_c: PhantomData<C>,
 }
 
 impl<C: Replicate> UpdateComponentEvent<C> {
+    /// Construct the event for `user_key` and `entity`.
     pub fn new(user_key: UserKey, entity: Entity) -> Self {
         Self {
             user_key,
@@ -237,14 +265,19 @@ impl<C: Replicate> UpdateComponentEvent<C> {
     }
 }
 
+/// Fires when component `C` is removed from an entity.
 #[derive(bevy_ecs::message::Message)]
 pub struct RemoveComponentEvent<C: Replicate> {
+    /// The user associated with the event.
     pub user_key: UserKey,
+    /// The entity the component was removed from.
     pub entity: Entity,
+    /// The removed component value.
     pub component: C,
 }
 
 impl<C: Replicate> RemoveComponentEvent<C> {
+    /// Construct the event for `user_key`, `entity` and the removed `component`.
     pub fn new(user_key: UserKey, entity: Entity, component: C) -> Self {
         Self {
             user_key,
@@ -269,11 +302,13 @@ impl<C: Replicate> RemoveComponentEvent<C> {
 /// it — see D20 for late-join semantics applied to the client side).
 #[derive(bevy_ecs::message::Message)]
 pub struct InsertResourceEvent<R: Replicate> {
+    /// The user associated with the event.
     pub user_key: UserKey,
     phantom_r: PhantomData<R>,
 }
 
 impl<R: Replicate> InsertResourceEvent<R> {
+    /// Construct the event for `user_key`.
     pub fn new(user_key: UserKey) -> Self {
         Self {
             user_key,
@@ -287,11 +322,13 @@ impl<R: Replicate> InsertResourceEvent<R> {
 /// authority on a delegated resource).
 #[derive(bevy_ecs::message::Message)]
 pub struct UpdateResourceEvent<R: Replicate> {
+    /// The user associated with the event.
     pub user_key: UserKey,
     phantom_r: PhantomData<R>,
 }
 
 impl<R: Replicate> UpdateResourceEvent<R> {
+    /// Construct the event for `user_key`.
     pub fn new(user_key: UserKey) -> Self {
         Self {
             user_key,
@@ -303,11 +340,14 @@ impl<R: Replicate> UpdateResourceEvent<R> {
 /// Fires when a Replicated Resource of type `R` is removed.
 #[derive(bevy_ecs::message::Message)]
 pub struct RemoveResourceEvent<R: Replicate> {
+    /// The user associated with the event.
     pub user_key: UserKey,
+    /// The removed resource value.
     pub resource: R,
 }
 
 impl<R: Replicate> RemoveResourceEvent<R> {
+    /// Construct the event for `user_key` and the removed `resource`.
     pub fn new(user_key: UserKey, resource: R) -> Self {
         Self { user_key, resource }
     }

@@ -12,6 +12,7 @@ pub struct TimeQueue<T: Eq + PartialEq> {
 
 #[allow(clippy::new_without_default)]
 impl<T: Eq + PartialEq> TimeQueue<T> {
+    /// Creates a new, empty `TimeQueue`.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -86,10 +87,15 @@ impl<T: Eq + PartialEq> TimeQueue<T> {
     }
 }
 
+/// An item paired with the [`Instant`] at which it becomes due, plus an
+/// insertion sequence used to break ties so equal-time items pop in the
+/// order they were added.
 #[derive(Clone)]
 pub struct ItemContainer<T: Eq + PartialEq> {
+    /// The time at which this item becomes ready to pop.
     pub instant: Instant,
     sequence: u64,
+    /// The queued payload.
     pub item: T,
 }
 

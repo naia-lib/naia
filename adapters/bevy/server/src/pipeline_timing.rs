@@ -180,19 +180,33 @@ mod imp {
 #[cfg(feature = "pipeline_timing")]
 #[derive(Debug, Clone, Copy)]
 pub struct PipelineTimingReport {
+    /// Records on the Recv stage.
     pub recv_count: u64,
+    /// Total Recv-stage nanoseconds.
     pub recv_ns: u64,
+    /// Records on the Sim stage.
     pub sim_count: u64,
+    /// Total Sim-stage nanoseconds.
     pub sim_ns: u64,
+    /// Records on the Send stage.
     pub send_count: u64,
+    /// Total Send-stage nanoseconds.
     pub send_ns: u64,
+    /// Records on the Tick stage (the sim-tick denominator `N`).
     pub tick_count: u64,
+    /// Total Tick-stage nanoseconds.
     pub tick_ns: u64,
+    /// Records on the Barrier stage.
     pub barrier_count: u64,
+    /// Total Barrier-stage nanoseconds.
     pub barrier_ns: u64,
+    /// Records on the Apply stage.
     pub apply_count: u64,
+    /// Total Apply-stage nanoseconds.
     pub apply_ns: u64,
+    /// Records on the Snap stage.
     pub snap_count: u64,
+    /// Total Snap-stage nanoseconds.
     pub snap_ns: u64,
 }
 

@@ -108,8 +108,8 @@ impl Socket {
         (id_receiver, packet_sender, packet_receiver)
     }
 
-    // Creates a Socket from an underlying DataPort.
-    // This is for use in apps running within a Web Worker.
+    /// Creates a Socket from an underlying DataPort.
+    /// This is for use in apps running within a Web Worker.
     pub fn connect_with_data_port(
         config: &SocketConfig,
         data_port: &DataPort,

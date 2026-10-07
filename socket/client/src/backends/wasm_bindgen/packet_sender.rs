@@ -49,10 +49,12 @@ impl PacketSender {
         self.server_addr.get()
     }
 
+    /// Whether this sender's connection is still open.
     pub fn connected(&self) -> bool {
         self.connected
     }
 
+    /// Tears down this attempt's connection; see [`Self::shutdown`].
     pub fn disconnect(&mut self) {
         self.shutdown();
     }

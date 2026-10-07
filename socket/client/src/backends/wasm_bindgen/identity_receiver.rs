@@ -23,7 +23,8 @@ impl IdentityReceiver {
         }
     }
 
-    // this is for the DataChannel to send the IdentityToken to be picked up by the IdentityReceiver
+    /// Called by the `DataChannel` to hand the received `IdentityToken` to
+    /// this receiver, to be picked up by [`IdentityReceiver::receive`].
     pub fn send(&self, id_token: IdentityToken) {
         *self.lock() = Some(Ok(id_token));
     }
@@ -49,6 +50,8 @@ impl Default for IdentityReceiver {
 }
 
 impl IdentityReceiver {
+    /// Polls for the identity token, or the auth rejection, the server sent
+    /// over the signaling channel. Returns `Waiting` until a result arrives.
     pub fn receive(&mut self) -> IdentityReceiverResult {
         let Some(result) = self.lock().take() else {
             return IdentityReceiverResult::Waiting;

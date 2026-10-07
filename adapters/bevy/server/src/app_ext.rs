@@ -13,8 +13,13 @@ use crate::{
 };
 
 // App Extension Methods
+/// Extension methods on Bevy `App` that register naia server event types.
 pub trait AppRegisterComponentEvents {
+    /// Register `InsertComponentEvent<C>`, `UpdateComponentEvent<C>` and
+    /// `RemoveComponentEvent<C>`, and a handler for `C` in [`ComponentEventRegistry`].
     fn add_component_events<C: Replicate>(&mut self) -> &mut Self;
+    /// Register `InsertBundleEvent<B>` and a bundle handler for `B` in
+    /// [`ComponentEventRegistry`].
     fn add_bundle_events<B: ReplicateBundle>(&mut self) -> &mut Self;
     /// Register the user-facing lifecycle event types for Replicated
     /// Resource `R`: `InsertResourceEvent<R>`, `UpdateResourceEvent<R>`,

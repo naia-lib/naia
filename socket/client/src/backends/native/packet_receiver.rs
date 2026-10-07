@@ -27,6 +27,7 @@ impl PlainPacketReceiver {
 }
 
 impl PlainPacketReceiver {
+    /// Receives a packet from the Server, or `None` if none is waiting.
     pub fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
         if let Ok(mut receiver) = self.receiver_channel.lock() {
             if let Ok(bytes) = receiver.try_recv() {

@@ -68,6 +68,8 @@
 //!
 //! [`Commands`]: bevy_ecs::system::Commands
 
+#![warn(missing_docs)]
+
 // Re-exported so consumers (e.g. cyberlith `game_network`) depend only on this
 // adapter crate and never reach past it into `naia-bevy-shared` directly.
 pub use naia_bevy_shared::{
@@ -89,6 +91,9 @@ pub use naia_client::{
     ReconnectPolicy, DEFAULT_MAX_TICKS,
 };
 
+/// Bevy events mirroring naia's connection lifecycle and world/tick updates
+/// (connect, disconnect, reject, error, messages, requests, spawn/despawn,
+/// component inserts/updates/removes, resource lifecycle, and auth events).
 pub mod events;
 
 mod app_ext;

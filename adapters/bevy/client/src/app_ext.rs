@@ -10,9 +10,18 @@ use crate::{
     },
 };
 
-// App Extension Methods
+/// Extension methods on Bevy's `App` for registering the lifecycle event
+/// types (insert/update/remove, and bundle inserts) for a replicated
+/// component or resource scoped under client-tag `T`.
 pub trait AppRegisterComponentEvents {
+    /// Registers `InsertComponentEvent<T, C>`, `UpdateComponentEvent<T, C>`,
+    /// and `RemoveComponentEvent<T, C>` as bevy `Message` types, and records
+    /// `C` in the client-tag `T` component-event registry so incoming
+    /// component events route to them.
     fn add_component_events<T: Send + Sync + 'static, C: Replicate>(&mut self) -> &mut Self;
+    /// Registers `InsertBundleEvent<T, B>` as a bevy `Message` type and
+    /// records bundle `B` in the client-tag `T` registry, so the event
+    /// fires once all of `B`'s components are present on an entity.
     fn add_bundle_events<T: Send + Sync + 'static, B: ReplicateBundle>(&mut self) -> &mut Self;
     /// Register the user-facing lifecycle event types for Replicated
     /// Resource `R` scoped under client-tag `T`: `InsertResourceEvent<T, R>`,

@@ -28,6 +28,8 @@ pub struct AddrCell {
 }
 
 impl AddrCell {
+    /// Creates a new `AddrCell` that reports `Finding` until `receiver`
+    /// yields the server's data-channel address, then `Found` forever after.
     #[must_use]
     pub fn new(receiver: Receiver<SocketAddr>) -> Self {
         Self {
@@ -38,6 +40,8 @@ impl AddrCell {
         }
     }
 
+    /// Returns the server's data-channel address, or `Finding` if it has not
+    /// arrived yet. Non-blocking: a contended lock also reports `Finding`.
     #[must_use]
     pub fn get(&self) -> ServerAddr {
         // A contended lock means another caller is mid-update; reporting

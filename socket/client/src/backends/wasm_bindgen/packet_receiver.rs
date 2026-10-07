@@ -28,6 +28,7 @@ impl PlainPacketReceiver {
 }
 
 impl PlainPacketReceiver {
+    /// Pops and returns the next queued packet, or `None` if none is waiting.
     pub fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
         match self
             .message_queue

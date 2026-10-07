@@ -23,6 +23,8 @@ impl LinkConditionerConfig {
         }
     }
 
+    /// Creates a new `LinkConditioner` that simulates a perfect connection
+    /// with no jitter or loss and 1ms of latency.
     #[must_use]
     pub fn perfect_condition() -> Self {
         Self {

@@ -17,6 +17,8 @@ use crate::{
     server::ServerImpl,
 };
 
+/// Resource mapping each registered component kind to the handler that
+/// emits its insert/update/remove events.
 #[derive(Resource, Default)]
 pub struct ComponentEventRegistry {
     bundle_registry: BundleEventRegistry,
@@ -28,6 +30,7 @@ impl ComponentEventRegistry {
         &mut self.bundle_registry
     }
 
+    /// Register the insert/update/remove event handler for component `R`.
     pub fn register_component_handler<R: Replicate>(&mut self) {
         self.component_handlers.insert(
             ComponentKind::of::<R>(),
@@ -35,6 +38,8 @@ impl ComponentEventRegistry {
         );
     }
 
+    /// Drain inserts, updates and removes from `events` and write the matching
+    /// Bevy component and bundle events into `world`.
     pub fn receive_events(&mut self, world: &mut World, events: &mut naia_server::Events<Entity>) {
         // Insert Component Event
         if events.has_inserts() {

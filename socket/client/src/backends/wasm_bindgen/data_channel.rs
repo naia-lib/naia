@@ -51,7 +51,10 @@ impl WasmPeerCloser {
     }
 }
 
-// DataChannel
+/// Drives the WebRTC signaling handshake (session POST, ICE gathering,
+/// peer/data-channel setup) for one connection attempt on the wasm_bindgen
+/// backend, and hands out the resulting [`AddrCell`], [`DataPort`], and
+/// [`IdentityReceiver`].
 pub struct DataChannel {
     server_session_url: String,
     auth_bytes_opt: Option<Vec<u8>>,
@@ -68,6 +71,9 @@ pub struct DataChannel {
 }
 
 impl DataChannel {
+    /// Builds a `DataChannel` for one connection attempt, parsing the
+    /// session URL and capturing the config's ICE servers. Does not start
+    /// signaling; call [`Self::start`] for that.
     pub fn new(
         config: &SocketConfig,
         server_session_url: &str,
@@ -88,18 +94,26 @@ impl DataChannel {
         }
     }
 
+    /// Returns a clone of the polled view over the server's data-channel
+    /// address.
     pub fn addr_cell(&self) -> AddrCell {
         self.addr_cell.clone()
     }
 
+    /// Returns the local half of the message channel used to move packets
+    /// between this `DataChannel` and the client's packet sender/receiver.
     pub fn data_port(&self) -> DataPort {
         DataPort::new(self.message_channel.port1())
     }
 
+    /// Returns a clone of the receiver that will yield the identity token,
+    /// or rejection, this attempt's signaling produces.
     pub fn id_receiver(&self) -> IdentityReceiver {
         self.id_cell.clone()
     }
 
+    /// Registers the callback invoked once the server's data-channel address
+    /// is resolved.
     pub fn on_find_addr(&mut self, func: Box<dyn FnMut(SocketAddr)>) {
         self.find_addr_func
             .as_ref()
@@ -108,6 +122,11 @@ impl DataChannel {
             .0 = func;
     }
 
+    /// Starts the WebRTC signaling handshake: builds the peer connection and
+    /// data channel, POSTs the session offer once ICE gathering completes or
+    /// the bounded early-post wait passes with a candidate in hand, and wires
+    /// up inbound message/identity routing. Returns a closer that can tear
+    /// this attempt's peer and channel down on retry.
     #[allow(unused_must_use)]
     pub fn start(&self) -> WasmPeerCloser {
         // Set up Ice Servers from the socket config (defaults to Google's

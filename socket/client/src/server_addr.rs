@@ -10,6 +10,7 @@ pub enum ServerAddr {
 }
 
 impl ServerAddr {
+    /// Whether the server's socket address has been found.
     #[must_use]
     pub fn is_found(&self) -> bool {
         match self {

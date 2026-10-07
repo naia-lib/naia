@@ -32,10 +32,12 @@ use crate::app_ext::AppRegisterComponentEvents;
 /// protocol.add_bundle::<(FileSystemEntry, FileSystemRootChild)>();
 /// ```
 pub trait ProtocolServerExt {
+    /// Register component `C` for wire replication and its server event installer.
     fn add_component<C>(&mut self) -> &mut Self
     where
         C: Replicate + Component<Mutability = Mutable>;
 
+    /// Register bundle `B`'s server event installer; no wire registration.
     fn add_bundle<B>(&mut self) -> &mut Self
     where
         B: ReplicateBundle;

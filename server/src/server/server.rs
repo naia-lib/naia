@@ -1095,7 +1095,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         self.world.rooms_count()
     }
 
-    /// Returns the number of rooms that contain at least one connected user.
+    /// Returns the number of currently existing rooms; same value as
+    /// [`Self::rooms_count`].
     pub fn room_count(&self) -> usize {
         self.world.room_count()
     }

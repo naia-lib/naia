@@ -21,6 +21,9 @@ thread_local! {
     static SHARED_OVERRIDE: RefCell<Option<Arc<AtomicU64>>> = const { RefCell::new(None) };
 }
 
+/// A simulated, thread-local (or opt-in cross-thread shared) clock used by
+/// the `test_time` backend's [`Instant`] so tests run on virtual time
+/// instead of the real clock.
 pub struct TestClock;
 
 impl TestClock {
@@ -161,6 +164,7 @@ impl Instant {
         }
     }
 
+    /// Returns whether the Instant is after another Instant
     pub fn is_after(&self, other: &Self) -> bool {
         self.millis_since_start > other.millis_since_start
     }

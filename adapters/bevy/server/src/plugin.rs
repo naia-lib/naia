@@ -46,12 +46,16 @@ impl PluginConfig {
 
 /// Explicit configuration for the Bevy server plugin.
 pub struct ServerPluginConfig {
+    /// naia server configuration.
     pub server_config: ServerConfig,
+    /// The shared naia protocol.
     pub protocol: Protocol,
+    /// Which Bevy world owns naia's server state.
     pub topology: Topology,
 }
 
 impl ServerPluginConfig {
+    /// Construct from a server config, protocol and topology.
     pub fn new(server_config: ServerConfig, protocol: Protocol, topology: Topology) -> Self {
         Self {
             server_config,
@@ -73,29 +77,37 @@ pub enum Topology {
 
 /// How naia drives the server engine.
 pub enum DriveShape {
+    /// Drive the server engine in place (the non-pipelined shape).
     Resident,
+    /// Drive the server engine through the pipeline, configured by [`PipelineConfig`](crate::PipelineConfig).
     Pipelined(crate::plugin_full::PipelineConfig),
 }
 
 /// Configuration for [`Topology::SimIntegration`].
 #[derive(Default)]
 pub struct SimIntegrationConfig {
+    /// Schedule to run change detection in; `None` when not set.
     pub change_detection_schedule: Option<InternedScheduleLabel>,
+    /// When true, host-sync change tracking is skipped.
     pub skip_host_sync_change_tracking: bool,
 }
 
 impl SimIntegrationConfig {
+    /// Set [`Self::change_detection_schedule`] to `schedule`.
     pub fn with_schedule<S: ScheduleLabel>(mut self, schedule: S) -> Self {
         self.change_detection_schedule = Some(schedule.intern());
         self
     }
 
+    /// Set [`Self::skip_host_sync_change_tracking`] to `skip`.
     pub fn skip_host_sync(mut self, skip: bool) -> Self {
         self.skip_host_sync_change_tracking = skip;
         self
     }
 }
 
+/// Tag type for the single naia server: parameterizes `SharedPlugin` and
+/// the `HostOwned` marker on server-owned entities.
 #[derive(Clone)]
 pub struct Singleton;
 
