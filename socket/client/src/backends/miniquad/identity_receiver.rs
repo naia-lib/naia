@@ -15,6 +15,8 @@ impl IdentityReceiver {
         IdentityReceiver { socket_id }
     }
 
+    /// Receives an IdentityToken (or a rejection) from the Server, if one
+    /// has arrived
     pub fn receive(&mut self) -> IdentityReceiverResult {
         // A disconnected socket's slot reads as Waiting.
         if let Some(table) = table_mut() {

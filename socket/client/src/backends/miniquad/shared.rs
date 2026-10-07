@@ -21,9 +21,9 @@ use crate::{
 // opening a second socket never resets the first (naia-lib/naia#193).
 //
 // Every access funnels through `table_mut` (plus `alloc_socket`'s
-// get-or-insert): one static-mut expression per helper, not one per call
-// site, which keeps the wasm build's static-mut warnings at two instead of
-// one per callback and handle.
+// get-or-insert): each takes the static's address with `&raw mut` and
+// borrows through that pointer, so no reference to the static mut is ever
+// formed directly (`static_mut_refs`), and no call site touches it.
 pub static mut SOCKET_TABLE: Option<SocketTable> = None;
 
 /// The live table, if a socket has been connected yet.
@@ -35,7 +35,8 @@ pub static mut SOCKET_TABLE: Option<SocketTable> = None;
 /// single-threaded, so no two borrows ever alias. None of the callback
 /// functions re-enter.
 pub(crate) fn table_mut() -> Option<&'static mut SocketTable> {
-    unsafe { SOCKET_TABLE.as_mut() }
+    let table = &raw mut SOCKET_TABLE;
+    unsafe { (*table).as_mut() }
 }
 
 /// Opens a fresh per-socket slot and returns its id, to be passed as the
@@ -45,10 +46,8 @@ pub fn alloc_socket() -> u32 {
     // Safety: SOCKET_TABLE is written here and subsequently only accessed
     // from the same wasm32 thread via the JS bridge callbacks and the
     // socket handles. wasm32 is single-threaded, so this is safe.
-    unsafe {
-        let table = SOCKET_TABLE.get_or_insert_with(SocketTable::new);
-        return table.connect().0;
-    }
+    let table = &raw mut SOCKET_TABLE;
+    unsafe { (*table).get_or_insert_with(SocketTable::new).connect().0 }
 }
 
 /// Closes a socket's slot, dropping its queued state.
@@ -210,7 +209,7 @@ impl JsObject {
             buf.reserve(len as usize - buf.len());
         }
         unsafe { buf.as_mut_vec().set_len(len as usize) };
-        unsafe { naia_unwrap_to_str(self.weak(), buf.as_mut_vec().as_mut_ptr(), len as u32) };
+        unsafe { naia_unwrap_to_str(self.weak(), buf.as_mut_vec().as_mut_ptr(), len) };
     }
 
     pub fn to_u8_array(&self, buf: &mut Vec<u8>) {
@@ -220,6 +219,6 @@ impl JsObject {
             buf.reserve(len as usize - buf.len());
         }
         unsafe { buf.set_len(len as usize) };
-        unsafe { naia_unwrap_to_u8_array(self.weak(), buf.as_mut_ptr(), len as u32) };
+        unsafe { naia_unwrap_to_u8_array(self.weak(), buf.as_mut_ptr(), len) };
     }
 }

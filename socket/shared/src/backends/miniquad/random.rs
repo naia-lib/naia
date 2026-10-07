@@ -3,7 +3,6 @@ extern "C" {
 }
 
 /// Container for cross-platform Random methods
-
 pub struct Random;
 
 impl Random {

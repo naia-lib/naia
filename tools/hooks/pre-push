@@ -36,4 +36,7 @@ RUSTFLAGS="-D warnings" cargo check -p naia-client --target wasm32-unknown-unkno
 echo "[pre-push] cargo check -p naia-bevy-client --target wasm32-unknown-unknown..."
 RUSTFLAGS="-D warnings" cargo check -p naia-bevy-client --target wasm32-unknown-unknown --quiet
 
+echo "[pre-push] cargo clippy mquad socket backend --target wasm32-unknown-unknown..."
+cargo clippy -p naia-socket-shared -p naia-client-socket --target wasm32-unknown-unknown --features mquad --quiet -- -D warnings
+
 echo "[pre-push] all checks passed."

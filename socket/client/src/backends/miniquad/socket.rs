@@ -24,7 +24,7 @@ impl Socket {
         config: &SocketConfig,
         protocol_id: &str,
     ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
-        return Self::connect_inner(server_session_url, config, None, None, protocol_id);
+        Self::connect_inner(server_session_url, config, None, protocol_id)
     }
 
     /// Connects to the given server address with authentication
@@ -34,46 +34,36 @@ impl Socket {
         auth_bytes: Vec<u8>,
         protocol_id: &str,
     ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
-        return Self::connect_inner(
-            server_session_url,
-            config,
-            Some(auth_bytes),
-            None,
-            protocol_id,
-        );
+        Self::connect_inner(server_session_url, config, Some(auth_bytes), protocol_id)
     }
 
-    /// Connects to the given server address with authentication
+    /// Connects to the given server address with authentication headers.
+    ///
+    /// The miniquad JS bridge has no header channel, so `auth_headers` is
+    /// not sent on this backend; this is equivalent to [`Self::connect`].
     pub fn connect_with_auth_headers(
         server_session_url: &str,
         config: &SocketConfig,
-        auth_headers: Vec<(String, String)>,
+        _auth_headers: Vec<(String, String)>,
         protocol_id: &str,
     ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
-        return Self::connect_inner(
-            server_session_url,
-            config,
-            None,
-            Some(auth_headers),
-            protocol_id,
-        );
+        Self::connect_inner(server_session_url, config, None, protocol_id)
     }
 
-    /// Connects to the given server address with authentication
+    /// Connects to the given server address with authentication and
+    /// authentication headers.
+    ///
+    /// The miniquad JS bridge has no header channel, so `auth_headers` is
+    /// not sent on this backend; this is equivalent to
+    /// [`Self::connect_with_auth`].
     pub fn connect_with_auth_and_headers(
         server_session_url: &str,
         config: &SocketConfig,
         auth_bytes: Vec<u8>,
-        auth_headers: Vec<(String, String)>,
+        _auth_headers: Vec<(String, String)>,
         protocol_id: &str,
     ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
-        return Self::connect_inner(
-            server_session_url,
-            config,
-            Some(auth_bytes),
-            Some(auth_headers),
-            protocol_id,
-        );
+        Self::connect_inner(server_session_url, config, Some(auth_bytes), protocol_id)
     }
 
     /// Connects to the given server address
@@ -81,7 +71,6 @@ impl Socket {
         server_session_url: &str,
         config: &SocketConfig,
         auth_bytes_opt: Option<Vec<u8>>,
-        auth_headers_opt: Option<Vec<(String, String)>>,
         protocol_id: &str,
     ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
         let server_url = parse_server_url(server_session_url);
@@ -128,7 +117,7 @@ impl Socket {
         // setup id receiver
         let id_receiver = IdentityReceiver::new(socket_id);
 
-        return (id_receiver, packet_sender, packet_receiver);
+        (id_receiver, packet_sender, packet_receiver)
     }
 }
 

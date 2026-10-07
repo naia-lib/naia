@@ -22,6 +22,7 @@ impl PlainPacketReceiver {
 }
 
 impl PlainPacketReceiver {
+    /// Receives the next Packet from the Server, if one has arrived
     pub fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
         // A disconnected socket's slot reads as no traffic.
         if let Some(table) = table_mut() {

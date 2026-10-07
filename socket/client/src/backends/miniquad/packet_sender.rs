@@ -30,11 +30,11 @@ impl PacketSender {
             let ptr = payload.as_ptr();
             let len = payload.len();
             let js_obj = naia_create_u8_array(ptr as _, len as _);
-            return if naia_send(self.socket_id, js_obj) {
+            if naia_send(self.socket_id, js_obj) {
                 Ok(())
             } else {
                 Err(NaiaClientSocketError::SendError)
-            };
+            }
         }
     }
 
@@ -49,13 +49,13 @@ impl PacketSender {
         ServerAddr::Finding
     }
 
+    /// Returns whether this socket's JS connection is currently open
     pub fn connected(&self) -> bool {
         // Safety: naia_is_connected() is a read-only FFI call into the JS bridge; no preconditions.
-        unsafe {
-            return naia_is_connected(self.socket_id);
-        }
+        unsafe { naia_is_connected(self.socket_id) }
     }
 
+    /// Closes this socket's JS connection and frees its table slot
     pub fn disconnect(&mut self) {
         // Safety: naia_disconnect() is an FFI call with no return value or preconditions.
         // Freeing the slot drops this socket's queued state; other sockets'
