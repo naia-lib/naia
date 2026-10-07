@@ -14,8 +14,8 @@ becomes provable, wiring it in is a separate card.
 
 - Headless `google-chrome` (any remote-debugging-capable Chromium).
 - `node >= 22` (uses the global WebSocket; zero npm installs).
-- For `check_offer.mjs` only: a live naia server plus `session_proxy.py`,
-  and `python3` to run the proxy.
+- For `check_offer.mjs` only: a live naia server plus the `session_proxy`
+  logging proxy (`cargo run -p naia-ice-gather-sensor --bin session_proxy`).
 
 ## Exit-code contract (both scripts)
 
@@ -43,7 +43,7 @@ Recorded: host (mDNS `.local`) + srflx (`66.219.234.106` via Google STUN)
 on every run; the immediately-POSTed offer shape carries zero candidate
 lines, which is the defect this sensor guards against misreading.
 
-## 2. check_offer.mjs + session_proxy.py — what does the client POST?
+## 2. check_offer.mjs + session_proxy — what does the client POST?
 
 Drives the SHIPPED `naia_socket.js` in headless Chrome against a live
 server through the logging proxy, then verdicts the captured offer body.
@@ -54,7 +54,7 @@ This is the post-repair gate: the offer must carry srflx.
 cargo run -p naia-server-socket-demo   # session 127.0.0.1:14191
 
 # terminal 2: logging proxy 14201 -> 14191, captures POST bodies
-python3 session_proxy.py 14201 14191 /tmp/offer.txt
+cargo run -p naia-ice-gather-sensor --bin session_proxy -- 14201 14191 /tmp/offer.txt
 
 # terminal 3: the gate (expect "OFFER CARRIES SRFLX", rc=0)
 node check_offer.mjs \

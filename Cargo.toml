@@ -16,6 +16,8 @@ members = [
     "bench/criterion",
     # "bench/iai",  -- disabled until iai-callgrind-runner is installed in CI/PATH; see _AGENTS/SDD_MIGRATION_PLAN.md Track 3
     "tools/spec_tool",
+    "tools/ci",
+    "tools/ice_gather_sensor",
     "test/compile_fail",
     "test/harness",
     "test/loom",
@@ -49,8 +51,8 @@ members = [
 # crates depend on private siblings (namako, slag), so they are excluded from
 # the published workspace. In a full sibling checkout they still build via
 # `cargo build --manifest-path <crate>/Cargo.toml`. Guarded by
-# tools/ci/check_no_escaping_path_deps.py (GitHub Actions is disabled in
-# this repo — run it by hand or from self-hosted CI).
+# `cargo run -p naia-ci-checks --bin check_no_escaping_path_deps` (GitHub
+# Actions is disabled in this repo — run it by hand or from self-hosted CI).
 exclude = [
     "bench/wins",
     "bench/suite",

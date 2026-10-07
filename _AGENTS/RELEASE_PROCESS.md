@@ -101,9 +101,9 @@ introduces it, so a consumer can run that presence check against its own pin.
    ```bash
    git checkout main
    git merge --ff-only dev
-   python3 tools/ci/check_no_escaping_path_deps.py
+   cargo run -p naia-ci-checks --bin check_no_escaping_path_deps
    ```
-   The script must print OK — it fails if the merge carried a workspace
+   The check must print OK — it fails if the merge carried a workspace
    member with a repo-escaping path dep (e.g. a surviving `test/bench`).
    Do not proceed to tag while it fails.
    If `--ff-only` fails, do **not** use a non-FF merge. `main` should never
@@ -161,7 +161,7 @@ naia is public; external consumers clone it with no siblings present. Crates
 depending on private siblings (`slag`) or the sibling checkout (`namako`)
 live in `exclude` in the root `Cargo.toml`, never in `members` — externals get
 the full library, only internal harness CLIs stay behind. Guarded by
-`tools/ci/check_no_escaping_path_deps.py` (run by hand or self-hosted CI;
+`cargo run -p naia-ci-checks --bin check_no_escaping_path_deps` (run by hand or self-hosted CI;
 GitHub Actions is disabled in this repo — do not wire it into workflows).
 Release-time: verify `test/bench` is gone from the merge (superseded by
 `bench/wins`); if it survives, swap its one dep line to

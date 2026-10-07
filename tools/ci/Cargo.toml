@@ -1,0 +1,11 @@
+[package]
+name = "naia-ci-checks"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT OR Apache-2.0"
+description = "Repository invariant checks for naia, run by hand or from self-hosted CI"
+
+[[bin]]
+name = "check_no_escaping_path_deps"
+path = "src/main.rs"
