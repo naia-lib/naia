@@ -87,11 +87,17 @@ impl TestClock {
     }
 
     /// Promote this thread's clock to a process-shareable handle.
-    /// Captures the current clock value into a fresh `Arc<AtomicU64>`,
-    /// installs the shared override on this thread, and returns the Arc for
-    /// passing to spawned worker threads. Workers call `install_shared(arc)`
-    /// to read/write the same clock.
+    /// If this thread already runs on a shared clock, that SAME handle is
+    /// returned: a thread has exactly one clock, and minting a second one
+    /// would silently fork time — every thread already holding the first
+    /// handle would freeze while this thread advanced the new one. Otherwise
+    /// captures the current thread-local value into a fresh `Arc<AtomicU64>`
+    /// and installs it. Workers call `install_shared(arc)` to read/write the
+    /// same clock.
     pub fn shareable_handle() -> Arc<AtomicU64> {
+        if let Some(existing) = SHARED_OVERRIDE.with(|s| s.borrow().clone()) {
+            return existing;
+        }
         let current = Self::current_time_ms();
         let arc = Arc::new(AtomicU64::new(current));
         Self::install_shared(arc.clone());
@@ -266,6 +272,27 @@ mod tests {
             // And the shared arc still holds its own value, unaffected by
             // reads on the now-detached thread.
             assert_eq!(arc.load(Ordering::SeqCst), 1000);
+        })
+        .join()
+        .unwrap();
+    }
+
+    /// A thread has exactly one clock: promoting a thread that already runs
+    /// on a shared clock returns THAT clock, so a later owner on the same
+    /// thread (e.g. a pipelined server constructed after a harness gate
+    /// shared the driver's clock) can never fork time away from the threads
+    /// already holding the first handle.
+    #[test]
+    fn shareable_handle_on_a_shared_thread_returns_the_same_clock() {
+        thread::spawn(|| {
+            TestClock::init(100);
+            let first = TestClock::shareable_handle();
+            let worker = Arc::clone(&first);
+            let second = TestClock::shareable_handle();
+            assert!(Arc::ptr_eq(&first, &second), "the clock was forked");
+            TestClock::advance(40);
+            assert_eq!(worker.load(Ordering::SeqCst), 140, "a holder froze");
+            TestClock::detach_shared();
         })
         .join()
         .unwrap();

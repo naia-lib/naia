@@ -2100,6 +2100,45 @@ mod delegated_send_guard_tests {
         (gdh, entity_idx)
     }
 
+    /// Scope-entry spawns carry their component kinds in canonical protocol
+    /// (net-id) order, whatever order the caller lists them in. The server's
+    /// per-entity kind set is a `HashSet`, so without this the same entity's
+    /// `SpawnWithComponents` differed between otherwise-identical runs.
+    #[test]
+    fn host_init_entity_spawn_kinds_are_in_protocol_order() {
+        let mut kinds = ComponentKinds::new();
+        kinds.add_component::<Ghost>();
+        kinds.add_component::<Wraith>();
+        kinds.add_component::<Haunt>();
+        let ghost = ComponentKind::of::<Ghost>();
+        let wraith = ComponentKind::of::<Wraith>();
+        let haunt = ComponentKind::of::<Haunt>();
+        let mut canonical = vec![ghost, wraith, haunt];
+        canonical.sort_by_key(|k| kinds.net_id_of(*k));
+
+        let spawn_kinds = |listed: Vec<ComponentKind>| {
+            let (_mutator, accessor) = EntityAuthChannel::new_channel(HostType::Server);
+            let gwm = AuthGwm {
+                auth: accessor,
+                global_dirty: Arc::new(GlobalDirtyBitset::new(64, kinds.kind_count() as usize)),
+            };
+            let mut manager = LocalWorldManager::new(&None, HostType::Server, 0, &gwm);
+            let global_entity = GlobalEntity::from_u64(1);
+            manager.host_init_entity(global_entity, listed, &kinds, false);
+            manager
+                .take_outgoing_commands(&Instant::now(), 0.0)
+                .into_iter()
+                .find_map(|(_, command)| match command {
+                    EntityCommand::SpawnWithComponents(_, k) => Some(k),
+                    _ => None,
+                })
+                .expect("a SpawnWithComponents was queued")
+        };
+
+        assert_eq!(spawn_kinds(vec![ghost, wraith, haunt]), canonical);
+        assert_eq!(spawn_kinds(vec![haunt, wraith, ghost]), canonical);
+    }
+
     /// What one `write_updates` pass down the SERVER paths did.
     struct ServerOutcome {
         has_written: bool,

@@ -110,6 +110,10 @@ impl TickBufferSender {
                 host_tick,
                 has_written,
             ) {
+                // A record still held under this index belongs to a packet sent one
+                // full `PacketIndex` wrap ago that was never acknowledged; this packet
+                // reuses the index, so drop it rather than append to it.
+                self.packet_to_channel_map.remove(&packet_index);
                 self.packet_to_channel_map.entry(packet_index).or_default();
                 let channel_list = self.packet_to_channel_map.get_mut(&packet_index).unwrap();
                 channel_list.push((*channel_kind, message_indices));
@@ -128,8 +132,11 @@ impl TickBufferSender {
 
 impl PacketNotifiable for TickBufferSender {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
-        if let Some(channel_list) = self.packet_to_channel_map.get(&packet_index) {
-            for (channel_kind, message_indices) in channel_list {
+        // Delivery ends tracking for this packet: release its record, or the
+        // map grows by one entry per command packet for the connection's
+        // lifetime.
+        if let Some(channel_list) = self.packet_to_channel_map.remove(&packet_index) {
+            for (channel_kind, message_indices) in &channel_list {
                 if let Some(channel) = self.channel_senders.get_mut(channel_kind) {
                     for (tick, message_index) in message_indices {
                         channel.notify_message_delivered(tick, message_index);
@@ -137,5 +144,24 @@ impl PacketNotifiable for TickBufferSender {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Delivery ENDS tracking for a packet: its record is released. Keeping
+    /// it grew the map by one entry per command packet for the connection's
+    /// lifetime.
+    #[test]
+    fn delivery_releases_the_packet_record() {
+        let mut sender = TickBufferSender::new(&ChannelKinds::new());
+        sender.packet_to_channel_map.insert(3, Vec::new());
+        sender.notify_packet_delivered(3);
+        assert!(
+            sender.packet_to_channel_map.is_empty(),
+            "a delivered packet's record must be released"
+        );
     }
 }

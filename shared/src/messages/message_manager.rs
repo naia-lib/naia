@@ -396,6 +396,10 @@ impl MessageManager {
             if let Some(message_indices) =
                 channel.write_messages(message_kinds, converter, writer, has_written)
             {
+                // A record still held under this index belongs to a packet sent one
+                // full `PacketIndex` wrap ago that was never acknowledged; this packet
+                // reuses the index, so drop it rather than append to it.
+                self.packet_to_message_map.remove(&packet_index);
                 self.packet_to_message_map.entry(packet_index).or_default();
                 let channel_list = self.packet_to_message_map.get_mut(&packet_index).unwrap();
                 channel_list.push((*channel_kind, message_indices));
@@ -518,8 +522,8 @@ impl PacketNotifiable for MessageManager {
     /// Occurs when a packet has been notified as delivered. Stops tracking the
     /// status of Messages in that packet.
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
-        if let Some(channel_list) = self.packet_to_message_map.get(&packet_index) {
-            for (channel_kind, message_indices) in channel_list {
+        if let Some(channel_list) = self.packet_to_message_map.remove(&packet_index) {
+            for (channel_kind, message_indices) in &channel_list {
                 if let Some(channel) = self.channel_senders.get_mut(channel_kind) {
                     for message_index in message_indices {
                         channel.notify_message_delivered(*message_index);
@@ -1755,6 +1759,45 @@ mod message_manager_tests {
                 ping(2),
             ),
             "the second must be refused, not silently swallowed"
+        );
+    }
+
+    fn write_one(manager: &mut MessageManager, value: usize, packet_index: u16) {
+        let kinds = directional_kinds();
+        let messages = message_kinds();
+        manager.send_message(
+            &messages,
+            &mut FakeEntityConverter,
+            &ChannelKind::of::<ToServer>(),
+            tagged(1, value),
+        );
+        manager.collect_outgoing_messages(&Instant::now(), 200.0);
+        let mut writer = BitWriter::new();
+        let mut has_written = false;
+        manager.write_messages(
+            &kinds,
+            &messages,
+            &mut FakeEntityConverter,
+            &mut writer,
+            packet_index,
+            &mut has_written,
+        );
+        assert!(has_written, "the message should have been written");
+    }
+
+    #[test]
+    fn delivery_releases_the_packet_record() {
+        // Delivery ENDS tracking for a packet. Keeping the record after the
+        // ack grew the map by one entry per message-carrying packet for the
+        // connection's lifetime.
+        let kinds = directional_kinds();
+        let mut manager = MessageManager::new(HostType::Client, &kinds);
+        write_one(&mut manager, 4, 7);
+        assert!(manager.packet_to_message_map.contains_key(&7));
+        manager.notify_packet_delivered(7);
+        assert!(
+            manager.packet_to_message_map.is_empty(),
+            "a delivered packet's record must be released"
         );
     }
 }

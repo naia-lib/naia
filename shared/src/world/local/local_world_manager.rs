@@ -344,6 +344,16 @@ impl LocalWorldManager {
         component_kinds_map: &ComponentKinds,
         is_static: bool,
     ) {
+        // Canonical component order: the server's per-entity kind set is a
+        // `HashSet` (`GlobalEntityRecord::component_kinds`), so its iteration
+        // order differs between otherwise-identical runs. The spawn command
+        // carries the kinds in list order and the receiver inserts them in
+        // that order, so a hash-ordered list made scope-entry spawns differ on
+        // the wire and in client-side insertion order run to run. Protocol
+        // net-id order is identical on every build of the same protocol.
+        let mut component_kinds = component_kinds;
+        component_kinds.sort_by_key(|kind| component_kinds_map.net_id_of(*kind));
+
         // Stale-mapping detection (per [entity-delegation-15] / scope re-entry):
         // If the entity is mapped but its HostEntityChannel has already been
         // removed from the HostEngine, that means a Despawn was sent (channel
