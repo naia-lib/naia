@@ -48,4 +48,8 @@ pub(crate) mod configure_replication;
 pub(crate) mod room_store;
 pub(crate) mod scope_change;
 pub(crate) mod scope_checks_cache;
+#[cfg(feature = "e2e_debug")]
+pub(crate) mod scope_explain;
+#[cfg(feature = "e2e_debug")]
+pub use scope_explain::{QueuedRoomChange, ScopeExplain, StagedScopeOp};
 pub(crate) mod user_store;

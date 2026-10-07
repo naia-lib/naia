@@ -2814,6 +2814,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         )
     }
 
+    /// `e2e_debug` read of the inputs behind [`Self::user_scope_has_entity`].
+    #[cfg(feature = "e2e_debug")]
+    pub(crate) fn user_scope_explain(
+        &self,
+        user_key: UserKey,
+        world_entity: &E,
+    ) -> crate::server::ScopeExplain {
+        crate::server::scope_explain::scope_explain_impl(
+            &self.shared,
+            &self.send.state.entity_scope_map,
+            &self.send.state.entity_room_map,
+            &self.sim_handle.state.user_store,
+            &self.sim_handle.state.resource_registry,
+            &self.sim_handle.state.room_store,
+            &self.sim_handle.state.pending_scope_ledger_ops,
+            user_key,
+            world_entity,
+        )
+    }
+
     //// Components
 
     /// Adds a Component to an Entity

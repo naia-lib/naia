@@ -53,6 +53,17 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserScopeRef<'s, E> {
             }
         }
     }
+
+    /// `e2e_debug` only: the inputs behind [`Self::has`] for `world_entity`.
+    /// Describes current state; it does not identify which call set an
+    /// explicit entry. See [`ScopeExplain`](crate::ScopeExplain).
+    #[cfg(feature = "e2e_debug")]
+    pub fn explain(&self, world_entity: &E) -> crate::ScopeExplain {
+        match &self.server {
+            UserScopeRefTarget::Resident(ws) => ws.user_scope_explain(self.key, world_entity),
+            UserScopeRefTarget::Pipelined(ps) => ps.user_scope_explain_ref(&self.key, world_entity),
+        }
+    }
 }
 
 /// Scoped mutable handle for a user's fine-grained entity scope.
@@ -95,6 +106,16 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserScopeMut<'s, E> {
             UserScopeMutTarget::Pipelined(ps) => {
                 ps.user_scope_has_entity_ref(&self.key, world_entity)
             }
+        }
+    }
+
+    /// `e2e_debug` only: the inputs behind [`Self::has`] for `world_entity`,
+    /// including include/exclude calls staged but not yet applied.
+    #[cfg(feature = "e2e_debug")]
+    pub fn explain(&self, world_entity: &E) -> crate::ScopeExplain {
+        match &self.server {
+            UserScopeMutTarget::Resident(ws) => ws.user_scope_explain(self.key, world_entity),
+            UserScopeMutTarget::Pipelined(ps) => ps.user_scope_explain_ref(&self.key, world_entity),
         }
     }
 

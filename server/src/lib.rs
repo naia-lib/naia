@@ -139,6 +139,8 @@ pub use server::world_server::{
 // `world_server` counters above.
 #[cfg(feature = "e2e_debug")]
 pub use connection::send_connection::send_pass_walls;
+#[cfg(feature = "e2e_debug")]
+pub use server::{QueuedRoomChange, ScopeExplain, StagedScopeOp};
 pub use user::{MainUser, MainUserRef, UserKey, UserMut, UserRef, WorldUser};
 pub use user_scope::{UserScopeMut, UserScopeRef};
 pub use world::{

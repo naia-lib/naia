@@ -1620,6 +1620,33 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         )
     }
 
+    /// `e2e_debug` read of the inputs behind [`Self::user_scope_has_entity_ref`],
+    /// including the coord-staged scope ops not yet drained in D7. Same
+    /// slot-lock as `has`; fail-loud if the send handle is not parked.
+    #[cfg(feature = "e2e_debug")]
+    pub fn user_scope_explain_ref(
+        &self,
+        user_key: &UserKey,
+        world_entity: &E,
+    ) -> crate::ScopeExplain {
+        let coord = self.coord();
+        let send = self.send_slot.lock();
+        let send = send.as_ref().expect(
+            "PipelinedWorldServer::user_scope_explain_ref: SendHandle not in slot — read between receive() and send()",
+        );
+        crate::server::scope_explain::scope_explain_impl(
+            &coord.shared,
+            &send.state.entity_scope_map,
+            &send.state.entity_room_map,
+            &coord.state.user_store,
+            &coord.state.resource_registry,
+            &coord.state.room_store,
+            &coord.state.pending_scope_ledger_ops,
+            *user_key,
+            world_entity,
+        )
+    }
+
     // ── `interior_visibility` send-resident `&self` reads (slot-lock, no reassembly) ──
     //
     // Same shape as `user_scope_has_entity_ref`: lock the parked send handle
