@@ -2,6 +2,7 @@
 //! Proc-macro derives for the naia Bevy adapter.
 //! Hosts the Bevy-flavored Replicate, Message, and ClientMarker derives.
 
+#![warn(missing_docs)]
 #![deny(trivial_casts, trivial_numeric_casts, unstable_features)]
 
 use naia_derive_core::{
