@@ -39,7 +39,7 @@ impl Socket {
 
     /// Connects to the given server address with authentication headers.
     ///
-    /// The miniquad JS bridge has no header channel, so `auth_headers` is
+    /// The miniquad JS bridge has no header channel, so the headers are
     /// not sent on this backend; this is equivalent to [`Self::connect`].
     pub fn connect_with_auth_headers(
         server_session_url: &str,
@@ -53,7 +53,7 @@ impl Socket {
     /// Connects to the given server address with authentication and
     /// authentication headers.
     ///
-    /// The miniquad JS bridge has no header channel, so `auth_headers` is
+    /// The miniquad JS bridge has no header channel, so the headers are
     /// not sent on this backend; this is equivalent to
     /// [`Self::connect_with_auth`].
     pub fn connect_with_auth_and_headers(
