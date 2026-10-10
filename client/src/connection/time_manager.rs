@@ -272,6 +272,17 @@ impl TimeManager {
         let prev_client_receiving_tick = self.client_receiving_tick;
         let prev_client_sending_tick = self.client_sending_tick;
 
+        // Entry: fires on every call, before the early-return below, so a
+        // call that never reaches the clamp still leaves a joinable line
+        // (H12 event-delivery discriminator, Usher 64915/Gerry 64919).
+        #[cfg(feature = "f3_diag")]
+        eprintln!(
+            "[F3-DIAG naia/TimeManager] collect_ticks_entry thread={:?} prev_receiving_tick={} ceiling={:?}",
+            std::thread::current().name(),
+            prev_client_receiving_tick as u32,
+            receiving_tick_ceiling
+        );
+
         self.receiving_tick_snapshot_fresh = false;
 
         {
@@ -279,6 +290,13 @@ impl TimeManager {
             self.last_tick_check_instant = now.clone();
             self.accumulator += time_elapsed;
             if self.accumulator < 1.0 {
+                #[cfg(feature = "f3_diag")]
+                eprintln!(
+                    "[F3-DIAG naia/TimeManager] collect_ticks_result thread={:?} prev_receiving_tick={} current_receiving_tick={} changed=false early_return=true",
+                    std::thread::current().name(),
+                    prev_client_receiving_tick as u32,
+                    prev_client_receiving_tick as u32
+                );
                 return (None, None);
             }
         }
@@ -392,6 +410,15 @@ impl TimeManager {
             true => Some((prev_client_sending_tick, self.client_sending_tick)),
             false => None,
         };
+
+        #[cfg(feature = "f3_diag")]
+        eprintln!(
+            "[F3-DIAG naia/TimeManager] collect_ticks_result thread={:?} prev_receiving_tick={} current_receiving_tick={} changed={} early_return=false",
+            std::thread::current().name(),
+            prev_client_receiving_tick as u32,
+            self.client_receiving_tick as u32,
+            receiving_incremented
+        );
 
         (output_receiving, output_sending)
     }

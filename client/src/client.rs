@@ -546,10 +546,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             }
         }
 
+        // Fires on every call, Some or None, so a call that pushes nothing
+        // still leaves a joinable line (H12 event-delivery discriminator,
+        // Usher 64915/Gerry 64919).
+        #[cfg(feature = "f3_diag")]
+        eprintln!(
+            "[F3-DIAG naia/Client] take_tick_events_push thread={:?} receiving_tick_happened={:?}",
+            std::thread::current().name(),
+            receiving_tick_happened
+        );
+
         if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
             let mut index_tick = prev_receiving_tick.wrapping_add(1);
             loop {
                 self.incoming_tick_events.push_server_tick(index_tick);
+
+                #[cfg(feature = "f3_diag")]
+                eprintln!(
+                    "[F3-DIAG naia/Client] take_tick_events_push_tick thread={:?} tick={}",
+                    std::thread::current().name(),
+                    index_tick as u32
+                );
 
                 if index_tick == current_receiving_tick {
                     break;

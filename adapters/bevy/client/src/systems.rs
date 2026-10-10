@@ -103,6 +103,17 @@ pub fn translate_tick_events<T: Send + Sync + 'static>(
 
     // Receive Events
     let mut events = client.client.take_tick_events(&now);
+
+    // Fires on every call, empty or not, so a call that writes nothing
+    // still leaves a joinable line (H12 event-delivery discriminator,
+    // Usher 64915/Gerry 64919).
+    #[cfg(feature = "f3_diag")]
+    eprintln!(
+        "[F3-DIAG naia/BevyAdapter] translate_tick_events thread={:?} is_empty={}",
+        std::thread::current().name(),
+        events.is_empty()
+    );
+
     if !events.is_empty() {
         // Client Tick Event
         if events.has::<naia_events::ClientTickEvent>() {
@@ -114,6 +125,12 @@ pub fn translate_tick_events<T: Send + Sync + 'static>(
         // Server Tick Event
         if events.has::<naia_events::ServerTickEvent>() {
             for tick in events.read::<naia_events::ServerTickEvent>() {
+                #[cfg(feature = "f3_diag")]
+                eprintln!(
+                    "[F3-DIAG naia/BevyAdapter] translate_tick_events_write thread={:?} tick={}",
+                    std::thread::current().name(),
+                    tick as u32
+                );
                 server_tick_events.write(bevy_events::ServerTickEvent::<T>::new(tick));
             }
         }
