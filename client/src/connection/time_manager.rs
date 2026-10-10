@@ -41,6 +41,18 @@ pub struct TimeManager {
     pub client_receiving_instant: GameInstant,
     pub client_sending_instant: GameInstant,
     server_receivable_instant: GameInstant,
+
+    // The clock-estimated receiving tick computed this call, captured before the
+    // `collect_ticks` ceiling clamp against the delivered-Data ceiling is applied.
+    // Paired with `client_receiving_tick` (post-clamp) and the connection's
+    // `last_received_server_tick` (the ceiling itself), this discriminates clock-
+    // estimate lag from a stalled Data ceiling at the same call site.
+    pub client_receiving_tick_pre_ceiling: Tick,
+    // False when the most recent `collect_ticks` call early-returned at the
+    // accumulator gate (sub-1ms elapsed) without recomputing the receiving-tick
+    // estimate. A reader snapshotting `client_receiving_tick_pre_ceiling` on such a
+    // call sees a stale, unchanged value that must not be read as a stall.
+    pub receiving_tick_snapshot_fresh: bool,
 }
 
 impl TimeManager {
@@ -118,6 +130,9 @@ impl TimeManager {
             client_receiving_instant,
             client_sending_instant,
             server_receivable_instant,
+
+            client_receiving_tick_pre_ceiling: client_receiving_tick,
+            receiving_tick_snapshot_fresh: false,
         }
     }
 
@@ -257,6 +272,8 @@ impl TimeManager {
         let prev_client_receiving_tick = self.client_receiving_tick;
         let prev_client_sending_tick = self.client_sending_tick;
 
+        self.receiving_tick_snapshot_fresh = false;
+
         {
             let time_elapsed = self.last_tick_check_instant.elapsed(now).as_secs_f32() * 1000.0;
             self.last_tick_check_instant = now.clone();
@@ -288,6 +305,8 @@ impl TimeManager {
                 millis_elapsed,
             );
         }
+        self.client_receiving_tick_pre_ceiling = self.client_receiving_tick;
+        self.receiving_tick_snapshot_fresh = true;
 
         // Cap the receiving tick at delivery (Bypass mode). The clock-estimated
         // receiving tick can outrun actual packet delivery; the confirmed timeline
