@@ -414,7 +414,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         let tm: &TimeManager = &tm_guard;
         for (user_address, send_conn) in self.send_user_connections.iter_mut() {
             if send_conn.base.should_send_heartbeat() {
-                let f3_sent_ok = Self::send_heartbeat_packet(user_address, send_conn, tm, &mut self.send_io);
+                let f3_sent_ok =
+                    Self::send_heartbeat_packet(user_address, send_conn, tm, &mut self.send_io);
                 #[cfg(feature = "f3_diag")]
                 eprintln!(
                     "[F3-DIAG naia/SendState] handle_heartbeats addr={} tick={} eligible=true sweep=heartbeat_timer emitted=Heartbeat sent={}",
@@ -434,7 +435,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         for (user_address, send_conn) in self.send_user_connections.iter_mut() {
             let f3_eligible = send_conn.base.should_send_empty_ack();
             if f3_eligible {
-                let f3_sent_ok = Self::send_heartbeat_packet(user_address, send_conn, tm, &mut self.send_io);
+                let f3_sent_ok =
+                    Self::send_heartbeat_packet(user_address, send_conn, tm, &mut self.send_io);
                 #[cfg(feature = "f3_diag")]
                 eprintln!(
                     "[F3-DIAG naia/SendState] handle_empty_acks addr={} tick={} eligible=true sweep=empty_ack emitted=Heartbeat sent={}",
