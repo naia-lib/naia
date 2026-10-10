@@ -1499,6 +1499,46 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         Some(connection.time_manager.client_receiving_tick)
     }
 
+    /// Returns the highest server tick whose Data payload has actually been
+    /// delivered (buffered) on this connection, or `None` if not connected or
+    /// nothing has arrived yet. This is the ceiling that `take_tick_events`
+    /// clamps `server_tick()` against; it does not advance on Heartbeat or any
+    /// other non-`Data` packet.
+    ///
+    /// Read together with `server_tick()` (the post-clamp estimate) and
+    /// `receiving_tick_estimate_pre_ceiling()` (the same estimate before the
+    /// clamp) to tell clock-estimate lag apart from a stalled Data ceiling.
+    #[must_use]
+    pub fn last_received_server_tick(&self) -> Option<Tick> {
+        let connection = self.server_connection.as_ref()?;
+        connection.last_received_server_tick()
+    }
+
+    /// Returns the receiving-tick clock estimate as computed by the
+    /// latency/jitter model on the most recent `take_tick_events` call, before
+    /// the ceiling clamp against `last_received_server_tick()` was applied.
+    /// Returns `None` if not connected.
+    ///
+    /// `receiving_tick_snapshot_is_fresh()` must be checked alongside this: if
+    /// the most recent `take_tick_events` call early-returned at the
+    /// sub-millisecond accumulator gate, this value is a stale carry-over from
+    /// an earlier call, not a fresh non-advancing reading.
+    #[must_use]
+    pub fn receiving_tick_estimate_pre_ceiling(&self) -> Option<Tick> {
+        let connection = self.server_connection.as_ref()?;
+        Some(connection.time_manager.client_receiving_tick_pre_ceiling)
+    }
+
+    /// Returns `true` if the most recent `take_tick_events` call actually
+    /// recomputed the receiving-tick estimate, versus early-returning at the
+    /// accumulator gate (sub-millisecond elapsed time) without touching it.
+    /// Returns `None` if not connected.
+    #[must_use]
+    pub fn receiving_tick_snapshot_is_fresh(&self) -> Option<bool> {
+        let connection = self.server_connection.as_ref()?;
+        Some(connection.time_manager.receiving_tick_snapshot_fresh)
+    }
+
     /// Returns the `GameInstant` corresponding to the current server-receive
     /// tick, or `None` if not connected.
     #[must_use]
