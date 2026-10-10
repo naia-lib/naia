@@ -22,6 +22,11 @@ transport_udp = [ "naia-client/transport_udp" ]
 transport_local = [ "naia-client/transport_local" ]
 interior_visibility = [ "naia-client/interior_visibility" ]
 test_time = [ "naia-client/test_time", "naia-bevy-shared/test_time" ]
+# Forwards to the underlying naia-client diagnostic traces (additive,
+# default-off, no behavior change). Consumers that build through the
+# bevy adapter (e.g. diax_net_client) need this edge to actually enable
+# naia-client's f3_diag cfg sites.
+f3_diag = [ "naia-client/f3_diag" ]
 
 [dependencies]
 parking_lot = "0.12"
