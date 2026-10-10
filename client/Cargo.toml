@@ -34,6 +34,12 @@ transport_local = [ "http", "base64", "parking_lot", "naia-shared/transport_loca
 interior_visibility = [ "naia-shared/interior_visibility" ]
 e2e_debug = []
 test_time = [ "naia-shared/test_time" ]
+# Additive, default-off. Enables structured `[F3-DIAG naia/<component>]`
+# `eprintln!` traces along the send-side pipeline (scope drain, snapshot
+# read, packet emit). No wire-format change; zero impact when off.
+# Used by cyberlith's `cargo test ... --features f3_diag` to diagnose
+# `match_start::f3_world_entity_assignment`.
+f3_diag = []
 
 [dependencies]
 naia-shared = { version = "0.25", path = "../shared" }
