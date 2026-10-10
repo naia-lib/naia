@@ -54,6 +54,28 @@ use crate::{
     ScopeExit,
 };
 
+/// Per-user, per-tick, COMPONENT-PAIR-unit rollup of `prepare_send_job`'s
+/// Phase 3A gate (do not read these fields against entity-level counts like
+/// `indices.len()` — one entity can hold several dirty components, each
+/// counted separately here). Distinguishes the three mutually-exclusive
+/// outcomes resolved for a dirty (entity, component) pair that passed this
+/// connection's visibility: `clean` (dirty globally, but this connection's
+/// mask was already clear), `gate_suppressed` (blocked by
+/// `is_component_updatable_for_entity`), and `emitted` (fast-path or
+/// slow-path — the pair was written into this tick's `SendPlan`; this is a
+/// PLANNING-stage outcome, not confirmation of socket send or peer ACK).
+/// Component pairs belonging to entities excluded by visibility itself are
+/// never visited by the inner loop, so never reach this tally — those are
+/// reported separately, at entity granularity only, as
+/// `outcome=excluded_by_visibility` lines.
+#[cfg(feature = "f3_diag")]
+#[derive(Default)]
+struct F3DiagTally {
+    clean: u32,
+    gate_suppressed: u32,
+    emitted: u32,
+}
+
 /// Send-thread-exclusive state lifted out of `InternalWorldServer` (step 4-E).
 pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     /// Per-address map of send-side connection halves. Each holds a clone
@@ -737,6 +759,25 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         // read this frozen copy — never the live, now-decremented bitset.
         let frozen_dirty = self.shared.global_dirty.freeze();
 
+        // Tick-wide opportunity denominator for the per-user f3_diag lines
+        // below: total entities dirty this tick, BEFORE any per-user
+        // visibility intersection. Per-user `indices.len()` against this
+        // total is what separates "dirty-but-out-of-visibility" (excluded
+        // here, never counted by any existing counter) from what each
+        // user's gate loop actually saw.
+        #[cfg(feature = "f3_diag")]
+        let tick_dirty_entities_total = frozen_dirty.dirty_entity_iter().count();
+
+        // Actual interval for every f3_diag line below: this function
+        // processes exactly one tick per call, so one read is correct for
+        // the whole call.
+        #[cfg(feature = "f3_diag")]
+        let f3_tick: u32 = {
+            let tm_guard = self.shared.time_manager.read();
+            let tm: &TimeManager = &tm_guard;
+            tm.current_tick() as u32
+        };
+
         // Collect and shuffle user addresses for fair priority ordering.
         let mut user_addresses: Vec<SocketAddr> =
             self.send_user_connections.keys().copied().collect();
@@ -763,6 +804,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         .intersect_dirty_frozen(&frozen_dirty)
                         .collect()
                 };
+                // f3_diag: snapshot BEFORE `indices` is consumed by-value below.
+                // `visible_candidates` is the entity-unit count that pairs with
+                // `tick_dirty_entities_total` above; `visible_set` lets the
+                // post-loop pass report every dirty entity this connection's
+                // visibility excluded, at entity granularity only (no component
+                // loop ever runs for them, so no component-pair outcome exists
+                // to report).
+                #[cfg(feature = "f3_diag")]
+                let visible_candidates = indices.len();
+                #[cfg(feature = "f3_diag")]
+                let visible_set: HashSet<GlobalEntityIndex> = indices.iter().copied().collect();
+                #[cfg(feature = "f3_diag")]
+                let mut f3_tally = F3DiagTally::default();
+
                 let send_conn = self.send_user_connections.get_mut(user_address).unwrap();
                 // L3 seam: take ONE coarse read guard on this user's diff-ledger
                 // for the whole Phase 3A gate loop, instead of one guard per
@@ -816,6 +871,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                                 && diff.is_receiver_dirty_and_delivered_fast(global_idx, kind_bit)
                             {
                                 // fast path
+                                #[cfg(feature = "f3_diag")]
+                                {
+                                    f3_tally.emitted += 1;
+                                    eprintln!(
+                                        "[F3-DIAG naia/SendState] collect_entity_kinds user={} tick={} entity={:?} component_kind_bit={} outcome=plan_emitted path=fast",
+                                        user_address, f3_tick, global_entity, kind_bit
+                                    );
+                                }
                                 #[cfg(feature = "bench_instrumentation")]
                                 {
                                     use crate::server::world_server::bench_iris_counters as bic;
@@ -835,6 +898,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                                     }
                                 }
                             } else if diff.diff_mask_is_clear_fast(global_idx, kind_bit) {
+                                #[cfg(feature = "f3_diag")]
+                                {
+                                    f3_tally.clean += 1;
+                                    eprintln!(
+                                        "[F3-DIAG naia/SendState] collect_entity_kinds user={} tick={} entity={:?} component_kind_bit={} outcome=clean",
+                                        user_address, f3_tick, global_entity, kind_bit
+                                    );
+                                }
                                 continue;
                             } else if !send_conn
                                 .base
@@ -848,6 +919,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                                         bic::N_GATE_SUPPRESSED.fetch_add(1, Ordering::Relaxed);
                                     }
                                 }
+                                #[cfg(feature = "f3_diag")]
+                                {
+                                    f3_tally.gate_suppressed += 1;
+                                    eprintln!(
+                                        "[F3-DIAG naia/SendState] collect_entity_kinds user={} tick={} entity={:?} component_kind_bit={} outcome=gate_suppressed",
+                                        user_address, f3_tick, global_entity, kind_bit
+                                    );
+                                }
                                 continue;
                             } else {
                                 // slow-path emit (delivered; fast flag not yet set, or forced-slow)
@@ -857,6 +936,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                                     if bic::MEASURE_LEAK.load(Ordering::Relaxed) {
                                         bic::N_SLOW_EMIT.fetch_add(1, Ordering::Relaxed);
                                     }
+                                }
+                                #[cfg(feature = "f3_diag")]
+                                {
+                                    f3_tally.emitted += 1;
+                                    eprintln!(
+                                        "[F3-DIAG naia/SendState] collect_entity_kinds user={} tick={} entity={:?} component_kind_bit={} outcome=plan_emitted path=slow",
+                                        user_address, f3_tick, global_entity, kind_bit
+                                    );
                                 }
                             }
 
@@ -878,6 +965,33 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         events.push((global_entity, global_idx, kinds));
                     }
                 }
+
+                // f3_diag: every entity dirty this tick but absent from this
+                // connection's `visible_set` never entered the loop above, so
+                // it has no component-pair outcome to report — entity
+                // granularity only, by deliberate scope limit (see
+                // `F3DiagTally` doc comment).
+                #[cfg(feature = "f3_diag")]
+                for excluded_idx in frozen_dirty.dirty_entity_iter() {
+                    if visible_set.contains(&excluded_idx) {
+                        continue;
+                    }
+                    let Some(excluded_entity) = guard.global_entity_at(excluded_idx) else {
+                        continue;
+                    };
+                    eprintln!(
+                        "[F3-DIAG naia/SendState] prepare_send_job user={} tick={} entity={:?} outcome=excluded_by_visibility",
+                        user_address, f3_tick, excluded_entity
+                    );
+                }
+
+                #[cfg(feature = "f3_diag")]
+                eprintln!(
+                    "[F3-DIAG naia/SendState] prepare_send_job user={} tick={} dirty_entities_total={} visible_entities={} component_outcomes: clean={} gate_suppressed={} plan_emitted={}",
+                    user_address, f3_tick, tick_dirty_entities_total, visible_candidates,
+                    f3_tally.clean, f3_tally.gate_suppressed, f3_tally.emitted
+                );
+
                 per_user.push((*user_address, events));
             }
         }
