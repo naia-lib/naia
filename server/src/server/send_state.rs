@@ -55,6 +55,23 @@ use crate::{
     ScopeExit,
 };
 
+/// Per-user, per-tick breakdown of `prepare_send_job`'s Phase 3A gate, for the
+/// `f3_diag` line emitted after each user's entity loop. Distinguishes the
+/// three mutually-exclusive outcomes for a dirty (entity, component) pair
+/// that passed visibility (i.e. was in that user's `indices`): `clean` (dirty
+/// globally but this user's mask was already clear), `gate_suppressed`
+/// (blocked by `is_component_updatable_for_entity`), and `emitted`
+/// (fast-path or slow-path send). Candidates excluded by visibility itself
+/// never reach this tally; the caller reports that count separately via
+/// `indices.len()` against the tick's total dirty-entity count.
+#[cfg(feature = "f3_diag")]
+#[derive(Default)]
+struct F3DiagTally {
+    clean: u32,
+    gate_suppressed: u32,
+    emitted: u32,
+}
+
 /// Send-thread-exclusive state lifted out of `InternalWorldServer` (step 4-E).
 pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     /// Per-address map of send-side connection halves. Each holds a clone
@@ -716,6 +733,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         frozen_dirty: &FrozenGlobalDirty,
         global_idx: GlobalEntityIndex,
         global_entity: GlobalEntity,
+        #[cfg(feature = "f3_diag")] tally: &mut F3DiagTally,
     ) -> UpdateKinds {
         // Build this entity's component list in kind_bit ascending order
         // (dirty_words iteration is LSB-first = ascending kind_bit).
@@ -747,6 +765,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
 
                 if !force_slow && diff.is_receiver_dirty_and_delivered_fast(global_idx, kind_bit) {
                     // fast path
+                    #[cfg(feature = "f3_diag")]
+                    {
+                        tally.emitted += 1;
+                    }
                     #[cfg(feature = "bench_instrumentation")]
                     {
                         use crate::server::world_server::bench_iris_counters as bic;
@@ -763,12 +785,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         }
                     }
                 } else if diff.diff_mask_is_clear_fast(global_idx, kind_bit) {
+                    #[cfg(feature = "f3_diag")]
+                    {
+                        tally.clean += 1;
+                    }
                     continue;
                 } else if !send_conn
                     .base
                     .world_manager
                     .is_component_updatable_for_entity(global_entity, component_kind)
                 {
+                    #[cfg(feature = "f3_diag")]
+                    {
+                        tally.gate_suppressed += 1;
+                    }
                     #[cfg(feature = "bench_instrumentation")]
                     {
                         use crate::server::world_server::bench_iris_counters as bic;
@@ -779,6 +809,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     continue;
                 } else {
                     // slow-path emit (delivered; fast flag not yet set, or forced-slow)
+                    #[cfg(feature = "f3_diag")]
+                    {
+                        tally.emitted += 1;
+                    }
                     #[cfg(feature = "bench_instrumentation")]
                     {
                         use crate::server::world_server::bench_iris_counters as bic;
@@ -842,6 +876,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         // read this frozen copy — never the live, now-decremented bitset.
         let frozen_dirty = self.shared.global_dirty.freeze();
 
+        // Tick-wide opportunity denominator for the per-user f3_diag line below:
+        // total entities dirty this tick, BEFORE any per-user visibility
+        // intersection. `indices.len()` (per user) against this total is what
+        // separates "dirty-but-out-of-visibility" (excluded here, never counted
+        // by any existing counter) from what each user's gate loop actually saw.
+        #[cfg(feature = "f3_diag")]
+        let tick_dirty_entities_total = frozen_dirty.dirty_entity_iter().count();
+
         // Collect and shuffle user addresses for fair priority ordering.
         let mut user_addresses: Vec<SocketAddr> =
             self.send_user_connections.keys().copied().collect();
@@ -878,6 +920,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 // (reads entity_map + host/remote — a different lock, no nesting).
                 let ledger = send_conn.base.world_manager.replication_ledger();
                 let diff = ledger.read_guard();
+                #[cfg(feature = "f3_diag")]
+                let visible_candidates = indices.len();
+                #[cfg(feature = "f3_diag")]
+                let mut f3_tally = F3DiagTally::default();
                 let mut events: SendUpdateEvents = Vec::with_capacity(indices.len());
                 for global_idx in indices {
                     let Some(global_entity) = guard.global_entity_at(global_idx) else {
@@ -894,11 +940,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         &frozen_dirty,
                         global_idx,
                         global_entity,
+                        #[cfg(feature = "f3_diag")]
+                        &mut f3_tally,
                     );
                     if !kinds.is_empty() {
                         events.push((global_entity, global_idx, kinds));
                     }
                 }
+                #[cfg(feature = "f3_diag")]
+                eprintln!(
+                    "[F3-DIAG naia/SendState] prepare_send_job user={} tick_dirty_entities_total={} visible_candidates={} clean={} gate_suppressed={} emitted={}",
+                    user_address,
+                    tick_dirty_entities_total,
+                    visible_candidates,
+                    f3_tally.clean,
+                    f3_tally.gate_suppressed,
+                    f3_tally.emitted
+                );
                 per_user.push((*user_address, events));
             }
         }
