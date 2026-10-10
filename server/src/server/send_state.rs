@@ -55,21 +55,36 @@ use crate::{
     ScopeExit,
 };
 
-/// Per-user, per-tick breakdown of `prepare_send_job`'s Phase 3A gate, for the
-/// `f3_diag` line emitted after each user's entity loop. Distinguishes the
-/// three mutually-exclusive outcomes for a dirty (entity, component) pair
-/// that passed visibility (i.e. was in that user's `indices`): `clean` (dirty
-/// globally but this user's mask was already clear), `gate_suppressed`
-/// (blocked by `is_component_updatable_for_entity`), and `emitted`
-/// (fast-path or slow-path send). Candidates excluded by visibility itself
-/// never reach this tally; the caller reports that count separately via
-/// `indices.len()` against the tick's total dirty-entity count.
+/// Per-user, per-tick, COMPONENT-PAIR-unit rollup of `prepare_send_job`'s
+/// Phase 3A gate (do not read these fields against entity-level counts like
+/// `indices.len()` — one entity can hold several dirty components, each
+/// counted separately here). Distinguishes the three mutually-exclusive
+/// outcomes `collect_entity_kinds` resolves for a dirty (entity, component)
+/// pair that passed this connection's visibility: `clean` (dirty globally,
+/// but this connection's mask was already clear), `gate_suppressed` (blocked
+/// by `is_component_updatable_for_entity`), and `emitted` (fast-path or
+/// slow-path — the pair was written into this tick's `SendPlan`; this is a
+/// PLANNING-stage outcome, not confirmation of socket send or peer ACK).
+/// Component pairs belonging to entities excluded by visibility itself never
+/// reach `collect_entity_kinds`, so never reach this tally — those are
+/// reported separately, at entity granularity only, as
+/// `outcome=excluded_by_visibility` lines.
 #[cfg(feature = "f3_diag")]
 #[derive(Default)]
 struct F3DiagTally {
     clean: u32,
     gate_suppressed: u32,
     emitted: u32,
+}
+
+/// Bundles `collect_entity_kinds`'s f3_diag-only inputs into one param so the
+/// function stays under clippy's `too_many_arguments` threshold without an
+/// `#[allow]`.
+#[cfg(feature = "f3_diag")]
+struct F3DiagCtx<'a> {
+    tally: &'a mut F3DiagTally,
+    user_address: &'a SocketAddr,
+    tick: u32,
 }
 
 /// Send-thread-exclusive state lifted out of `InternalWorldServer` (step 4-E).
@@ -733,7 +748,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         frozen_dirty: &FrozenGlobalDirty,
         global_idx: GlobalEntityIndex,
         global_entity: GlobalEntity,
-        #[cfg(feature = "f3_diag")] tally: &mut F3DiagTally,
+        #[cfg(feature = "f3_diag")] f3: &mut F3DiagCtx,
     ) -> UpdateKinds {
         // Build this entity's component list in kind_bit ascending order
         // (dirty_words iteration is LSB-first = ascending kind_bit).
@@ -767,7 +782,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     // fast path
                     #[cfg(feature = "f3_diag")]
                     {
-                        tally.emitted += 1;
+                        f3.tally.emitted += 1;
+                        eprintln!(
+                            "[F3-DIAG naia/SendState] collect_entity_kinds user={} tick={} entity={:?} component_kind_bit={} outcome=plan_emitted path=fast",
+                            f3.user_address, f3.tick, global_entity, kind_bit
+                        );
                     }
                     #[cfg(feature = "bench_instrumentation")]
                     {
@@ -787,7 +806,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 } else if diff.diff_mask_is_clear_fast(global_idx, kind_bit) {
                     #[cfg(feature = "f3_diag")]
                     {
-                        tally.clean += 1;
+                        f3.tally.clean += 1;
+                        eprintln!(
+                            "[F3-DIAG naia/SendState] collect_entity_kinds user={} tick={} entity={:?} component_kind_bit={} outcome=clean",
+                            f3.user_address, f3.tick, global_entity, kind_bit
+                        );
                     }
                     continue;
                 } else if !send_conn
@@ -797,7 +820,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 {
                     #[cfg(feature = "f3_diag")]
                     {
-                        tally.gate_suppressed += 1;
+                        f3.tally.gate_suppressed += 1;
+                        eprintln!(
+                            "[F3-DIAG naia/SendState] collect_entity_kinds user={} tick={} entity={:?} component_kind_bit={} outcome=gate_suppressed",
+                            f3.user_address, f3.tick, global_entity, kind_bit
+                        );
                     }
                     #[cfg(feature = "bench_instrumentation")]
                     {
@@ -811,7 +838,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     // slow-path emit (delivered; fast flag not yet set, or forced-slow)
                     #[cfg(feature = "f3_diag")]
                     {
-                        tally.emitted += 1;
+                        f3.tally.emitted += 1;
+                        eprintln!(
+                            "[F3-DIAG naia/SendState] collect_entity_kinds user={} tick={} entity={:?} component_kind_bit={} outcome=plan_emitted path=slow",
+                            f3.user_address, f3.tick, global_entity, kind_bit
+                        );
                     }
                     #[cfg(feature = "bench_instrumentation")]
                     {
@@ -884,6 +915,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         #[cfg(feature = "f3_diag")]
         let tick_dirty_entities_total = frozen_dirty.dirty_entity_iter().count();
 
+        // Actual interval for every f3_diag line below: this function processes
+        // exactly one tick per call, so one read is correct for the whole call.
+        #[cfg(feature = "f3_diag")]
+        let f3_tick: u32 = {
+            let tm_guard = self.shared.time_manager.read();
+            let tm: &TimeManager = &tm_guard;
+            u32::from(tm.current_tick())
+        };
+
         // Collect and shuffle user addresses for fair priority ordering.
         let mut user_addresses: Vec<SocketAddr> =
             self.send_user_connections.keys().copied().collect();
@@ -922,8 +962,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 let diff = ledger.read_guard();
                 #[cfg(feature = "f3_diag")]
                 let visible_candidates = indices.len();
+                // Entity-level opportunity set for the exclusion report below —
+                // captured before `indices` is consumed by the loop. Separate
+                // unit from `f3_tally` (component-pair outcomes) per Usher's
+                // 63830: entity-level and component-level counts must not be
+                // conflated.
+                #[cfg(feature = "f3_diag")]
+                let visible_set: HashSet<GlobalEntityIndex> = indices.iter().copied().collect();
                 #[cfg(feature = "f3_diag")]
                 let mut f3_tally = F3DiagTally::default();
+                #[cfg(feature = "f3_diag")]
+                let mut f3_ctx = F3DiagCtx {
+                    tally: &mut f3_tally,
+                    user_address,
+                    tick: f3_tick,
+                };
                 let mut events: SendUpdateEvents = Vec::with_capacity(indices.len());
                 for global_idx in indices {
                     let Some(global_entity) = guard.global_entity_at(global_idx) else {
@@ -941,16 +994,33 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         global_idx,
                         global_entity,
                         #[cfg(feature = "f3_diag")]
-                        &mut f3_tally,
+                        &mut f3_ctx,
                     );
                     if !kinds.is_empty() {
                         events.push((global_entity, global_idx, kinds));
                     }
                 }
+                // Entity-level opportunity records for entities dirty this tick
+                // but excluded from this connection's visibility before the
+                // component loop above ever ran — no component identity is
+                // available for these (the per-component loop never visited
+                // them), so they are reported at entity granularity only.
+                #[cfg(feature = "f3_diag")]
+                for excluded_idx in frozen_dirty.dirty_entity_iter() {
+                    if visible_set.contains(&excluded_idx) {
+                        continue;
+                    }
+                    let excluded_entity = guard.global_entity_at(excluded_idx);
+                    eprintln!(
+                        "[F3-DIAG naia/SendState] prepare_send_job user={} tick={} entity={:?} outcome=excluded_by_visibility",
+                        user_address, f3_tick, excluded_entity
+                    );
+                }
                 #[cfg(feature = "f3_diag")]
                 eprintln!(
-                    "[F3-DIAG naia/SendState] prepare_send_job user={} tick_dirty_entities_total={} visible_candidates={} clean={} gate_suppressed={} emitted={}",
+                    "[F3-DIAG naia/SendState] prepare_send_job user={} tick={} dirty_entities_total={} visible_entities={} component_outcomes: clean={} gate_suppressed={} plan_emitted={}",
                     user_address,
+                    f3_tick,
                     tick_dirty_entities_total,
                     visible_candidates,
                     f3_tally.clean,
