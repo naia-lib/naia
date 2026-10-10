@@ -414,7 +414,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         let tm: &TimeManager = &tm_guard;
         for (user_address, send_conn) in self.send_user_connections.iter_mut() {
             if send_conn.base.should_send_heartbeat() {
-                Self::send_heartbeat_packet(user_address, send_conn, tm, &mut self.send_io);
+                let f3_sent_ok = Self::send_heartbeat_packet(user_address, send_conn, tm, &mut self.send_io);
+                #[cfg(feature = "f3_diag")]
+                eprintln!(
+                    "[F3-DIAG naia/SendState] handle_heartbeats addr={} tick={} eligible=true sweep=heartbeat_timer emitted=Heartbeat sent={}",
+                    user_address, tm.current_tick() as u32, f3_sent_ok
+                );
+                #[cfg(not(feature = "f3_diag"))]
+                let _ = f3_sent_ok;
             }
         }
     }
@@ -425,18 +432,36 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         let tm_guard = self.shared.time_manager.read();
         let tm: &TimeManager = &tm_guard;
         for (user_address, send_conn) in self.send_user_connections.iter_mut() {
-            if send_conn.base.should_send_empty_ack() {
-                Self::send_heartbeat_packet(user_address, send_conn, tm, &mut self.send_io);
+            let f3_eligible = send_conn.base.should_send_empty_ack();
+            if f3_eligible {
+                let f3_sent_ok = Self::send_heartbeat_packet(user_address, send_conn, tm, &mut self.send_io);
+                #[cfg(feature = "f3_diag")]
+                eprintln!(
+                    "[F3-DIAG naia/SendState] handle_empty_acks addr={} tick={} eligible=true sweep=empty_ack emitted=Heartbeat sent={}",
+                    user_address, tm.current_tick() as u32, f3_sent_ok
+                );
+                #[cfg(not(feature = "f3_diag"))]
+                let _ = f3_sent_ok;
+            } else {
+                #[cfg(feature = "f3_diag")]
+                eprintln!(
+                    "[F3-DIAG naia/SendState] handle_empty_acks addr={} tick={} eligible=false sweep=empty_ack emitted=none",
+                    user_address, tm.current_tick() as u32
+                );
             }
         }
     }
 
+    /// Returns `true` if the heartbeat packet was handed to `io` without an
+    /// immediate send error (the same outcome `warn!` below already gated
+    /// on) — plumbed out so callers can distinguish "eligible but unsent"
+    /// from "eligible and sent" without a second send.
     fn send_heartbeat_packet(
         user_address: &SocketAddr,
         send_conn: &mut SendConnection,
         time_manager: &TimeManager,
         io: &mut SendIo,
-    ) {
+    ) -> bool {
         let mut writer = BitWriter::new();
 
         // write header (reads ack snapshot via shared atomic)
@@ -447,7 +472,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         time_manager.current_tick_instant().ser(&mut writer);
 
         send_conn.shared.note_outbound_packet();
-        if io.send_packet(user_address, writer.to_packet()).is_err() {
+        let send_failed = io.send_packet(user_address, writer.to_packet()).is_err();
+        if send_failed {
             // Heartbeat send failure is not fatal: the connection timeout
             // will detect a persistently dead link when heartbeats stop arriving.
             warn!(
@@ -456,6 +482,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             );
         }
         send_conn.base.mark_sent();
+        !send_failed
     }
 
     /// Pipeline-mode send-half tick body (step 4-F.naia.h).
@@ -1255,9 +1282,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 user_key, addr, packet_count
             );
             for packet in packets {
-                if self.send_io.send_packet(&addr, packet).is_err() {
+                let f3_send_failed = self.send_io.send_packet(&addr, packet).is_err();
+                if f3_send_failed {
                     warn!("Server Error: Cannot send data packet to {}", addr);
                 }
+                #[cfg(feature = "f3_diag")]
+                eprintln!(
+                    "[F3-DIAG naia/SendState] transmit_send_job dispatch addr={:?} tick={} type=Data constructed=true sent={}",
+                    addr, time_manager.current_tick() as u32, !f3_send_failed
+                );
             }
         }
         #[cfg(feature = "f3_diag")]

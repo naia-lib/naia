@@ -623,6 +623,11 @@ impl SendConnection {
         let has_events = !host_world_events.is_empty() || !update_list.is_empty();
         let needs_ack_only = self.base.take_should_send_empty_ack();
 
+        #[cfg(feature = "f3_diag")]
+        let f3_addr = self.address;
+        #[cfg(feature = "f3_diag")]
+        let f3_tick = time_manager.current_tick() as u32;
+
         if needs_ack_only && !has_messages && !has_events {
             let mut writer = BitWriter::new();
             writer.reserve_bits(3);
@@ -632,6 +637,11 @@ impl SendConnection {
             false.ser(&mut writer);
             false.ser(&mut writer);
             false.ser(&mut writer);
+            #[cfg(feature = "f3_diag")]
+            eprintln!(
+                "[F3-DIAG naia/SendConnection] build_one_packet addr={} tick={} needs_ack_only=true has_messages=false has_events=false branch=ack_only type=Data constructed=true",
+                f3_addr, f3_tick
+            );
             return Some(writer.to_packet());
         }
 
@@ -639,6 +649,12 @@ impl SendConnection {
             if !self.base.can_spend_bandwidth(MTU_SIZE_BYTES as u32) {
                 self.base.record_bandwidth_deferred();
                 *refused_on_bandwidth = true;
+                #[cfg(feature = "f3_diag")]
+                eprintln!(
+                    "[F3-DIAG naia/SendConnection] build_one_packet addr={} tick={} needs_ack_only={} has_messages={} has_events={} branch=bandwidth_refused constructed=false note={}",
+                    f3_addr, f3_tick, needs_ack_only, has_messages, has_events,
+                    if needs_ack_only { "flag_consumed_unsent" } else { "n/a" }
+                );
                 return None;
             }
             let writer = self.write_packet(
@@ -656,9 +672,20 @@ impl SendConnection {
             );
             let packet = writer.to_packet();
             self.base.spend_bandwidth(packet.slice().len() as u32);
+            #[cfg(feature = "f3_diag")]
+            eprintln!(
+                "[F3-DIAG naia/SendConnection] build_one_packet addr={} tick={} needs_ack_only={} has_messages={} has_events={} branch=normal type=Data constructed=true note={}",
+                f3_addr, f3_tick, needs_ack_only, has_messages, has_events,
+                if needs_ack_only { "folded_into_data" } else { "n/a" }
+            );
             return Some(packet);
         }
 
+        #[cfg(feature = "f3_diag")]
+        eprintln!(
+            "[F3-DIAG naia/SendConnection] build_one_packet addr={} tick={} needs_ack_only=false has_messages=false has_events=false branch=none constructed=false",
+            f3_addr, f3_tick
+        );
         None
     }
 

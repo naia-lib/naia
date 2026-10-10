@@ -521,6 +521,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .time_manager
             .collect_ticks(now, receiving_tick_ceiling);
 
+        // Caller-side cap log removed (Usher 64101): a post-call read here
+        // cannot distinguish a fresh clamp from a stale pre_ceiling carried
+        // over an early-return call. The same-call, evaluation-site version
+        // of this observation lives in `TimeManager::collect_ticks` itself
+        // (`f3_diag`'s `collect_ticks_cap` there is the authoritative one).
+
         // If jitter buffer is in bypass mode, process packets immediately regardless of tick
         // Otherwise, only process on tick boundaries
         let should_read_packets = match self.client_config.jitter_buffer {
@@ -2587,9 +2593,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             if let Some(w) = watch.as_mut() {
                                 w.data_applied += 1;
                             }
+
+                            #[cfg(feature = "f3_diag")]
+                            eprintln!(
+                                "[F3-DIAG naia/Client] recv thread={:?} type=Data server_tick={} ceiling={:?}",
+                                std::thread::current().name(),
+                                server_tick as u32,
+                                connection.last_received_server_tick()
+                            );
                         }
                         PacketType::Heartbeat => {
                             // already marked as heard, job done
+                            #[cfg(feature = "f3_diag")]
+                            eprintln!(
+                                "[F3-DIAG naia/Client] recv thread={:?} type=Heartbeat server_tick={} ceiling={:?}",
+                                std::thread::current().name(),
+                                server_tick as u32,
+                                connection.last_received_server_tick()
+                            );
                         }
                         PacketType::Ping => {
                             let Ok(ping_index) = BaseTimeManager::read_ping(&mut reader) else {

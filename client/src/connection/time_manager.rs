@@ -330,6 +330,21 @@ impl TimeManager {
             }
         }
 
+        // Printed here, not by the caller: this is the one place in the
+        // function body reached if and only if the clamp above actually ran
+        // this call (the `accumulator < 1.0` branch above returns before
+        // reaching here). `client_receiving_tick_pre_ceiling` was just set
+        // a few lines up for this exact call, so there is no earlier-call
+        // staleness window to read through.
+        #[cfg(feature = "f3_diag")]
+        eprintln!(
+            "[F3-DIAG naia/TimeManager] collect_ticks_cap thread={:?} ceiling={:?} pre_cap={} post_cap={}",
+            std::thread::current().name(),
+            receiving_tick_ceiling,
+            self.client_receiving_tick_pre_ceiling as u32,
+            self.client_receiving_tick as u32
+        );
+
         // Client Sending
         {
             let client_sending_target = get_client_sending_target(
