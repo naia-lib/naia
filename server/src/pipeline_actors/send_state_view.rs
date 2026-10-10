@@ -93,7 +93,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
                 all.len(),
                 resolved.len()
             );
-            return resolved;
+            resolved
         }
         #[cfg(not(feature = "f3_diag"))]
         gwm.all_global_entities()
