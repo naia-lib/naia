@@ -12,6 +12,8 @@ use naia_bevy_shared::{
     GlobalEntity, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick,
     WorldProxyMut,
 };
+#[cfg(feature = "f3_diag")]
+use naia_client::ClientDiagProgress as NaiaClientDiagProgress;
 use naia_client::{
     shared::{GameInstant, ReplicatedComponent, SocketConfig},
     transport::Socket,
@@ -28,6 +30,15 @@ pub struct ClientWrapper<T: Send + Sync + 'static> {
     /// The wrapped naia client, keyed on Bevy's `Entity` type.
     pub client: NaiaClient<Entity>,
     phantom_t: PhantomData<T>,
+    /// Cumulative count of `MessageEvents` batches actually published by
+    /// `translate_world_events` (i.e. calls where `events.has_messages()`
+    /// was true), for the diagnostic snapshot (Usher 67915, Brock
+    /// 67887/67909). Marker-only, like naia-client's own `f3_diag`
+    /// counters: never gates behavior. Lives here, not on the core
+    /// `naia_client::Client`, because the publish decision only exists at
+    /// this adapter layer.
+    #[cfg(feature = "f3_diag")]
+    pub(crate) diag_message_batches_published: u64,
 }
 
 impl<T: Send + Sync + 'static> ClientWrapper<T> {
@@ -36,8 +47,28 @@ impl<T: Send + Sync + 'static> ClientWrapper<T> {
         Self {
             client,
             phantom_t: PhantomData,
+            #[cfg(feature = "f3_diag")]
+            diag_message_batches_published: 0,
         }
     }
+}
+
+/// Non-consuming snapshot of client receive/process/publish progress,
+/// combining naia-client's own receive/process counters with this
+/// adapter's publish counter (Usher 67915, Brock 67887/67909 Cyberlith/Diax
+/// harness correlation). Available only under the `f3_diag` feature.
+/// Obtain via [`Client::diag_progress`].
+#[cfg(feature = "f3_diag")]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ClientDiagProgress {
+    /// Cumulative `receive_all_packets` call count.
+    pub poll_calls: u64,
+    /// Cumulative `process_all_packets` call count.
+    pub process_calls: u64,
+    /// Cumulative count of `MessageEvents` batches actually published —
+    /// i.e. `translate_world_events` calls where `events.has_messages()`
+    /// was true — not every `take_world_events` call.
+    pub message_batches_published: u64,
 }
 
 /// Bevy `SystemParam` wrapping the client-tag-`T` naia client, giving
@@ -261,6 +292,24 @@ impl<'w, T: Send + Sync + 'static> Client<'w, T> {
     /// Returns current connection statistics, or `None` if not connected.
     pub fn connection_stats(&self) -> Option<ConnectionStats> {
         self.client.client.connection_stats()
+    }
+
+    /// Returns a non-consuming snapshot of cumulative receive/process/
+    /// publish call counts (Brock/Roger's Cyberlith/Diax harness
+    /// correlation, Usher 67915). See [`ClientDiagProgress`]. Available
+    /// only under the `f3_diag` feature.
+    #[cfg(feature = "f3_diag")]
+    #[must_use]
+    pub fn diag_progress(&self) -> ClientDiagProgress {
+        let NaiaClientDiagProgress {
+            poll_calls,
+            process_calls,
+        } = self.client.client.diag_progress();
+        ClientDiagProgress {
+            poll_calls,
+            process_calls,
+            message_batches_published: self.client.diag_message_batches_published,
+        }
     }
 }
 

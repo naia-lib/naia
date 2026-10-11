@@ -144,6 +144,12 @@ cfg_if! {
     }
 }
 
+cfg_if! {
+    if #[cfg(feature = "f3_diag")] {
+        pub use client::ClientDiagProgress;
+    }
+}
+
 pub use client::{Client, ConnectionStatus};
 pub use client_config::ClientConfig;
 pub use command_history::{CommandHistory, DEFAULT_MAX_TICKS};

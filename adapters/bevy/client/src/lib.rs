@@ -107,6 +107,8 @@ mod protocol_ext;
 mod systems;
 
 pub use app_ext::AppRegisterComponentEvents;
+#[cfg(feature = "f3_diag")]
+pub use client::ClientDiagProgress;
 pub use client::{take_received_updates_of_kind, Client, ClientWrapper};
 pub use naia_bevy_derive::ClientMarker;
 pub use protocol_ext::ProtocolClientExt;

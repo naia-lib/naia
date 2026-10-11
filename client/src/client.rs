@@ -113,6 +113,28 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     // resource events and maintain the bevy-Resource side. See
     // `_AGENTS/RESOURCES_PLAN.md` §A1 + `RESOURCES_AUDIT.md`.
     resource_registry: naia_shared::ResourceRegistry,
+    // Diagnostics (f3_diag, Usher 67915): non-consuming cumulative call
+    // counters for Brock/Roger's Cyberlith/Diax harness correlation. Marker
+    // only, like `post_connect_watch`: never gates behavior.
+    #[cfg(feature = "f3_diag")]
+    diag_poll_calls: u64,
+    #[cfg(feature = "f3_diag")]
+    diag_process_calls: u64,
+}
+
+/// Non-consuming snapshot of cumulative client receive/process call counts.
+///
+/// Available only under the `f3_diag` feature. Counts calls, not packets:
+/// [`Client::receive_all_packets`] and [`Client::process_all_packets`] each
+/// increment their counter on every call, including calls that find nothing
+/// to do. Obtain via [`Client::diag_progress`].
+#[cfg(feature = "f3_diag")]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ClientDiagProgress {
+    /// Cumulative [`Client::receive_all_packets`] call count.
+    pub poll_calls: u64,
+    /// Cumulative [`Client::process_all_packets`] call count.
+    pub process_calls: u64,
 }
 
 /// Post-Connected liveness counters for the Usher 42587 fork-(a) markers.
@@ -232,6 +254,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             priority: UserPriorityState::new(),
             resource_registry: naia_shared::ResourceRegistry::new(),
             post_connect_watch: None,
+            #[cfg(feature = "f3_diag")]
+            diag_poll_calls: 0,
+            #[cfg(feature = "f3_diag")]
+            diag_process_calls: 0,
         }
     }
 
@@ -443,6 +469,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// [`process_all_packets`](Client::process_all_packets). Handles
     /// handshake progress, heartbeats, and buffers incoming data packets.
     pub fn receive_all_packets(&mut self) {
+        #[cfg(feature = "f3_diag")]
+        {
+            self.diag_poll_calls += 1;
+        }
         // Need to run this to maintain connection with server, and receive packets
         // until none left
         self.maintain_socket();
@@ -455,6 +485,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// server-replicated entity spawn/update/despawn events and queues them
     /// for the next [`take_world_events`](Client::take_world_events) call.
     pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
+        #[cfg(feature = "f3_diag")]
+        {
+            self.diag_process_calls += 1;
+        }
         // all other operations
         if self.is_disconnecting() {
             let (reason, payload) = Self::resolve_disconnect_reason(
@@ -1631,6 +1665,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             kbps_sent: self.io.outgoing_bandwidth(),
             kbps_recv: self.io.incoming_bandwidth(),
         })
+    }
+
+    /// Returns a non-consuming snapshot of cumulative receive/process call
+    /// counts (Brock/Roger's Cyberlith/Diax harness correlation, Usher
+    /// 67915). See [`ClientDiagProgress`]. Available only under the
+    /// `f3_diag` feature.
+    #[cfg(feature = "f3_diag")]
+    #[must_use]
+    pub fn diag_progress(&self) -> ClientDiagProgress {
+        ClientDiagProgress {
+            poll_calls: self.diag_poll_calls,
+            process_calls: self.diag_process_calls,
+        }
     }
 
     // Crate-Public methods
@@ -4689,6 +4736,237 @@ mod client_disconnect_tests {
             *order.lock().unwrap(),
             vec!["dial-a1", "shutdown-a1", "dial-a2"],
             "shutdown must fire exactly once, before the redial",
+        );
+    }
+}
+
+// ---- Diagnostic receive/process/publish progress snapshot (Usher 67915,
+// Brock 67887/67909 Cyberlith/Diax harness correlation) ----
+// `f3_diag`-gated and additive: these tests fail if the counters stop
+// tracking every real `receive_all_packets`/`process_all_packets` call, or
+// if the snapshot getter starts consuming (resetting) what it reads.
+#[cfg(all(test, feature = "f3_diag"))]
+mod diag_progress_tests {
+    use naia_shared::{
+        ComponentFieldUpdate, ComponentKinds, EntityAndGlobalEntityConverter,
+        GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, PendingComponentUpdate,
+        ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, SerdeErr,
+    };
+
+    use super::*;
+
+    /// Minimal world: the idle/disconnected `process_all_packets` path this
+    /// module exercises returns before touching the world at all, so every
+    /// `WorldMutType` method it doesn't reach is `unimplemented!()`.
+    struct StubWorld;
+
+    impl WorldRefType<u64> for StubWorld {
+        fn has_entity(&self, _world_entity: &u64) -> bool {
+            false
+        }
+        fn entities(&self) -> Vec<u64> {
+            Vec::new()
+        }
+        fn has_component<R: ReplicatedComponent>(&self, _world_entity: &u64) -> bool {
+            false
+        }
+        fn has_component_of_kind(
+            &self,
+            _world_entity: &u64,
+            _component_kind: ComponentKind,
+        ) -> bool {
+            false
+        }
+        fn component<'a, R: ReplicatedComponent>(
+            &'a self,
+            _entity: &u64,
+        ) -> Option<ReplicaRefWrapper<'a, R>> {
+            None
+        }
+        fn component_of_kind<'a>(
+            &'a self,
+            _entity: &u64,
+            _component_kind: ComponentKind,
+        ) -> Option<ReplicaDynRefWrapper<'a>> {
+            None
+        }
+    }
+
+    impl WorldMutType<u64> for StubWorld {
+        fn spawn_entity(&mut self) -> u64 {
+            unimplemented!()
+        }
+        fn local_duplicate_entity(&mut self, _world_entity: &u64) -> u64 {
+            unimplemented!()
+        }
+        fn local_duplicate_components(&mut self, _mutable_entity: &u64, _immutable_entity: &u64) {
+            unimplemented!()
+        }
+        fn despawn_entity(&mut self, _world_entity: &u64) {
+            unimplemented!()
+        }
+        fn component_kinds(&mut self, _world_entity: &u64) -> Vec<ComponentKind> {
+            unimplemented!()
+        }
+        fn component_mut<'a, R: ReplicatedComponent>(
+            &'a mut self,
+            _world_entity: &u64,
+        ) -> Option<ReplicaMutWrapper<'a, R>> {
+            unimplemented!()
+        }
+        fn component_mut_of_kind<'a>(
+            &'a mut self,
+            _world_entity: &u64,
+            _component_kind: ComponentKind,
+        ) -> Option<ReplicaDynMutWrapper<'a>> {
+            unimplemented!()
+        }
+        fn component_apply_update(
+            &mut self,
+            _converter: &dyn LocalEntityAndGlobalEntityConverter,
+            _world_entity: &u64,
+            _component_kind: ComponentKind,
+            _update: PendingComponentUpdate,
+        ) -> Result<(), SerdeErr> {
+            unimplemented!()
+        }
+        fn component_apply_field_update(
+            &mut self,
+            _converter: &dyn LocalEntityAndGlobalEntityConverter,
+            _world_entity: &u64,
+            _component_kind: ComponentKind,
+            _update: ComponentFieldUpdate,
+        ) -> Result<(), SerdeErr> {
+            unimplemented!()
+        }
+        fn mirror_entities(&mut self, _mutable_entity: &u64, _immutable_entity: &u64) {
+            unimplemented!()
+        }
+        fn mirror_components(
+            &mut self,
+            _mutable_entity: &u64,
+            _immutable_entity: &u64,
+            _component_kind: ComponentKind,
+        ) {
+            unimplemented!()
+        }
+        fn insert_component<R: ReplicatedComponent>(
+            &mut self,
+            _world_entity: &u64,
+            _component_ref: R,
+        ) {
+            unimplemented!()
+        }
+        fn insert_boxed_component(
+            &mut self,
+            _world_entity: &u64,
+            _boxed_component: Box<dyn Replicate>,
+        ) {
+            unimplemented!()
+        }
+        fn remove_component<R: ReplicatedComponent>(&mut self, _world_entity: &u64) -> Option<R> {
+            unimplemented!()
+        }
+        fn remove_component_of_kind(
+            &mut self,
+            _world_entity: &u64,
+            _component_kind: ComponentKind,
+        ) -> Option<Box<dyn Replicate>> {
+            unimplemented!()
+        }
+        fn entity_publish(
+            &mut self,
+            _component_kinds: &ComponentKinds,
+            _converter: &dyn EntityAndGlobalEntityConverter<u64>,
+            _global_world_manager: &dyn GlobalWorldManagerType,
+            _world_entity: &u64,
+        ) {
+            unimplemented!()
+        }
+        fn component_publish(
+            &mut self,
+            _component_kinds: &ComponentKinds,
+            _converter: &dyn EntityAndGlobalEntityConverter<u64>,
+            _global_world_manager: &dyn GlobalWorldManagerType,
+            _world_entity: &u64,
+            _component_kind: ComponentKind,
+        ) {
+            unimplemented!()
+        }
+        fn entity_unpublish(&mut self, _world_entity: &u64) {
+            unimplemented!()
+        }
+        fn component_unpublish(&mut self, _world_entity: &u64, _component_kind: ComponentKind) {
+            unimplemented!()
+        }
+        fn entity_enable_delegation(
+            &mut self,
+            _component_kinds: &ComponentKinds,
+            _converter: &dyn EntityAndGlobalEntityConverter<u64>,
+            _global_world_manager: &dyn GlobalWorldManagerType,
+            _world_entity: &u64,
+        ) {
+            unimplemented!()
+        }
+        fn component_enable_delegation(
+            &mut self,
+            _component_kinds: &ComponentKinds,
+            _converter: &dyn EntityAndGlobalEntityConverter<u64>,
+            _global_world_manager: &dyn GlobalWorldManagerType,
+            _world_entity: &u64,
+            _component_kind: ComponentKind,
+        ) {
+            unimplemented!()
+        }
+        fn entity_disable_delegation(&mut self, _world_entity: &u64) {
+            unimplemented!()
+        }
+        fn component_disable_delegation(
+            &mut self,
+            _world_entity: &u64,
+            _component_kind: ComponentKind,
+        ) {
+            unimplemented!()
+        }
+    }
+
+    #[test]
+    fn poll_and_process_calls_count_every_invocation_without_consuming() {
+        let mut client = Client::<u64>::new(ClientConfig::default(), Protocol::builder().build());
+
+        assert_eq!(client.diag_progress().poll_calls, 0);
+        assert_eq!(client.diag_progress().process_calls, 0);
+
+        client.receive_all_packets();
+        client.receive_all_packets();
+        client.process_all_packets(StubWorld, &Instant::now());
+
+        let snapshot = client.diag_progress();
+        assert_eq!(
+            snapshot.poll_calls, 2,
+            "receive_all_packets must count every call, including no-op polls",
+        );
+        assert_eq!(
+            snapshot.process_calls, 1,
+            "process_all_packets must count every call, including the disconnected no-op path",
+        );
+
+        // Reading twice must not reset anything: non-consuming.
+        let snapshot_again = client.diag_progress();
+        assert_eq!(
+            snapshot_again.poll_calls, 2,
+            "diag_progress must be non-consuming"
+        );
+        assert_eq!(
+            snapshot_again.process_calls, 1,
+            "diag_progress must be non-consuming"
+        );
+
+        client.receive_all_packets();
+        assert_eq!(
+            client.diag_progress().poll_calls,
+            3,
+            "counts must keep accumulating across calls",
         );
     }
 }

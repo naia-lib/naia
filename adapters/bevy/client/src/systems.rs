@@ -175,6 +175,10 @@ pub fn translate_world_events<T: Send + Sync + 'static>(world: &mut World) {
 
             // Message Event
             if events.has_messages() {
+                #[cfg(feature = "f3_diag")]
+                {
+                    client.diag_message_batches_published += 1;
+                }
                 let mut event_writer = world
                     .get_resource_mut::<Messages<bevy_events::MessageEvents<T>>>()
                     .unwrap();
