@@ -22,6 +22,9 @@ transport_udp = [ "naia-client/transport_udp" ]
 transport_local = [ "naia-client/transport_local" ]
 interior_visibility = [ "naia-client/interior_visibility" ]
 test_time = [ "naia-client/test_time", "naia-bevy-shared/test_time" ]
+# Additive, default-off. Cascades to `naia-client/f3_diag` — see that
+# crate's `[features]` for details.
+f3_diag = [ "naia-client/f3_diag" ]
 
 [dependencies]
 parking_lot = "0.12"

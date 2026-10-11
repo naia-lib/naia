@@ -34,6 +34,8 @@ transport_local = [ "http", "base64", "parking_lot", "naia-shared/transport_loca
 interior_visibility = [ "naia-shared/interior_visibility" ]
 e2e_debug = []
 test_time = [ "naia-shared/test_time" ]
+# Additive, default-off. Mirrors naia-server's f3_diag: zero impact when off.
+f3_diag = []
 
 [dependencies]
 naia-shared = { version = "0.25", path = "../shared" }
