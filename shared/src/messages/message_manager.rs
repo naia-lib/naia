@@ -367,6 +367,14 @@ impl MessageManager {
             .collect();
         ordered.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
+        // A record still held under this index belongs to a packet sent one
+        // full `PacketIndex` wrap ago that was never acknowledged; this packet
+        // reuses the index, so drop it rather than append to it. This runs once
+        // per packet, before any channel appends: inside the per-channel loop it
+        // wiped earlier channels' delivery records for this same packet, so
+        // their messages were never marked delivered and re-sent forever.
+        self.packet_to_message_map.remove(&packet_index);
+
         for (channel_kind, _gain) in &ordered {
             let channel = self.channel_senders.get_mut(channel_kind).unwrap();
             if !channel.has_messages() {
@@ -396,10 +404,8 @@ impl MessageManager {
             if let Some(message_indices) =
                 channel.write_messages(message_kinds, converter, writer, has_written)
             {
-                // A record still held under this index belongs to a packet sent one
-                // full `PacketIndex` wrap ago that was never acknowledged; this packet
-                // reuses the index, so drop it rather than append to it.
-                self.packet_to_message_map.remove(&packet_index);
+                // Stale-wrap drop already ran once per packet above; here we only
+                // append this channel's indices to the current packet's record.
                 self.packet_to_message_map.entry(packet_index).or_default();
                 let channel_list = self.packet_to_message_map.get_mut(&packet_index).unwrap();
                 channel_list.push((*channel_kind, message_indices));
@@ -1520,6 +1526,67 @@ mod message_manager_tests {
         assert!(
             !manager.has_outgoing_messages(),
             "an acked reliable message must not be re-queued for retransmission"
+        );
+    }
+
+    #[test]
+    fn two_channels_sharing_one_packet_are_both_marked_delivered_on_ack() {
+        // Regression: the stale-wrap `packet_to_message_map.remove` ran inside
+        // the per-channel write loop, so the second channel sharing a packet
+        // wiped the first channel's delivery record. The wiped messages were
+        // never marked delivered on ack and re-sent forever, starving the other
+        // channels. Whichever channel writes second wipes the first, so this
+        // fails pre-fix regardless of channel order.
+        let kinds = directional_kinds();
+        let messages = message_kinds();
+        let mut manager = MessageManager::new(HostType::Client, &kinds);
+        manager.send_message(
+            &messages,
+            &mut FakeEntityConverter,
+            &ChannelKind::of::<ToServer>(),
+            ping(1),
+        );
+        manager.send_message(
+            &messages,
+            &mut FakeEntityConverter,
+            &ChannelKind::of::<BothWays>(),
+            ping(2),
+        );
+
+        let now = Instant::now();
+        manager.collect_outgoing_messages(&now, 200.0);
+        let mut writer = BitWriter::new();
+        let mut has_written = false;
+        manager.write_messages(
+            &kinds,
+            &messages,
+            &mut FakeEntityConverter,
+            &mut writer,
+            7,
+            &mut has_written,
+        );
+        assert!(has_written, "both messages should have been written");
+
+        // Both channels' indices must be recorded under this packet ...
+        let record = manager
+            .packet_to_message_map
+            .get(&7)
+            .expect("packet 7 must have a delivery record");
+        assert_eq!(
+            record.len(),
+            2,
+            "both sharing channels must be recorded, found: {record:?}"
+        );
+
+        manager.notify_packet_delivered(7);
+
+        // ... so the ack retires both messages.
+        let mut later = Instant::now();
+        later.add_millis(10_000);
+        manager.collect_outgoing_messages(&later, 200.0);
+        assert!(
+            !manager.has_outgoing_messages(),
+            "acked messages from both channels must not be re-queued"
         );
     }
 
