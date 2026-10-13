@@ -125,6 +125,7 @@ pub use connection::{
     priority_state::{GlobalPriorityState, OutgoingPriorityHook, UserPriorityState},
     standard_header::StandardHeader,
 };
+pub use constants::{FRAGMENTATION_LIMIT_BITS, FRAGMENTATION_LIMIT_BYTES};
 pub use messages::{
     abandonment::{
         AbandonDisposition, CancelDisposition, ConnectionRequestNonce, NonceAllocator,
