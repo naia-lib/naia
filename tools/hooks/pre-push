@@ -10,14 +10,21 @@
 # `cargo check` (faster than full build) but also gate on warnings.
 set -e
 
-# Block all direct pushes to main. Naia uses dev-trunk model; main is
-# only touched at tag time via a deliberate release process.
+# Main is append-only. Naia uses dev-trunk model: releases land on main
+# through the deliberate Factory release process (coordinator-authorized
+# qualification, then fast-forward stage -> main -> main-to-dev). The hook
+# therefore refuses every non-fast-forward update of main — rewrites and
+# deletes can never be a release — while a fast-forward that keeps main's
+# history continuous proceeds to the validation gates below.
+ZERO="0000000000000000000000000000000000000000"
 while read local_ref local_sha remote_ref remote_sha; do
     if [[ "$remote_ref" == "refs/heads/main" ]]; then
-        echo "[pre-push] ERROR: Direct push to 'main' is forbidden."
-        echo "[pre-push] Naia uses dev-trunk model — main is only touched at tag time."
-        echo "[pre-push] Push to 'dev' instead."
-        exit 1
+        if [[ "$local_sha" == "$ZERO" ]] || ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+            echo "[pre-push] ERROR: Non-fast-forward push to 'main' is forbidden."
+            echo "[pre-push] Land releases fast-forward through the release process;"
+            echo "[pre-push] never rewrite, replace, or delete 'main'."
+            exit 1
+        fi
     fi
 done
 
