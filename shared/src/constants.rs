@@ -19,4 +19,5 @@
 /// packet. Increasing this constant beyond 400 risks overflowing the WebRTC
 /// envelope on poor-MTU paths.
 pub const FRAGMENTATION_LIMIT_BYTES: usize = 400;
+/// Same limit in bits, for `bit_length` comparisons on the fragmentation path.
 pub const FRAGMENTATION_LIMIT_BITS: u32 = (FRAGMENTATION_LIMIT_BYTES as u32) * 8;

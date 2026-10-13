@@ -56,6 +56,7 @@ pub use naia_shared::{
     ComponentKinds,
     CompressionConfig,
     CompressionMode,
+    ConnectionRequestNonce,
     ConstBitLength,
     DiffMask,
     EntityAndGlobalEntityConverter,
@@ -76,6 +77,8 @@ pub use naia_shared::{
     LocalEntityAndGlobalEntityConverter,
     LocalEntityAndGlobalEntityConverterMut,
     LocalEntityMap,
+    LocalRequestId,
+    LocalResponseId,
     // Named by `#[derive(Replicate)]`'s generated `max_bit_length`, which
     // resolves everything through this crate for bevy consumers.
     MaxBits,
@@ -129,6 +132,8 @@ pub use naia_shared::{
     WorldRefType,
     CACHED_UPDATE_BITS,
     CACHED_UPDATE_BYTES,
+    FRAGMENTATION_LIMIT_BITS,
+    FRAGMENTATION_LIMIT_BYTES,
     MTU_SIZE_BYTES,
     SCHEMA_NATIVE_ENDIAN,
     SCHEMA_ORDERED,
