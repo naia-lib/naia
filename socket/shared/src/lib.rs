@@ -20,6 +20,7 @@ mod backends;
 mod gather_gate;
 mod identity_token;
 mod link_conditioner_config;
+mod poll_delay_queue;
 mod protocol_id_header;
 mod socket_config;
 mod time_queue;
@@ -35,6 +36,7 @@ pub use backends::{Instant, Random};
 pub use gather_gate::{should_post_session_offer, ICE_GATHER_EARLY_POST_MS};
 pub use identity_token::*;
 pub use link_conditioner_config::LinkConditionerConfig;
+pub use poll_delay_queue::PollDelayQueue;
 pub use protocol_id_header::{
     stamp_protocol_id_header, PROTOCOL_ID_HEADER, PROTOCOL_ID_HEADER_VALUE_LEN,
     PROTOCOL_MISMATCH_STATUS,

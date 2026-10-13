@@ -1,4 +1,6 @@
-use naia_socket_shared::{link_condition_logic, Instant, LinkConditionerConfig, TimeQueue};
+use naia_socket_shared::{
+    link_condition_logic, Instant, LinkConditionerConfig, PollDelayQueue, TimeQueue,
+};
 
 use super::{error::NaiaClientSocketError, server_addr::ServerAddr};
 use crate::backends::PlainPacketReceiver;
@@ -9,6 +11,8 @@ pub struct ConditionedPacketReceiver {
     inner_receiver: PlainPacketReceiver,
     link_conditioner_config: LinkConditionerConfig,
     time_queue: TimeQueue<Box<[u8]>>,
+    poll_queue: PollDelayQueue<Box<[u8]>>,
+    poll: u64,
     last_payload: Option<Box<[u8]>>,
 }
 
@@ -23,12 +27,49 @@ impl ConditionedPacketReceiver {
             inner_receiver,
             link_conditioner_config: link_conditioner_config.clone(),
             time_queue: TimeQueue::new(),
+            poll_queue: PollDelayQueue::new(),
+            poll: 0,
             last_payload: None,
         }
     }
 
     /// Receives a packet from the Client Socket
     pub fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
+        self.poll = self
+            .poll
+            .checked_add(1)
+            .expect("ConditionedPacketReceiver poll count exhausted");
+        if let Some(delay) = self.link_conditioner_config.fixed_poll_delay {
+            debug_assert!(
+                self.link_conditioner_config.incoming_jitter == 0
+                    && self.link_conditioner_config.incoming_loss == 0.0,
+                "fixed_poll_delay mode bypasses jitter/loss draws: leave both at zero",
+            );
+            let due = self
+                .poll
+                .checked_add(u64::from(delay))
+                .expect("ConditionedPacketReceiver poll count exhausted");
+            loop {
+                match self.inner_receiver.receive() {
+                    Ok(option) => match option {
+                        None => {
+                            break;
+                        }
+                        Some(payload) => {
+                            self.poll_queue.push(due, payload.into());
+                        }
+                    },
+                    Err(err) => {
+                        return Err(err);
+                    }
+                }
+            }
+            if self.poll_queue.has_due(self.poll) {
+                self.last_payload = Some(self.poll_queue.pop_due(self.poll).unwrap());
+                return Ok(Some(self.last_payload.as_ref().unwrap()));
+            }
+            return Ok(None);
+        }
         loop {
             match self.inner_receiver.receive() {
                 Ok(option) => match option {

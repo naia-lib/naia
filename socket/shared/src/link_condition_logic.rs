@@ -13,7 +13,9 @@ pub fn process_packet<T: Eq>(
     packet: T,
 ) {
     let now = Instant::now();
-    if Random::gen_range_f32(0.0, 1.0) <= config.incoming_loss {
+    // Skip the randomness draw entirely when loss is zero: an exact-0.0 draw
+    // would otherwise drop a packet on a link the contract calls lossless.
+    if config.incoming_loss > 0.0 && Random::gen_range_f32(0.0, 1.0) <= config.incoming_loss {
         debug!(
             "[LINK_COND] Packet dropped due to loss (loss={})",
             config.incoming_loss
