@@ -10,21 +10,20 @@
 # `cargo check` (faster than full build) but also gate on warnings.
 set -e
 
-# Main is append-only. Naia uses dev-trunk model: releases land on main
-# through the deliberate Factory release process (coordinator-authorized
-# qualification, then fast-forward stage -> main -> main-to-dev). The hook
-# therefore refuses every non-fast-forward update of main — rewrites and
-# deletes can never be a release — while a fast-forward that keeps main's
-# history continuous proceeds to the validation gates below.
-ZERO="0000000000000000000000000000000000000000"
+# Main is FROZEN. Naia is the exception to the Factory Operating Procedure:
+# naia `main` moves ONLY on Connor's explicit word — never on coordinator
+# direction, never on seam-closure logic, never fast-forward, never for any
+# reason. The hook therefore refuses EVERY update of refs/heads/main,
+# including fast-forwards: no push process, qualification, or release flow
+# constitutes authority to move main. If Connor orders a main move, he moves
+# it himself or names the exact sha in writing; this hook is then bypassed
+# only by his explicit word for that push, never edited to re-bless automation.
 while read local_ref local_sha remote_ref remote_sha; do
     if [[ "$remote_ref" == "refs/heads/main" ]]; then
-        if [[ "$local_sha" == "$ZERO" ]] || ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
-            echo "[pre-push] ERROR: Non-fast-forward push to 'main' is forbidden."
-            echo "[pre-push] Land releases fast-forward through the release process;"
-            echo "[pre-push] never rewrite, replace, or delete 'main'."
-            exit 1
-        fi
+        echo "[pre-push] ERROR: Every push to 'main' is forbidden."
+        echo "[pre-push] Naia main moves ONLY on Connor's explicit word."
+        echo "[pre-push] No coordinator, seam rule, or release flow is authority."
+        exit 1
     fi
 done
 
