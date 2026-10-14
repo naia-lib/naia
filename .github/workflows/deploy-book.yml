@@ -32,7 +32,7 @@ jobs:
         with:
           args: --offline --include-fragments --exclude-path 'book/book/404.html' 'book/book/**/*.html'
           fail: true
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: book/book
       - uses: actions/deploy-pages@v4
