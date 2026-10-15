@@ -311,6 +311,22 @@ impl<'w, T: Send + Sync + 'static> Client<'w, T> {
             message_batches_published: self.client.diag_message_batches_published,
         }
     }
+
+    /// Post-connect data-packet ingest counter (Roger 82653): number of
+    /// Data packets received since connect. Marker-only, never gates
+    /// behavior. Always available (unlike `diag_progress`).
+    #[must_use]
+    pub fn data_rx_count(&self) -> u64 {
+        self.client.client.data_rx_count()
+    }
+
+    /// Post-connect data-packet buffered counter (Roger 82653): number of
+    /// Data packets moved into the jitter buffer since connect (pre-app
+    /// poll). Marker-only, never gates behavior. Always available.
+    #[must_use]
+    pub fn data_applied_count(&self) -> u64 {
+        self.client.client.data_applied_count()
+    }
 }
 
 impl<'w, T: Send + Sync + 'static> EntityAndGlobalEntityConverter<Entity> for Client<'w, T> {

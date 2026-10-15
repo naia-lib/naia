@@ -1680,6 +1680,30 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
     }
 
+    /// Post-connect data-packet ingest counter (Roger 82653): number of
+    /// Data packets received since connect. Marker-only, never gates
+    /// behavior; lets the Lab stamp per-generation arrival.
+    #[must_use]
+    pub fn data_rx_count(&self) -> u64 {
+        self.post_connect_watch
+            .as_ref()
+            .map(|watch| watch.data_rx)
+            .unwrap_or(0)
+    }
+
+    /// Post-connect data-packet buffered counter (Roger 82653): number of
+    /// Data packets moved into the jitter buffer since connect (pre-app
+    /// poll). Marker-only, never gates behavior; with [`Client::data_rx_count`]
+    /// separates hub-hold (both late) from jitter-buffer/poll hold (rx on
+    /// time, applied late).
+    #[must_use]
+    pub fn data_applied_count(&self) -> u64 {
+        self.post_connect_watch
+            .as_ref()
+            .map(|watch| watch.data_applied)
+            .unwrap_or(0)
+    }
+
     // Crate-Public methods
 
     /// Despawns the Entity, if it exists.
