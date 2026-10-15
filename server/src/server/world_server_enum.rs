@@ -720,6 +720,33 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         }
     }
 
+    /// Retire the outstanding request row for `response_key` — see the
+    /// contract on the resident method. No wire effect.
+    pub fn cancel_request<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.cancel_request::<S>(response_key),
+            WorldServerImpl::Pipelined(ps) => ps.cancel_request::<S>(response_key),
+        }
+    }
+
+    /// Outstanding (unanswered, unretired) request rows for `user_key`.
+    /// Production observer for the bounded-rows control.
+    pub fn outstanding_request_count(&self, user_key: &UserKey) -> usize {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.outstanding_request_count(user_key),
+            WorldServerImpl::Pipelined(ps) => ps.outstanding_request_count(user_key),
+        }
+    }
+
+    /// Outstanding request rows across all users. Production observer for
+    /// the bounded-rows control.
+    pub fn total_outstanding_requests(&self) -> usize {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.total_outstanding_requests(),
+            WorldServerImpl::Pipelined(ps) => ps.total_outstanding_requests(),
+        }
+    }
+
     /// Poll for a response to a previously-sent request.
     pub fn receive_response<S: Response>(
         &mut self,

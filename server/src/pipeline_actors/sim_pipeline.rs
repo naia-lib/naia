@@ -1845,6 +1845,39 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         Ok(ResponseReceiveKey::new(request_id))
     }
 
+    /// Retire the outstanding request row for `response_key`. Same contract
+    /// as the resident path: late responses keep the unknown-id warn+drop,
+    /// duplicate retire is silent, identity is id-scoped, no wire effect.
+    /// Touches only coordinator state (like [`Self::send_request`); no
+    /// monolithic reassembly needed. Panics under the same conditions as
+    /// [`Self::coord_mut`] — call from the parked main thread only.
+    pub fn cancel_request<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) {
+        self.coord_mut()
+            .state
+            .global_request_manager
+            .cancel_request_id(response_key.request_id());
+    }
+
+    /// Number of outstanding (unanswered, unretired) request rows for
+    /// `user_key`, read from coordinator state. Production observer for the
+    /// bounded-rows control. Panics under the same conditions as
+    /// [`Self::coord`] — call from the parked main thread only.
+    pub fn outstanding_request_count(&self, user_key: &UserKey) -> usize {
+        self.coord()
+            .state
+            .global_request_manager
+            .outstanding_for_user(user_key)
+    }
+
+    /// Number of outstanding request rows across all users, read from
+    /// coordinator state. Production observer for the bounded-rows control.
+    pub fn total_outstanding_requests(&self) -> usize {
+        self.coord()
+            .state
+            .global_request_manager
+            .total_outstanding_requests()
+    }
+
     /// Queue a response for the D6 outbound-message drain.
     /// Outcome-reporting form. The pipelined path enqueues onto the coordinator's
     /// outbound op queue rather than the reliable channel directly, so it never

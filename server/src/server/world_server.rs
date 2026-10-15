@@ -1020,6 +1020,42 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         }
     }
 
+    /// Retires the outstanding request row for `response_key`. The row is
+    /// removed whether or not a response has arrived: a response that
+    /// arrives later keeps the existing unknown-id path (warn + drop, no
+    /// state change), so the cell treats it as never-arrived.
+    ///
+    /// Duplicate retire — same key twice, or a key whose response was
+    /// already polled — is silent success: eviction and decision can race
+    /// the same key across passes. Retirement is keyed by request id only;
+    /// other rows of the same user and every other user's rows are
+    /// untouched, and the user's nonce supply is unchanged. No wire effect:
+    /// disconnect still purges through `user_delete`.
+    pub fn cancel_request<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) {
+        self.sim_handle
+            .state
+            .global_request_manager
+            .cancel_request_id(response_key.request_id());
+    }
+
+    /// Number of outstanding (unanswered, unretired) request rows for
+    /// `user_key`. Production observer for the bounded-rows control.
+    pub fn outstanding_request_count(&self, user_key: &UserKey) -> usize {
+        self.sim_handle
+            .state
+            .global_request_manager
+            .outstanding_for_user(user_key)
+    }
+
+    /// Number of outstanding request rows across all users. Production
+    /// observer for the bounded-rows control.
+    pub fn total_outstanding_requests(&self) -> usize {
+        self.sim_handle
+            .state
+            .global_request_manager
+            .total_outstanding_requests()
+    }
+
     /// Polls for a response to a previously sent request; returns `None` if not yet received.
     pub fn receive_response<S: Response>(
         &mut self,

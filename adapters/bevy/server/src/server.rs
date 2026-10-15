@@ -453,6 +453,34 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Retire the outstanding request row for `response_key`. Same contract
+    /// as the world surface: late responses keep the unknown-id warn+drop,
+    /// duplicate retire is silent, identity is id-scoped, no wire effect.
+    pub fn cancel_request<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) {
+        match &mut *self.server_impl {
+            ServerImpl::WorldOnly(server) => server.cancel_request(response_key),
+            ServerImpl::Full(server) => server.cancel_request(response_key),
+        }
+    }
+
+    /// Outstanding (unanswered, unretired) request rows for `user_key`.
+    /// Production observer for the bounded-rows control.
+    pub fn outstanding_request_count(&self, user_key: &UserKey) -> usize {
+        match &*self.server_impl {
+            ServerImpl::WorldOnly(server) => server.outstanding_request_count(user_key),
+            ServerImpl::Full(server) => server.outstanding_request_count(user_key),
+        }
+    }
+
+    /// Outstanding request rows across all users. Production observer for
+    /// the bounded-rows control.
+    pub fn total_outstanding_requests(&self) -> usize {
+        match &*self.server_impl {
+            ServerImpl::WorldOnly(server) => server.total_outstanding_requests(),
+            ServerImpl::Full(server) => server.total_outstanding_requests(),
+        }
+    }
+
     //// Updates ////
 
     /// Pending scope checks as `(room, user, entity)` tuples.

@@ -429,6 +429,26 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     ) -> Option<(UserKey, S)> {
         self.world.receive_response(response_key)
     }
+
+    /// Retires the outstanding request row for `response_key` — see the
+    /// contract on [`WorldServer::cancel_request`](crate::WorldServer::cancel_request).
+    /// Late responses keep the unknown-id warn+drop; duplicate retire is
+    /// silent; no wire effect.
+    pub fn cancel_request<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) {
+        self.world.cancel_request(response_key)
+    }
+
+    /// Outstanding (unanswered, unretired) request rows for `user_key`.
+    /// Production observer for the bounded-rows control.
+    pub fn outstanding_request_count(&self, user_key: &UserKey) -> usize {
+        self.world.outstanding_request_count(user_key)
+    }
+
+    /// Outstanding request rows across all users. Production observer for
+    /// the bounded-rows control.
+    pub fn total_outstanding_requests(&self) -> usize {
+        self.world.total_outstanding_requests()
+    }
     //
 
     /// Returns all tick-buffered messages that arrived for the given tick.

@@ -45,17 +45,36 @@ impl GlobalRequestManager {
         Ok((id, nonce))
     }
 
+    /// Number of outstanding (unanswered, unretired) request rows for one
+    /// user. Production observer backing the maintained
+    /// `outstanding_request_count` surface: the transport control asserts
+    /// per-user rows stay bounded and the total returns to zero.
+    pub(crate) fn outstanding_for_user(&self, user_key: &UserKey) -> usize {
+        self.map
+            .values()
+            .filter(|(key, _, _)| key == user_key)
+            .count()
+    }
+
+    /// Number of outstanding request rows across all users. Production
+    /// observer backing the maintained total surface.
+    pub(crate) fn total_outstanding_requests(&self) -> usize {
+        self.map.len()
+    }
+
     /// Number of outstanding request ids, across all users. Test observer.
     #[cfg(test)]
     pub(crate) fn outstanding(&self) -> usize {
-        self.map.len()
+        self.total_outstanding_requests()
     }
 
     /// Drop a request row unconditionally (send-side cancel on Err).
     ///
     /// Unlike [`destroy_request_id`](Self::destroy_request_id), which only
     /// releases ANSWERED rows to the caller, this removes whatever is there:
-    /// a request that never left must not linger until disconnect.
+    /// a request that never left must not linger until disconnect. This is
+    /// also the mechanism behind the maintained application-reachable
+    /// `cancel_request` surface; see its contract there.
     pub(crate) fn cancel_request_id(&mut self, request_id: GlobalRequestId) -> bool {
         self.map.remove(&request_id).is_some()
     }
@@ -235,7 +254,7 @@ pub enum ResponseSendOutcome {
 
 #[cfg(test)]
 mod tests {
-    use naia_shared::{BigMapKey, LocalRequestId};
+    use naia_shared::{BigMapKey, LocalRequestId, RequestOrResponse};
 
     use super::*;
 
@@ -245,6 +264,14 @@ mod tests {
 
     fn response_id(i: u16) -> LocalResponseId {
         LocalRequestId::from(i).receive_from_remote()
+    }
+
+    fn answered_container() -> MessageContainer {
+        MessageContainer::new(Box::new(RequestOrResponse::request(
+            LocalRequestId::from(0),
+            ConnectionRequestNonce::from_wire(0),
+            Box::new([]),
+        )))
     }
 
     /// A user's requests only leave this map when the application answers them,
@@ -387,6 +414,115 @@ mod tests {
         assert_eq!(nonce_a.value(), 0);
         assert_eq!(nonce_b.value(), 1);
         assert_eq!(nonce_other.value(), 0);
+    }
+
+    /// Retirement removes the unanswered row; the cell calls this for keys
+    /// its ledger evicted or decided without polling.
+    #[test]
+    fn retiring_an_unanswered_row_removes_it() {
+        let mut manager = GlobalRequestManager::new();
+        let user = UserKey::from_u64(1);
+
+        let (id, _) = manager.create_request_id(user).expect("capacity remains");
+        assert_eq!(manager.total_outstanding_requests(), 1);
+
+        manager.cancel_request_id(id);
+        assert_eq!(manager.total_outstanding_requests(), 0);
+        assert_eq!(manager.outstanding_for_user(&user), 0);
+        assert!(manager.destroy_request_id(id).is_none());
+    }
+
+    /// Duplicate retire — same key twice, or a key that was never created —
+    /// is silent: eviction and decision can race the same key across passes.
+    #[test]
+    fn duplicate_retire_is_silent() {
+        let mut manager = GlobalRequestManager::new();
+        let user = UserKey::from_u64(1);
+
+        let (id, _) = manager.create_request_id(user).expect("capacity remains");
+        manager.cancel_request_id(id);
+        manager.cancel_request_id(id);
+        manager.cancel_request_id(GlobalRequestId::new(999));
+        assert_eq!(manager.total_outstanding_requests(), 0);
+    }
+
+    /// Retiring an answered-but-unpolled key drops the answer with the row:
+    /// a response that arrives after the cell decided is defined as
+    /// never-arrived, so there is nothing to poll.
+    #[test]
+    fn retiring_an_answered_key_drops_the_answer_with_the_row() {
+        let mut manager = GlobalRequestManager::new();
+        let user = UserKey::from_u64(1);
+
+        let (id, _) = manager.create_request_id(user).expect("capacity remains");
+        manager.receive_response(id, answered_container());
+        manager.cancel_request_id(id);
+        assert!(manager.destroy_request_id(id).is_none());
+        assert_eq!(manager.total_outstanding_requests(), 0);
+    }
+
+    /// A response arriving for a retired key keeps the existing unknown-id
+    /// path: warn + drop, and no row is recreated.
+    #[test]
+    fn late_response_after_retire_drops_without_recreating_a_row() {
+        let mut manager = GlobalRequestManager::new();
+        let user = UserKey::from_u64(1);
+
+        let (id, _) = manager.create_request_id(user).expect("capacity remains");
+        manager.cancel_request_id(id);
+        manager.receive_response(id, answered_container());
+        assert_eq!(manager.total_outstanding_requests(), 0);
+        assert!(manager.destroy_request_id(id).is_none());
+    }
+
+    /// Retirement is keyed by request id only: retiring K1 leaves K2 of the
+    /// same user and every other user's rows untouched.
+    #[test]
+    fn retirement_is_scoped_to_the_single_key() {
+        let mut manager = GlobalRequestManager::new();
+        let user = UserKey::from_u64(1);
+        let other = UserKey::from_u64(2);
+
+        let (first, _) = manager.create_request_id(user).expect("capacity remains");
+        let (second, _) = manager.create_request_id(user).expect("capacity remains");
+        let (foreign, _) = manager.create_request_id(other).expect("capacity remains");
+
+        manager.cancel_request_id(first);
+
+        assert!(manager.destroy_request_id(first).is_none());
+        assert_eq!(manager.outstanding_for_user(&user), 1);
+        assert_eq!(manager.outstanding_for_user(&other), 1);
+        // The surviving rows are still live: answering the second one works.
+        manager.receive_response(second, answered_container());
+        assert!(manager.destroy_request_id(second).is_some());
+        manager.receive_response(foreign, answered_container());
+        assert!(manager.destroy_request_id(foreign).is_some());
+        assert_eq!(manager.total_outstanding_requests(), 0);
+    }
+
+    /// Per-user and total observers track create, retire, and purge.
+    #[test]
+    fn observers_track_create_retire_and_purge() {
+        let mut manager = GlobalRequestManager::new();
+        let user = UserKey::from_u64(1);
+        let other = UserKey::from_u64(2);
+
+        let (id, _) = manager.create_request_id(user).expect("capacity remains");
+        manager.create_request_id(user).expect("capacity remains");
+        manager.create_request_id(other).expect("capacity remains");
+
+        assert_eq!(manager.outstanding_for_user(&user), 2);
+        assert_eq!(manager.outstanding_for_user(&other), 1);
+        assert_eq!(manager.total_outstanding_requests(), 3);
+
+        manager.cancel_request_id(id);
+        assert_eq!(manager.outstanding_for_user(&user), 1);
+        assert_eq!(manager.total_outstanding_requests(), 2);
+
+        manager.purge_user(user);
+        assert_eq!(manager.outstanding_for_user(&user), 0);
+        assert_eq!(manager.outstanding_for_user(&other), 1);
+        assert_eq!(manager.total_outstanding_requests(), 1);
     }
 
     /// H3 envelope cutover: a disconnect drops the user's nonce supply with
