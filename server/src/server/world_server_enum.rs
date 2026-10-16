@@ -729,6 +729,15 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         }
     }
 
+    /// Drop every outstanding request row for `user_key` — see the
+    /// contract on the resident method. Returns the removed count.
+    pub fn cancel_requests_for_user(&mut self, user_key: &UserKey) -> usize {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.cancel_requests_for_user(user_key),
+            WorldServerImpl::Pipelined(ps) => ps.cancel_requests_for_user(user_key),
+        }
+    }
+
     /// Outstanding (unanswered, unretired) request rows for `user_key`.
     /// Production observer for the bounded-rows control.
     pub fn outstanding_request_count(&self, user_key: &UserKey) -> usize {

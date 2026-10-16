@@ -79,6 +79,20 @@ impl GlobalRequestManager {
         self.map.remove(&request_id).is_some()
     }
 
+    /// Drop every outstanding row for one user, returning how many were
+    /// removed. Backs the maintained application-reachable
+    /// `cancel_requests_for_user` surface for terminal decide-orphans:
+    /// rows whose ledger user is decided but which were never polled.
+    /// Unlike [`purge_user`](Self::purge_user) this leaves the user's
+    /// nonce supply intact — the user stays connected and may send
+    /// again. Answered-but-unpolled rows go with unanswered ones; a
+    /// response arriving later keeps the unknown-id warn+drop.
+    pub(crate) fn cancel_requests_for_user(&mut self, user_key: &UserKey) -> usize {
+        let before = self.map.len();
+        self.map.retain(|_, (key, _, _)| *key != *user_key);
+        before - self.map.len()
+    }
+
     pub(crate) fn destroy_request_id(
         &mut self,
         request_id: GlobalRequestId,
@@ -523,6 +537,58 @@ mod tests {
         assert_eq!(manager.outstanding_for_user(&user), 0);
         assert_eq!(manager.outstanding_for_user(&other), 1);
         assert_eq!(manager.total_outstanding_requests(), 1);
+    }
+
+    /// Per-user cancel drops every row of exactly one user — answered and
+    /// unanswered — returns the removed count, and leaves other users
+    /// untouched. The cell calls this for a decided ledger user whose
+    /// rows were never polled.
+    #[test]
+    fn cancelling_a_user_drops_all_their_rows_and_returns_the_count() {
+        let mut manager = GlobalRequestManager::new();
+        let user = UserKey::from_u64(1);
+        let other = UserKey::from_u64(2);
+
+        let (first, _) = manager.create_request_id(user).expect("capacity remains");
+        let (second, _) = manager.create_request_id(user).expect("capacity remains");
+        let (foreign, _) = manager.create_request_id(other).expect("capacity remains");
+        manager.receive_response(first, answered_container());
+
+        assert_eq!(manager.cancel_requests_for_user(&user), 2);
+        assert!(manager.destroy_request_id(first).is_none());
+        assert!(manager.destroy_request_id(second).is_none());
+        assert_eq!(manager.outstanding_for_user(&user), 0);
+        assert_eq!(manager.outstanding_for_user(&other), 1);
+        assert_eq!(manager.total_outstanding_requests(), 1);
+        // The surviving row is still live: answering it works.
+        manager.receive_response(foreign, answered_container());
+        assert!(manager.destroy_request_id(foreign).is_some());
+    }
+
+    /// Cancelling a user with nothing outstanding is silent success: the
+    /// per-episode bound check calls this unconditionally after deciding.
+    #[test]
+    fn cancelling_a_user_with_no_rows_returns_zero() {
+        let mut manager = GlobalRequestManager::new();
+        let user = UserKey::from_u64(1);
+
+        assert_eq!(manager.cancel_requests_for_user(&user), 0);
+        assert_eq!(manager.total_outstanding_requests(), 0);
+    }
+
+    /// Per-user cancel leaves the nonce supply intact, unlike purge: the
+    /// user stays connected and may send again with continuing nonces.
+    #[test]
+    fn cancelling_a_user_keeps_the_nonce_supply() {
+        let mut manager = GlobalRequestManager::new();
+        let user = UserKey::from_u64(1);
+
+        let (_, first) = manager.create_request_id(user).expect("capacity remains");
+        assert_eq!(first.value(), 0);
+        manager.cancel_requests_for_user(&user);
+
+        let (_, next) = manager.create_request_id(user).expect("capacity remains");
+        assert_eq!(next.value(), 1);
     }
 
     /// H3 envelope cutover: a disconnect drops the user's nonce supply with

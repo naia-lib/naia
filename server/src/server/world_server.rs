@@ -1038,6 +1038,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .cancel_request_id(response_key.request_id());
     }
 
+    /// Drop every outstanding request row for `user_key`, returning how
+    /// many were removed. Terminal decide-orphans (ledger decided, never
+    /// polled) bound retention per ledger episode: the consumer cancels
+    /// the decided user's set and asserts the returned count reaches
+    /// zero on the next check. The user stays connected — only
+    /// [`purge_user`](Self::purge_user) resets the nonce supply. Answered
+    /// rows go with unanswered ones; late responses keep the unknown-id
+    /// warn+drop. No wire effect.
+    pub fn cancel_requests_for_user(&mut self, user_key: &UserKey) -> usize {
+        self.sim_handle
+            .state
+            .global_request_manager
+            .cancel_requests_for_user(user_key)
+    }
+
     /// Number of outstanding (unanswered, unretired) request rows for
     /// `user_key`. Production observer for the bounded-rows control.
     pub fn outstanding_request_count(&self, user_key: &UserKey) -> usize {

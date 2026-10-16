@@ -463,6 +463,16 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Drop every outstanding request row for `user_key`, returning how
+    /// many were removed. Same contract as the world surface: the user
+    /// stays connected; answered rows included; no wire effect.
+    pub fn cancel_requests_for_user(&mut self, user_key: &UserKey) -> usize {
+        match &mut *self.server_impl {
+            ServerImpl::WorldOnly(server) => server.cancel_requests_for_user(user_key),
+            ServerImpl::Full(server) => server.cancel_requests_for_user(user_key),
+        }
+    }
+
     /// Outstanding (unanswered, unretired) request rows for `user_key`.
     /// Production observer for the bounded-rows control.
     pub fn outstanding_request_count(&self, user_key: &UserKey) -> usize {

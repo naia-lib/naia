@@ -438,6 +438,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         self.world.cancel_request(response_key)
     }
 
+    /// Drop every outstanding request row for `user_key` — see the
+    /// contract on [`WorldServer::cancel_requests_for_user`](crate::WorldServer::cancel_requests_for_user).
+    /// Returns the removed count; the user stays connected.
+    pub fn cancel_requests_for_user(&mut self, user_key: &UserKey) -> usize {
+        self.world.cancel_requests_for_user(user_key)
+    }
+
     /// Outstanding (unanswered, unretired) request rows for `user_key`.
     /// Production observer for the bounded-rows control.
     pub fn outstanding_request_count(&self, user_key: &UserKey) -> usize {
