@@ -25,6 +25,13 @@ pub trait Handshaker: Send + Sync {
 
     fn reset(&mut self);
 
+    /// Take the recorded client-ping count for a handshaking address,
+    /// removing it. Defaults to `None` (untracked); `HandshakeManager`
+    /// overrides this with its per-address counts.
+    fn take_handshake_attempts(&mut self, _address: &SocketAddr) -> Option<u32> {
+        None
+    }
+
     /// Write a disconnect packet to send to a client.
     ///
     /// `payload`, when present, is an already-serialized message saying why in

@@ -56,6 +56,11 @@ pub struct HandshakeManager {
     address_to_timestamp_map: CacheMap<SocketAddr, Timestamp>,
     #[cfg(feature = "transport_udp")]
     timestamp_digest_map: CacheMap<Timestamp, Vec<u8>>,
+    /// Client handshake pings received per source address, both builds:
+    /// challenge receipts on address-validating builds, identify receipts
+    /// otherwise. Taken (removed) when the handshake finalizes; backs the
+    /// `handshake_attempts` observer that tells first-send from resend.
+    ping_counts: HashMap<SocketAddr, u32>,
 }
 
 impl Handshaker for HandshakeManager {
@@ -73,6 +78,7 @@ impl Handshaker for HandshakeManager {
         }
         if let Some(address) = address_opt {
             self.authenticated_and_identified_users.remove(&address);
+            self.ping_counts.remove(&address);
             #[cfg(feature = "transport_udp")]
             {
                 self.been_handshaked_users.remove(&address);
@@ -82,7 +88,7 @@ impl Handshaker for HandshakeManager {
             // User disconnected before finalize_connection set data_addr; scan by value
             // to ensure been_handshaked_users doesn't leak on pre-finalization drops.
             #[cfg(feature = "transport_udp")]
-            self.been_handshaked_users.retain(|_, v| v != user_key);
+            self.been_handshaked_users.retain(|_, v| *v != user_key);
         }
     }
 
@@ -133,10 +139,15 @@ impl Handshaker for HandshakeManager {
         }
     }
 
+    fn take_handshake_attempts(&mut self, address: &SocketAddr) -> Option<u32> {
+        self.take_handshake_attempts(address)
+    }
+
     fn reset(&mut self) {
         self.authenticated_and_identified_users.clear();
         self.authenticated_unidentified_users.clear();
         self.identity_token_map.clear();
+        self.ping_counts.clear();
         #[cfg(feature = "transport_udp")]
         {
             self.been_handshaked_users.clear();
@@ -169,6 +180,7 @@ impl HandshakeManager {
         reader: &mut BitReader,
         protocol_id: ProtocolId,
     ) -> Result<HandshakeAction, SerdeErr> {
+        *self.ping_counts.entry(*address).or_default() += 1;
         if protocol_id != self.protocol_id {
             warn!(
                 "Server: Protocol Mismatch! Client: {}, Server: {}",
@@ -255,6 +267,7 @@ impl HandshakeManager {
         protocol_id: ProtocolId,
         has_connection: bool,
     ) -> HandshakeAction {
+        *self.ping_counts.entry(*address).or_default() += 1;
         if protocol_id != self.protocol_id {
             warn!(
                 "Server: Protocol Mismatch! Client: {}, Server: {}",
@@ -347,7 +360,18 @@ impl HandshakeManager {
             address_to_timestamp_map: CacheMap::with_capacity(MAX_PENDING_CONNECTIONS),
             #[cfg(feature = "transport_udp")]
             timestamp_digest_map: CacheMap::with_capacity(MAX_TIMESTAMP_DIGESTS),
+            ping_counts: HashMap::new(),
         }
+    }
+
+    /// Take the recorded client-ping count for `address`, removing it.
+    /// The main server calls this when the handshake finalizes so the
+    /// per-key `handshake_attempts` observer can tell the client's first
+    /// send (1) from a 250 ms resend (>1). Returns `None` when no ping
+    /// was ever recorded — finalize always follows a counted receipt, so
+    /// `None` here means the entry was already taken or evicted.
+    pub fn take_handshake_attempts(&mut self, address: &SocketAddr) -> Option<u32> {
+        self.ping_counts.remove(address)
     }
 
     // Step 1 of Handshake (address-validating builds)
@@ -721,7 +745,7 @@ mod tests {
         let mut manager = HandshakeManager::new(server_pid());
         let token = IdentityToken::generate();
         let user_key = UserKey::from_u64(7);
-        manager.authenticate_user(&token, &user_key);
+        manager.authenticate_user(&token, user_key);
         let bytes = challenge_inbound(12345, &token);
         let first = match maintain(&mut manager, &bytes) {
             Ok(HandshakeAction::SendPacket(packet)) => packet,
@@ -739,5 +763,47 @@ mod tests {
             }
             _ => panic!("duplicate challenge must resend the response, never go silent"),
         }
+    }
+
+    /// Client pings are counted per address: a challenge plus its
+    /// retransmit take as 2, and the take removes the entry. First-send
+    /// vs resend reads off this count at finalize.
+    #[cfg(feature = "transport_udp")]
+    #[test]
+    fn challenge_pings_are_counted_and_taken_once() {
+        let mut manager = HandshakeManager::new(server_pid());
+        let token = IdentityToken::generate();
+        let user_key = UserKey::from_u64(7);
+        manager.authenticate_user(&token, user_key);
+        let bytes = challenge_inbound(12345, &token);
+        assert!(maintain(&mut manager, &bytes).is_ok());
+        assert!(maintain(&mut manager, &bytes).is_ok());
+        assert_eq!(manager.take_handshake_attempts(&addr()), Some(2));
+        assert_eq!(manager.take_handshake_attempts(&addr()), None);
+    }
+
+    /// Identify receipts are counted per address on builds without
+    /// address validation: a single identify takes as 1.
+    #[cfg(not(feature = "transport_udp"))]
+    #[test]
+    fn identify_pings_are_counted_and_taken_once() {
+        let mut manager = HandshakeManager::new(server_pid());
+        let token = IdentityToken::generate();
+        let user_key = UserKey::from_u64(7);
+        manager.authenticate_user(&token, user_key);
+        let bytes = inbound(
+            &HandshakeHeader::ClientIdentifyRequest(server_pid()),
+            Some(&token),
+        );
+        assert!(maintain(&mut manager, &bytes).is_ok());
+        assert_eq!(manager.take_handshake_attempts(&addr()), Some(1));
+        assert_eq!(manager.take_handshake_attempts(&addr()), None);
+    }
+
+    /// Taking attempts for an address that never pinged returns None.
+    #[test]
+    fn taking_attempts_for_unknown_address_returns_none() {
+        let mut manager = HandshakeManager::new(server_pid());
+        assert_eq!(manager.take_handshake_attempts(&addr()), None);
     }
 }

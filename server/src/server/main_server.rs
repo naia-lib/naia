@@ -51,6 +51,9 @@ pub struct MainServer {
     pending_auth_users: HashSet<UserKey>,
     // Events
     incoming_events: MainEvents,
+    /// Client handshake-ping counts taken at finalize, keyed by user.
+    /// Backs the `handshake_attempts` observer; evicted on disconnect.
+    handshake_attempts: HashMap<UserKey, u32>,
 }
 
 impl MainServer {
@@ -100,6 +103,7 @@ impl MainServer {
             pending_auth_users: HashSet::new(),
             // Events
             incoming_events: MainEvents::default(),
+            handshake_attempts: HashMap::new(),
         }
     }
 
@@ -131,6 +135,7 @@ impl MainServer {
         self.users = BigMap::new();
         self.user_connections.clear();
         self.incoming_events = MainEvents::default();
+        self.handshake_attempts.clear();
     }
 
     /// Returns whether or not the Server has initialized correctly and is
@@ -253,7 +258,21 @@ impl MainServer {
         self.user_connections.insert(user.address(), user_key);
         self.pending_auth_users.remove(&user_key);
 
+        if let Some(attempts) = self.handshake_manager.take_handshake_attempts(user_address) {
+            self.handshake_attempts.insert(user_key, attempts);
+        }
+
         self.incoming_events.push_connection(user_key);
+    }
+
+    /// Number of client handshake pings the server received for `user_key`
+    /// before finalizing its connection: 1 means the handshake completed
+    /// on the client's first send, 2+ means a resend completed it. Read
+    /// after `ConnectEvent`; evicted on disconnect, so a key that never
+    /// finalized through this surface — or already disconnected — reads
+    /// `None`. Diagnostic only: no wire effect, no admission role.
+    pub(crate) fn handshake_attempts(&self, user_key: &UserKey) -> Option<u32> {
+        self.handshake_attempts.get(user_key).copied()
     }
 
     // Users
@@ -370,6 +389,7 @@ impl MainServer {
 
         self.handshake_manager
             .delete_user(user_key, user.address_opt());
+        self.handshake_attempts.remove(&user_key);
 
         user
     }

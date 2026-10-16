@@ -451,6 +451,15 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         self.world.outstanding_request_count(user_key)
     }
 
+    /// Client handshake pings received for `user_key` before its
+    /// connection finalized: 1 means first send, 2+ means a resend
+    /// completed it. Read after `ConnectEvent`; `None` when the key
+    /// never finalized through the main-server handshake or already
+    /// disconnected. Diagnostic only: no wire effect, no admission role.
+    pub fn handshake_attempts(&self, user_key: &UserKey) -> Option<u32> {
+        self.main.handshake_attempts(user_key)
+    }
+
     /// Outstanding request rows across all users. Production observer for
     /// the bounded-rows control.
     pub fn total_outstanding_requests(&self) -> usize {

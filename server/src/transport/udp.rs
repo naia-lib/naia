@@ -70,9 +70,9 @@ impl Socket {
     }
 }
 
-impl Into<Box<dyn TransportSocket>> for Socket {
-    fn into(self) -> Box<dyn TransportSocket> {
-        Box::new(self)
+impl From<Socket> for Box<dyn TransportSocket> {
+    fn from(value: Socket) -> Self {
+        Box::new(value)
     }
 }
 
@@ -659,7 +659,7 @@ fn url_to_addr(url: &Url) -> SocketAddr {
                 panic!("{SOCKET_PARSE_FAIL_STR}: {url}");
             }
 
-            return *addr_list.first().expect(SOCKET_PARSE_FAIL_STR);
+            *addr_list.first().expect(SOCKET_PARSE_FAIL_STR)
         }
         Err(err) => {
             panic!("URL -> SocketAddr parse fails for {url}: {err:?}");
