@@ -3,7 +3,6 @@
 //! coordinator drain; a connect response alone does not prove finalization.
 
 use std::{
-    collections::HashSet,
     net::SocketAddr,
     sync::mpsc::{Receiver, Sender},
 };
@@ -57,6 +56,7 @@ struct Admission {
 impl Admission {
     fn new() -> Self {
         let hub = LocalTransportHub::new("127.0.0.1:54490".parse().unwrap());
+        hub.enable_packet_recording();
         let mut server = PipelinedWorldServer::new(ServerConfig::default(), protocol());
         server.listen(Socket::new(LocalServerSocket::new(hub.clone()), None));
         Self {
@@ -75,18 +75,35 @@ impl Admission {
         }
     }
 
-    fn receive(&mut self, expected_addresses: &[SocketAddr]) -> Vec<UserKey> {
+    fn receive(&mut self, expected_requests: usize) -> Vec<UserKey> {
         let mut outputs = Vec::new();
         self.server
             .receive_into(&mut self.world.proxy_mut(), &mut outputs);
         let mut connected = Vec::new();
-        let mut received = HashSet::new();
         for output in &mut outputs {
             assert!(!output.world_events.has::<ErrorEvent>());
-            received.extend(output.received_addresses.iter().copied());
             connected.extend(output.world_events.read::<ConnectEvent>());
         }
-        assert_eq!(received, expected_addresses.iter().copied().collect());
+        // apply_recv_to_world consumes output.received_addresses. Observe
+        // receipt at the real transport instead of inspecting the drained set.
+        let received: Vec<_> = self
+            .hub
+            .take_recorded_packets()
+            .into_iter()
+            .filter(|(server_to_client, _)| !server_to_client)
+            .collect();
+        assert_eq!(received.len(), expected_requests);
+        for (_, bytes) in received {
+            let mut reader = BitReader::new(&bytes);
+            assert_eq!(
+                StandardHeader::de(&mut reader).unwrap().packet_type,
+                PacketType::Handshake
+            );
+            assert_eq!(
+                HandshakeHeader::de(&mut reader).unwrap(),
+                HandshakeHeader::ClientConnectRequest
+            );
+        }
         connected
     }
 
@@ -120,11 +137,11 @@ fn registered_user_connects_through_real_receive_and_finalization() {
     admission.assert_connection(&key, &client.address, false);
     client.request_connect();
 
-    assert_eq!(admission.receive(&[client.address]), vec![key]);
+    assert_eq!(admission.receive(1), vec![key]);
     admission.assert_connection(&key, &client.address, true);
     admission.send();
     assert_eq!(client.take_connect_responses(), 1);
-    assert!(admission.receive(&[]).is_empty());
+    assert!(admission.receive(0).is_empty());
     admission.assert_connection(&key, &client.address, true);
 }
 
@@ -135,13 +152,13 @@ fn draining_before_registration_does_not_finalize_or_buffer_admission() {
     let key = UserKey::from_u64(7);
 
     client.request_connect();
-    assert!(admission.receive(&[client.address]).is_empty());
+    assert!(admission.receive(1).is_empty());
     admission.assert_connection(&key, &client.address, false);
 
     // The same operations in reversed order discriminate: registration after
     // the drain cannot resurrect a request that already lacked a user.
     admission.server.receive_user(key, client.address);
-    assert!(admission.receive(&[]).is_empty());
+    assert!(admission.receive(0).is_empty());
     admission.assert_connection(&key, &client.address, false);
     admission.send();
     // Recv acknowledges even an unknown address. This is deliberately weaker
@@ -161,15 +178,12 @@ fn unknown_user_does_not_block_a_registered_user_in_the_same_drain() {
     // The local hub drains the lower-address unknown client first.
     unknown.request_connect();
     known.request_connect();
-    assert_eq!(
-        admission.receive(&[unknown.address, known.address]),
-        vec![known_key],
-    );
+    assert_eq!(admission.receive(2), vec![known_key],);
     admission.assert_connection(&known_key, &known.address, true);
     admission.assert_connection(&unknown_key, &unknown.address, false);
 
     admission.server.receive_user(unknown_key, unknown.address);
-    assert!(admission.receive(&[]).is_empty());
+    assert!(admission.receive(0).is_empty());
     admission.assert_connection(&unknown_key, &unknown.address, false);
     admission.send();
     assert_eq!(known.take_connect_responses(), 1);
@@ -185,13 +199,13 @@ fn duplicate_requests_finalize_once_across_receive_drains() {
     admission.server.receive_user(key, client.address);
     client.request_connect();
     client.request_connect();
-    assert_eq!(admission.receive(&[client.address]), vec![key]);
+    assert_eq!(admission.receive(2), vec![key]);
     admission.assert_connection(&key, &client.address, true);
     admission.send();
     assert_eq!(client.take_connect_responses(), 2);
 
     client.request_connect();
-    assert!(admission.receive(&[client.address]).is_empty());
+    assert!(admission.receive(1).is_empty());
     admission.assert_connection(&key, &client.address, true);
     admission.send();
     assert_eq!(client.take_connect_responses(), 1);
