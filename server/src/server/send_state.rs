@@ -924,9 +924,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             u32::from(tm.current_tick())
         };
 
-        // Collect and shuffle user addresses for fair priority ordering.
+        // Collect user addresses for priority ordering. Production shuffles for
+        // fairness; deterministic builds sort so the per-user plan order (and
+        // hence MTU packing) is reproducible run-to-run (Roger 91235: the
+        // fastrand shuffle draws per-thread entropy on tick-worker threads,
+        // flipping d6/j9 arrival tails ±1 tick).
         let mut user_addresses: Vec<SocketAddr> =
             self.send_user_connections.keys().copied().collect();
+        #[cfg(feature = "deterministic")]
+        user_addresses.sort();
+        #[cfg(not(feature = "deterministic"))]
         fastrand::shuffle(&mut user_addresses);
 
         // ── Iris Phase 3A: serial — build per-user update plan ──────────────────
