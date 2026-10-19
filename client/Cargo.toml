@@ -36,6 +36,9 @@ e2e_debug = []
 test_time = [ "naia-shared/test_time" ]
 # Additive, default-off. Mirrors naia-server's f3_diag: zero impact when off.
 f3_diag = []
+# Byte-exact determinism (forwards to naia-shared; see naia-server's feature
+# for the mode's contract). No naia-client cfg reads it yet.
+deterministic = [ "naia-shared/deterministic" ]
 
 [dependencies]
 naia-shared = { version = "0.25", path = "../shared" }

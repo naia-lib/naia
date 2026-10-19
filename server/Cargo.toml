@@ -36,7 +36,7 @@ test_time = [ "naia-shared/test_time" ]
 # cfg as `not(deterministic)`. Implies `test_time` (the parked path drives the
 # sim clock synchronously). Consumers whose output must be deterministic enable
 # this (e.g. the bevy adapter's `deterministic` feature forwards to it).
-deterministic = [ "test_time" ]
+deterministic = [ "test_time", "naia-shared/deterministic" ]
 e2e_debug = []
 test_utils = [ "naia-shared/test_utils" ]
 bench_instrumentation = [ "naia-shared/bench_instrumentation" ]

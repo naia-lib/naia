@@ -35,12 +35,7 @@ pub fn message_impl(
     // Names
     let struct_name = input.ident;
     let struct_name_str = LitStr::new(
-        format!(
-            "{}{}",
-            &struct_name.to_string(),
-            &untyped_generics.to_string()
-        )
-        .as_str(),
+        format!("{}{}", struct_name, untyped_generics).as_str(),
         struct_name.span(),
     );
     let lowercase_struct_name = Ident::new(
@@ -946,12 +941,7 @@ fn enum_message_impl(
 
     let enum_name = &input.ident;
     let enum_name_str = LitStr::new(
-        format!(
-            "{}{}",
-            &enum_name.to_string(),
-            &untyped_generics.to_string()
-        )
-        .as_str(),
+        format!("{}{}", enum_name, untyped_generics).as_str(),
         enum_name.span(),
     );
     let lowercase_enum_name = Ident::new(

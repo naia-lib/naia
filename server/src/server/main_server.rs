@@ -192,7 +192,7 @@ impl MainServer {
         if auth_sender.accept(&auth_addr, &identity_token).is_err() {
             warn!(
                 "Server Error: Cannot send auth accept packet to {:?}",
-                &auth_addr
+                auth_addr
             );
             // TODO: handle destroying any threads waiting on this response
         }
@@ -239,7 +239,7 @@ impl MainServer {
             if auth_sender.reject(&auth_addr, payload).is_err() {
                 warn!(
                     "Server Error: Cannot send auth reject message to {:?}",
-                    &auth_addr
+                    auth_addr
                 );
                 // TODO: handle destroying any threads waiting on this response
             }
@@ -463,7 +463,7 @@ impl MainServer {
                             if auth_sender.accept(&auth_addr, &identity_token).is_err() {
                                 warn!(
                                     "Server Error: Cannot send auto-accept packet to {:?}",
-                                    &auth_addr
+                                    auth_addr
                                 );
                             }
                         }
@@ -542,7 +542,7 @@ impl MainServer {
                                         // Single send failure is not fatal: the client will
                                         // retry the handshake on its own timeout. Persistent
                                         // failures will surface via connection timeout.
-                                        warn!("Server Error: Cannot send packet to {}", &address);
+                                        warn!("Server Error: Cannot send packet to {}", address);
                                     }
                                 }
                                 Ok(HandshakeAction::FinalizeConnection(
@@ -558,7 +558,7 @@ impl MainServer {
                                         // Same rationale as SendPacket above: client retries.
                                         warn!(
                                             "Server Error: Cannot send validation packet to {}",
-                                            &address
+                                            address
                                         );
                                     }
                                 }

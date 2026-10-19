@@ -33,6 +33,10 @@ transport_udp = [ "http" ]
 transport_local = [ "http" ]
 interior_visibility = []
 test_time = [ "naia-socket-shared/test_time" ]
+# Byte-exact determinism: callers whose output must be deterministic enable
+# this (forwarded from naia-server/naia-client `deterministic`). Off by
+# default: production keeps hash-order statistical fairness where noted.
+deterministic = []
 test_utils = []
 e2e_debug = []
 bench_instrumentation = ["naia-serde/bench_instrumentation"]

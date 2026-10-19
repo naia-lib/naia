@@ -349,7 +349,7 @@ impl SendConnection {
             let addr = self.address;
             self.shared.note_outbound_packet();
             if io.send_packet(&addr, &writer.to_packet()).is_err() {
-                warn!("Server Error: Cannot send ACK-only packet to {}", &addr);
+                warn!("Server Error: Cannot send ACK-only packet to {}", addr);
             } else {
                 #[cfg(feature = "e2e_debug")]
                 {
@@ -398,7 +398,7 @@ impl SendConnection {
             let addr = self.address;
             self.shared.note_outbound_packet();
             if io.send_packet(&addr, &packet).is_err() {
-                warn!("Server Error: Cannot send data packet to {}", &addr);
+                warn!("Server Error: Cannot send data packet to {}", addr);
             } else {
                 self.base.spend_bandwidth(packet_bytes);
                 #[cfg(feature = "bench_instrumentation")]

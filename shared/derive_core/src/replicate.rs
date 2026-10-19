@@ -84,12 +84,7 @@ pub fn replicate_impl(
     // Names
     let replica_name = input.ident.clone();
     let replica_name_str = LitStr::new(
-        format!(
-            "{}{}",
-            &replica_name.to_string(),
-            &untyped_generics.to_string()
-        )
-        .as_str(),
+        format!("{}{}", replica_name, untyped_generics).as_str(),
         replica_name.span(),
     );
     let lowercase_replica_name = Ident::new(

@@ -141,7 +141,7 @@ impl ChannelKinds {
         self.net_id_map.get(&net_id).copied().ok_or(SerdeErr)
     }
 
-    fn kind_to_net_id(&self, channel_kind: &ChannelKind) -> NetId {
+    pub(crate) fn kind_to_net_id(&self, channel_kind: &ChannelKind) -> NetId {
         self.kind_map
             .get(channel_kind)
             .expect(
