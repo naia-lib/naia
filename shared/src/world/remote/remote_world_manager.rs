@@ -32,6 +32,34 @@ cfg_if! {
     }
 }
 
+// TEMP-PROBE-NASH-93102 (revert before qual, never lands): two-sided
+// silent-until-dump receive log. Wire side (lowercase op, logged at
+// `take_incoming_events` entry BEFORE the channel sees the batch) records
+// every Spawn/Despawn/SpawnWithComponents arriving for the manager.
+// Apply side (uppercase op, logged at the apply arms below) records every
+// Spawn/Despawn the manager APPLIES. Tag is the manager address: the
+// harness runs several connections in one process and remote ids restart
+// per connection, so an untagged log would show false pairs across
+// managers. The consumer census drains + prints it once at first-dup via
+// `nash_temp_take_recv_log`. No I/O per event (92721 TIMING CAUTION).
+// Tuple shape is IDENTICAL to the 92721 probe so existing census drain
+// code compiles unchanged.
+static NASH_RECV_LOG: std::sync::Mutex<Vec<(usize, Tick, RemoteEntity, char)>> =
+    std::sync::Mutex::new(Vec::new());
+
+fn nash_recv_log(manager: usize, tick: Tick, remote_entity: RemoteEntity, op: char) {
+    if let Ok(mut log) = NASH_RECV_LOG.lock() {
+        log.push((manager, tick, remote_entity, op));
+    }
+}
+
+/// Drain the TEMP receive log (see above). Called once by the consumer
+/// census at first-dup; the run is already decided by then, so the single
+/// bounded print cannot move the window.
+pub fn nash_temp_take_recv_log() -> Vec<(usize, Tick, RemoteEntity, char)> {
+    std::mem::take(&mut NASH_RECV_LOG.lock().unwrap())
+}
+
 /// Manages the inbound side of entity replication — entities whose authoritative state comes from the remote peer.
 pub struct RemoteWorldManager {
     // For Server, this contains the Entities that have been received from the Client, that the Client has authority over.
@@ -263,6 +291,22 @@ impl RemoteWorldManager {
         incoming_updates: Vec<(Tick, OwnedLocalEntity, PendingComponentUpdate)>,
         incoming_messages: Vec<(MessageIndex, Tick, EntityMessage<RemoteEntity>)>,
     ) -> Vec<EntityEvent> {
+        // TEMP-PROBE-NASH-93102: wire-side log (see top of file). Runs BEFORE
+        // the channel sees the batch, so this is the on-wire order per manager.
+        {
+            let manager = self as *const Self as usize;
+            for (_, tick, message) in incoming_messages.iter() {
+                let op = match message.get_type() {
+                    crate::EntityMessageType::Spawn => 's',
+                    crate::EntityMessageType::SpawnWithComponents => 'w',
+                    crate::EntityMessageType::Despawn => 'd',
+                    _ => continue,
+                };
+                if let Some(remote_entity) = message.entity() {
+                    nash_recv_log(manager, *tick, remote_entity, op);
+                }
+            }
+        }
         let incoming_messages = EntityMessageReceiver::remote_take_incoming_messages(
             &mut self.remote_engine,
             incoming_messages,
@@ -333,6 +377,8 @@ impl RemoteWorldManager {
             // info!("Processing EntityMessage: {:?}", message);
             match message {
                 EntityMessage::Spawn(remote_entity) => {
+                    // TEMP-PROBE-NASH-93102: apply-side log (see top of file).
+                    nash_recv_log(self as *const Self as usize, tick, remote_entity, 'S');
                     // set up entity
                     let world_entity = world.spawn_entity();
                     let global_entity = spawner.spawn(world_entity, Some(remote_entity));
@@ -347,6 +393,8 @@ impl RemoteWorldManager {
                         .push(EntityEvent::Spawn(tick, global_entity));
                 }
                 EntityMessage::Despawn(remote_entity) => {
+                    // TEMP-PROBE-NASH-93102: apply-side log (see top of file).
+                    nash_recv_log(self as *const Self as usize, tick, remote_entity, 'D');
                     // On the client (authed_entities_opt is Some): read the mapping before
                     // removing it so that process_remove can resolve remote_entity →
                     // global_entity and emit RemoveComponent events. The client has no relay

@@ -198,7 +198,8 @@ pub use world::{
         in_scope_entities::InScopeEntities,
     },
     host::host_world_manager::HostWorldManager,
-    remote::remote_world_manager::RemoteWorldManager,
+    remote::remote_world_manager::{nash_temp_take_recv_log, RemoteWorldManager},
+    // TEMP-PROBE-NASH-93102: re-export kept adjacent for a one-line revert.
     resource::{resource_registry::ResourceAlreadyExists, ResourceKinds, ResourceRegistry},
     shared_global_world_manager::SharedGlobalWorldManager,
     world_type::{WorldMutType, WorldRefType},
