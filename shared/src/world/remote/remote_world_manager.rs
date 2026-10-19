@@ -1666,4 +1666,64 @@ mod remote_world_manager_tests {
         assert_eq!(fixture.world.entity_count(), 1);
         assert!(fixture.map.contains_remote_entity(remote(1)));
     }
+
+    /// Roger 93102: a second Spawn for an already-live id is a server
+    /// re-assertion, not a new lifetime. The channel discards it; the
+    /// entity stays single-mapped and no duplicate Spawn event fires.
+    #[test]
+    fn a_duplicate_spawn_for_a_live_entity_is_discarded() {
+        let mut fixture = Fixture::new(HostType::Client);
+
+        fixture.deliver(vec![(370, EntityMessage::Spawn(remote(1)))]);
+        assert_eq!(fixture.world.entity_count(), 1);
+
+        let events = fixture.deliver(vec![(372, EntityMessage::Spawn(remote(1)))]);
+        assert!(summarize(&events).is_empty());
+        assert_eq!(fixture.world.entity_count(), 1);
+        assert!(fixture.map.contains_remote_entity(remote(1)));
+    }
+
+    /// Roger 93102: the Despawn queued behind a duplicate Spawn still
+    /// applies. Breaking on the duplicate head wedged the channel for
+    /// life, leaking the entity and its map entry (the retained ghost
+    /// behind the tower DuplicateId pair).
+    #[test]
+    fn a_despawn_queued_behind_a_duplicate_spawn_still_applies() {
+        let mut fixture = Fixture::new(HostType::Client);
+
+        fixture.deliver(vec![(370, EntityMessage::Spawn(remote(1)))]);
+        let events = fixture.deliver(vec![(372, EntityMessage::Spawn(remote(1)))]);
+        assert!(summarize(&events).is_empty());
+
+        let events = fixture.deliver(vec![(374, EntityMessage::Despawn(remote(1)))]);
+        assert_eq!(
+            summarize(&events),
+            vec![(Some(EntityMessageType::Despawn), GlobalEntity::from_u64(0))],
+        );
+        assert_eq!(fixture.world.entity_count(), 0);
+        assert!(!fixture.map.contains_remote_entity(remote(1)));
+    }
+
+    /// Roger 93102: same discard for a duplicate coalesced init. The
+    /// components it names are already live; the queued Despawn still
+    /// applies afterwards.
+    #[test]
+    fn a_duplicate_spawn_with_components_for_a_live_entity_is_discarded() {
+        let mut fixture = Fixture::new(HostType::Client);
+
+        fixture.deliver(vec![(370, EntityMessage::Spawn(remote(1)))]);
+        let events = fixture.deliver(vec![(
+            372,
+            EntityMessage::SpawnWithComponents(remote(1), vec![ghost()]),
+        )]);
+        assert!(summarize(&events).is_empty());
+        assert_eq!(fixture.world.entity_count(), 1);
+
+        let events = fixture.deliver(vec![(374, EntityMessage::Despawn(remote(1)))]);
+        assert_eq!(
+            summarize(&events),
+            vec![(Some(EntityMessageType::Despawn), GlobalEntity::from_u64(0))],
+        );
+        assert_eq!(fixture.world.entity_count(), 0);
+    }
 }

@@ -220,7 +220,14 @@ impl RemoteEntityChannel {
             match msg.get_type() {
                 EntityMessageType::Spawn => {
                     if self.state != EntityChannelState::Despawned {
-                        break;
+                        // Duplicate Spawn for a live entity: the lifetime it
+                        // names already applied, so this is a server
+                        // re-assertion, not a new lifetime. Discard it and
+                        // keep processing. Breaking here wedges the channel
+                        // for life: a Despawn queued behind this head can
+                        // never apply, leaking the entity and its map entry.
+                        let _ = self.buffered_messages.pop_front();
+                        continue;
                     }
 
                     self.state = EntityChannelState::Spawned;
@@ -259,7 +266,11 @@ impl RemoteEntityChannel {
                 }
                 EntityMessageType::SpawnWithComponents => {
                     if self.state != EntityChannelState::Despawned {
-                        break;
+                        // Duplicate coalesced init for a live entity: same
+                        // discard as a duplicate Spawn. The components it
+                        // names are already live; updates flow separately.
+                        let _ = self.buffered_messages.pop_front();
+                        continue;
                     }
 
                     self.state = EntityChannelState::Spawned;
