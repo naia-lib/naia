@@ -32,6 +32,30 @@ cfg_if! {
     }
 }
 
+// TEMP-PROBE-NASH-92721 (revert before qual): silent-until-dump receive log.
+// Every Spawn/Despawn APPLICATION appends (manager, tick, remote, op) to an
+// in-memory log — no I/O per event (Roger 92721 §2 TIMING CAUTION: per-event
+// output moves the dup window). Tagged by manager address: the harness runs
+// several connections in one process and remote ids restart per connection,
+// so an untagged log would show false S/S pairs across managers. The
+// consumer census drains + prints it once at first-dup via
+// `nash_temp_take_recv_log`.
+static NASH_RECV_LOG: std::sync::Mutex<Vec<(usize, Tick, RemoteEntity, char)>> =
+    std::sync::Mutex::new(Vec::new());
+
+fn nash_recv_log(manager: usize, tick: Tick, remote_entity: RemoteEntity, op: char) {
+    if let Ok(mut log) = NASH_RECV_LOG.lock() {
+        log.push((manager, tick, remote_entity, op));
+    }
+}
+
+/// Drain the TEMP receive log (see above). Called once by the consumer
+/// census at first-dup; the run is already decided by then, so the single
+/// bounded print cannot move the window.
+pub fn nash_temp_take_recv_log() -> Vec<(usize, Tick, RemoteEntity, char)> {
+    std::mem::take(&mut NASH_RECV_LOG.lock().unwrap())
+}
+
 /// Manages the inbound side of entity replication — entities whose authoritative state comes from the remote peer.
 pub struct RemoteWorldManager {
     // For Server, this contains the Entities that have been received from the Client, that the Client has authority over.
@@ -333,6 +357,8 @@ impl RemoteWorldManager {
             // info!("Processing EntityMessage: {:?}", message);
             match message {
                 EntityMessage::Spawn(remote_entity) => {
+                    // TEMP-PROBE-NASH-92721: silent receive log (see top of file).
+                    nash_recv_log(self as *const Self as usize, tick, remote_entity, 'S');
                     // set up entity
                     let world_entity = world.spawn_entity();
                     let global_entity = spawner.spawn(world_entity, Some(remote_entity));
@@ -347,6 +373,8 @@ impl RemoteWorldManager {
                         .push(EntityEvent::Spawn(tick, global_entity));
                 }
                 EntityMessage::Despawn(remote_entity) => {
+                    // TEMP-PROBE-NASH-92721: silent receive log (see top of file).
+                    nash_recv_log(self as *const Self as usize, tick, remote_entity, 'D');
                     // On the client (authed_entities_opt is Some): read the mapping before
                     // removing it so that process_remove can resolve remote_entity →
                     // global_entity and emit RemoveComponent events. The client has no relay
