@@ -20,7 +20,7 @@
 //! the shell (construction + lifecycle); Phase 3 adds the unified `receive`/`send`
 //! drives; Phase 4 adds the `entity_mut` builder.
 
-use std::{hash::Hash, net::SocketAddr, time::Duration};
+use std::{fmt::Debug, hash::Hash, net::SocketAddr, time::Duration};
 
 use naia_shared::{
     AuthorityError, Channel, ComponentKind, ConnectionStats, DisconnectReason,
@@ -344,7 +344,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     /// its fused `receive_with_world` (one output); the pipelined variant drains
     /// its recv path (one output in the oracle shape, N in the worker shape).
     /// Both ultimately apply through the same `process_all_packets` path.
-    pub fn receive<W: WorldMutType<E>>(&mut self, world: W) -> Vec<ReceiveOutput<E>> {
+    // TEMP-PROBE-NASH-93102-H-SEAT: E: Debug propagates from the remote seating log.
+    pub fn receive<W: WorldMutType<E>>(&mut self, world: W) -> Vec<ReceiveOutput<E>>
+    where
+        E: Debug,
+    {
         let mut out = Vec::new();
         self.receive_into(world, &mut out);
         out
@@ -354,11 +358,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     /// with this tick's outputs so the caller can retain the allocation across
     /// ticks. The hot per-tick recv system uses this to avoid a per-tick
     /// `Vec` allocation; byte-identical to `receive`.
+    // TEMP-PROBE-NASH-93102-H-SEAT: E: Debug propagates from the remote seating log.
     pub fn receive_into<W: WorldMutType<E>>(
         &mut self,
         mut world: W,
         out: &mut Vec<ReceiveOutput<E>>,
-    ) {
+    ) where
+        E: Debug,
+    {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => {
                 out.clear();
@@ -624,7 +631,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     }
 
     /// Decode and apply all buffered inbound packets to `world`.
-    pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
+    // TEMP-PROBE-NASH-93102-H-SEAT: E: Debug propagates from the remote seating log.
+    pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant)
+    where
+        E: Debug,
+    {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.process_all_packets(&mut world, now),
             WorldServerImpl::Pipelined(ps) => {

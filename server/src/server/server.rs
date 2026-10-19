@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash, net::SocketAddr, panic, time::Duration};
+use std::{collections::HashMap, fmt::Debug, hash::Hash, net::SocketAddr, panic, time::Duration};
 
 use naia_shared::{
     AuthorityError, BitWriter, Channel, ComponentKind, EntityAndGlobalEntityConverter,
@@ -185,7 +185,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// [`take_world_events`](Server::take_world_events) call.
     ///
     /// [`Events`]: crate::Events
-    pub fn process_all_packets<W: WorldMutType<E>>(&mut self, world: W, now: &Instant) {
+    // TEMP-PROBE-NASH-93102-H-SEAT: E: Debug propagates from the remote seating log.
+    pub fn process_all_packets<W: WorldMutType<E>>(&mut self, world: W, now: &Instant)
+    where
+        E: Debug,
+    {
         // Public API stays by-value; `WorldServer::process_all_packets` takes the
         // world by value and reborrows internally — byte-identical.
         self.world.process_all_packets(world, now);
@@ -200,7 +204,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// same connection-handshake routing through `MainServer`, then delegates to
     /// [`WorldServer::receive`] so a pipelined server exercises the split
     /// coord/recv/send path instead of whole-engine reassembly.
-    pub fn receive<W: WorldMutType<E>>(&mut self, world: W) -> Vec<ReceiveOutput<E>> {
+    // TEMP-PROBE-NASH-93102-H-SEAT: E: Debug propagates from the remote seating log.
+    pub fn receive<W: WorldMutType<E>>(&mut self, world: W) -> Vec<ReceiveOutput<E>>
+    where
+        E: Debug,
+    {
         let mut main_events = self.main.receive();
 
         for user_key in main_events.read::<ConnectEvent>() {

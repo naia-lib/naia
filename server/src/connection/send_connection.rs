@@ -11,7 +11,7 @@
 //! `RecvConnection` for the recv-only methods. Composite call sites
 //! that need both halves split-borrow the recv/send maps.
 
-use std::{collections::VecDeque, hash::Hash, net::SocketAddr, sync::Arc};
+use std::{collections::VecDeque, fmt::Debug, hash::Hash, net::SocketAddr, sync::Arc};
 
 use log::warn;
 
@@ -158,7 +158,8 @@ impl SendConnection {
     /// tick-buffer read happens at the call site (recv map lookup) before
     /// this method runs.
     #[allow(clippy::too_many_arguments)]
-    pub fn process_packets<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+    // TEMP-PROBE-NASH-93102-H-SEAT: +Debug propagates from the remote seating log.
+    pub fn process_packets<E: Copy + Eq + Hash + Send + Sync + Debug, W: WorldMutType<E>>(
         &mut self,
         message_kinds: &MessageKinds,
         component_kinds: &ComponentKinds,

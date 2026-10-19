@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
+    fmt::Debug,
     hash::Hash,
     net::SocketAddr,
     time::Duration,
@@ -1005,7 +1006,8 @@ impl LocalWorldManager {
     /// # Panics
     ///
     /// Panics when the invalid state is reached: Received message without an entity! Message: {`incoming_message`:?}.
-    pub fn take_incoming_events<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+    // TEMP-PROBE-NASH-93102-H-SEAT: +Debug propagates from the remote seating log.
+    pub fn take_incoming_events<E: Copy + Eq + Hash + Send + Sync + Debug, W: WorldMutType<E>>(
         &mut self,
         spawner: &mut dyn GlobalEntitySpawner<E>,
         global_world_manager: &dyn GlobalWorldManagerType,

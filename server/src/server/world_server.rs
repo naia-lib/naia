@@ -1,6 +1,7 @@
 use std::{
     any::Any,
     collections::{hash_set::Iter, HashMap},
+    fmt::Debug,
     hash::Hash,
     net::SocketAddr,
     panic,
@@ -535,7 +536,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     // burst drained by `PipelinedWorldServer::receive`) can reborrow one world across
     // them — a `WorldMutType` proxy is single-use by value. Byte-identical: this
     // body never moved `world`, only ever borrowed it `&mut`.
-    pub fn process_all_packets<W: WorldMutType<E>>(&mut self, world: &mut W, now: &Instant) {
+    // TEMP-PROBE-NASH-93102-H-SEAT: E: Debug propagates from the remote seating log.
+    pub fn process_all_packets<W: WorldMutType<E>>(&mut self, world: &mut W, now: &Instant)
+    where
+        E: Debug,
+    {
         self.process_disconnects(world);
 
         let addresses = std::mem::take(&mut self.recv.state.addrs_with_new_packets);
@@ -605,10 +610,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// [`process_all_packets`](Self::process_all_packets) +
     /// [`take_world_events`](Self::take_world_events) directly so the recv
     /// loop can run without holding `world`.
+    // TEMP-PROBE-NASH-93102-H-SEAT: E: Debug propagates from the remote seating log.
     pub fn receive_with_world<W: WorldMutType<E>>(
         &mut self,
         mut world: W,
-    ) -> super::receive_output::ReceiveOutput<E> {
+    ) -> super::receive_output::ReceiveOutput<E>
+    where
+        E: Debug,
+    {
         let now = Instant::now();
         self.receive_all_packets();
         self.process_all_packets(&mut world, &now);
@@ -3985,12 +3994,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         }
     }
 
+    // TEMP-PROBE-NASH-93102-H-SEAT: E: Debug propagates from the remote seating log.
     fn process_packets<W: WorldMutType<E>>(
         &mut self,
         address: &SocketAddr,
         world: &mut W,
         now: &Instant,
-    ) {
+    ) where
+        E: Debug,
+    {
         // Packets requiring established connection — process_packets lives
         // on SendConnection (the half that owns base.message_manager +
         // world_manager).

@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::fmt::Debug;
 use std::hash::Hash;
 
 use log::{debug, warn};
@@ -172,7 +173,8 @@ impl Connection {
     }
 
     /// Receive & process messages / entity actions / entity updates and emit events for them
-    pub fn process_packets<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+    // TEMP-PROBE-NASH-93102-H-SEAT: +Debug propagates from the remote seating log.
+    pub fn process_packets<E: Copy + Eq + Hash + Send + Sync + Debug, W: WorldMutType<E>>(
         &mut self,
         global_entity_map: &mut dyn GlobalEntitySpawner<E>,
         global_world_manager: &mut GlobalWorldManager,

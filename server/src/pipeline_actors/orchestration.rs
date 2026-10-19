@@ -28,6 +28,7 @@
 //! `pipeline_handles.rs:84` (where the recv path skips
 //! `process_all_packets` because it has no `&mut World`).
 
+use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -296,7 +297,8 @@ pub fn apply_recv_to_world<E, W>(
     server_tick: Tick,
 ) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>)
 where
-    E: Copy + Eq + Hash + Send + Sync,
+    // TEMP-PROBE-NASH-93102-H-SEAT: E: Debug propagates from the remote seating log.
+    E: Copy + Eq + Hash + Send + Sync + Debug,
     W: WorldMutType<E>,
 {
     let CoordHandle {

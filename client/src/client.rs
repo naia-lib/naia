@@ -1,4 +1,6 @@
-use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr, time::Duration};
+use std::{
+    any::Any, collections::VecDeque, fmt::Debug, hash::Hash, net::SocketAddr, time::Duration,
+};
 
 use log::{debug, info, warn};
 
@@ -484,7 +486,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// and before [`take_world_events`](Client::take_world_events). Applies
     /// server-replicated entity spawn/update/despawn events and queues them
     /// for the next [`take_world_events`](Client::take_world_events) call.
-    pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
+    // TEMP-PROBE-NASH-93102-H-SEAT: E: Debug propagates from the remote seating log.
+    pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant)
+    where
+        E: Debug,
+    {
         #[cfg(feature = "f3_diag")]
         {
             self.diag_process_calls += 1;

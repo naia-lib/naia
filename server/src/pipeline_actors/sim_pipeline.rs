@@ -29,7 +29,7 @@
 //! recv/send workers at spawn time; workers deposit their handle before
 //! parking and re-claim it after unpark.
 
-use std::{hash::Hash, net::SocketAddr, sync::Arc};
+use std::{fmt::Debug, hash::Hash, net::SocketAddr, sync::Arc};
 
 use crossbeam_channel::Receiver;
 use naia_shared::{
@@ -2089,7 +2089,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// # Precondition
     /// Workers parked (or not spawned). The bevy adapter's `ReceivePackets` set
     /// brackets this with park/unpark (G8); the synchronous oracle needs none.
-    pub fn receive<W: WorldMutType<E>>(&mut self, world: &mut W) -> Vec<ReceiveOutput<E>> {
+    // TEMP-PROBE-NASH-93102-H-SEAT: E: Debug propagates from the remote seating log.
+    pub fn receive<W: WorldMutType<E>>(&mut self, world: &mut W) -> Vec<ReceiveOutput<E>>
+    where
+        E: Debug,
+    {
         // Allocating convenience shape. The hot per-tick path uses
         // `receive_into` with a caller-owned reusable buffer to avoid the
         // per-tick allocation.
@@ -2102,11 +2106,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// with this tick's [`ReceiveOutput`]s in the identical FIFO order, so the
     /// caller can retain `out`'s allocation across ticks (the per-tick recv
     /// path is otherwise allocation-heavy). Byte-identical to `receive`.
+    // TEMP-PROBE-NASH-93102-H-SEAT: E: Debug propagates from the remote seating log.
     pub fn receive_into<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
         out: &mut Vec<ReceiveOutput<E>>,
-    ) {
+    ) where
+        E: Debug,
+    {
         out.clear();
         // §2f: when the worker runtime is owned + `Running`, OPEN the park window
         // here — the workers deposit their handles in the slots and block, so the

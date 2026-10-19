@@ -1,4 +1,4 @@
-use std::{collections::HashSet, hash::Hash};
+use std::{collections::HashSet, fmt::Debug, hash::Hash};
 
 use log::warn;
 
@@ -58,6 +58,37 @@ fn nash_recv_log(manager: usize, tick: Tick, remote_entity: RemoteEntity, op: ch
 /// bounded print cannot move the window.
 pub fn nash_temp_take_recv_log() -> Vec<(usize, Tick, RemoteEntity, char)> {
     std::mem::take(&mut NASH_RECV_LOG.lock().unwrap())
+}
+
+// TEMP-PROBE-NASH-93102-H-SEAT (revert before qual, never lands): seating
+// log. Same tag/tick/remote/op as the recv log, plus the Debug rendering of
+// the host world entity the remote id seated onto (TestEntity/u64 in unit
+// tests, bevy Entity in the harness — all Debug). Spawn arm pushes AFTER
+// world_entity/global_entity bind; Despawn arm pushes AFTER world_entity
+// resolves, BEFORE mapping removal, so a death-before-seating and a
+// claim-collision seat-over are distinguishable in the join. One small
+// String alloc per apply — dwarfed by the spawn/despawn itself.
+/// TEMP-PROBE-NASH-93102-H-SEAT record: (manager tag, tick, remote id, op, host seat).
+pub type NashSeatRecord = (usize, Tick, RemoteEntity, char, String);
+
+static NASH_SEAT_LOG: std::sync::Mutex<Vec<NashSeatRecord>> = std::sync::Mutex::new(Vec::new());
+
+fn nash_seat_log(
+    manager: usize,
+    tick: Tick,
+    remote_entity: RemoteEntity,
+    op: char,
+    host_entity: String,
+) {
+    if let Ok(mut log) = NASH_SEAT_LOG.lock() {
+        log.push((manager, tick, remote_entity, op, host_entity));
+    }
+}
+
+/// Drain the TEMP seating log (see above). Called once by the consumer
+/// census at first-dup alongside `nash_temp_take_recv_log`.
+pub fn nash_temp_take_seat_log() -> Vec<NashSeatRecord> {
+    std::mem::take(&mut NASH_SEAT_LOG.lock().unwrap())
 }
 
 /// Manages the inbound side of entity replication — entities whose authoritative state comes from the remote peer.
@@ -279,7 +310,7 @@ impl RemoteWorldManager {
 
     /// Processes all buffered incoming messages and updates, applying them to `world` and returning the resulting [`EntityEvent`]s.
     #[allow(clippy::too_many_arguments)]
-    pub fn take_incoming_events<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+    pub fn take_incoming_events<E: Copy + Eq + Hash + Send + Sync + Debug, W: WorldMutType<E>>(
         &mut self,
         spawner: &mut dyn GlobalEntitySpawner<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
@@ -334,7 +365,7 @@ impl RemoteWorldManager {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn process_incoming_messages<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+    fn process_incoming_messages<E: Copy + Eq + Hash + Send + Sync + Debug, W: WorldMutType<E>>(
         &mut self,
         spawner: &mut dyn GlobalEntitySpawner<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
@@ -363,7 +394,7 @@ impl RemoteWorldManager {
 
     /// For each [`EntityMessage`] that can be executed now,
     /// execute it and emit a corresponding event.
-    fn process_ready_messages<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+    fn process_ready_messages<E: Copy + Eq + Hash + Send + Sync + Debug, W: WorldMutType<E>>(
         &mut self,
         spawner: &mut dyn GlobalEntitySpawner<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
@@ -382,6 +413,14 @@ impl RemoteWorldManager {
                     // set up entity
                     let world_entity = world.spawn_entity();
                     let global_entity = spawner.spawn(world_entity, Some(remote_entity));
+                    // TEMP-PROBE-NASH-93102-H-SEAT: seating log (see top of file).
+                    nash_seat_log(
+                        self as *const Self as usize,
+                        tick,
+                        remote_entity,
+                        'S',
+                        format!("{world_entity:?}"),
+                    );
                     let already_mapped = local_entity_map.contains_remote_entity(remote_entity);
                     if already_mapped {
                         // mapped remote entity already when reserving global entity
@@ -416,6 +455,16 @@ impl RemoteWorldManager {
                         local_entity_map.remove_by_remote_entity(remote_entity)
                     };
                     let world_entity = spawner.global_entity_to_entity(global_entity).unwrap();
+                    // TEMP-PROBE-NASH-93102-H-SEAT: seating log (see top of
+                    // file). BEFORE mapping removal: this is the host seat
+                    // the death resolves against.
+                    nash_seat_log(
+                        self as *const Self as usize,
+                        tick,
+                        remote_entity,
+                        'D',
+                        format!("{world_entity:?}"),
+                    );
 
                     if let Some(component_kinds) =
                         global_world_manager.component_kinds(global_entity)
