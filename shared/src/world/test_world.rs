@@ -45,6 +45,11 @@ impl TestWorld {
         self.next_id = self.next_id.max(entity + 1);
     }
 
+    /// Counts live entities, for asserting spawn/despawn balance.
+    pub fn entity_count(&self) -> usize {
+        self.entities.len()
+    }
+
     /// Reads a component's value back out, for asserting what an apply did.
     pub fn value_of<R: ReplicatedComponent>(&self, entity: &TestEntity) -> Option<&R> {
         self.entities

@@ -1579,4 +1579,91 @@ mod remote_world_manager_tests {
             "flushing is what hands the released message to the manager",
         );
     }
+
+    /// Scope Leave->Enter cycles (Roger 92721): alternating Despawn/Spawn
+    /// applications must never hold two live world entities for one remote
+    /// entity — not across ticks, not within one batch.
+    #[test]
+    fn scope_leave_enter_cycles_never_hold_two_live_entities() {
+        let mut fixture = Fixture::new(HostType::Client);
+
+        // Enter: spawn applies, one live entity, mapped.
+        let events = fixture.deliver(vec![(370, EntityMessage::Spawn(remote(1)))]);
+        assert_eq!(summarize(&events).len(), 1);
+        assert_eq!(fixture.world.entity_count(), 1);
+        assert!(fixture.map.contains_remote_entity(remote(1)));
+
+        // Leave->Enter flap inside ONE batch (adjacent-tick scope churn):
+        // the despawn must apply before the respawn, ending with exactly
+        // one live entity.
+        let events = fixture.deliver(vec![
+            (372, EntityMessage::Despawn(remote(1))),
+            (372, EntityMessage::Spawn(remote(1))),
+        ]);
+        assert_eq!(
+            summarize(&events)
+                .iter()
+                .map(|(t, _)| *t)
+                .collect::<Vec<_>>(),
+            vec![
+                Some(EntityMessageType::Despawn),
+                Some(EntityMessageType::Spawn)
+            ],
+            "despawn must apply before the respawn in the same batch",
+        );
+        assert_eq!(fixture.world.entity_count(), 1);
+        assert!(fixture.map.contains_remote_entity(remote(1)));
+
+        // Leave: despawn applies, nothing live, unmapped.
+        let events = fixture.deliver(vec![(374, EntityMessage::Despawn(remote(1)))]);
+        assert_eq!(summarize(&events).len(), 1);
+        assert_eq!(fixture.world.entity_count(), 0);
+        assert!(!fixture.map.contains_remote_entity(remote(1)));
+    }
+
+    /// Re-entry under a FRESH remote id (the server allocates one when the
+    /// old lifetime's despawn is still unacked — see the stale-mapping
+    /// eviction in `host_init_entity`): once the ordered despawn lands,
+    /// exactly one entity stays live.
+    #[test]
+    fn reentry_under_fresh_remote_id_balances_once_despawn_lands() {
+        let mut fixture = Fixture::new(HostType::Client);
+
+        fixture.deliver(vec![(370, EntityMessage::Spawn(remote(1)))]);
+        assert_eq!(fixture.world.entity_count(), 1);
+
+        // Ordered stream: despawn of the old id lands before the fresh spawn.
+        let events = fixture.deliver(vec![
+            (372, EntityMessage::Despawn(remote(1))),
+            (372, EntityMessage::Spawn(remote(2))),
+        ]);
+        assert_eq!(summarize(&events).len(), 2);
+        assert_eq!(fixture.world.entity_count(), 1);
+        assert!(!fixture.map.contains_remote_entity(remote(1)));
+        assert!(fixture.map.contains_remote_entity(remote(2)));
+
+        let events = fixture.deliver(vec![(374, EntityMessage::Despawn(remote(2)))]);
+        assert_eq!(summarize(&events).len(), 1);
+        assert_eq!(fixture.world.entity_count(), 0);
+    }
+
+    /// The receive airlock (Roger 92721 flip (i) control): a second Spawn
+    /// with no intervening Despawn — the shape a lost despawn would take —
+    /// must STALL in the channel, never double-spawn the world.
+    #[test]
+    fn spawn_without_intervening_despawn_stalls_instead_of_doubling() {
+        let mut fixture = Fixture::new(HostType::Client);
+
+        fixture.deliver(vec![(370, EntityMessage::Spawn(remote(1)))]);
+        assert_eq!(fixture.world.entity_count(), 1);
+
+        // No despawn between the lifetimes: the respawn cannot apply.
+        let events = fixture.deliver(vec![(372, EntityMessage::Spawn(remote(1)))]);
+        assert!(
+            summarize(&events).is_empty(),
+            "a spawn with no intervening despawn must stall, never emit",
+        );
+        assert_eq!(fixture.world.entity_count(), 1);
+        assert!(fixture.map.contains_remote_entity(remote(1)));
+    }
 }
