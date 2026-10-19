@@ -1858,6 +1858,19 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .cancel_request_id(response_key.request_id());
     }
 
+    /// Drop every outstanding request row for `user_key`. Same contract
+    /// as the resident path: per-episode bound, user stays connected,
+    /// answered rows included, late responses warn+drop, no wire effect.
+    /// Touches only coordinator state (like [`Self::send_request`]); no
+    /// monolithic reassembly needed. Panics under the same conditions as
+    /// [`Self::coord_mut`] — call from the parked main thread only.
+    pub fn cancel_requests_for_user(&mut self, user_key: &UserKey) -> usize {
+        self.coord_mut()
+            .state
+            .global_request_manager
+            .cancel_requests_for_user(user_key)
+    }
+
     /// Number of outstanding (unanswered, unretired) request rows for
     /// `user_key`, read from coordinator state. Production observer for the
     /// bounded-rows control. Panics under the same conditions as

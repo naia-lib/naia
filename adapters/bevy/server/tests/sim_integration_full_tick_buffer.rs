@@ -184,3 +184,98 @@ fn park_window_recv_borrow_is_race_free_under_repeated_cycles() {
 
     drop(app);
 }
+
+/// A skipped drain tick is permanent loss: its message never replays.
+///
+/// Contract: `TickBufferReceiverChannel::collect(T)` prunes every buffered
+/// tick older than T before the exact-T match, so draining T+1 without
+/// draining T discards T's input forever — no later drain (exact, early, or
+/// repeated) can surface it. This is the skip-one-drain control for the
+/// served-b5d exact-T transport contract (Usher 87190): contiguous drains
+/// yield every tick (test above), one skipped drain loses exactly that tick.
+#[test]
+fn tick_buffered_skipped_drain_tick_never_replays() {
+    let mut app = build_app();
+    listen(&mut app, "127.0.0.1:23042");
+
+    let addr: std::net::SocketAddr = "127.0.0.1:54401".parse().unwrap();
+    let user_key = UserKey::from_u64(8);
+
+    let ticks: Vec<u16> = vec![12, 13, 14, 15, 16];
+    let skipped: u16 = 14;
+
+    Server::pipeline_park(app.world());
+    let recv_slot = recv_slot(&mut app);
+
+    // ── Inject phase (parked) ──────────────────────────────────────────
+    {
+        let mut recv = recv_slot
+            .lock()
+            .take()
+            .expect("RecvHandle in slot while workers parked");
+        for (i, message_tick) in ticks.iter().copied().enumerate() {
+            let host_tick = message_tick.wrapping_sub(2);
+            let accepted = recv
+                .inject_tick_buffer_message_for_test::<TickBufferedChannel, TestMessage>(
+                    addr,
+                    &user_key,
+                    &host_tick,
+                    &message_tick,
+                    TestMessage::new(i as u32 + 100),
+                );
+            assert!(
+                accepted,
+                "tick-buffer inject should be accepted for tick {message_tick}"
+            );
+        }
+        *recv_slot.lock() = Some(recv);
+    }
+
+    // ── Drain phase: 12, 13, SKIP 14, 15, 16 ────────────────────────────
+    let mut seen_pairs: Vec<(u16, u32)> = Vec::new();
+    {
+        let mut recv = recv_slot.lock().take().expect("RecvHandle still in slot");
+        for message_tick in [12u16, 13, 15, 16] {
+            let mut msgs = recv.receive_tick_buffer_messages(&message_tick);
+            let drained: Vec<(UserKey, TestMessage)> =
+                msgs.read::<TickBufferedChannel, TestMessage>();
+            assert_eq!(
+                drained.len(),
+                1,
+                "drain at tick {message_tick} should yield exactly its own message"
+            );
+            assert_eq!(drained[0].0, user_key);
+            seen_pairs.push((message_tick, drained[0].1.value));
+        }
+
+        // The skipped tick yields nothing, immediately after the skip ...
+        let mut late = recv.receive_tick_buffer_messages(&skipped);
+        let late_drained: Vec<(UserKey, TestMessage)> =
+            late.read::<TickBufferedChannel, TestMessage>();
+        assert!(
+            late_drained.is_empty(),
+            "skipped tick {skipped} must not replay after the drain moved past it"
+        );
+
+        // ... and nothing replays on a repeated late drain either.
+        let mut late_again = recv.receive_tick_buffer_messages(&skipped);
+        let late_again_drained: Vec<(UserKey, TestMessage)> =
+            late_again.read::<TickBufferedChannel, TestMessage>();
+        assert!(
+            late_again_drained.is_empty(),
+            "skipped tick {skipped} must stay lost on repeated drains"
+        );
+        *recv_slot.lock() = Some(recv);
+    }
+
+    Server::pipeline_unpark(app.world());
+
+    thread::sleep(Duration::from_millis(10));
+    Server::pipeline_propagate_panics(app.world());
+
+    // Ticks 12,13,15,16 yielded values 100,101,103,104 in order; tick 14's
+    // value 102 appears nowhere.
+    assert_eq!(seen_pairs, vec![(12, 100), (13, 101), (15, 103), (16, 104)]);
+
+    drop(app);
+}

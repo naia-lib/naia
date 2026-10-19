@@ -463,12 +463,33 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Drop every outstanding request row for `user_key`, returning how
+    /// many were removed. Same contract as the world surface: the user
+    /// stays connected; answered rows included; no wire effect.
+    pub fn cancel_requests_for_user(&mut self, user_key: &UserKey) -> usize {
+        match &mut *self.server_impl {
+            ServerImpl::WorldOnly(server) => server.cancel_requests_for_user(user_key),
+            ServerImpl::Full(server) => server.cancel_requests_for_user(user_key),
+        }
+    }
+
     /// Outstanding (unanswered, unretired) request rows for `user_key`.
     /// Production observer for the bounded-rows control.
     pub fn outstanding_request_count(&self, user_key: &UserKey) -> usize {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.outstanding_request_count(user_key),
             ServerImpl::Full(server) => server.outstanding_request_count(user_key),
+        }
+    }
+
+    /// Client handshake pings received for `user_key` before its
+    /// connection finalized: 1 means first send, 2+ means a resend
+    /// completed it. Same contract as the world surface. The world-only
+    /// arm never runs the main-server handshake, so it reads `None`.
+    pub fn handshake_attempts(&self, user_key: &UserKey) -> Option<u32> {
+        match &*self.server_impl {
+            ServerImpl::WorldOnly(_) => None,
+            ServerImpl::Full(server) => server.handshake_attempts(user_key),
         }
     }
 
