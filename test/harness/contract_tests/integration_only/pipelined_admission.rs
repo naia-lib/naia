@@ -33,6 +33,14 @@ impl Client {
             .unwrap();
     }
 
+    fn heartbeat(&self) {
+        let mut writer = BitWriter::new();
+        StandardHeader::new(PacketType::Heartbeat, 0, 0, 0).ser(&mut writer);
+        self.outgoing
+            .send(writer.to_packet().slice().to_vec())
+            .unwrap();
+    }
+
     fn take_connect_responses(&self) -> usize {
         self.incoming
             .try_iter()
@@ -75,7 +83,7 @@ impl Admission {
         }
     }
 
-    fn receive(&mut self, expected_requests: usize) -> Vec<UserKey> {
+    fn receive(&mut self, expected_packets: usize) -> Vec<UserKey> {
         let mut outputs = Vec::new();
         self.server
             .receive_into(&mut self.world.proxy_mut(), &mut outputs);
@@ -92,17 +100,17 @@ impl Admission {
             .into_iter()
             .filter(|(server_to_client, _)| !server_to_client)
             .collect();
-        assert_eq!(received.len(), expected_requests);
+        assert_eq!(received.len(), expected_packets);
         for (_, bytes) in received {
             let mut reader = BitReader::new(&bytes);
-            assert_eq!(
-                StandardHeader::de(&mut reader).unwrap().packet_type,
-                PacketType::Handshake
-            );
-            assert_eq!(
-                HandshakeHeader::de(&mut reader).unwrap(),
-                HandshakeHeader::ClientConnectRequest
-            );
+            match StandardHeader::de(&mut reader).unwrap().packet_type {
+                PacketType::Handshake => assert_eq!(
+                    HandshakeHeader::de(&mut reader).unwrap(),
+                    HandshakeHeader::ClientConnectRequest
+                ),
+                PacketType::Heartbeat => {}
+                other => panic!("unexpected client packet: {other:?}"),
+            }
         }
         connected
     }
@@ -158,7 +166,10 @@ fn draining_before_registration_does_not_finalize_or_buffer_admission() {
     // The same operations in reversed order discriminate: registration after
     // the drain cannot resurrect a request that already lacked a user.
     admission.server.receive_user(key, client.address);
-    assert!(admission.receive(0).is_empty());
+    // A non-connect packet forces another coordinator drain even with the
+    // frozen test clock. An empty receive would skip that drain entirely.
+    client.heartbeat();
+    assert!(admission.receive(1).is_empty());
     admission.assert_connection(&key, &client.address, false);
     admission.send();
     // Recv acknowledges even an unknown address. This is deliberately weaker
@@ -183,7 +194,8 @@ fn unknown_user_does_not_block_a_registered_user_in_the_same_drain() {
     admission.assert_connection(&unknown_key, &unknown.address, false);
 
     admission.server.receive_user(unknown_key, unknown.address);
-    assert!(admission.receive(0).is_empty());
+    unknown.heartbeat();
+    assert!(admission.receive(1).is_empty());
     admission.assert_connection(&unknown_key, &unknown.address, false);
     admission.send();
     assert_eq!(known.take_connect_responses(), 1);
