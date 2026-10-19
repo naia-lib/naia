@@ -5,8 +5,8 @@ use log::warn;
 #[cfg(feature = "transport_udp")]
 use naia_shared::Timestamp as stamp_time;
 use naia_shared::{
-    handshake::HandshakeHeader, BitReader, BitWriter, IdentityToken, OutgoingPacket, PacketType,
-    ProtocolId, Serde, StandardHeader, Timer,
+    handshake::HandshakeHeader, BitReader, BitWriter, IdentityToken, Instant, OutgoingPacket,
+    PacketType, ProtocolId, Serde, StandardHeader, Timer,
 };
 
 use crate::{
@@ -61,6 +61,74 @@ impl PartialEq for HandshakeState {
     }
 }
 
+/// Per-attempt handshake observability (Usher 93197): counts of handshake
+/// packets sent per phase and inbound datagrams received per type, with a
+/// one-shot warn schedule. A stalled handshake is otherwise silent — the
+/// client logs only its first send — so a multi-second gap (run4/run5's +4s
+/// first inbound, +24s connect on loopback) cannot be attributed to
+/// send-starvation vs wire-loss vs server-silence. Transition rows fire
+/// immediately (they survive a tab killed mid-handshake); periodic summaries
+/// fire at 5/15/25s; teardown rows close the attempt. Pure schedule form
+/// mirrors `PostConnectWatch` so tests pin it without a wall clock.
+struct HandshakeWatch {
+    attempt_started: Instant,
+    sent_negotiate: u32,
+    sent_ping: u32,
+    sent_connect: u32,
+    recv_handshake: u32,
+    recv_pong: u32,
+    recv_ignored: u32,
+    next_mark: usize,
+}
+
+impl HandshakeWatch {
+    /// One-shot summary marks in elapsed seconds. A healthy handshake
+    /// (identify + 10 pongs at 250ms + connect) takes ~3s, so the first
+    /// mark only ever fires on a stalled attempt.
+    const MARKS: [u64; 3] = [5, 15, 25];
+
+    fn new() -> Self {
+        Self {
+            attempt_started: Instant::now(),
+            sent_negotiate: 0,
+            sent_ping: 0,
+            sent_connect: 0,
+            recv_handshake: 0,
+            recv_pong: 0,
+            recv_ignored: 0,
+            next_mark: 0,
+        }
+    }
+
+    fn elapsed_secs(&self) -> u64 {
+        self.attempt_started.elapsed(&Instant::now()).as_secs()
+    }
+
+    /// Returns the newly-due mark, if any, advancing past it so each mark
+    /// fires exactly once. Pure takes-elapsed-seconds form for tests.
+    fn mark_due(&mut self, elapsed_secs: u64) -> Option<u64> {
+        if self.next_mark < Self::MARKS.len() && elapsed_secs >= Self::MARKS[self.next_mark] {
+            let mark = Self::MARKS[self.next_mark];
+            self.next_mark += 1;
+            Some(mark)
+        } else {
+            None
+        }
+    }
+
+    fn totals(&self) -> String {
+        format!(
+            "sent_neg={} sent_ping={} sent_conn={} recv_hs={} recv_pong={} recv_ign={}",
+            self.sent_negotiate,
+            self.sent_ping,
+            self.sent_connect,
+            self.recv_handshake,
+            self.recv_pong,
+            self.recv_ignored,
+        )
+    }
+}
+
 pub struct HandshakeManager {
     protocol_id: ProtocolId,
     ping_interval: Duration,
@@ -68,6 +136,7 @@ pub struct HandshakeManager {
     connection_state: HandshakeState,
     handshake_timer: Timer,
     identity_token: Option<IdentityToken>,
+    watch: HandshakeWatch,
     #[cfg(feature = "transport_udp")]
     pre_connection_timestamp: Timestamp,
     #[cfg(feature = "transport_udp")]
@@ -87,7 +156,7 @@ impl Handshaker for HandshakeManager {
 
         self.handshake_timer.reset();
 
-        match &mut self.connection_state {
+        let out = match &mut self.connection_state {
             #[cfg(feature = "transport_udp")]
             HandshakeState::AwaitingChallengeResponse => {
                 let identity_token = self.identity_token.as_ref()?;
@@ -118,7 +187,15 @@ impl Handshaker for HandshakeManager {
                 Some(writer.to_packet())
             }
             HandshakeState::Connected => None,
+        };
+        if out.is_some() {
+            match &self.connection_state {
+                HandshakeState::TimeSync(_) => self.watch.sent_ping += 1,
+                HandshakeState::AwaitingConnectResponse(_) => self.watch.sent_connect += 1,
+                _ => self.watch.sent_negotiate += 1,
+            }
         }
+        out
     }
 
     // Call this regularly so handshake manager can process incoming requests
@@ -130,6 +207,7 @@ impl Handshaker for HandshakeManager {
         let header = header_result.unwrap();
         match header.packet_type {
             PacketType::Handshake => {
+                self.watch.recv_handshake += 1;
                 let Ok(handshake_header) = HandshakeHeader::de(reader) else {
                     warn!("Could not read HandshakeHeader");
                     return None;
@@ -160,6 +238,7 @@ impl Handshaker for HandshakeManager {
                 }
             }
             PacketType::Pong => {
+                self.watch.recv_pong += 1;
                 // Time Manager should record incoming Pongs in order to sync time
                 let mut success = false;
                 if let HandshakeState::TimeSync(time_manager) = &mut self.connection_state {
@@ -178,10 +257,14 @@ impl Handshaker for HandshakeManager {
                     };
                     self.connection_state =
                         HandshakeState::AwaitingConnectResponse(time_manager.finalize());
+                    self.watch_transition("awaiting-connect");
                 }
                 None
             }
-            PacketType::Data | PacketType::Heartbeat | PacketType::Ping => None,
+            PacketType::Data | PacketType::Heartbeat | PacketType::Ping => {
+                self.watch.recv_ignored += 1;
+                None
+            }
         }
     }
 
@@ -206,6 +289,29 @@ impl Handshaker for HandshakeManager {
         identity_token.ser(&mut writer);
 
         writer
+    }
+
+    fn watch_summary_due(&mut self) -> Option<String> {
+        let elapsed = self.watch.elapsed_secs();
+        self.watch.mark_due(elapsed).map(|mark| {
+            format!(
+                "handshake +{}s still {} after {}s ({})",
+                mark,
+                self.state_name(),
+                elapsed,
+                self.watch.totals(),
+            )
+        })
+    }
+
+    fn watch_final(&self, end: &str) -> String {
+        format!(
+            "handshake {} after {}s in {} ({})",
+            end,
+            self.watch.elapsed_secs(),
+            self.state_name(),
+            self.watch.totals(),
+        )
     }
 }
 
@@ -233,7 +339,31 @@ impl HandshakeManager {
             connection_state: HandshakeState::AwaitingIdentifyResponse,
             ping_interval,
             handshake_pings,
+            watch: HandshakeWatch::new(),
         }
+    }
+
+    fn state_name(&self) -> &'static str {
+        match self.connection_state {
+            #[cfg(feature = "transport_udp")]
+            HandshakeState::AwaitingChallengeResponse => "awaiting-challenge",
+            #[cfg(feature = "transport_udp")]
+            HandshakeState::AwaitingValidateResponse => "awaiting-validate",
+            #[cfg(not(feature = "transport_udp"))]
+            HandshakeState::AwaitingIdentifyResponse => "awaiting-identify",
+            HandshakeState::TimeSync(_) => "time-sync",
+            HandshakeState::AwaitingConnectResponse(_) => "awaiting-connect",
+            HandshakeState::Connected => "connected",
+        }
+    }
+
+    fn watch_transition(&self, to: &str) {
+        warn!(
+            "naia: Client: handshake advanced to {} after {}s ({})",
+            to,
+            self.watch.elapsed_secs(),
+            self.watch.totals(),
+        );
     }
 
     // Step 1 of Handshake (address-validating builds)
@@ -268,6 +398,7 @@ impl HandshakeManager {
                 self.pre_connection_digest = Some(digest_bytes);
 
                 self.connection_state = HandshakeState::AwaitingValidateResponse;
+                self.watch_transition("awaiting-validate");
             }
         }
     }
@@ -293,6 +424,7 @@ impl HandshakeManager {
             self.ping_interval,
             self.handshake_pings,
         ));
+        self.watch_transition("time-sync");
     }
 
     // Step 1 of Handshake (builds without address validation)
@@ -315,6 +447,7 @@ impl HandshakeManager {
                 self.ping_interval,
                 self.handshake_pings,
             ));
+            self.watch_transition("time-sync");
         }
     }
 
@@ -370,7 +503,7 @@ mod tests {
         TestClock,
     };
 
-    use super::{HandshakeManager, HandshakeResult, Handshaker};
+    use super::{HandshakeManager, HandshakeResult, HandshakeWatch, Handshaker};
 
     const SEND_INTERVAL_MS: u64 = 1000;
 
@@ -546,6 +679,106 @@ mod tests {
             Some(PacketType::Ping),
             "stray connect response must leave the timesync stage intact",
         );
+    }
+
+    #[test]
+    fn watch_counts_sends_per_phase() {
+        init_clock();
+        let mut manager = manager();
+        with_token(&mut manager);
+
+        TestClock::advance(SEND_INTERVAL_MS + 1);
+        assert!(manager.send().is_some());
+        TestClock::advance(SEND_INTERVAL_MS + 1);
+        assert!(manager.send().is_some());
+        assert_eq!(manager.watch.sent_negotiate, 2);
+        assert_eq!(manager.watch.sent_ping, 0);
+
+        // Identify response moves to TimeSync; pings count separately.
+        let result = recv_handshake(&mut manager, HandshakeHeader::ServerIdentifyResponse);
+        assert!(result.is_none());
+        TestClock::advance(SEND_INTERVAL_MS + 1);
+        assert!(manager.send().is_some());
+        assert_eq!(manager.watch.sent_negotiate, 2);
+        assert_eq!(manager.watch.sent_ping, 1);
+    }
+
+    #[test]
+    fn watch_send_gated_by_timer_counts_nothing() {
+        init_clock();
+        let mut manager = manager();
+        with_token(&mut manager);
+
+        TestClock::advance(1);
+        assert!(manager.send().is_some());
+        // Immediately after a send the interval gates us: no packet, no count.
+        assert!(manager.send().is_none());
+        assert_eq!(manager.watch.sent_negotiate, 1);
+    }
+
+    #[test]
+    fn watch_counts_receives_per_type() {
+        init_clock();
+        let mut manager = manager();
+        with_token(&mut manager);
+
+        // Stray connect response: ignored by stage, still counted inbound.
+        let result = recv_handshake(&mut manager, HandshakeHeader::ServerConnectResponse);
+        assert!(result.is_none());
+        // Pong outside TimeSync: unread, still counted.
+        let bytes = inbound_bytes(PacketType::Pong, None);
+        let mut reader = BitReader::new(&bytes);
+        assert!(manager.recv(&mut reader).is_none());
+        // Ping mid-handshake: ignored, still counted.
+        let bytes = inbound_bytes(PacketType::Ping, None);
+        let mut reader = BitReader::new(&bytes);
+        assert!(manager.recv(&mut reader).is_none());
+
+        assert_eq!(manager.watch.recv_handshake, 1);
+        assert_eq!(manager.watch.recv_pong, 1);
+        assert_eq!(manager.watch.recv_ignored, 1);
+    }
+
+    #[test]
+    fn watch_marks_fire_once_in_order() {
+        init_clock();
+        let mut watch = HandshakeWatch::new();
+        assert_eq!(watch.mark_due(0), None);
+        assert_eq!(watch.mark_due(4), None);
+        assert_eq!(watch.mark_due(5), Some(5));
+        assert_eq!(watch.mark_due(5), None);
+        assert_eq!(watch.mark_due(14), None);
+        assert_eq!(watch.mark_due(15), Some(15));
+        assert_eq!(watch.mark_due(100), Some(25));
+        assert_eq!(watch.mark_due(100), None);
+    }
+
+    #[test]
+    fn watch_summary_due_names_phase_and_totals() {
+        init_clock();
+        let mut manager = manager();
+        with_token(&mut manager);
+
+        assert!(manager.watch_summary_due().is_none());
+        TestClock::advance(6000);
+        let line = manager.watch_summary_due().expect("5s mark is due");
+        assert!(line.contains("+5s"), "unexpected line: {line}");
+        assert!(
+            line.contains("awaiting-identify"),
+            "unexpected line: {line}"
+        );
+        assert!(line.contains("sent_neg="), "unexpected line: {line}");
+        // Mark consumed: no repeat without further elapsed time.
+        assert!(manager.watch_summary_due().is_none());
+    }
+
+    #[test]
+    fn watch_final_names_outcome() {
+        init_clock();
+        let manager = manager();
+        let line = manager.watch_final("rejected");
+        assert!(line.contains("rejected"), "unexpected line: {line}");
+        assert!(line.contains("sent_neg=0"), "unexpected line: {line}");
     }
 }
 

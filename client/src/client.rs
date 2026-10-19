@@ -2377,8 +2377,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             // Same teardown as `cancel_connect`: nothing was ever
             // established, so no world state is touched — the reset drops
             // the socket, the attempt flags, and the rung timer together.
+            warn!(
+                "naia: Client: {}",
+                self.handshake_manager
+                    .watch_final("timed out (AuthTimeout)")
+            );
             self.reset_attempt_state();
             return;
+        }
+
+        // Stalled-handshake attribution (Usher 93197): one-shot rows at
+        // 5/15/25s so a slow attempt names its phase and counts instead of
+        // sitting silent past the flow budget that will kill it.
+        if let Some(line) = self.handshake_manager.watch_summary_due() {
+            warn!("naia: Client: {line}");
         }
 
         if !self.io.is_authenticated() {
@@ -2496,6 +2508,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                                 "naia: Client: handshake Connected to Server at {:?}",
                                 server_addr
                             );
+                            warn!(
+                                "naia: Client: {}",
+                                self.handshake_manager.watch_final("connected")
+                            );
                             self.post_connect_watch = Some(PostConnectWatch::new());
                             warn!("naia: Client post-connect watch started");
                             self.incoming_world_events.push_connection(&server_addr);
@@ -2518,6 +2534,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                                 Some(server_addr),
                                 reason,
                                 None,
+                            );
+                            warn!(
+                                "naia: Client: {}",
+                                self.handshake_manager.watch_final("rejected")
                             );
                             self.disconnect_reset_connection();
                             break;
