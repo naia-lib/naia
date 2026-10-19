@@ -235,6 +235,20 @@ fn despawning_a_paused_entity_clears_the_pause_state() {
     assert!(!fx.manager.is_entity_paused(entity));
 }
 
+/// A despawn for an id already gone from the local map must skip silently and
+/// queue nothing: a user despawn and a scope-exit `Despawn` can land in the
+/// same tick, so the second call observes an absent id (specimen:
+/// `fd0c01cb5587d` tick 388).
+#[test]
+fn despawning_an_absent_entity_skips_silently() {
+    let mut fx = Fixture::server();
+
+    fx.manager.despawn_entity(global(99));
+
+    let commands = fx.drain_commands();
+    assert!(commands.is_empty(), "{commands:?}");
+}
+
 // -- command routing -------------------------------------------------------
 
 /// Each of the three routers must queue its own command shape for a
@@ -306,16 +320,6 @@ fn only_queued_commands_reach_the_sender() {
     assert!(fx
         .drain_commands()
         .contains(&crate::EntityCommand::Spawn(global(1))));
-}
-
-/// Despawning an entity the map never saw is a programmer error, not a
-/// droppable packet.
-#[test]
-#[should_panic(expected = "does not exist in local entity map")]
-fn despawning_an_unmapped_entity_panics() {
-    let mut fx = Fixture::server();
-
-    fx.manager.despawn_entity(global(1));
 }
 
 #[test]

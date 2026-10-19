@@ -1271,17 +1271,15 @@ impl LocalWorldManager {
 
     /// Sends a `Despawn` command for `global_entity` through whichever engine owns it.
     ///
-    /// # Panics
-    ///
-    /// Panics when the invalid state is reached: Attempting to despawn entity which does not exist in local entity map! {`global_entity`:?}.
+    /// Skips silently when the id is already gone from the local map: a user
+    /// despawn and a scope-exit `Despawn` can land in the same tick, so the
+    /// second call observes an absent id (specimen: `fd0c01cb5587d` tick 388).
     pub fn despawn_entity(&mut self, global_entity: GlobalEntity) {
         // Clean up pause state if entity was Paused (ScopeExit::Persist)
         self.paused_entities.remove(&global_entity);
 
         let Ok(local_entity) = self.em_read().global_entity_to_owned_entity(global_entity) else {
-            panic!(
-                "Attempting to despawn entity which does not exist in local entity map! {global_entity:?}"
-            );
+            return;
         };
         if local_entity.is_host() {
             self.host.send_command(
