@@ -1208,6 +1208,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         self.world.connection_stats(user_key)
     }
 
+    /// Cumulative data-channel packets built for the given user's connection,
+    /// or `None` if the user is not connected. D6 L1 EMIT leg (Gerry 92237):
+    /// pairs with the client's `data_rx_count` to bound the hub+wire hold.
+    pub fn data_emit_count(&self, user_key: &UserKey) -> Option<u64> {
+        self.world.data_emit_count(user_key)
+    }
+
     /// Whether the user's canonical send-side connection is materialized.
     pub fn user_connection_ready(&self, user_key: &UserKey) -> bool {
         self.world.user_connection_ready(user_key)

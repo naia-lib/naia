@@ -1443,6 +1443,20 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         })
     }
 
+    /// Cumulative data-channel packets built for `user_key`'s connection.
+    ///
+    /// D6 L1 EMIT leg (Gerry 92237 / Usher 92247): same population as the
+    /// resident arm. Reads the parked send handle; `None` when the user is
+    /// unknown, the handle is not parked, or no send-side connection is
+    /// materialized — never a slot-precondition panic.
+    pub fn data_emit_count(&self, user_key: &UserKey) -> Option<u64> {
+        let addr = self.coord().user_address(*user_key)?;
+        let send = self.send_slot.lock();
+        let send = send.as_ref()?;
+        let send_conn = send.state.send_user_connections.get(&addr)?;
+        Some(send_conn.shared.data_packets_built())
+    }
+
     /// Whether the user's send-side connection has been materialized.
     ///
     /// Safe during the park window between `receive()` and `send()`. This

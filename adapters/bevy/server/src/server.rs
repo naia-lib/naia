@@ -762,6 +762,15 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Cumulative data-channel packets built for user `user_key`, or `None`.
+    /// D6 L1 EMIT leg (Gerry 92237): pairs with the client's `data_rx_count`.
+    pub fn data_emit_count(&self, user_key: &UserKey) -> Option<u64> {
+        match &*self.server_impl {
+            ServerImpl::WorldOnly(server) => server.data_emit_count(user_key),
+            ServerImpl::Full(server) => server.data_emit_count(user_key),
+        }
+    }
+
     /// Enable the historian, keeping up to `max_ticks` ticks.
     pub fn enable_historian(&mut self, max_ticks: u16) {
         match &mut *self.server_impl {

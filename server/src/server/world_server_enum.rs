@@ -584,6 +584,15 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         }
     }
 
+    /// Cumulative data-channel packets built for the given user's connection.
+    /// D6 L1 EMIT leg (Gerry 92237 / Usher 92247).
+    pub fn data_emit_count(&self, user_key: &UserKey) -> Option<u64> {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.data_emit_count(user_key),
+            WorldServerImpl::Pipelined(ps) => ps.data_emit_count(user_key),
+        }
+    }
+
     /// Whether the user's canonical send-side connection is materialized.
     pub fn user_connection_ready(&self, user_key: &UserKey) -> bool {
         match &self.inner {

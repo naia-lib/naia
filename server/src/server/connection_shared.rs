@@ -43,6 +43,15 @@ pub struct ConnectionShared {
     /// writes, the recv-side timeout sweep reads at the drop decision.
     /// Monotonic; wraps only after 2^64 packets.
     pub outbound_packets_sent: AtomicU64,
+
+    /// Cumulative count of `PacketType::Data` packets built for this
+    /// connection. D6 L1 EMIT leg (Gerry 92237 / Usher 92247): the send
+    /// path writes once per packet built in `build_all_packets`, including
+    /// ack-only Data packets — the same population the client's
+    /// `data_rx_count` ingests, so EMIT minus RECEIVE bounds the hub+wire
+    /// hold per user. Marker-only, never gates behavior. Monotonic per
+    /// connection; a new connection gets a new zeroed shared block.
+    pub data_packets_built: AtomicU64,
 }
 
 impl ConnectionShared {
@@ -56,6 +65,7 @@ impl ConnectionShared {
             rtt_avg_ms: AtomicU32::new(0_f32.to_bits()),
             should_disconnect: AtomicBool::new(false),
             outbound_packets_sent: AtomicU64::new(0),
+            data_packets_built: AtomicU64::new(0),
         }
     }
 
@@ -96,6 +106,12 @@ impl ConnectionShared {
         self.outbound_packets_sent.fetch_add(1, Ordering::Relaxed);
     }
 
+    /// Records `count` Data packets built for this connection in one send
+    /// pass. D6 L1 EMIT leg (Gerry 92237 / Usher 92247).
+    pub fn note_data_packets_built(&self, count: u64) {
+        self.data_packets_built.fetch_add(count, Ordering::Relaxed);
+    }
+
     // --- Reader API (send path) ---
 
     /// Returns the remote's latest acknowledged packet sequence number.
@@ -122,6 +138,12 @@ impl ConnectionShared {
     pub fn outbound_packets_sent(&self) -> u64 {
         self.outbound_packets_sent.load(Ordering::Acquire)
     }
+
+    /// Returns the cumulative Data-packet build count for this connection.
+    /// D6 L1 EMIT leg (Gerry 92237 / Usher 92247).
+    pub fn data_packets_built(&self) -> u64 {
+        self.data_packets_built.load(Ordering::Acquire)
+    }
 }
 
 impl Default for ConnectionShared {
@@ -146,6 +168,20 @@ mod connection_shared_tests {
             shared.outbound_packets_sent(),
             3,
             "every packet handed to the socket must be counted for the timeout-drop marker",
+        );
+    }
+
+    #[test]
+    fn data_emit_count_starts_at_zero_and_accumulates_per_pass() {
+        let shared = ConnectionShared::new();
+        assert_eq!(shared.data_packets_built(), 0);
+        shared.note_data_packets_built(3);
+        shared.note_data_packets_built(0);
+        shared.note_data_packets_built(1);
+        assert_eq!(
+            shared.data_packets_built(),
+            4,
+            "every Data packet built for the connection must be counted for the D6 EMIT leg",
         );
     }
 }

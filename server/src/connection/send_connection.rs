@@ -586,6 +586,10 @@ impl SendConnection {
             packets.push(pkt);
         }
 
+        // D6 L1 EMIT leg (Gerry 92237 / Usher 92247): every packet built
+        // here is PacketType::Data. Marker-only; never gates behavior.
+        self.shared.note_data_packets_built(packets.len() as u64);
+
         #[cfg(feature = "e2e_debug")]
         {
             use send_pass_walls::*;

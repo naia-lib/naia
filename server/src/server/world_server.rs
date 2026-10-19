@@ -2614,6 +2614,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         })
     }
 
+    /// Cumulative data-channel packets built for `user_key`'s connection.
+    ///
+    /// D6 L1 EMIT leg (Gerry 92237 / Usher 92247): counts every
+    /// `PacketType::Data` packet built in `build_all_packets`, including
+    /// ack-only Data packets — the same population the client's
+    /// `data_rx_count` ingests, so EMIT minus RECEIVE bounds the hub+wire
+    /// hold per user. Marker-only, never gates behavior. Returns `None`
+    /// when the user has no materialized send-side connection.
+    #[must_use]
+    pub fn data_emit_count(&self, user_key: &UserKey) -> Option<u64> {
+        let user = self.sim_handle.state.user_store.get(*user_key)?;
+        let send_conn = self.send.state.send_user_connections.get(&user.address())?;
+        Some(send_conn.shared.data_packets_built())
+    }
+
     /// Whether the user's send-side connection has been materialized.
     ///
     /// This is a side-effect-free park-window query. It reads only the
