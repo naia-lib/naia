@@ -351,9 +351,11 @@ impl MessageManager {
     ) {
         // Phase A: walk channels in descending criticality order so High
         // (e.g. TickBuffered) wins packet space over Normal wins over Low
-        // under tight budgets. Stable sort preserves equal-gain order.
-        // Reverse bits of base_gain into an ordering key so higher base_gain
-        // sorts first; ties broken by ChannelKind order (stable).
+        // under tight budgets. Higher base_gain sorts first. The sender map
+        // iterates in hash order, so deterministic builds break equal-gain
+        // ties by protocol registration order (net-ID); otherwise tight-packet
+        // packing varies run to run (91235 RC#3). Production keeps hash order
+        // (statistical fairness under chronic congestion).
         let mut ordered: Vec<(ChannelKind, f32)> = self
             .channel_senders
             .keys()
@@ -365,6 +367,17 @@ impl MessageManager {
                 (*k, gain)
             })
             .collect();
+        #[cfg(feature = "deterministic")]
+        ordered.sort_by(|a, b| {
+            b.1.partial_cmp(&a.1)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    channel_kinds
+                        .kind_to_net_id(&a.0)
+                        .cmp(&channel_kinds.kind_to_net_id(&b.0))
+                })
+        });
+        #[cfg(not(feature = "deterministic"))]
         ordered.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
         // A record still held under this index belongs to a packet sent one
