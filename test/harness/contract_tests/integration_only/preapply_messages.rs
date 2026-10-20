@@ -120,7 +120,20 @@ impl Link {
 
     fn decode(&mut self) {
         self.client.receive_all_packets();
-        self.client.take_tick_events(&Instant::now());
+        let received_tick = self
+            .client
+            .last_received_server_tick()
+            .expect("the server must have delivered a data packet");
+        // Bypass still holds future-tick packets until the receiving clock
+        // reaches them. Exercise decoded messages, without applying the world.
+        for _ in 0..100 {
+            self.client.take_tick_events(&Instant::now());
+            if self.client.server_tick() == Some(received_tick) {
+                return;
+            }
+            TestClock::advance(16);
+        }
+        panic!("the delivered packet must reach the decode boundary");
     }
 
     fn apply(&mut self) -> naia_client::Events<Entity> {
@@ -139,7 +152,8 @@ impl Link {
 
     fn queue(&mut self, value: u32) {
         self.server
-            .send_message::<OrderedChannel, _>(&self.user, &TestMessage::new(value));
+            .send_message::<OrderedChannel, _>(&self.user, &TestMessage::new(value))
+            .expect("the ordered message must be queued");
     }
 }
 
@@ -149,10 +163,12 @@ fn early_drain_is_ordered_once_and_leaves_world_and_unrelated_events_for_apply()
     link.spawn();
     link.queue(1);
     link.server
-        .send_message::<OrderedChannel, _>(&link.user, &Auth::new("unrelated", "message"));
+        .send_message::<OrderedChannel, _>(&link.user, &Auth::new("unrelated", "message"))
+        .expect("the unrelated message must be queued");
     link.queue(2);
     link.server
-        .send_message::<ReliableChannel, _>(&link.user, &TestMessage::new(99));
+        .send_message::<ReliableChannel, _>(&link.user, &TestMessage::new(99))
+        .expect("the other-channel message must be queued");
     link.queue(3);
     link.send();
     assert!(link.early().is_empty(), "socket receipt is not decode");
@@ -209,10 +225,12 @@ fn repeated_early_drains_preserve_unrelated_kind_order_across_packets() {
     let mut link = Link::new();
     for value in 1..=3 {
         link.queue(value);
-        link.server.send_message::<OrderedChannel, _>(
-            &link.user,
-            &Auth::new(&format!("other-{value}"), "message"),
-        );
+        link.server
+            .send_message::<OrderedChannel, _>(
+                &link.user,
+                &Auth::new(&format!("other-{value}"), "message"),
+            )
+            .expect("the unrelated message must be queued");
         link.send();
         link.decode();
         assert_eq!(link.early(), vec![value]);
