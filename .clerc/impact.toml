@@ -1,0 +1,1493 @@
+# Naia's impact selector, inventoried from the 42 public workspace members.
+# 125 test-bearing Cargo targets share 122 logical target IDs; a same-name
+# library and binary keep both selectors in the same physical command.
+# This adoption declares a map and explicit argv, not gate rungs. Use
+# 'clerc impact plan', not 'impact run', until rung adoption is complete.
+# docs/IMPACT.md records scope, feature profiles and the qualification route.
+
+[suite]
+id = "naia"
+always_run = []
+floor = ["lint:clippy", "lint:fmt", "lint:native-check", "lint:public-paths", "lint:wasm-bevy-client", "lint:wasm-client", "lint:wasm-mquad", "lint:wasm-shared"]
+checks = [
+    "lint:clippy",
+    "lint:fmt",
+    "lint:native-check",
+    "lint:public-paths",
+    "lint:wasm-bevy-client",
+    "lint:wasm-client",
+    "lint:wasm-mquad",
+    "lint:wasm-shared",
+    "test:naia-basic-client-demo-app:naia_basic_client_demo_app",
+    "test:naia-basic-client-demo-mq:naia_basic_client_demo_mq",
+    "test:naia-basic-client-demo-wb:naia_basic_client_demo_wb",
+    "test:naia-basic-demo-shared:naia_basic_demo_shared",
+    "test:naia-basic-server-demo:naia-basic-server-demo",
+    "test:naia-benches:component_kind_wire",
+    "test:naia-benches:local_entity_wire",
+    "test:naia-benches:many_kinds_no_64_cap",
+    "test:naia-benches:naia_benches",
+    "test:naia-benches:static_split_bytes",
+    "test:naia-bevy-client-demo:naia_bevy_client_demo",
+    "test:naia-bevy-client:client_marker_bevy",
+    "test:naia-bevy-client:naia_bevy_client",
+    "test:naia-bevy-demo-shared:naia_bevy_demo_shared",
+    "test:naia-bevy-derive:naia_bevy_derive",
+    "test:naia-bevy-metrics:naia_bevy_metrics",
+    "test:naia-bevy-server-demo:naia-bevy-server-demo",
+    "test:naia-bevy-server:apply_receive_output_with_sim_receiver",
+    "test:naia-bevy-server:authority_commands_bevy",
+    "test:naia-bevy-server:cross_frame_enable_bevy",
+    "test:naia-bevy-server:naia_bevy_server",
+    "test:naia-bevy-server:replicated_resources_bevy",
+    "test:naia-bevy-server:scope_change_retry_survivability",
+    "test:naia-bevy-server:send_message_to_address",
+    "test:naia-bevy-server:send_message_to_user",
+    "test:naia-bevy-server:send_preamble_split",
+    "test:naia-bevy-server:send_scope_changes_drain",
+    "test:naia-bevy-server:sim_configure_entity_replication",
+    "test:naia-bevy-server:sim_configure_replication_deferred",
+    "test:naia-bevy-server:sim_converter",
+    "test:naia-bevy-server:sim_enable_entity_replication",
+    "test:naia-bevy-server:sim_event_receiver",
+    "test:naia-bevy-server:sim_host_sync",
+    "test:naia-bevy-server:sim_integration_full_bracket_drive",
+    "test:naia-bevy-server:sim_integration_full_lifecycle",
+    "test:naia-bevy-server:sim_integration_full_panic",
+    "test:naia-bevy-server:sim_integration_full_park",
+    "test:naia-bevy-server:sim_integration_full_shutdown",
+    "test:naia-bevy-server:sim_integration_full_tick_buffer",
+    "test:naia-bevy-server:sim_integration_iris2",
+    "test:naia-bevy-server:sim_integration_schedule_label",
+    "test:naia-bevy-server:sim_mark_entity_as_static",
+    "test:naia-bevy-server:sim_replicated_resources",
+    "test:naia-bevy-server:sim_single_world_drains",
+    "test:naia-bevy-server:snapshot_sender",
+    "test:naia-bevy-server:snapshot_world_wire_identity",
+    "test:naia-bevy-shared:derive_flavor_parity",
+    "test:naia-bevy-shared:facade_tier_parity",
+    "test:naia-bevy-shared:naia_bevy_shared",
+    "test:naia-ci-checks:check_no_escaping_path_deps",
+    "test:naia-client-socket:naia_client_socket",
+    "test:naia-client:naia_client",
+    "test:naia-compile-fail:compile_fail",
+    "test:naia-demo-world:naia_demo_world",
+    "test:naia-derive-core:naia_derive_core",
+    "test:naia-derive:naia_derive",
+    "test:naia-empty-world:naia_empty_world",
+    "test:naia-ice-gather-sensor:session_proxy",
+    "test:naia-loom:naia_loom",
+    "test:naia-macroquad-client-demo:naia_macroquad_client_demo",
+    "test:naia-macroquad-demo-shared:naia_macroquad_demo_shared",
+    "test:naia-macroquad-server-demo:naia-macroquad-server-demo",
+    "test:naia-metrics:naia_metrics",
+    "test:naia-serde-derive-core:naia_serde_derive_core",
+    "test:naia-serde-derive:naia_serde_derive",
+    "test:naia-serde:bit_budget",
+    "test:naia-serde:malformed_input",
+    "test:naia-serde:naia_serde",
+    "test:naia-serde:serde_roundtrip",
+    "test:naia-server-socket-demo:naia-server-socket-demo",
+    "test:naia-server-socket:close_releases_port",
+    "test:naia-server-socket:naia_server_socket",
+    "test:naia-server-socket:webrtc_loopback",
+    "test:naia-server:close_releases_ports",
+    "test:naia-server:naia_server",
+    "test:naia-server:udp_close_releases_port",
+    "test:naia-shared:delegation_tag_stability",
+    "test:naia-shared:derive_enum",
+    "test:naia-shared:derive_message_enum",
+    "test:naia-shared:derive_replicate",
+    "test:naia-shared:derive_shorthand_guard",
+    "test:naia-shared:derive_struct",
+    "test:naia-shared:derive_tuple_struct",
+    "test:naia-shared:derive_unit_struct",
+    "test:naia-shared:det1_quat_normalize_probe",
+    "test:naia-shared:disconnect_reason_wire_stability",
+    "test:naia-shared:handshake_header_wire_stability",
+    "test:naia-shared:key_generator",
+    "test:naia-shared:naia_shared",
+    "test:naia-shared:packet_type_wire_stability",
+    "test:naia-shared:reject_reason_wire_stability",
+    "test:naia-shared:structural_registries",
+    "test:naia-shared:unlabeled_surfaces",
+    "test:naia-socket-client-demo-app:naia_socket_client_demo_app",
+    "test:naia-socket-client-demo-mq:naia_socket_client_demo_mq",
+    "test:naia-socket-client-demo-wb:naia_socket_client_demo_wb",
+    "test:naia-socket-demo-shared:naia_socket_demo_shared",
+    "test:naia-socket-shared:naia_socket_shared",
+    "test:naia-spec-tool:naia-spec-tool",
+    "test:naia-test-harness:12_reconnect_cancel",
+    "test:naia-test-harness:g8_real_ack_byte_identity",
+    "test:naia-test-harness:g9pre_resident_pipelined_byte_identity",
+    "test:naia-test-harness:integration_only_00_common",
+    "test:naia-test-harness:integration_only_01_connection_lifecycle",
+    "test:naia-test-harness:integration_only_02_static_entities",
+    "test:naia-test-harness:integration_only_03_messaging",
+    "test:naia-test-harness:integration_only_06_entity_scopes",
+    "test:naia-test-harness:integration_only_09_entity_ownership",
+    "test:naia-test-harness:integration_only_10_entity_delegation",
+    "test:naia-test-harness:integration_only_11_cross_feature_delegation",
+    "test:naia-test-harness:lagged_send_drops_final_value",
+    "test:naia-test-harness:naia_test_harness",
+    "test:naia-test-harness:parallel_send_matches_serial",
+    "test:naia-test-harness:pipeline_bracket",
+    "test:naia-test-harness:pipeline_recv_send_independent",
+    "test:naia-test-harness:pipelined_admission",
+    "test:naia-test-harness:preapply_messages",
+    "test:naia-test-harness:quiet_tick_progress",
+    "test:naia-test-harness:replicated_resources",
+    "test:naia-test-harness:router_basic",
+    "test:naia-test-harness:typed_request_refusals",
+    "test:naia-test-harness:world_server_enum_shell",
+]
+
+[cargo_targets]
+prefix = "test"
+
+# All declared commands retain defaults. Required features in Cargo metadata
+# are added verbatim. The server's cfg(test, test_time) quiet-data regression
+# also needs its injected-clock/local-transport profile; active worker tests
+# remain enabled because this lib profile does not enable deterministic.
+# Real-port server tests explicitly enable their crate-level transport cfgs.
+# A Cargo target declaration is an inventory entry, never a test-count claim.
+
+[[leg]]
+checks = ["lint:clippy"]
+argv = ["cargo", "clippy", "--workspace", "--all-targets", "--keep-going", "--", "-D", "warnings"]
+
+[[leg]]
+checks = ["lint:native-check"]
+argv = ["cargo", "check", "--workspace", "--all-targets", "--keep-going"]
+
+[[leg]]
+checks = ["lint:public-paths"]
+argv = ["cargo", "run", "-p", "naia-ci-checks", "--bin", "check_no_escaping_path_deps"]
+
+[[leg]]
+checks = ["lint:wasm-shared"]
+argv = ["cargo", "check", "-p", "naia-shared", "--target", "wasm32-unknown-unknown", "--features", "wbindgen", "--keep-going"]
+
+[[leg]]
+checks = ["lint:wasm-client"]
+argv = ["cargo", "check", "-p", "naia-client", "--target", "wasm32-unknown-unknown", "--features", "wbindgen", "--keep-going"]
+
+[[leg]]
+checks = ["lint:wasm-bevy-client"]
+argv = ["cargo", "check", "-p", "naia-bevy-client", "--target", "wasm32-unknown-unknown", "--keep-going"]
+
+[[leg]]
+checks = ["lint:wasm-mquad"]
+argv = ["cargo", "clippy", "-p", "naia-socket-shared", "-p", "naia-client-socket", "--target", "wasm32-unknown-unknown", "--features", "mquad", "--keep-going", "--", "-D", "warnings"]
+
+[[leg]]
+checks = ["test:naia-basic-client-demo-app:naia_basic_client_demo_app"]
+argv = ["cargo", "test", "-p", "naia-basic-client-demo-app", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-basic-client-demo-mq:naia_basic_client_demo_mq"]
+argv = ["cargo", "test", "-p", "naia-basic-client-demo-mq", "--bin", "naia_basic_client_demo_mq", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-basic-client-demo-wb:naia_basic_client_demo_wb"]
+argv = ["cargo", "test", "-p", "naia-basic-client-demo-wb", "--bin", "naia_basic_client_demo_wb", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-basic-demo-shared:naia_basic_demo_shared"]
+argv = ["cargo", "test", "-p", "naia-basic-demo-shared", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-basic-server-demo:naia-basic-server-demo"]
+argv = ["cargo", "test", "-p", "naia-basic-server-demo", "--bin", "naia-basic-server-demo", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-benches:component_kind_wire"]
+argv = ["cargo", "test", "-p", "naia-benches", "--test", "component_kind_wire", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-benches:local_entity_wire"]
+argv = ["cargo", "test", "-p", "naia-benches", "--test", "local_entity_wire", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-benches:many_kinds_no_64_cap"]
+argv = ["cargo", "test", "-p", "naia-benches", "--test", "many_kinds_no_64_cap", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-benches:naia_benches"]
+argv = ["cargo", "test", "-p", "naia-benches", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-benches:static_split_bytes"]
+argv = ["cargo", "test", "-p", "naia-benches", "--test", "static_split_bytes", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-client:client_marker_bevy"]
+argv = ["cargo", "test", "-p", "naia-bevy-client", "--test", "client_marker_bevy", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-client:naia_bevy_client"]
+argv = ["cargo", "test", "-p", "naia-bevy-client", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-client-demo:naia_bevy_client_demo"]
+argv = ["cargo", "test", "-p", "naia-bevy-client-demo", "--bin", "naia_bevy_client_demo", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-demo-shared:naia_bevy_demo_shared"]
+argv = ["cargo", "test", "-p", "naia-bevy-demo-shared", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-derive:naia_bevy_derive"]
+argv = ["cargo", "test", "-p", "naia-bevy-derive", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-metrics:naia_bevy_metrics"]
+argv = ["cargo", "test", "-p", "naia-bevy-metrics", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:apply_receive_output_with_sim_receiver"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "apply_receive_output_with_sim_receiver", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:authority_commands_bevy"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "authority_commands_bevy", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:cross_frame_enable_bevy"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "cross_frame_enable_bevy", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:naia_bevy_server"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:replicated_resources_bevy"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "replicated_resources_bevy", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:scope_change_retry_survivability"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "scope_change_retry_survivability", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:send_message_to_address"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "send_message_to_address", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:send_message_to_user"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "send_message_to_user", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:send_preamble_split"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "send_preamble_split", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:send_scope_changes_drain"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "send_scope_changes_drain", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:sim_configure_entity_replication"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "sim_configure_entity_replication", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:sim_configure_replication_deferred"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "sim_configure_replication_deferred", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:sim_converter"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "sim_converter", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:sim_enable_entity_replication"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "sim_enable_entity_replication", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:sim_event_receiver"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "sim_event_receiver", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:sim_host_sync"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "sim_host_sync", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:sim_integration_full_bracket_drive"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "sim_integration_full_bracket_drive", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:sim_integration_full_lifecycle"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "sim_integration_full_lifecycle", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:sim_integration_full_panic"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "sim_integration_full_panic", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:sim_integration_full_park"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "sim_integration_full_park", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:sim_integration_full_shutdown"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "sim_integration_full_shutdown", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:sim_integration_full_tick_buffer"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "sim_integration_full_tick_buffer", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:sim_integration_iris2"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "sim_integration_iris2", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:sim_integration_schedule_label"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "sim_integration_schedule_label", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:sim_mark_entity_as_static"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "sim_mark_entity_as_static", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:sim_replicated_resources"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "sim_replicated_resources", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:sim_single_world_drains"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "sim_single_world_drains", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:snapshot_sender"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "snapshot_sender", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:snapshot_world_wire_identity"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "snapshot_world_wire_identity", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server-demo:naia-bevy-server-demo"]
+argv = ["cargo", "test", "-p", "naia-bevy-server-demo", "--bin", "naia-bevy-server-demo", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-shared:derive_flavor_parity"]
+argv = ["cargo", "test", "-p", "naia-bevy-shared", "--test", "derive_flavor_parity", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-shared:facade_tier_parity"]
+argv = ["cargo", "test", "-p", "naia-bevy-shared", "--test", "facade_tier_parity", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-shared:naia_bevy_shared"]
+argv = ["cargo", "test", "-p", "naia-bevy-shared", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-ci-checks:check_no_escaping_path_deps"]
+argv = ["cargo", "test", "-p", "naia-ci-checks", "--bin", "check_no_escaping_path_deps", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-client:naia_client"]
+argv = ["cargo", "test", "-p", "naia-client", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-client-socket:naia_client_socket"]
+argv = ["cargo", "test", "-p", "naia-client-socket", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-compile-fail:compile_fail"]
+argv = ["cargo", "test", "-p", "naia-compile-fail", "--test", "compile_fail", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-demo-world:naia_demo_world"]
+argv = ["cargo", "test", "-p", "naia-demo-world", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-derive:naia_derive"]
+argv = ["cargo", "test", "-p", "naia-derive", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-derive-core:naia_derive_core"]
+argv = ["cargo", "test", "-p", "naia-derive-core", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-empty-world:naia_empty_world"]
+argv = ["cargo", "test", "-p", "naia-empty-world", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-ice-gather-sensor:session_proxy"]
+argv = ["cargo", "test", "-p", "naia-ice-gather-sensor", "--bin", "session_proxy", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-loom:naia_loom"]
+argv = ["cargo", "test", "-p", "naia-loom", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-macroquad-client-demo:naia_macroquad_client_demo"]
+argv = ["cargo", "test", "-p", "naia-macroquad-client-demo", "--bin", "naia_macroquad_client_demo", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-macroquad-demo-shared:naia_macroquad_demo_shared"]
+argv = ["cargo", "test", "-p", "naia-macroquad-demo-shared", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-macroquad-server-demo:naia-macroquad-server-demo"]
+argv = ["cargo", "test", "-p", "naia-macroquad-server-demo", "--bin", "naia-macroquad-server-demo", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-metrics:naia_metrics"]
+argv = ["cargo", "test", "-p", "naia-metrics", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-serde:bit_budget"]
+argv = ["cargo", "test", "-p", "naia-serde", "--test", "bit_budget", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-serde:malformed_input"]
+argv = ["cargo", "test", "-p", "naia-serde", "--test", "malformed_input", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-serde:naia_serde"]
+argv = ["cargo", "test", "-p", "naia-serde", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-serde:serde_roundtrip"]
+argv = ["cargo", "test", "-p", "naia-serde", "--test", "serde_roundtrip", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-serde-derive:naia_serde_derive"]
+argv = ["cargo", "test", "-p", "naia-serde-derive", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-serde-derive-core:naia_serde_derive_core"]
+argv = ["cargo", "test", "-p", "naia-serde-derive-core", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-server:close_releases_ports"]
+argv = ["cargo", "test", "-p", "naia-server", "--test", "close_releases_ports", "--features", "transport_udp,transport_webrtc", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-server:naia_server"]
+argv = ["cargo", "test", "-p", "naia-server", "--lib", "--features", "test_time,test_utils,transport_local", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-server:udp_close_releases_port"]
+argv = ["cargo", "test", "-p", "naia-server", "--test", "udp_close_releases_port", "--features", "transport_udp", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-server-socket:close_releases_port"]
+argv = ["cargo", "test", "-p", "naia-server-socket", "--test", "close_releases_port", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-server-socket:naia_server_socket"]
+argv = ["cargo", "test", "-p", "naia-server-socket", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-server-socket:webrtc_loopback"]
+argv = ["cargo", "test", "-p", "naia-server-socket", "--test", "webrtc_loopback", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-server-socket-demo:naia-server-socket-demo"]
+argv = ["cargo", "test", "-p", "naia-server-socket-demo", "--bin", "naia-server-socket-demo", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-shared:delegation_tag_stability"]
+argv = ["cargo", "test", "-p", "naia-shared", "--test", "delegation_tag_stability", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-shared:derive_enum"]
+argv = ["cargo", "test", "-p", "naia-shared", "--test", "derive_enum", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-shared:derive_message_enum"]
+argv = ["cargo", "test", "-p", "naia-shared", "--test", "derive_message_enum", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-shared:derive_replicate"]
+argv = ["cargo", "test", "-p", "naia-shared", "--test", "derive_replicate", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-shared:derive_shorthand_guard"]
+argv = ["cargo", "test", "-p", "naia-shared", "--test", "derive_shorthand_guard", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-shared:derive_struct"]
+argv = ["cargo", "test", "-p", "naia-shared", "--test", "derive_struct", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-shared:derive_tuple_struct"]
+argv = ["cargo", "test", "-p", "naia-shared", "--test", "derive_tuple_struct", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-shared:derive_unit_struct"]
+argv = ["cargo", "test", "-p", "naia-shared", "--test", "derive_unit_struct", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-shared:det1_quat_normalize_probe"]
+argv = ["cargo", "test", "-p", "naia-shared", "--test", "det1_quat_normalize_probe", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-shared:disconnect_reason_wire_stability"]
+argv = ["cargo", "test", "-p", "naia-shared", "--test", "disconnect_reason_wire_stability", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-shared:handshake_header_wire_stability"]
+argv = ["cargo", "test", "-p", "naia-shared", "--test", "handshake_header_wire_stability", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-shared:key_generator"]
+argv = ["cargo", "test", "-p", "naia-shared", "--test", "key_generator", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-shared:naia_shared"]
+argv = ["cargo", "test", "-p", "naia-shared", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-shared:packet_type_wire_stability"]
+argv = ["cargo", "test", "-p", "naia-shared", "--test", "packet_type_wire_stability", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-shared:reject_reason_wire_stability"]
+argv = ["cargo", "test", "-p", "naia-shared", "--test", "reject_reason_wire_stability", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-shared:structural_registries"]
+argv = ["cargo", "test", "-p", "naia-shared", "--test", "structural_registries", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-shared:unlabeled_surfaces"]
+argv = ["cargo", "test", "-p", "naia-shared", "--test", "unlabeled_surfaces", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-socket-client-demo-app:naia_socket_client_demo_app"]
+argv = ["cargo", "test", "-p", "naia-socket-client-demo-app", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-socket-client-demo-mq:naia_socket_client_demo_mq"]
+argv = ["cargo", "test", "-p", "naia-socket-client-demo-mq", "--bin", "naia_socket_client_demo_mq", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-socket-client-demo-wb:naia_socket_client_demo_wb"]
+argv = ["cargo", "test", "-p", "naia-socket-client-demo-wb", "--bin", "naia_socket_client_demo_wb", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-socket-demo-shared:naia_socket_demo_shared"]
+argv = ["cargo", "test", "-p", "naia-socket-demo-shared", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-socket-shared:naia_socket_shared"]
+argv = ["cargo", "test", "-p", "naia-socket-shared", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-spec-tool:naia-spec-tool"]
+argv = ["cargo", "test", "-p", "naia-spec-tool", "--bin", "naia-spec-tool", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:12_reconnect_cancel"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "12_reconnect_cancel", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:g8_real_ack_byte_identity"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "g8_real_ack_byte_identity", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:g9pre_resident_pipelined_byte_identity"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "g9pre_resident_pipelined_byte_identity", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:integration_only_00_common"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "integration_only_00_common", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:integration_only_01_connection_lifecycle"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "integration_only_01_connection_lifecycle", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:integration_only_02_static_entities"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "integration_only_02_static_entities", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:integration_only_03_messaging"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "integration_only_03_messaging", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:integration_only_06_entity_scopes"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "integration_only_06_entity_scopes", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:integration_only_09_entity_ownership"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "integration_only_09_entity_ownership", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:integration_only_10_entity_delegation"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "integration_only_10_entity_delegation", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:integration_only_11_cross_feature_delegation"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "integration_only_11_cross_feature_delegation", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:lagged_send_drops_final_value"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "lagged_send_drops_final_value", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:naia_test_harness"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--lib", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:parallel_send_matches_serial"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "parallel_send_matches_serial", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:pipeline_bracket"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "pipeline_bracket", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:pipeline_recv_send_independent"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "pipeline_recv_send_independent", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:pipelined_admission"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "pipelined_admission", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:preapply_messages"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "preapply_messages", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:quiet_tick_progress"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "quiet_tick_progress", "--features", "deterministic", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:replicated_resources"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "replicated_resources", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:router_basic"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "router_basic", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:typed_request_refusals"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "typed_request_refusals", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:world_server_enum_shell"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "world_server_enum_shell", "--no-fail-fast"]
+
+# Cargo dependencies include build, dev and target-specific local edges.
+# This conservative union preserves reverse-dependency reachability. No
+# cfg(test)-only narrowing is claimed by this initial policy.
+
+[[package]]
+name = "naia-basic-client-demo-app"
+paths = ["demos/basic/client/app/"]
+depends_on = ["naia-basic-demo-shared", "naia-client", "naia-demo-world"]
+
+[[edge]]
+from = "demos/basic/client/app/"
+to = "test:naia-basic-client-demo-app:naia_basic_client_demo_app"
+
+[[package]]
+name = "naia-basic-client-demo-mq"
+paths = ["demos/basic/client/miniquad/"]
+depends_on = ["naia-basic-client-demo-app"]
+
+[[edge]]
+from = "demos/basic/client/miniquad/"
+to = "test:naia-basic-client-demo-mq:naia_basic_client_demo_mq"
+
+[[package]]
+name = "naia-basic-client-demo-wb"
+paths = ["demos/basic/client/wasm_bindgen/"]
+depends_on = ["naia-basic-client-demo-app"]
+
+[[edge]]
+from = "demos/basic/client/wasm_bindgen/"
+to = "test:naia-basic-client-demo-wb:naia_basic_client_demo_wb"
+
+[[package]]
+name = "naia-basic-demo-shared"
+paths = ["demos/basic/shared/"]
+depends_on = ["naia-shared"]
+
+[[edge]]
+from = "demos/basic/shared/"
+to = "test:naia-basic-demo-shared:naia_basic_demo_shared"
+
+[[package]]
+name = "naia-basic-server-demo"
+paths = ["demos/basic/server/"]
+depends_on = ["naia-basic-demo-shared", "naia-demo-world", "naia-server"]
+
+[[edge]]
+from = "demos/basic/server/"
+to = "test:naia-basic-server-demo:naia-basic-server-demo"
+
+[[package]]
+name = "naia-benches"
+paths = ["bench/criterion/"]
+depends_on = ["naia-client", "naia-demo-world", "naia-server", "naia-shared"]
+
+[[edge]]
+from = "bench/criterion/"
+to = "test:naia-benches:component_kind_wire"
+
+[[edge]]
+from = "bench/criterion/"
+to = "test:naia-benches:local_entity_wire"
+
+[[edge]]
+from = "bench/criterion/"
+to = "test:naia-benches:many_kinds_no_64_cap"
+
+[[edge]]
+from = "bench/criterion/"
+to = "test:naia-benches:naia_benches"
+
+[[edge]]
+from = "bench/criterion/"
+to = "test:naia-benches:static_split_bytes"
+
+[[package]]
+name = "naia-bevy-client"
+paths = ["adapters/bevy/client/"]
+depends_on = ["naia-bevy-derive", "naia-bevy-shared", "naia-client", "naia-derive"]
+
+[[edge]]
+from = "adapters/bevy/client/"
+to = "test:naia-bevy-client:client_marker_bevy"
+
+[[edge]]
+from = "adapters/bevy/client/"
+to = "test:naia-bevy-client:naia_bevy_client"
+
+[[package]]
+name = "naia-bevy-client-demo"
+paths = ["demos/bevy/client/"]
+depends_on = ["naia-bevy-client", "naia-bevy-demo-shared"]
+
+[[edge]]
+from = "demos/bevy/client/"
+to = "test:naia-bevy-client-demo:naia_bevy_client_demo"
+
+[[package]]
+name = "naia-bevy-demo-shared"
+paths = ["demos/bevy/shared/"]
+depends_on = ["naia-bevy-shared", "naia-shared"]
+
+[[edge]]
+from = "demos/bevy/shared/"
+to = "test:naia-bevy-demo-shared:naia_bevy_demo_shared"
+
+[[package]]
+name = "naia-bevy-derive"
+paths = ["adapters/bevy/derive/"]
+depends_on = ["naia-derive-core", "naia-serde-derive-core"]
+
+[[edge]]
+from = "adapters/bevy/derive/"
+to = "test:naia-bevy-derive:naia_bevy_derive"
+
+[[package]]
+name = "naia-bevy-metrics"
+paths = ["adapters/bevy/metrics/"]
+depends_on = ["naia-bevy-client", "naia-bevy-server", "naia-bevy-shared", "naia-metrics"]
+
+[[edge]]
+from = "adapters/bevy/metrics/"
+to = "test:naia-bevy-metrics:naia_bevy_metrics"
+
+[[package]]
+name = "naia-bevy-server"
+paths = ["adapters/bevy/server/"]
+depends_on = ["naia-bevy-client", "naia-bevy-shared", "naia-client", "naia-server", "naia-shared", "naia-test-harness"]
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:apply_receive_output_with_sim_receiver"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:authority_commands_bevy"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:cross_frame_enable_bevy"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:naia_bevy_server"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:replicated_resources_bevy"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:scope_change_retry_survivability"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:send_message_to_address"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:send_message_to_user"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:send_preamble_split"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:send_scope_changes_drain"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:sim_configure_entity_replication"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:sim_configure_replication_deferred"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:sim_converter"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:sim_enable_entity_replication"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:sim_event_receiver"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:sim_host_sync"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:sim_integration_full_bracket_drive"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:sim_integration_full_lifecycle"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:sim_integration_full_panic"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:sim_integration_full_park"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:sim_integration_full_shutdown"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:sim_integration_full_tick_buffer"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:sim_integration_iris2"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:sim_integration_schedule_label"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:sim_mark_entity_as_static"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:sim_replicated_resources"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:sim_single_world_drains"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:snapshot_sender"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:snapshot_world_wire_identity"
+
+[[package]]
+name = "naia-bevy-server-demo"
+paths = ["demos/bevy/server/"]
+depends_on = ["naia-bevy-demo-shared", "naia-bevy-server"]
+
+[[edge]]
+from = "demos/bevy/server/"
+to = "test:naia-bevy-server-demo:naia-bevy-server-demo"
+
+[[package]]
+name = "naia-bevy-shared"
+paths = ["adapters/bevy/shared/"]
+depends_on = ["naia-bevy-derive", "naia-shared"]
+
+[[edge]]
+from = "adapters/bevy/shared/"
+to = "test:naia-bevy-shared:derive_flavor_parity"
+
+[[edge]]
+from = "adapters/bevy/shared/"
+to = "test:naia-bevy-shared:facade_tier_parity"
+
+[[edge]]
+from = "adapters/bevy/shared/"
+to = "test:naia-bevy-shared:naia_bevy_shared"
+
+[[package]]
+name = "naia-ci-checks"
+paths = ["tools/ci/"]
+depends_on = []
+
+[[edge]]
+from = "tools/ci/"
+to = "test:naia-ci-checks:check_no_escaping_path_deps"
+
+[[package]]
+name = "naia-client"
+paths = ["client/"]
+depends_on = ["naia-client-socket", "naia-shared"]
+
+[[edge]]
+from = "client/"
+to = "test:naia-client:naia_client"
+
+[[package]]
+name = "naia-client-socket"
+paths = ["socket/client/"]
+depends_on = ["naia-socket-shared"]
+
+[[edge]]
+from = "socket/client/"
+to = "test:naia-client-socket:naia_client_socket"
+
+[[package]]
+name = "naia-compile-fail"
+paths = ["test/compile_fail/"]
+depends_on = ["naia-shared"]
+
+[[edge]]
+from = "test/compile_fail/"
+to = "test:naia-compile-fail:compile_fail"
+
+[[package]]
+name = "naia-demo-world"
+paths = ["demos/demo_utils/demo_world/"]
+depends_on = ["naia-shared"]
+
+[[edge]]
+from = "demos/demo_utils/demo_world/"
+to = "test:naia-demo-world:naia_demo_world"
+
+[[package]]
+name = "naia-derive"
+paths = ["shared/derive/"]
+depends_on = ["naia-derive-core", "naia-serde-derive"]
+
+[[edge]]
+from = "shared/derive/"
+to = "test:naia-derive:naia_derive"
+
+[[package]]
+name = "naia-derive-core"
+paths = ["shared/derive_core/"]
+depends_on = []
+
+[[edge]]
+from = "shared/derive_core/"
+to = "test:naia-derive-core:naia_derive_core"
+
+[[package]]
+name = "naia-empty-world"
+paths = ["demos/demo_utils/empty_world/"]
+depends_on = ["naia-shared"]
+
+[[edge]]
+from = "demos/demo_utils/empty_world/"
+to = "test:naia-empty-world:naia_empty_world"
+
+[[package]]
+name = "naia-ice-gather-sensor"
+paths = ["tools/ice_gather_sensor/"]
+depends_on = []
+
+[[edge]]
+from = "tools/ice_gather_sensor/"
+to = "test:naia-ice-gather-sensor:session_proxy"
+
+[[package]]
+name = "naia-loom"
+paths = ["test/loom/"]
+depends_on = ["naia-shared"]
+
+[[edge]]
+from = "test/loom/"
+to = "test:naia-loom:naia_loom"
+
+[[package]]
+name = "naia-macroquad-client-demo"
+paths = ["demos/macroquad/client/"]
+depends_on = ["naia-client", "naia-demo-world", "naia-macroquad-demo-shared"]
+
+[[edge]]
+from = "demos/macroquad/client/"
+to = "test:naia-macroquad-client-demo:naia_macroquad_client_demo"
+
+[[package]]
+name = "naia-macroquad-demo-shared"
+paths = ["demos/macroquad/shared/"]
+depends_on = ["naia-shared"]
+
+[[edge]]
+from = "demos/macroquad/shared/"
+to = "test:naia-macroquad-demo-shared:naia_macroquad_demo_shared"
+
+[[package]]
+name = "naia-macroquad-server-demo"
+paths = ["demos/macroquad/server/"]
+depends_on = ["naia-demo-world", "naia-macroquad-demo-shared", "naia-server"]
+
+[[edge]]
+from = "demos/macroquad/server/"
+to = "test:naia-macroquad-server-demo:naia-macroquad-server-demo"
+
+[[package]]
+name = "naia-metrics"
+paths = ["metrics/"]
+depends_on = ["naia-shared"]
+
+[[edge]]
+from = "metrics/"
+to = "test:naia-metrics:naia_metrics"
+
+[[package]]
+name = "naia-serde"
+paths = ["shared/serde/"]
+depends_on = ["naia-serde-derive"]
+
+[[edge]]
+from = "shared/serde/"
+to = "test:naia-serde:bit_budget"
+
+[[edge]]
+from = "shared/serde/"
+to = "test:naia-serde:malformed_input"
+
+[[edge]]
+from = "shared/serde/"
+to = "test:naia-serde:naia_serde"
+
+[[edge]]
+from = "shared/serde/"
+to = "test:naia-serde:serde_roundtrip"
+
+[[package]]
+name = "naia-serde-derive"
+paths = ["shared/serde/derive/"]
+depends_on = ["naia-serde-derive-core"]
+
+[[edge]]
+from = "shared/serde/derive/"
+to = "test:naia-serde-derive:naia_serde_derive"
+
+[[package]]
+name = "naia-serde-derive-core"
+paths = ["shared/serde/derive_core/"]
+depends_on = []
+
+[[edge]]
+from = "shared/serde/derive_core/"
+to = "test:naia-serde-derive-core:naia_serde_derive_core"
+
+[[package]]
+name = "naia-server"
+paths = ["server/"]
+depends_on = ["naia-server-socket", "naia-shared"]
+
+[[edge]]
+from = "server/"
+to = "test:naia-server:close_releases_ports"
+
+[[edge]]
+from = "server/"
+to = "test:naia-server:naia_server"
+
+[[edge]]
+from = "server/"
+to = "test:naia-server:udp_close_releases_port"
+
+[[package]]
+name = "naia-server-socket"
+paths = ["socket/server/"]
+depends_on = ["naia-client-socket", "naia-socket-shared"]
+
+[[edge]]
+from = "socket/server/"
+to = "test:naia-server-socket:close_releases_port"
+
+[[edge]]
+from = "socket/server/"
+to = "test:naia-server-socket:naia_server_socket"
+
+[[edge]]
+from = "socket/server/"
+to = "test:naia-server-socket:webrtc_loopback"
+
+[[package]]
+name = "naia-server-socket-demo"
+paths = ["demos/socket/server/"]
+depends_on = ["naia-server-socket", "naia-socket-demo-shared"]
+
+[[edge]]
+from = "demos/socket/server/"
+to = "test:naia-server-socket-demo:naia-server-socket-demo"
+
+[[package]]
+name = "naia-shared"
+paths = ["shared/"]
+depends_on = ["naia-bevy-derive", "naia-derive", "naia-serde", "naia-socket-shared"]
+
+[[edge]]
+from = "shared/"
+to = "test:naia-shared:delegation_tag_stability"
+
+[[edge]]
+from = "shared/"
+to = "test:naia-shared:derive_enum"
+
+[[edge]]
+from = "shared/"
+to = "test:naia-shared:derive_message_enum"
+
+[[edge]]
+from = "shared/"
+to = "test:naia-shared:derive_replicate"
+
+[[edge]]
+from = "shared/"
+to = "test:naia-shared:derive_shorthand_guard"
+
+[[edge]]
+from = "shared/"
+to = "test:naia-shared:derive_struct"
+
+[[edge]]
+from = "shared/"
+to = "test:naia-shared:derive_tuple_struct"
+
+[[edge]]
+from = "shared/"
+to = "test:naia-shared:derive_unit_struct"
+
+[[edge]]
+from = "shared/"
+to = "test:naia-shared:det1_quat_normalize_probe"
+
+[[edge]]
+from = "shared/"
+to = "test:naia-shared:disconnect_reason_wire_stability"
+
+[[edge]]
+from = "shared/"
+to = "test:naia-shared:handshake_header_wire_stability"
+
+[[edge]]
+from = "shared/"
+to = "test:naia-shared:key_generator"
+
+[[edge]]
+from = "shared/"
+to = "test:naia-shared:naia_shared"
+
+[[edge]]
+from = "shared/"
+to = "test:naia-shared:packet_type_wire_stability"
+
+[[edge]]
+from = "shared/"
+to = "test:naia-shared:reject_reason_wire_stability"
+
+[[edge]]
+from = "shared/"
+to = "test:naia-shared:structural_registries"
+
+[[edge]]
+from = "shared/"
+to = "test:naia-shared:unlabeled_surfaces"
+
+[[package]]
+name = "naia-socket-client-demo-app"
+paths = ["demos/socket/client/app/"]
+depends_on = ["naia-client-socket", "naia-shared", "naia-socket-demo-shared"]
+
+[[edge]]
+from = "demos/socket/client/app/"
+to = "test:naia-socket-client-demo-app:naia_socket_client_demo_app"
+
+[[package]]
+name = "naia-socket-client-demo-mq"
+paths = ["demos/socket/client/miniquad/"]
+depends_on = ["naia-socket-client-demo-app"]
+
+[[edge]]
+from = "demos/socket/client/miniquad/"
+to = "test:naia-socket-client-demo-mq:naia_socket_client_demo_mq"
+
+[[package]]
+name = "naia-socket-client-demo-wb"
+paths = ["demos/socket/client/wasm_bindgen/"]
+depends_on = ["naia-socket-client-demo-app"]
+
+[[edge]]
+from = "demos/socket/client/wasm_bindgen/"
+to = "test:naia-socket-client-demo-wb:naia_socket_client_demo_wb"
+
+[[package]]
+name = "naia-socket-demo-shared"
+paths = ["demos/socket/shared/"]
+depends_on = ["naia-socket-shared"]
+
+[[edge]]
+from = "demos/socket/shared/"
+to = "test:naia-socket-demo-shared:naia_socket_demo_shared"
+
+[[package]]
+name = "naia-socket-shared"
+paths = ["socket/shared/"]
+depends_on = ["naia-serde"]
+
+[[edge]]
+from = "socket/shared/"
+to = "test:naia-socket-shared:naia_socket_shared"
+
+[[package]]
+name = "naia-spec-tool"
+paths = ["tools/spec_tool/"]
+depends_on = ["naia-test-harness"]
+
+[[edge]]
+from = "tools/spec_tool/"
+to = "test:naia-spec-tool:naia-spec-tool"
+
+[[package]]
+name = "naia-test-harness"
+paths = ["test/harness/"]
+depends_on = ["naia-client", "naia-demo-world", "naia-server", "naia-shared"]
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:12_reconnect_cancel"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:g8_real_ack_byte_identity"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:g9pre_resident_pipelined_byte_identity"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:integration_only_00_common"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:integration_only_01_connection_lifecycle"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:integration_only_02_static_entities"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:integration_only_03_messaging"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:integration_only_06_entity_scopes"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:integration_only_09_entity_ownership"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:integration_only_10_entity_delegation"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:integration_only_11_cross_feature_delegation"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:lagged_send_drops_final_value"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:naia_test_harness"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:parallel_send_matches_serial"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:pipeline_bracket"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:pipeline_recv_send_independent"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:pipelined_admission"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:preapply_messages"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:quiet_tick_progress"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:replicated_resources"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:router_basic"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:typed_request_refusals"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:world_server_enum_shell"
+
+# The public-path invariant reads every member manifest, not just tools/ci.
+[[scan]]
+check = "lint:public-paths"
+paths = ["Cargo.toml", "**/Cargo.toml"]
+
+# Changes to selector/build policy conservatively select the whole suite.
+[[root]]
+path = ".clerc/"
+mode = "fallback"
+reason = "The selector and physical argv change the meaning of every check."
+
+[[root]]
+path = ".cargo/"
+mode = "fallback"
+reason = "Cargo configuration can change compilation and test execution."
+
+[[root]]
+path = "Cargo.toml"
+mode = "cargo-workspace"
+reason = "Resolve workspace dependency/profile changes through Cargo manifests; undecidable changes fall back."
+
+[[root]]
+path = "deny.toml"
+mode = "fallback"
+reason = "Dependency policy changes can affect every package."
+
+[[root]]
+path = "rustfmt.yml"
+mode = "fallback"
+reason = "Formatter policy changes affect the full Rust file set."
+
+[[root]]
+path = "crucible.toml"
+mode = "fallback"
+reason = "Test infrastructure configuration can affect selection and execution."
+
+[[root]]
+path = ".github/"
+mode = "scan-only"
+reason = "Funding metadata; this repository declares no GitHub Actions selector."
+
+[[root]]
+path = ".gitignore"
+mode = "scan-only"
+reason = "Ignored output patterns; R0 remains mandatory."
+
+[[root]]
+path = ".gitpod.yml"
+mode = "scan-only"
+reason = "Development environment metadata; R0 remains mandatory."
+
+[[root]]
+path = ".idea/"
+mode = "scan-only"
+reason = "Editor metadata; R0 remains mandatory."
+
+[[root]]
+path = ".nojekyll"
+mode = "scan-only"
+reason = "Documentation hosting marker."
+
+[[root]]
+path = ".tesaki/"
+mode = "scan-only"
+reason = "Scenario authoring configuration outside the public Cargo workspace."
+
+[[root]]
+path = "CHANGELOG.md"
+mode = "scan-only"
+reason = "Release notes, not a runtime or test input."
+
+[[root]]
+path = "FEATURES.md"
+mode = "scan-only"
+reason = "Feature documentation, not a compiled fixture."
+
+[[root]]
+path = "LICENSE-APACHE.txt"
+mode = "scan-only"
+reason = "License text."
+
+[[root]]
+path = "LICENSE-MIT.txt"
+mode = "scan-only"
+reason = "License text."
+
+[[root]]
+path = "README.md"
+mode = "scan-only"
+reason = "Repository documentation; Cargo includes it as package metadata."
+
+[[root]]
+path = "SECURITY.md"
+mode = "scan-only"
+reason = "Security reporting documentation."
+
+[[root]]
+path = "_AGENTS/"
+mode = "scan-only"
+reason = "Architecture, historical plans and operational documentation."
+
+[[root]]
+path = "book/"
+mode = "scan-only"
+reason = "Published book sources, not Rust test fixtures."
+
+[[root]]
+path = "docs/"
+mode = "scan-only"
+reason = "Repository documentation; no test target reads these files as fixtures."
+
+[[root]]
+path = "faq/"
+mode = "scan-only"
+reason = "Published FAQ sources."
+
+[[root]]
+path = "rust-analyzer.toml"
+mode = "scan-only"
+reason = "Editor analysis configuration."
+
