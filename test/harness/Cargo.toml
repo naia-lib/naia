@@ -112,6 +112,10 @@ name = "pipelined_admission"
 path = "contract_tests/integration_only/pipelined_admission.rs"
 
 [[test]]
+name = "preapply_messages"
+path = "contract_tests/integration_only/preapply_messages.rs"
+
+[[test]]
 name = "world_server_enum_shell"
 path = "contract_tests/integration_only/world_server_enum_shell.rs"
 

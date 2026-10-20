@@ -367,3 +367,18 @@ pub fn take_received_updates_of_kind<T: Send + Sync + 'static, R: ReplicatedComp
     });
     result
 }
+
+/// Takes ready `M` messages on channel `C` for client marker `T`, without
+/// applying replicated world state. Call from `HandleTickEvents`, after packet
+/// decode and before `ProcessPackets`, to consume messages before simulation.
+/// Messages retain channel order and are consumed exactly once; unrelated
+/// messages and lifecycle events remain available through normal delivery.
+/// Entity-dependent messages retain their normal entity-waitlist behavior.
+pub fn take_received_messages_of_kind<T: Send + Sync + 'static, C: Channel, M: Message>(
+    world: &mut World,
+) -> Vec<M> {
+    world
+        .resource_mut::<ClientWrapper<T>>()
+        .client
+        .take_received_messages_of_kind::<C, M>()
+}

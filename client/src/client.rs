@@ -1948,6 +1948,52 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .take_received_updates_of_kind::<E, W, R>(&*global_entity_map, &mut world)
     }
 
+    /// Takes ready messages of type `M` on channel `C` after packet decode
+    /// ([`Self::take_tick_events`]) and before replicated state is applied
+    /// ([`Self::process_all_packets`]). No world changes are applied.
+    ///
+    /// Messages retain their channel's delivery order and are consumed exactly
+    /// once: later calls and normal message events do not repeat them. Other
+    /// message kinds remain queued for normal event delivery; other channels,
+    /// requests, responses and lifecycle events are not drained. Messages that
+    /// reference entities still obey the receiver's entity waitlist, so they may
+    /// remain unavailable until a later world apply resolves those references.
+    pub fn take_received_messages_of_kind<C: Channel, M: Message>(&mut self) -> Vec<M> {
+        let mut output: Vec<M> = self
+            .incoming_world_events
+            .read::<crate::MessageEvent<C, M>>()
+            .collect();
+        let Some(connection) = self.server_connection.as_mut() else {
+            return output;
+        };
+        let channel_kind = ChannelKind::of::<C>();
+        let (entity_converter, entity_waitlist) = connection
+            .base
+            .send
+            .world_manager
+            .get_message_processor_helpers();
+        let messages = connection
+            .base
+            .send
+            .message_manager
+            .receive_messages_on_channel(
+                &channel_kind,
+                &self.protocol.message_kinds,
+                &Instant::now(),
+                &entity_converter,
+                entity_waitlist,
+            );
+        for message in messages {
+            if message.kind() == naia_shared::MessageKind::of::<M>() {
+                output.push(*message.to_boxed_any().downcast::<M>().unwrap());
+            } else {
+                self.incoming_world_events
+                    .push_message(&channel_kind, message);
+            }
+        }
+        output
+    }
+
     /// Removes a Component from an Entity
     pub(crate) fn remove_component<R: ReplicatedComponent, W: WorldMutType<E>>(
         &mut self,

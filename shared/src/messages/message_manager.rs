@@ -436,6 +436,23 @@ impl MessageManager {
 
     // Incoming Messages
 
+    /// Drains ready messages from one channel without applying replicated world
+    /// state or draining any other channel. Entity-dependent messages retain the
+    /// channel receiver's normal waitlist and ordering rules.
+    pub fn receive_messages_on_channel(
+        &mut self,
+        channel_kind: &ChannelKind,
+        message_kinds: &MessageKinds,
+        now: &Instant,
+        entity_converter: &dyn LocalEntityAndGlobalEntityConverter,
+        entity_waitlist: &mut RemoteEntityWaitlist,
+    ) -> Vec<MessageContainer> {
+        let Some(channel) = self.channel_receivers.get_mut(channel_kind) else {
+            return Vec::new();
+        };
+        channel.receive_messages(message_kinds, now, entity_waitlist, entity_converter)
+    }
+
     /// Parses an incoming message packet, routing each message to its channel's receiver buffer.
     pub fn read_messages(
         &mut self,
