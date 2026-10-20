@@ -85,6 +85,9 @@ pub struct SendConnection {
     pub visibility: ConnectionVisibilityBitset,
     /// Shared per-connection state crossing the recv/send boundary.
     pub shared: Arc<ConnectionShared>,
+    /// Latest tick serialized into Data. Quiet links still need one Data
+    /// boundary per tick so the client's delivered-state ceiling can advance.
+    last_data_tick: Option<Tick>,
 }
 
 impl SendConnection {
@@ -105,6 +108,7 @@ impl SendConnection {
             // capacity = max_replicated_entities + 1 (slot 0 = INVALID sentinel)
             visibility: ConnectionVisibilityBitset::new(max_replicated_entities + 1),
             shared,
+            last_data_tick: None,
         }
     }
 
@@ -345,6 +349,7 @@ impl SendConnection {
             false.ser(&mut writer);
             false.ser(&mut writer);
             false.ser(&mut writer);
+            self.last_data_tick = Some(tick);
 
             let addr = self.address;
             self.shared.note_outbound_packet();
@@ -360,7 +365,8 @@ impl SendConnection {
             return false;
         }
 
-        if has_events || has_messages {
+        let needs_tick_boundary = self.last_data_tick != Some(time_manager.current_tick());
+        if has_events || has_messages || needs_tick_boundary {
             if !self
                 .base
                 .can_spend_bandwidth(u32::try_from(MTU_SIZE_BYTES).expect("MTU size fits in u32"))
@@ -448,6 +454,7 @@ impl SendConnection {
         let tick = time_manager.current_tick();
         tick.ser(&mut writer);
         time_manager.current_tick_instant().ser(&mut writer);
+        self.last_data_tick = Some(tick);
 
         let mut has_written = false;
 
@@ -640,10 +647,14 @@ impl SendConnection {
             false.ser(&mut writer);
             false.ser(&mut writer);
             false.ser(&mut writer);
+            self.last_data_tick = Some(time_manager.current_tick());
             return Some(writer.to_packet());
         }
 
-        if has_events || has_messages {
+        // Heartbeats update the clock estimate, but only Data advances the
+        // client's receive ceiling. An idle world must still supply that tick.
+        let needs_tick_boundary = self.last_data_tick != Some(time_manager.current_tick());
+        if has_events || has_messages || needs_tick_boundary {
             if !self
                 .base
                 .can_spend_bandwidth(u32::try_from(MTU_SIZE_BYTES).expect("MTU size fits in u32"))
@@ -712,14 +723,14 @@ impl SendConnection {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "test_time"))]
 mod quiet_data_tests {
     use std::time::Duration;
 
     use naia_shared::{
         BigMapKey, ChannelKinds, ComponentKinds, EntityAndGlobalEntityConverter,
         EntityDoesNotExistError, GameInstant, GlobalEntity, Instant, MessageKinds, PacketType,
-        Serde, SnapshotMap, SnapshotWorld, StandardHeader, Tick,
+        Serde, SnapshotMap, SnapshotWorld, StandardHeader, TestClock, Tick,
     };
 
     use super::SendConnection;
@@ -755,6 +766,7 @@ mod quiet_data_tests {
 
     impl Link {
         fn new() -> Self {
+            TestClock::init(0);
             let config = ServerConfig::default();
             let global_world_manager = GlobalWorldManager::new();
             let (_, mut connection) = new_connection_pair(
@@ -778,7 +790,8 @@ mod quiet_data_tests {
         }
 
         fn advance(&mut self) {
-            self.now.add_millis(40);
+            TestClock::advance(40);
+            self.now = Instant::now();
             assert!(self.time_manager.recv_server_tick(&self.now));
         }
 
