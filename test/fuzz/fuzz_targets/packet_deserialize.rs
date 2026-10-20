@@ -2,7 +2,8 @@
 use libfuzzer_sys::fuzz_target;
 
 use naia_serde::{
-    BitReader, Serde, SignedInteger, SignedVariableInteger, UnsignedInteger, UnsignedVariableInteger,
+    BitReader, Serde, SignedInteger, SignedVariableInteger, UnsignedInteger,
+    UnsignedVariableInteger,
 };
 
 fuzz_target!(|data: &[u8]| {

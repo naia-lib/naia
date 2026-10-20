@@ -70,10 +70,10 @@ impl GlobalWorldManagerType for FakeGlobalWorldManager {
 
 fuzz_target!(|data: &[u8]| {
     let fake_mgr = FakeGlobalWorldManager::new();
-    let mut world_manager =
-        LocalWorldManager::new(&None, HostType::Client, 0, &fake_mgr);
+    let mut world_manager = LocalWorldManager::new(&None, HostType::Client, 0, &fake_mgr);
     let component_kinds = ComponentKinds::new();
     let tick = Tick::default();
     let mut reader = BitReader::new(data);
-    let _ = WorldReader::read_world_events(&mut world_manager, &component_kinds, &tick, &mut reader);
+    let _ =
+        WorldReader::read_world_events(&mut world_manager, &component_kinds, &tick, &mut reader);
 });
