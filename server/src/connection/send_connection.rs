@@ -711,3 +711,160 @@ impl SendConnection {
         self.base.world_manager.diff_handler_receiver_count()
     }
 }
+
+#[cfg(test)]
+mod quiet_data_tests {
+    use std::time::Duration;
+
+    use naia_shared::{
+        BigMapKey, ChannelKinds, ComponentKinds, EntityAndGlobalEntityConverter,
+        EntityDoesNotExistError, GameInstant, GlobalEntity, Instant, MessageKinds, PacketType,
+        Serde, SnapshotMap, SnapshotWorld, StandardHeader, Tick,
+    };
+
+    use super::SendConnection;
+    use crate::{
+        connection::connection::new_connection_pair, time_manager::TimeManager,
+        world::global_world_manager::GlobalWorldManager, ServerConfig, UserKey,
+    };
+
+    struct Converter;
+
+    impl EntityAndGlobalEntityConverter<u64> for Converter {
+        fn global_entity_to_entity(
+            &self,
+            entity: GlobalEntity,
+        ) -> Result<u64, EntityDoesNotExistError> {
+            Ok(entity.to_u64())
+        }
+
+        fn entity_to_global_entity(
+            &self,
+            entity: &u64,
+        ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+            Ok(GlobalEntity::from_u64(*entity))
+        }
+    }
+
+    struct Link {
+        connection: SendConnection,
+        global_world_manager: GlobalWorldManager,
+        time_manager: TimeManager,
+        now: Instant,
+    }
+
+    impl Link {
+        fn new() -> Self {
+            let config = ServerConfig::default();
+            let global_world_manager = GlobalWorldManager::new();
+            let (_, mut connection) = new_connection_pair(
+                &config.connection,
+                &config.ping,
+                &"127.0.0.1:54501".parse().unwrap(),
+                UserKey::from_u64(1),
+                &ChannelKinds::new(),
+                &global_world_manager,
+                32,
+            );
+            let time_manager = TimeManager::new(Duration::from_millis(40));
+            let now = Instant::now();
+            connection.base.accumulate_bandwidth(&now);
+            Self {
+                connection,
+                global_world_manager,
+                time_manager,
+                now,
+            }
+        }
+
+        fn advance(&mut self) {
+            self.now.add_millis(40);
+            assert!(self.time_manager.recv_server_tick(&self.now));
+        }
+
+        fn build(&mut self) -> Vec<naia_shared::OutgoingPacket> {
+            self.connection
+                .build_all_packets(
+                    &ChannelKinds::new(),
+                    &MessageKinds::new(),
+                    &ComponentKinds::new(),
+                    &self.now,
+                    &SnapshotWorld::<u64>::new(),
+                    &Converter,
+                    &self.global_world_manager,
+                    &self.time_manager,
+                    0.0,
+                    &mut Vec::new(),
+                    &SnapshotMap::new(),
+                )
+                .0
+        }
+    }
+
+    fn assert_empty_data(packet: &naia_shared::OutgoingPacket, tick: Tick) {
+        let mut reader = naia_shared::BitReader::new(packet.slice());
+        assert_eq!(
+            StandardHeader::de(&mut reader).unwrap().packet_type,
+            PacketType::Data
+        );
+        assert_eq!(Tick::de(&mut reader).unwrap(), tick);
+        GameInstant::de(&mut reader).unwrap();
+        for _ in 0..3 {
+            assert!(!bool::de(&mut reader).unwrap());
+        }
+    }
+
+    #[test]
+    fn quiet_link_builds_one_data_boundary_per_server_tick() {
+        let mut link = Link::new();
+        for _ in 0..3 {
+            link.advance();
+            let packets = link.build();
+            assert_eq!(
+                packets.len(),
+                1,
+                "a quiet tick must still deliver its Data boundary"
+            );
+            assert_empty_data(&packets[0], link.time_manager.current_tick());
+            assert!(
+                link.build().is_empty(),
+                "repeated sends in the same tick must stay bounded"
+            );
+        }
+    }
+
+    #[test]
+    fn quiet_link_defers_its_data_boundary_when_bandwidth_is_exhausted() {
+        let mut link = Link::new();
+        link.connection.base.spend_bandwidth(10_000);
+        link.advance();
+        assert!(link.build().is_empty());
+        for _ in 0..4 {
+            link.advance();
+        }
+        let packets = link.build();
+        assert_eq!(
+            packets.len(),
+            1,
+            "the quiet boundary must resume when budget returns"
+        );
+        assert_empty_data(&packets[0], link.time_manager.current_tick());
+    }
+
+    #[test]
+    fn quiet_link_ack_only_data_already_supplies_the_tick_boundary() {
+        let mut link = Link::new();
+        link.advance();
+        link.connection.base.mark_should_send_empty_ack();
+        let packets = link.build();
+        assert_eq!(packets.len(), 1);
+        assert_empty_data(&packets[0], link.time_manager.current_tick());
+        assert!(link.build().is_empty());
+        link.advance();
+        assert_eq!(
+            link.build().len(),
+            1,
+            "progress must not depend on another ACK request"
+        );
+    }
+}
