@@ -92,4 +92,3 @@ an ignored developer artifact, as required by this library repository.
 Before a `dev` landing, qualify the committed content and require
 `clerc plan-admin land-key --root . --commit HEAD -- cargo clippy --workspace --all-targets --keep-going -- -D warnings`.
 A native process success without valid content-key credit is UNKNOWN.
-

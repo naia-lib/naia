@@ -1490,4 +1490,3 @@ reason = "Published FAQ sources."
 path = "rust-analyzer.toml"
 mode = "scan-only"
 reason = "Editor analysis configuration."
-
