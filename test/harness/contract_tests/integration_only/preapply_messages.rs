@@ -85,7 +85,7 @@ impl Link {
             }
             server.take_tick_events(&now);
             server.send_all_packets(&server_world.proxy());
-            if connected && events.read::<naia_server::ConnectEvent>().next().is_some() {
+            if connected && user.is_some_and(|key| server.user_connection_ready(&key)) {
                 break;
             }
         }
@@ -100,11 +100,14 @@ impl Link {
     }
 
     fn spawn(&mut self) {
+        let room = self.server.create_room().key();
+        self.server.room_mut(&room).add_user(&self.user);
         let entity = self
             .server
             .spawn_entity(self.server_world.proxy_mut())
             .configure_replication(ReplicationConfig::public())
             .insert_component(Position::new(7.0, 8.0))
+            .enter_room(&room)
             .id();
         self.server.user_scope_mut(&self.user).include(&entity);
     }
