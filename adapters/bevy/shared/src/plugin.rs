@@ -7,7 +7,7 @@ use log::info;
 
 use crate::{
     change_detection::{on_despawn, on_host_owned_added, HostSyncEvent},
-    system_set::{HostSyncChangeTracking, HostSyncOwnedAddedTracking},
+    system_set::{HostSyncChangeTracking, HostSyncDespawnTrailer, HostSyncOwnedAddedTracking},
     HostOwnedMap,
 };
 
@@ -51,7 +51,12 @@ impl<T: Send + Sync + 'static> PluginType for SharedPlugin<T> {
                 Update,
                 on_host_owned_added.in_set(HostSyncOwnedAddedTracking),
             )
-            .add_systems(Update, on_despawn.in_set(HostSyncChangeTracking))
+            .add_systems(
+                Update,
+                on_despawn
+                    .in_set(HostSyncChangeTracking)
+                    .in_set(HostSyncDespawnTrailer),
+            )
             // Force-order: `on_host_owned_added` populates HostOwnedMap
             // for newly-replicated entities; `on_despawn` panics if it
             // runs first on a same-frame spawn-and-despawn (the entity's

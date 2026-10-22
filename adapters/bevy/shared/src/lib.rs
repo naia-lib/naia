@@ -202,9 +202,9 @@ pub use plugin::SharedPlugin;
 pub use protocol::Protocol;
 pub use protocol_plugin::ProtocolPlugin;
 pub use system_set::{
-    HandleTickEvents, HandleWorldEvents, HostSyncChangeTracking, HostSyncOwnedAddedTracking,
-    ProcessPackets, ReceivePackets, SendPackets, TranslateTickEvents, TranslateWorldEvents,
-    WorldToHostSync, WorldUpdate,
+    HandleTickEvents, HandleWorldEvents, HostSyncChangeTracking, HostSyncDespawnTrailer,
+    HostSyncKindSlot, HostSyncOwnedAddedTracking, ProcessPackets, ReceivePackets, SendPackets,
+    TranslateTickEvents, TranslateWorldEvents, WorldToHostSync, WorldUpdate,
 };
 pub use world_data::WorldData;
 pub use world_proxy::{WorldMut, WorldProxy, WorldProxyMut, WorldRef};

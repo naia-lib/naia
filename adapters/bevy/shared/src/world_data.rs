@@ -1,16 +1,19 @@
 use std::collections::{HashMap, HashSet};
 
-use bevy_app::App;
+use bevy_app::{App, Update};
 use bevy_ecs::{
     component::{Component, Mutable},
     entity::Entity,
     prelude::Resource,
-    schedule::InternedScheduleLabel,
+    schedule::{InternedScheduleLabel, IntoScheduleConfigs, ScheduleLabel},
 };
 
 use naia_shared::{ComponentKind, Replicate};
 
-use super::component_access::{ComponentAccess, ComponentAccessor};
+use super::{
+    component_access::{ComponentAccess, ComponentAccessor},
+    system_set::{HostSyncDespawnTrailer, HostSyncKindSlot},
+};
 
 /// Per-`Protocol` bevy-world bookkeeping: tracks spawned entities, the
 /// `ComponentAccess` for each registered component kind, and which kinds
@@ -20,6 +23,12 @@ use super::component_access::{ComponentAccess, ComponentAccessor};
 pub struct WorldData {
     entities: HashSet<Entity>,
     kind_to_accessor_map: HashMap<ComponentKind, Box<dyn ComponentAccess>>,
+    /// Component kinds in protocol registration order (the `ComponentKinds`
+    /// net-ID order). `put_kind` is called once per `register_component` in
+    /// registration order, so this mirrors the wire order both ends agree
+    /// on. Tracker registration and kind enumeration walk this order so
+    /// `HashMap` iteration order never leaks into system execution.
+    registration_order: Vec<ComponentKind>,
     /// Component kinds that are Replicated Resources (registered via
     /// `Protocol::add_resource`). A ReplicatedResource is BOTH a bevy
     /// `Component` (the carrier entity-component) AND a bevy `Resource`
@@ -49,6 +58,7 @@ impl Clone for WorldData {
                 .iter()
                 .map(|(kind, accessor)| (*kind, accessor.box_clone()))
                 .collect(),
+            registration_order: self.registration_order.clone(),
             resource_kinds: self.resource_kinds.clone(),
             resource_carrier_entities: self.resource_carrier_entities.clone(),
         }
@@ -67,16 +77,31 @@ impl WorldData {
         if !self.entities.is_empty() || !other.entities.is_empty() {
             panic!("merging world data with non-empty entities");
         }
+        for kind in &other.registration_order {
+            if !self.kind_to_accessor_map.contains_key(kind) {
+                self.registration_order.push(*kind);
+            }
+        }
         self.kind_to_accessor_map.extend(other.kind_to_accessor_map);
         self.resource_kinds.extend(other.resource_kinds);
     }
 
     /// Registers every component kind's `on_component_added` /
-    /// `on_component_removed` systems under `Update` on `app`.
+    /// `on_component_removed` systems under `Update` on `app`, in protocol
+    /// registration order: each kind's added-before-removed pair joins its
+    /// own [`HostSyncKindSlot`], and consecutive slots (plus the trailing
+    /// [`HostSyncDespawnTrailer`], where `on_despawn` is registered by the
+    /// plugins) are chained so the trackers execute as one deterministic
+    /// sequence.
     pub fn add_systems(&self, app: &mut App) {
-        for accessor in self.kind_to_accessor_map.values() {
-            accessor.add_systems(app);
+        for (ordinal, kind) in self.registration_order.iter().enumerate() {
+            let accessor = self
+                .kind_to_accessor_map
+                .get(kind)
+                .expect("every registered ComponentKind must have an accessor");
+            accessor.add_systems_in_slot(app, HostSyncKindSlot(ordinal as u32));
         }
+        self.configure_tracker_ordering(app, Update);
     }
 
     /// Like [`WorldData::add_systems`], but registers every per-Replicate
@@ -85,8 +110,37 @@ impl WorldData {
     /// when the host bevy app's gameplay schedule is e.g. `SimMain`
     /// rather than the canonical `Update`.
     pub fn add_systems_to_schedule(&self, app: &mut App, schedule: InternedScheduleLabel) {
-        for accessor in self.kind_to_accessor_map.values() {
-            accessor.add_systems_to_schedule(app, schedule);
+        for (ordinal, kind) in self.registration_order.iter().enumerate() {
+            let accessor = self
+                .kind_to_accessor_map
+                .get(kind)
+                .expect("every registered ComponentKind must have an accessor");
+            accessor.add_systems_to_schedule_in_slot(
+                app,
+                schedule,
+                HostSyncKindSlot(ordinal as u32),
+            );
+        }
+        self.configure_tracker_ordering(app, schedule);
+    }
+
+    /// Chains the per-kind [`HostSyncKindSlot`]s in registration order and
+    /// the [`HostSyncDespawnTrailer`] behind the last one, inside
+    /// `schedule`. With no registered kinds there is nothing to chain;
+    /// `on_despawn` still joins the trailer slot on its own.
+    fn configure_tracker_ordering<S: ScheduleLabel + Clone>(&self, app: &mut App, schedule: S) {
+        let count = self.registration_order.len() as u32;
+        for ordinal in 0..count.saturating_sub(1) {
+            app.configure_sets(
+                schedule.clone(),
+                HostSyncKindSlot(ordinal).before(HostSyncKindSlot(ordinal + 1)),
+            );
+        }
+        if count > 0 {
+            app.configure_sets(
+                schedule,
+                HostSyncKindSlot(count - 1).before(HostSyncDespawnTrailer),
+            );
         }
     }
 
@@ -115,11 +169,13 @@ impl WorldData {
 
     // Components
 
-    /// Every registered replicated-component kind. Used by the host-sync
-    /// initial-insert pass, which enumerates an entity's current components
-    /// when tracking begins (cross-frame enable).
+    /// Every registered replicated-component kind, in protocol registration
+    /// order. Used by the host-sync initial-insert pass, which enumerates
+    /// an entity's current components when tracking begins (cross-frame
+    /// enable); registration order keeps the emitted `Insert` events
+    /// deterministic across processes.
     pub fn component_kinds(&self) -> impl Iterator<Item = &ComponentKind> {
-        self.kind_to_accessor_map.keys()
+        self.registration_order.iter()
     }
 
     /// Returns the registered `ComponentAccess` for `component_kind`, if any.
@@ -150,6 +206,12 @@ impl WorldData {
         &mut self,
         component_kind: &ComponentKind,
     ) {
+        // `register_component` calls this once per kind in registration
+        // order, so pushing unseen kinds here mirrors the protocol (wire
+        // net-ID) order both ends agree on.
+        if !self.kind_to_accessor_map.contains_key(component_kind) {
+            self.registration_order.push(*component_kind);
+        }
         self.kind_to_accessor_map
             .insert(*component_kind, ComponentAccessor::<R>::create());
     }

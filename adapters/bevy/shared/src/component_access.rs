@@ -16,7 +16,7 @@ use naia_shared::{
 use super::{
     change_detection::{on_component_added, on_component_removed},
     component_ref::{ComponentDynMut, ComponentDynRef},
-    system_set::HostSyncChangeTracking,
+    system_set::{HostSyncChangeTracking, HostSyncKindSlot},
 };
 
 /// Marker trait implemented once per bevy-adapter tier (client/server) to
@@ -32,6 +32,15 @@ pub trait AppTag: Send + Sync + 'static {
 pub trait ComponentAccess: Send + Sync {
     /// Registers this component's change-tracking systems under `Update`.
     fn add_systems(&self, app: &mut App);
+    /// Registers this component's change-tracking pair under `Update` as a
+    /// member of both [`HostSyncChangeTracking`] and the given
+    /// [`HostSyncKindSlot`]. The default implementation ignores the slot and
+    /// keeps the legacy unordered registration; implementors that care about
+    /// deterministic cross-component order override this.
+    fn add_systems_in_slot(&self, app: &mut App, slot: HostSyncKindSlot) {
+        let _ = slot;
+        self.add_systems(app);
+    }
     /// Register `on_component_added::<R>` / `on_component_removed::<R>` in
     /// `schedule` instead of the default `Update`. Used by callers (e.g.
     /// cyberlith's Sim SubApp) whose change-tracking must run in a custom
@@ -44,6 +53,20 @@ pub trait ComponentAccess: Send + Sync {
         // that genuinely care about schedule placement override.
         let _ = schedule;
         self.add_systems(app);
+    }
+    /// Registers this component's change-tracking pair in `schedule` as a
+    /// member of both [`HostSyncChangeTracking`] and the given
+    /// [`HostSyncKindSlot`]. The default implementation ignores the slot and
+    /// keeps the legacy unordered registration; implementors that care about
+    /// deterministic cross-component order override this.
+    fn add_systems_to_schedule_in_slot(
+        &self,
+        app: &mut App,
+        schedule: InternedScheduleLabel,
+        slot: HostSyncKindSlot,
+    ) {
+        let _ = slot;
+        self.add_systems_to_schedule(app, schedule);
     }
     /// Clones this accessor into a new boxed trait object.
     fn box_clone(&self) -> Box<dyn ComponentAccess>;
@@ -139,12 +162,37 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
         );
     }
 
+    fn add_systems_in_slot(&self, app: &mut App, slot: HostSyncKindSlot) {
+        app.add_systems(
+            Update,
+            (on_component_added::<R>, on_component_removed::<R>)
+                .chain()
+                .in_set(HostSyncChangeTracking)
+                .in_set(slot),
+        );
+    }
+
     fn add_systems_to_schedule(&self, app: &mut App, schedule: InternedScheduleLabel) {
         app.add_systems(
             schedule,
             (on_component_added::<R>, on_component_removed::<R>)
                 .chain()
                 .in_set(HostSyncChangeTracking),
+        );
+    }
+
+    fn add_systems_to_schedule_in_slot(
+        &self,
+        app: &mut App,
+        schedule: InternedScheduleLabel,
+        slot: HostSyncKindSlot,
+    ) {
+        app.add_systems(
+            schedule,
+            (on_component_added::<R>, on_component_removed::<R>)
+                .chain()
+                .in_set(HostSyncChangeTracking)
+                .in_set(slot),
         );
     }
 

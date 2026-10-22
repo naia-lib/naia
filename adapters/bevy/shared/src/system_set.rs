@@ -48,8 +48,40 @@ pub struct HostSyncOwnedAddedTracking;
 // internal to Bevy adapter crates
 /// System set for the per-component `on_component_added` / `on_component_removed`
 /// and `on_despawn` host-sync systems.
+///
+/// Public contract: consumers order their own systems against this whole set
+/// (`.before(...)` / `.after(...)`) without naming naia internals. Inside the
+/// set, members run as one explicitly ordered sequence: each component kind's
+/// added-then-removed pair in protocol registration order (see
+/// [`HostSyncKindSlot`]), with `on_despawn` last (see
+/// [`HostSyncDespawnTrailer`]).
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 pub struct HostSyncChangeTracking;
+
+// internal to Bevy adapter crates
+/// Ordering slot for one component kind's `on_component_added` /
+/// `on_component_removed` pair inside [`HostSyncChangeTracking`].
+///
+/// Slot `n` holds the pair for the `n`-th component kind in protocol
+/// registration order (the `ComponentKinds` net-ID order, which already has
+/// to match on both ends of the wire). `WorldData` chains consecutive slots
+/// and the [`HostSyncDespawnTrailer`] behind them, so the trackers execute
+/// in a deterministic order that is identical in every process.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct HostSyncKindSlot(pub u32);
+
+impl SystemSet for HostSyncKindSlot {
+    fn dyn_clone(&self) -> Box<dyn SystemSet> {
+        Box::new(*self)
+    }
+}
+
+// internal to Bevy adapter crates
+/// Trailing slot inside [`HostSyncChangeTracking`]: `on_despawn` joins this
+/// slot, and `WorldData` orders it after the last [`HostSyncKindSlot`], so
+/// despawn bookkeeping always runs after every per-kind tracker.
+#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
+pub struct HostSyncDespawnTrailer;
 
 // internal to Bevy adapter crates
 /// System set for systems that push host-owned world changes into naia's
