@@ -50,10 +50,13 @@ fn summary_line() -> String {
     )
 }
 
+/// Record one client request accepted into the channel send queue.
 pub fn bump_cli_queued() {
     CLI_QUEUED.fetch_add(1, Ordering::Relaxed);
 }
 
+/// Record one request envelope serialized into an outgoing packet, and track
+/// its message index until an ack marks it delivered.
 pub fn note_req_written(message_index: u16) {
     REQ_WRITTEN.fetch_add(1, Ordering::Relaxed);
     if let Ok(mut map) = UNACKED_REQ_INDEX.lock() {
@@ -61,6 +64,8 @@ pub fn note_req_written(message_index: u16) {
     }
 }
 
+/// Record an ack for `message_index`; counts only when the index belongs to
+/// a tracked request envelope.
 pub fn note_msg_delivered(message_index: u16) {
     let tracked = match UNACKED_REQ_INDEX.lock() {
         Ok(mut map) => map.remove(&message_index).is_some(),
@@ -71,14 +76,17 @@ pub fn note_msg_delivered(message_index: u16) {
     }
 }
 
+/// Record one request envelope parsed out of an incoming packet.
 pub fn bump_msg_decoded() {
     MSG_DECODED.fetch_add(1, Ordering::Relaxed);
 }
 
+/// Record one parsed request envelope accepted by the reliable receiver buffer.
 pub fn bump_chan_entered() {
     CHAN_ENTERED.fetch_add(1, Ordering::Relaxed);
 }
 
+/// Record one request inserted into the server world-events path.
 pub fn bump_surfaced() {
     SURFACED.fetch_add(1, Ordering::Relaxed);
 }
