@@ -40,7 +40,7 @@ impl AssertList {
             assert_eq!(
                 assert_msg, &out[i].1,
                 "At index {}, output message: {:?} not equal to expected message: {:?}",
-                i, &out[i], assert_msg
+                i, out[i], assert_msg
             );
         }
     }

@@ -706,9 +706,9 @@ mod tests {
         // Write
         let mut writer = BitWriter::new();
 
-        let in_1 = UnsignedFloat::<7, 1>::new(12.3);
-        let in_2 = UnsignedFloat::<20, 2>::new(5352.21);
-        let in_3 = UnsignedFloat::<5, 1>::new(3.0);
+        let in_1 = UnsignedFloat::<7, 1>::new(12.3_f32);
+        let in_2 = UnsignedFloat::<20, 2>::new(5352.21_f32);
+        let in_3 = UnsignedFloat::<5, 1>::new(3.0_f32);
 
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
@@ -747,9 +747,9 @@ mod tests {
     fn read_write_signed_float() {
         let mut writer = BitWriter::new();
 
-        let in_1 = SignedFloat::<7, 1>::new(-12.3);
-        let in_2 = SignedFloat::<20, 2>::new(5352.21);
-        let in_3 = SignedFloat::<5, 1>::new(-3.0);
+        let in_1 = SignedFloat::<7, 1>::new(-12.3_f32);
+        let in_2 = SignedFloat::<20, 2>::new(5352.21_f32);
+        let in_3 = SignedFloat::<5, 1>::new(-3.0_f32);
 
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
@@ -786,9 +786,9 @@ mod tests {
     fn read_write_unsigned_variable_float() {
         let mut writer = BitWriter::new();
 
-        let in_1 = UnsignedVariableFloat::<3, 1>::new(2.3);
-        let in_2 = UnsignedVariableFloat::<5, 2>::new(153.22);
-        let in_3 = UnsignedVariableFloat::<2, 1>::new(3.0);
+        let in_1 = UnsignedVariableFloat::<3, 1>::new(2.3_f32);
+        let in_2 = UnsignedVariableFloat::<5, 2>::new(153.22_f32);
+        let in_3 = UnsignedVariableFloat::<2, 1>::new(3.0_f32);
 
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
@@ -825,9 +825,9 @@ mod tests {
     fn read_write_signed_variable_float() {
         let mut writer = BitWriter::new();
 
-        let in_1 = SignedVariableFloat::<5, 1>::new(-66.8);
-        let in_2 = SignedVariableFloat::<6, 2>::new(537.35);
-        let in_3 = SignedVariableFloat::<2, 1>::new(-3.0);
+        let in_1 = SignedVariableFloat::<5, 1>::new(-66.8_f32);
+        let in_2 = SignedVariableFloat::<6, 2>::new(537.35_f32);
+        let in_3 = SignedVariableFloat::<2, 1>::new(-3.0_f32);
 
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
