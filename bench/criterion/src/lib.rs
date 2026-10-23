@@ -788,9 +788,9 @@ impl BenchWorld {
                     tile_x: (f as i16).wrapping_add(1),
                     tile_y: (f as i16).wrapping_add(1),
                     tile_z: (f as i16).wrapping_add(1),
-                    dx: SignedVariableFloat::new(0.5),
-                    dy: SignedVariableFloat::new(0.5),
-                    dz: SignedVariableFloat::new(0.5),
+                    dx: SignedVariableFloat::new(0.5_f32),
+                    dy: SignedVariableFloat::new(0.5_f32),
+                    dz: SignedVariableFloat::new(0.5_f32),
                 };
             }
             if let Some(mut v) = self
