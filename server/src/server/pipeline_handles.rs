@@ -277,8 +277,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// is consumed (and `sent_updates` trimmed) on the send side, keeping the
     /// worker-owned `RetransmitLedger` single-owner. Forwards to
     /// [`SendState::drain_all_acks`].
+    ///
+    /// Drain-only by design (worker shape): the worker transmits a plan the
+    /// main thread already froze, so there is no same-tick plan to finalize
+    /// for. The main-thread oracle path pairs its drain with
+    /// [`Self::finalize_drained_deliveries`].
     pub fn drain_all_acks(&mut self) {
         self.state.drain_all_acks();
+    }
+
+    /// Same-tick delivery finalize (Tick227 send-gate fix, Usher 108045).
+    /// Main-thread oracle companion to [`Self::drain_all_acks`]: finalizes
+    /// whatever the D8 drain just consumed before D9 plans. Forwards to
+    /// [`SendState::finalize_drained_deliveries`].
+    pub fn finalize_drained_deliveries(&mut self) {
+        self.state.finalize_drained_deliveries();
     }
 
     /// C.6 prep — run the per-tick send preamble on `SendState` alone,

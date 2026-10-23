@@ -702,7 +702,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         // On the active path the send worker drains in its preamble (before
         // `transmit_send_job`); this synchronous path covers the oracle + the
         // worker's no-plan fallback.
+        // Same-tick finalize (Tick227 send-gate fix, Usher 108045): an ACK
+        // drained here must be finalized before `prepare_send_job` plans, or
+        // the plan reads stale undelivered state for one tick.
         self.drain_all_acks();
+        self.finalize_drained_deliveries();
         let plan = self.prepare_send_job(&world);
         self.transmit_send_job(world, plan);
     }
@@ -714,9 +718,30 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// of `process_recv_packets` so the consumer of the ACK channel runs on the
     /// send side (single-owner `sent_updates`). Recv still pushes samples via
     /// `RecvConnection::process_incoming_header`.
+    ///
+    /// The drain only RECORDS delivery (notification buffered + ledger
+    /// trimmed). The delivery state the D9 plan reads (`delivered=true` on the
+    /// fast gate, the delivered-world entry on the slow gate) is applied by
+    /// [`Self::finalize_drained_deliveries`], which send-prep must run before
+    /// the plan — otherwise an ACK drained this tick still plans stale.
     pub fn drain_all_acks(&mut self) {
         for send_conn in self.send_user_connections.values_mut() {
             send_conn.drain_acks(&mut []);
+        }
+    }
+
+    /// Same-tick delivery finalize (Tick227 send-gate fix, Usher 108045):
+    /// finalize whatever the send-side ACK drain just consumed, BEFORE the D9
+    /// plan reads delivery state. Runs the same per-connection
+    /// `process_received_commands` the recv phase runs (step 3) — applying
+    /// buffered delivery confirmations to the delivered world and marking
+    /// receivers delivered — so an ACK drained at D8 is visible to the same
+    /// tick's plan instead of stalling one tick. Idempotent no-op when the
+    /// drain consumed nothing (queue already empty); the recv-phase finalize
+    /// stays as the backstop for worker-shape drains and stray notifications.
+    pub fn finalize_drained_deliveries(&mut self) {
+        for send_conn in self.send_user_connections.values_mut() {
+            send_conn.process_received_commands();
         }
     }
 

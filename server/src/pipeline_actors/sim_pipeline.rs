@@ -2260,6 +2260,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         // / frozen plan, which the worker then transmits self-contained).
         if publisher.is_none() {
             send.drain_all_acks();
+            // Same-tick finalize (Tick227 send-gate fix, Usher 108045): an
+            // ACK drained here must be finalized before D9 plans, or the plan
+            // reads stale undelivered state for one tick.
+            send.finalize_drained_deliveries();
         }
         send.apply_pending_send_preamble();
         send.apply_pending_scope_changes(world);

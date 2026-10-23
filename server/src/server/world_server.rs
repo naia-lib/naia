@@ -1169,6 +1169,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         // 4-F.naia.h: send-half body lives on `SendState`. The serial /
         // cyberlith.d coordinator entry point runs the coordination-stage
         // preamble inline, then prepares + transmits synchronously.
+        // Same-tick finalize (Tick227 send-gate fix, Usher 108045): drain
+        // ACKs pushed by this tick's recv decode (after the recv-phase drain)
+        // and finalize them BEFORE the plan reads delivery state — otherwise
+        // an ACK that arrived this tick still plans stale for one tick.
+        self.send.state.drain_all_acks();
+        self.send.state.finalize_drained_deliveries();
         let plan = self.prepare_send_job(&world);
         self.transmit_send_job(world, plan);
     }
