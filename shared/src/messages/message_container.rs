@@ -114,10 +114,9 @@ impl MessageContainer {
     #[must_use]
     pub fn is_request_envelope(&self) -> bool {
         let any: &dyn Any = &**self.inner.as_ref();
-        any.downcast_ref::<crate::messages::channels::senders::request_sender::RequestOrResponse>(
-        )
-        .map(crate::messages::channels::senders::request_sender::RequestOrResponse::is_request)
-        .unwrap_or(false)
+        any.downcast_ref::<crate::messages::channels::senders::request_sender::RequestOrResponse>()
+            .map(crate::messages::channels::senders::request_sender::RequestOrResponse::is_request)
+            .unwrap_or(false)
     }
 
     /// Returns the set of remote entities this message is still waiting on, or `None` if ready.

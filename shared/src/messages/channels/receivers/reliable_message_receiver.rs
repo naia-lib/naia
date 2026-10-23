@@ -128,7 +128,9 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         if is_req {
             crate::reqdiag::bump_msg_decoded();
         }
-        let outcome = self.reliable_receiver.buffer_message(message_index, message);
+        let outcome = self
+            .reliable_receiver
+            .buffer_message(message_index, message);
         if is_req
             && matches!(
                 outcome,
