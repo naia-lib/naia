@@ -86,6 +86,8 @@ mod messages;
 mod named;
 mod protocol;
 mod protocol_id;
+/// TEMP RED 108734 diag counters (Usher 110231). NOT FOR MERGE.
+pub mod reqdiag;
 mod sequence_list;
 mod types;
 mod world;

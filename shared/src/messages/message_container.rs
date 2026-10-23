@@ -109,6 +109,17 @@ impl MessageContainer {
         self.inner.kind()
     }
 
+    /// TEMP RED 108734 diag: `true` if the envelope is a request (not a
+    /// response, not a plain message). By-ref downcast; never consumes.
+    #[must_use]
+    pub fn is_request_envelope(&self) -> bool {
+        let any: &dyn Any = &**self.inner.as_ref();
+        any.downcast_ref::<crate::messages::channels::senders::request_sender::RequestOrResponse>(
+        )
+        .map(crate::messages::channels::senders::request_sender::RequestOrResponse::is_request)
+        .unwrap_or(false)
+    }
+
     /// Returns the set of remote entities this message is still waiting on, or `None` if ready.
     #[must_use]
     pub fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> {

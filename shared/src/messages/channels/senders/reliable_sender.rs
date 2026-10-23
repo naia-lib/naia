@@ -234,6 +234,8 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
     }
 
     fn notify_message_delivered(&mut self, message_index: MessageIndex) {
+        // TEMP RED 108734 diag: a tracked request index was acked.
+        crate::reqdiag::note_msg_delivered(message_index);
         self.deliver_message(message_index);
     }
 }

@@ -485,6 +485,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// server-replicated entity spawn/update/despawn events and queues them
     /// for the next [`take_world_events`](Client::take_world_events) call.
     pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
+        // TEMP RED 108734 diag: one-line summary every 200 client ticks.
+        naia_shared::reqdiag::maybe_print_cli();
         #[cfg(feature = "f3_diag")]
         {
             self.diag_process_calls += 1;
@@ -797,6 +799,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             // handing back an id whose response will never arrive.
             return Err(NaiaClientError::MessageQueueFull);
         }
+        // TEMP RED 108734 diag: request queued on the client.
+        naia_shared::reqdiag::bump_cli_queued();
 
         Ok(request_id)
     }

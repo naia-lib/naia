@@ -194,10 +194,15 @@ impl SendConnection {
             }
         }
 
+        // TEMP RED 108734 diag: one-line summary every 200 server ticks.
+        naia_shared::reqdiag::maybe_print_srv();
+
         // Receive Request and Response Events
         let (requests, responses) = self.base.message_manager.receive_requests_and_responses();
         for (channel_kind, requests) in requests {
             for (local_response_id, wire_nonce, request) in requests {
+                // TEMP RED 108734 diag: request surfaced toward RequestEvents.
+                naia_shared::reqdiag::bump_surfaced();
                 let global_response_id = global_response_manager.create_response_id(
                     user_key,
                     &channel_kind,

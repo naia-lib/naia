@@ -67,6 +67,11 @@ impl IndexedMessageWriter {
                 message,
             );
 
+            // TEMP RED 108734 diag: a request envelope serialized into a packet.
+            if message.is_request_envelope() {
+                crate::reqdiag::note_req_written(*message_index);
+            }
+
             message_indices.push(*message_index);
             last_written_id = Some(*message_index);
 

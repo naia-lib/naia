@@ -1,0 +1,7 @@
+# TEMP RED 108734 diag branch pin (mirrors naia dev 1.98.0 pin, Usher 109706).
+# Exists only so Fabro relays TEMP worktree jobs; a dependency's
+# rust-toolchain.toml never affects a top-level cyberlith build.
+# NOT FOR MERGE — dies with the temp-reqdiag branch.
+[toolchain]
+channel = "1.98.0"
+components = ["rustfmt", "clippy"]

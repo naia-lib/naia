@@ -122,8 +122,22 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         message_index: MessageIndex,
         message: MessageContainer,
     ) {
-        self.reliable_receiver
-            .buffer_message(message_index, message);
+        // TEMP RED 108734 diag: request envelope parsed out of a packet (4),
+        // accepted by the reliable receiver buffer (5).
+        let is_req = message.is_request_envelope();
+        if is_req {
+            crate::reqdiag::bump_msg_decoded();
+        }
+        let outcome = self.reliable_receiver.buffer_message(message_index, message);
+        if is_req
+            && matches!(
+                outcome,
+                crate::messages::channels::receivers::reliable_receiver::BufferOutcome::Buffered
+                    | crate::messages::channels::receivers::reliable_receiver::BufferOutcome::ReplacedUpgrade
+            )
+        {
+            crate::reqdiag::bump_chan_entered();
+        }
         let received_messages = self.reliable_receiver.receive_messages();
         for (received_message_id, received_message) in received_messages {
             self.push_message(

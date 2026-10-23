@@ -100,6 +100,11 @@ pub struct RequestOrResponse {
 }
 
 impl RequestOrResponse {
+    /// TEMP RED 108734 diag: request vs response without consuming.
+    pub fn is_request(&self) -> bool {
+        self.id.is_request()
+    }
+
     /// Wraps `bytes` as a request tagged with `id` and `nonce`.
     #[must_use]
     pub fn request(id: LocalRequestId, nonce: ConnectionRequestNonce, bytes: Box<[u8]>) -> Self {
