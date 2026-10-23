@@ -473,6 +473,19 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     @Scenario(23)
     Scenario: [world-integration-03] Component removal mirrors server remove
 
+    # [client-events-15] — TickEvent fires when the tick pipeline runs off the driving thread.
+    # The client's simulated clock is app-wide (one-clock-per-app): a tick
+    # pipeline driven from a worker thread that never advances the clock MUST
+    # still observe the driver's advancing time, so connected sends are not
+    # gated shut (RED 108734: frozen translate starved ClientTickEvent,
+    # stalling the post-rejoin publish within 200 ticks).
+    @Scenario(24)
+    Scenario: [client-events-15] TickEvent fires when the tick pipeline runs off the driving thread
+      Given a server is running
+      And a client connects
+      When the client's tick pipeline runs on a thread that never advances the simulated clock
+      Then the client observes tick events and its queued request is answered within 200 ticks
+
 
   # ==========================================================================
   # === Source: component_event_ordering.feature ===

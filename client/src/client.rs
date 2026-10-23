@@ -1,6 +1,11 @@
+#[cfg(feature = "test_time")]
+use std::sync::{atomic::AtomicU64, Arc};
 use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr, time::Duration};
 
 use log::{debug, info, warn};
+
+#[cfg(feature = "test_time")]
+use naia_shared::TestClock;
 
 use naia_shared::{
     handshake::{HandshakeHeader, RejectReason},
@@ -104,6 +109,17 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     /// [`Client::take_authority_error`].
     authority_error: Option<AuthorityError>,
     incoming_tick_events: TickEvents,
+    /// App-wide simulated-clock handle (RED 108734 one-clock-per-app).
+    /// Captured from the constructing thread via `TestClock::shareable_handle`,
+    /// so a tick pipeline driven from a worker thread that never advances the
+    /// clock still observes the driver's advancing time. Without this, a
+    /// frozen thread-local clock starves `collect_ticks`, no `ClientTickEvent`
+    /// is produced, and the connected send gate stays shut: queued requests
+    /// serialize but never reach the wire and never retransmit. Present only
+    /// under `test_time`; production backends read the wall clock, which
+    /// needs no sharing.
+    #[cfg(feature = "test_time")]
+    shared_clock: Arc<AtomicU64>,
     // Per-connection priority layer (single connection; no global/per-user split).
     priority: UserPriorityState<E>,
     // Replicated Resources — client-side mirror of the server's
@@ -245,6 +261,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             global_world_manager,
             global_entity_map: GlobalEntityMap::new(),
             // Events
+            #[cfg(feature = "test_time")]
+            shared_clock: TestClock::shareable_handle(),
             incoming_world_events: Events::new(),
             // Fail-closed delegation error slot (card 27945). Without the
             // `entity_delegation` feature, delegation wire commands are
@@ -463,12 +481,25 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     // Event loop ────────────────────────────────────────────────────────────
 
+    /// Points this thread's simulated clock at the app-wide shared handle
+    /// (RED 108734 one-clock-per-app). Call before reading `Instant::now()`
+    /// on any thread that may not be the clock-driving thread — e.g. a bevy
+    /// worker executing the tick pipeline. Without this, such a thread sees
+    /// a frozen thread-local clock: `collect_ticks` never advances, no
+    /// `ClientTickEvent` is produced, and the connected send gate stays shut.
+    /// No-op without `test_time` (production backends read the wall clock).
+    pub fn sync_thread_clock(&self) {
+        #[cfg(feature = "test_time")]
+        TestClock::install_shared(self.shared_clock.clone());
+    }
+
     /// Reads all pending packets from the socket.
     ///
     /// Must be called **first** in the client loop, before
     /// [`process_all_packets`](Client::process_all_packets). Handles
     /// handshake progress, heartbeats, and buffers incoming data packets.
     pub fn receive_all_packets(&mut self) {
+        self.sync_thread_clock();
         #[cfg(feature = "f3_diag")]
         {
             self.diag_poll_calls += 1;
@@ -485,6 +516,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// server-replicated entity spawn/update/despawn events and queues them
     /// for the next [`take_world_events`](Client::take_world_events) call.
     pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
+        self.sync_thread_clock();
         #[cfg(feature = "f3_diag")]
         {
             self.diag_process_calls += 1;
@@ -539,6 +571,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ///
     /// [`TickEvents`]: crate::TickEvents
     pub fn take_tick_events(&mut self, now: &Instant) -> TickEvents {
+        self.sync_thread_clock();
+        // Under `test_time` the caller may have read `now` on a thread that
+        // had not yet synced (a foreign worker thread): re-read after
+        // syncing so a frozen value can never starve `collect_ticks`. On the
+        // driving thread the re-read is identical to the passed value.
+        #[cfg(feature = "test_time")]
+        let now_storage = Instant::now();
+        // The caller's timestamp may have been read on an unsynced thread:
+        // consume it and use the post-sync re-read instead. Without
+        // `test_time` the caller's value flows through untouched.
+        #[cfg(feature = "test_time")]
+        let _ = now;
+        #[cfg(feature = "test_time")]
+        let now = &now_storage;
         let Some(connection) = &mut self.server_connection else {
             return TickEvents::default();
         };
@@ -611,6 +657,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// packet retransmission when not yet connected. If this is not called,
     /// the server never receives any updates.
     pub fn send_all_packets<W: WorldRefType<E>>(&mut self, world: W) {
+        self.sync_thread_clock();
         if let Some(connection) = &mut self.server_connection {
             let now = Instant::now();
 

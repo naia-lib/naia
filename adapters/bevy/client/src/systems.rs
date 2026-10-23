@@ -99,6 +99,12 @@ pub fn translate_tick_events<T: Send + Sync + 'static>(
     mut server_tick_events: ResMut<Messages<bevy_events::ServerTickEvent<T>>>,
     mut client_tick_events: ResMut<Messages<bevy_events::ClientTickEvent<T>>>,
 ) {
+    // RED 108734 one-clock-per-app: this system may run on a bevy worker
+    // that never advances the simulated clock. Sync first so `now` below
+    // observes the driver's advancing time; otherwise `collect_ticks`
+    // starves, no ClientTickEvent is produced, and the connected send gate
+    // stays shut.
+    client.client.sync_thread_clock();
     let now = Instant::now();
 
     // Receive Events
@@ -122,6 +128,8 @@ pub fn translate_tick_events<T: Send + Sync + 'static>(
 
 pub fn process_packets<T: Send + Sync + 'static>(world: &mut World) {
     world.resource_scope(|world, mut client: Mut<ClientWrapper<T>>| {
+        // RED 108734 one-clock-per-app: see translate_tick_events above.
+        client.client.sync_thread_clock();
         let now = Instant::now();
         client.client.process_all_packets(world.proxy_mut(), &now);
     });
