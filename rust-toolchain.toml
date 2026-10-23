@@ -1,0 +1,11 @@
+# Pinned nightly for the whole naia workspace (Usher 109706).
+#
+# Why: naia ships to players inside cyberlith, whose workspace pins
+# nightly-2026-08-27. Without this file every host built naia on its own
+# floating stable (Lifetop 1.96.0, Dino 1.96.1, Worktop/Newtop 1.99.1),
+# and Fabro correctly refused to relay when the worker could not match the
+# toolchain. Pinning the consumer's channel keeps naia's repro builds on
+# the same compiler as the cyberlith e2e that reds are chased under.
+[toolchain]
+channel = "nightly-2026-08-27"
+components = ["rustfmt", "clippy"]
