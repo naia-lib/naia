@@ -82,17 +82,6 @@ impl RecvConnection {
     /// and publish the recv-derived ack snapshot onto the shared atomic
     /// cell. Composite call sites pair this with `SendConnection::drain_acks`.
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
-        // TEMP-ACKTRACE (diagnostic only, removed after Tick227 arrival read).
-        if std::env::var_os("NAIA_ACKTRACE").is_some() {
-            eprintln!(
-                "[ACKTRACE] hdr addr={} ukey={:?} inbound_seq={} ack_seq={} ack_bits={:032b}",
-                self.address,
-                self.user_key,
-                header.sender_packet_index,
-                header.sender_ack_index,
-                header.sender_ack_bitfield
-            );
-        }
         self.base.ack_recv.process_incoming_header(header);
         self.timeout_timer.reset();
         self.last_inbound_at = Instant::now();

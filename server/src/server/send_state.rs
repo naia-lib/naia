@@ -319,13 +319,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         // `prepare_send_job` in the oracle, and nothing between recv-apply and
         // send touches the ACK/`sent_updates`/`delivered` state.
 
-        // TEMP-ACKTRACE (diagnostic only, removed after Tick227 arrival read).
-        if std::env::var_os("NAIA_ACKTRACE").is_some() {
-            eprintln!(
-                "[ACKTRACE] d0 tick={:?} addrs={:?}",
-                server_tick, received_addresses
-            );
-        }
         // Step 2: per-data-packet decode.
         for (address, client_tick, owned_reader) in pending_data_packets {
             let mut reader = owned_reader.borrow();
@@ -385,10 +378,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
 
         // Step 3: per-address command finalization.
         for address in received_addresses {
-            // TEMP-ACKTRACE (diagnostic only, removed after Tick227 arrival read).
-            if std::env::var_os("NAIA_ACKTRACE").is_some() {
-                eprintln!("[ACKTRACE] d0-finalize tick={:?} addr={}", server_tick, address);
-            }
             if let Some(send_conn) = self.send_user_connections.get_mut(&address) {
                 send_conn.process_received_commands();
             }
@@ -726,11 +715,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// send side (single-owner `sent_updates`). Recv still pushes samples via
     /// `RecvConnection::process_incoming_header`.
     pub fn drain_all_acks(&mut self) {
-        // TEMP-ACKTRACE (diagnostic only, removed after Tick227 arrival read).
-        if std::env::var_os("NAIA_ACKTRACE").is_some() {
-            let tm_guard = self.shared.time_manager.read();
-            eprintln!("[ACKTRACE] d8 tick={:?}", tm_guard.current_tick());
-        }
         for send_conn in self.send_user_connections.values_mut() {
             send_conn.drain_acks(&mut []);
         }

@@ -332,10 +332,6 @@ impl HostWorldManager {
         command_id: CommandId,
         message: EntityMessage<HostEntity>,
     ) {
-        // TEMP-ACKTRACE (diagnostic only, removed after Tick227 arrival read).
-        if std::env::var_os("NAIA_ACKTRACE").is_some() {
-            eprintln!("[ACKTRACE] notify id={:?} msg={:?}", command_id, message);
-        }
         self.delivered_receiver.buffer_message(command_id, message);
     }
 
@@ -363,10 +359,6 @@ impl HostWorldManager {
             &mut self.delivered_engine,
             filtered_messages,
         ) {
-            // TEMP-ACKTRACE (diagnostic only, removed after Tick227 arrival read).
-            if std::env::var_os("NAIA_ACKTRACE").is_some() {
-                eprintln!("[ACKTRACE] finalized msg={:?}", message);
-            }
             match message {
                 EntityMessage::Spawn(host_entity) => {
                     self.on_delivered_spawn_entity(host_entity);
