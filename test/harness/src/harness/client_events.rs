@@ -578,7 +578,7 @@ pub(crate) fn process_spawn_events(
 ) {
     // Collect client spawn events (client-side SpawnEntityEvent means client spawned it)
     let mut spawns_to_register = Vec::new();
-    for (client_key, _client_events) in client_events_map.iter_mut() {
+    for client_key in client_events_map.keys() {
         // Check for new client spawns in this tick
         // These are entities the client created that we need to match with server
         let state = scenario
