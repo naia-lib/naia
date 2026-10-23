@@ -166,8 +166,7 @@ impl OracleRun {
         self.client.receive_all_packets();
         self.client
             .process_all_packets(self.client_world.proxy_mut(), &now);
-        self.client
-            .send_all_packets(self.client_world.proxy_mut());
+        self.client.send_all_packets(self.client_world.proxy_mut());
         let _ = self.client.take_tick_events(&now);
 
         self.server.receive(self.server_world.proxy_mut());
