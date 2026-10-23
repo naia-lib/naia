@@ -109,9 +109,9 @@ impl PositionQ {
             tile_x: x.round() as i16,
             tile_y: y.round() as i16,
             tile_z: z.round() as i16,
-            dx: SignedVariableFloat::new(0.0),
-            dy: SignedVariableFloat::new(0.0),
-            dz: SignedVariableFloat::new(0.0),
+            dx: SignedVariableFloat::new(0.0_f32),
+            dy: SignedVariableFloat::new(0.0_f32),
+            dz: SignedVariableFloat::new(0.0_f32),
         })
     }
 }

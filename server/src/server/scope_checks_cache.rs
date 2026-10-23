@@ -289,7 +289,7 @@ mod tests {
                 }
                 4 => {
                     // Despawn entity globally — drop from every room's truth.
-                    for (_, (_, ents)) in truth.iter_mut() {
+                    for (_, ents) in truth.values_mut() {
                         ents.remove(&e);
                     }
                     cache.on_entity_despawned(e);

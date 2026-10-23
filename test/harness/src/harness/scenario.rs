@@ -1095,7 +1095,7 @@ impl Scenario {
         // Update all clients and server network
         let server = self.server.as_mut().expect("server not started");
 
-        for (_client_key, state) in self.clients.iter_mut() {
+        for state in self.clients.values_mut() {
             let (client, world) = state.client_and_world_mut();
             Self::update_client_server_at(&now, client, server, world, &mut self.server_world);
         }
@@ -1201,7 +1201,7 @@ impl Scenario {
         let now = Instant::now();
         self.hub.process_time_queues();
         let server = self.server.as_mut().expect("server not started");
-        for (_client_key, state) in self.clients.iter_mut() {
+        for state in self.clients.values_mut() {
             let (client, world) = state.client_and_world_mut();
             client.receive_all_packets();
             client.process_all_packets(world.proxy_mut(), &now);
