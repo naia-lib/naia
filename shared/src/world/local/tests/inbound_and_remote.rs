@@ -182,29 +182,77 @@ fn a_drained_update_is_not_returned_a_second_time() {
 }
 
 #[test]
-fn an_update_for_an_unmapped_entity_is_dropped() {
+fn an_update_for_an_unmapped_entity_is_buffered_until_materialized() {
     let mut fx = Fixture::client();
     let mut world = TestWorld::new();
     let _ = fx.adopt_remote(&mut world, 7);
 
     let stranger = RemoteEntity::new(99).copy_to_owned();
-    fx.manager
-        .insert_received_update(1, stranger, full_update(&fx.kinds, &Ghost::new_complete(5)));
+    fx.manager.insert_received_update(
+        227,
+        stranger,
+        full_update(&fx.kinds, &Ghost::new_complete(5)),
+    );
 
     let taken = fx
         .manager
         .take_received_updates_of_kind::<u64, TestWorld, Ghost>(&IdentityConverter, &mut world);
     assert!(
         taken.is_empty(),
-        "an update for an unknown entity yields nothing"
+        "an update for an unknown entity yields nothing yet"
     );
 
-    let again = fx
+    // The entity materializes (spawn + insert baseline), as the later full
+    // apply would do; the pre-materialization update must still be there.
+    // Spec entity-replication-06: buffered until insert, applied after.
+    fx.adopt_remote(&mut world, 99);
+    let materialized = fx
+        .manager
+        .take_received_updates_of_kind::<u64, TestWorld, Ghost>(&IdentityConverter, &mut world);
+    assert_eq!(
+        materialized.len(),
+        1,
+        "the pre-materialization update must survive the drain (spec -06)"
+    );
+    assert_eq!(materialized[0].0, 227, "the tick rides along verbatim");
+    assert_eq!(
+        *materialized[0].2.value, 5,
+        "the buffered value applies after insert"
+    );
+}
+
+#[test]
+fn a_buffered_update_for_an_unknown_entity_never_applies_to_another_entity() {
+    // Spec -05/-06: buffering must not misapply across lifetimes. A kept
+    // update for an entity that never materializes must stay silent when an
+    // unrelated entity with its own baseline appears.
+    let mut fx = Fixture::client();
+    let mut world = TestWorld::new();
+
+    let stranger = RemoteEntity::new(99).copy_to_owned();
+    fx.manager.insert_received_update(
+        227,
+        stranger,
+        full_update(&fx.kinds, &Ghost::new_complete(42)),
+    );
+
+    let taken = fx
+        .manager
+        .take_received_updates_of_kind::<u64, TestWorld, Ghost>(&IdentityConverter, &mut world);
+    assert!(taken.is_empty(), "nothing applied before materialization");
+
+    fx.adopt_remote(&mut world, 7);
+    let taken = fx
         .manager
         .take_received_updates_of_kind::<u64, TestWorld, Ghost>(&IdentityConverter, &mut world);
     assert!(
-        again.is_empty(),
-        "and it should be discarded, not retained to be retried forever"
+        taken.is_empty(),
+        "the stale update for 99 must not surface as 7's update"
+    );
+    assert_eq!(
+        *world.value_of::<Ghost>(&7).expect("7 holds Ghost").value,
+        0,
+        "7 keeps its own baseline"
     );
 }
 

@@ -921,10 +921,12 @@ impl LocalWorldManager {
     /// Drains the freshly-decoded-but-not-yet-applied UPDATES of component kind
     /// `R` from the incoming buffer, applies each to `world` IN TICK ORDER, and
     /// returns a copy of the resulting component value per update as a typed
-    /// `(Tick, E, R)`. Drained entries are removed so the later full apply
-    /// ([`Self::take_incoming_events`]) does not re-apply them; all other buffered
-    /// updates — and ALL buffered inserts (`incoming_components`) — are left
-    /// untouched for that later apply.
+    /// `(Tick, E, R)`. Applied entries are removed so the later full apply
+    /// ([`Self::take_incoming_events`]) does not re-apply them; entries that
+    /// cannot yet apply (target entity or component not yet materialized)
+    /// stay buffered per spec entity-replication-06, as do all other buffered
+    /// updates — and ALL buffered inserts (`incoming_components`) — for that
+    /// later apply.
     ///
     /// This is a pure mechanism: naia neither knows nor cares that `R` is an
     /// "input". It exposes the gap naia maintains between **decode** (packets are
@@ -972,16 +974,34 @@ impl LocalWorldManager {
                 kept.push((tick, local_entity, update));
                 continue;
             }
+            // Spec entity-replication-06: an update received before its
+            // insert has been applied MUST be buffered and applied after the
+            // insert arrives. This drain applies what it can NOW; anything it
+            // cannot yet apply stays buffered for the later full apply
+            // (`take_incoming_events`), which parks it on the scope-checked,
+            // TTL/cap-bounded entity waitlist. Only applied updates leave the
+            // buffer, so the full apply never re-applies them.
             let Ok(global_entity) = entity_map.owned_entity_to_global_entity(local_entity) else {
+                // Target entity not yet materialized (spawn pending): keep.
+                kept.push((tick, local_entity, update));
                 continue;
             };
             let Ok(world_entity) = world_converter.global_entity_to_entity(global_entity) else {
+                // Mapped but not yet spawned into this world: keep.
+                kept.push((tick, local_entity, update));
                 continue;
             };
+            if !world.has_component_of_kind(&world_entity, component_kind) {
+                // Component insert pending in the same batch: keep.
+                kept.push((tick, local_entity, update));
+                continue;
+            }
             if world
                 .component_apply_update(&*entity_map, &world_entity, component_kind, update)
                 .is_err()
             {
+                // Present component but malformed update: drop, as the full
+                // apply path does (warn-and-drop); it can never apply later.
                 continue;
             }
             // Capture the freshly-applied value as an owned, typed `R`. `Replicate`

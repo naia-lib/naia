@@ -122,6 +122,8 @@ Within an active lifetime:
 
 The same rule applies symmetrically for any component action that requires the component to exist first (e.g. Remove received before Insert): Naia MUST ensure the action is not misapplied.
 
+Early-drain APIs that expose buffered updates before the full apply (e.g. `take_received_updates_of_kind`) MUST NOT discard updates they cannot yet apply: an update whose target entity or component is not yet materialized stays buffered for the full apply path, which parks it per this rule. Only updates applied by the drain may leave the buffer; malformed updates on an already-present component are dropped, as in the full apply path.
+
 ---
 
 ### [entity-replication-07] — Local-only component overwrite by server replication
@@ -230,7 +232,7 @@ For each contract above, Naia MUST eventually have at least one E2E test proving
 - entity-replication-03 — TODO: Spawn contains full baseline state
 - entity-replication-04 — TODO: no observable update/insert/remove before Spawn
 - entity-replication-05 — TODO: late/out-of-lifetime actions ignored
-- entity-replication-06 — TODO: update-before-insert buffered then applied
+- entity-replication-06 — Covered by: `shared/src/world/local/tests/inbound_and_remote.rs` (`an_update_for_an_unmapped_entity_is_buffered_until_materialized`, `a_buffered_update_for_an_unknown_entity_never_applies_to_another_entity`)
 - entity-replication-07 — TODO: local-only overwritten by server replication
 - entity-replication-08 — TODO: collapse to final per tick; no intermediate states
 - entity-replication-09 — TODO: duplicates idempotent
