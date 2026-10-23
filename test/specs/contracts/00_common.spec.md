@@ -362,6 +362,18 @@ Rationale: Simplifies implementation and ensures clean state.
 
 ---
 
+## Removed / not wanted
+
+The following were deliberately removed from this repo and MUST NOT be reintroduced without an explicit ruling overturning the one cited.
+
+### pre-push hook build legs
+
+- **What:** the build-enforcement legs of tracked `tools/hooks/pre-push` (rustfmt drift check, warning-clean native workspace check, three wasm32-unknown-unknown checks, mquad clippy leg), removed 2026-10-23. The hook now enforces only `refs/heads/main` protection.
+- **Why:** no git-hook build enforcement in this Kingdom; hooks duplicate Fabro legs instead of crediting them and block landing on fleet capacity. Seam gates (clerc/clippy/CI) own build enforcement.
+- **Ruled by:** Connor, 2026-10-22, via Trevor/Kepler (NO GIT HOOKS, naia main-protection hook possibly the only keeper; relayed Usher 107809).
+
+---
+
 ## Test obligations
 
 The contracts in this document are cross-cutting policies. They are tested indirectly through domain-specific specs, but the following direct tests apply:
