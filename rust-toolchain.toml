@@ -1,0 +1,15 @@
+# Pinned toolchain for the whole naia workspace (Usher 109706, flip from
+# nightly-2026-08-27 recorded below).
+#
+# Why: naia ships to players inside cyberlith. Without this file every host
+# built naia on its own floating stable (Lifetop 1.96.0, Dino 1.96.1,
+# Worktop/Newtop 1.99.1), and Fabro correctly refused to relay when the
+# worker could not match the toolchain.
+#
+# Flip history: nightly-2026-08-27 (cy's channel) failed naia's own clippy
+# gate on Lifetop — 3 pre-existing lints in naia-test-harness that the
+# nightly's newer clippy denies. Per 109706, flipped to 1.98.0, the fleet
+# stable with the same sha256 on all 4 hosts.
+[toolchain]
+channel = "1.98.0"
+components = ["rustfmt", "clippy"]
