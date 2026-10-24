@@ -202,6 +202,8 @@ end-to-end rejection without a token is proven on the local transport.
 
 On first successful validation attempt, the server MUST mark the token as used (consumed). Replays MUST fail.
 
+The token is judged at identify on the local/WebRTC build, and at validate — after an answered challenge has proven the address — on the UDP build; the challenge step itself never judges the token.
+
 ---
 
 ## Transport handshake & tick sync

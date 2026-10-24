@@ -231,9 +231,12 @@ impl HandshakeManager {
             return Ok(HandshakeAction::SendPacket(reject_response));
         }
         if let Ok((timestamp, id_token)) = self.recv_challenge_request(reader) {
-            // A token older than its TTL is dropped exactly like a token
-            // the server never issued ([connection-10]); the stale entry
-            // was already removed by the lookup.
+            // The challenge validates the address only and never judges
+            // the token ([connection-11], [connection-18] no-token): a
+            // token older than its TTL, or one the server never issued,
+            // binds no user here — the stale entry, if any, was already
+            // removed by the lookup — and the judgment waits for
+            // validate, by then at a proven address.
             match self.authenticated_unidentified_users.remove(&id_token) {
                 Some((user_key, issued_at))
                     if issued_at.elapsed(&Instant::now()) <= self.identity_token_ttl =>
@@ -248,18 +251,13 @@ impl HandshakeManager {
                         .insert(*address, user_key);
                 }
                 _ => {
-                    if !self
-                        .authenticated_and_identified_users
-                        .contains_key(address)
-                    {
-                        // Unknown retry: never authenticated and never
-                        // finalized — stay silent as before. A retry for an
-                        // already-finalized address falls through and gets
-                        // the response re-sent below: the client retransmits
-                        // over an unreliable channel, so the first response
-                        // is routinely lost.
-                        return Ok(HandshakeAction::None);
-                    }
+                    // Unknown or expired token, or a retry for an
+                    // already-finalized address: bind nothing, but answer
+                    // as usual below so the client can prove address
+                    // receipt at validate. The client retransmits over an
+                    // unreliable channel, so the first response is
+                    // routinely lost — resends are re-answered, never
+                    // re-judged.
                 }
             }
 
@@ -292,8 +290,15 @@ impl HandshakeManager {
                     let packet = self.user_finish_handshake(&address, &user_key);
                     Ok(HandshakeAction::SendPacket(packet))
                 } else {
-                    warn!("Server Error: Cannot find user by address {}", address);
-                    Ok(HandshakeAction::None)
+                    // Valid cookie, no identified user ([connection-11]
+                    // expired, [connection-18] no-token on the UDP shape):
+                    // the challenge proved the address but no token ever
+                    // bound a user to it. Judge it here, at a proven
+                    // address, with the bounded reject — this is the
+                    // explicit reject the silenced client would otherwise
+                    // hang waiting for.
+                    let reject = Self::write_reject_response(RejectReason::Auth).to_packet();
+                    Ok(HandshakeAction::SendPacket(reject))
                 }
             }
         } else {
@@ -999,9 +1004,11 @@ mod tests {
         writer.to_packet().slice().to_vec()
     }
 
-    /// A challenge presenting a token the server never minted must be
-    /// dropped in silence and finalize nothing: the token gate holds on
-    /// the UDP handshake shape too ([connection-12]).
+    /// A challenge presenting a token the server never minted is
+    /// answered as usual but binds no user and finalizes nothing: the
+    /// challenge validates the address only and never judges the token —
+    /// the judgment waits for validate, by then at a proven address
+    /// ([connection-12], [connection-18] no-token, UDP shape).
     #[cfg(feature = "transport_udp")]
     #[test]
     fn unknown_token_at_challenge_finalizes_nothing() {
@@ -1009,8 +1016,8 @@ mod tests {
         let token = IdentityToken::generate();
         let bytes = challenge_inbound(12345, &token);
         match maintain(&mut manager, &bytes) {
-            Ok(HandshakeAction::None) => {}
-            _ => panic!("unknown token challenge must be dropped in silence"),
+            Ok(HandshakeAction::SendPacket(_)) => {}
+            _ => panic!("unknown token challenge must still be answered"),
         }
         assert!(
             !manager
@@ -1020,12 +1027,66 @@ mod tests {
         );
     }
 
+    /// Unknown token, full UDP chain ([connection-18] no-token,
+    /// [connection-19]): the answered challenge lets the client prove
+    /// address receipt at validate, where the missing user binding draws
+    /// the bounded Auth reject — the explicit reject that reaches the
+    /// client as RejectEvent (never a ConnectEvent, never a hang). The
+    /// reject is no larger than the validate request that triggered it.
+    #[cfg(feature = "transport_udp")]
+    #[test]
+    fn unknown_token_chain_ends_in_bounded_reject() {
+        let mut manager = manager_with_ttl();
+        let token = IdentityToken::generate();
+        // Challenge: answered (address validation), nothing bound.
+        let challenge_bytes = challenge_inbound(12345, &token);
+        let cookie = match maintain(&mut manager, &challenge_bytes) {
+            Ok(HandshakeAction::SendPacket(packet)) => packet,
+            _ => panic!("unknown token challenge must still be answered"),
+        };
+        assert!(!manager
+            .authenticated_and_identified_users
+            .contains_key(&addr()));
+        // Validate: echo the answered cookie (timestamp + tag) back,
+        // as the client would.
+        let mut reader = BitReader::new(cookie.slice());
+        StandardHeader::de(&mut reader).expect("challenge response must parse");
+        match HandshakeHeader::de(&mut reader).expect("challenge header must parse") {
+            HandshakeHeader::ServerChallengeResponse => {}
+            other => panic!("expected a challenge response, got {other:?}"),
+        }
+        let timestamp = Timestamp::de(&mut reader).expect("cookie timestamp must parse");
+        let tag = Vec::<u8>::de(&mut reader).expect("cookie tag must parse");
+        let mut validate = BitWriter::new();
+        HandshakeHeader::ClientValidateRequest.ser(&mut validate);
+        timestamp.ser(&mut validate);
+        tag.ser(&mut validate);
+        let validate_bytes = validate.to_packet().slice().to_vec();
+        match maintain(&mut manager, &validate_bytes) {
+            Ok(HandshakeAction::SendPacket(packet)) => {
+                assert_eq!(reject_reason_of(&packet), RejectReason::Auth);
+                assert!(
+                    packet.slice().len() <= validate_bytes.len(),
+                    "reject ({} B) must not exceed its trigger ({} B)",
+                    packet.slice().len(),
+                    validate_bytes.len(),
+                );
+            }
+            _ => panic!("validate with no bound user must be auth-rejected"),
+        }
+        assert!(
+            !manager.been_handshaked_users.contains_key(&addr()),
+            "rejected chain must never validate"
+        );
+    }
+
     /// A challenge presenting no token bytes is dropped in silence and
     /// finalizes nothing: only a hostile or buggy peer sends one (the
     /// honest client emits no challenge until its token arrives), and
     /// undecodable wire bytes are the remit of the malformed-drop rule,
     /// not of a session decision ([connection-18] no-token,
-    /// [transport-04]).
+    /// [transport-04]). Unchanged by the answer-as-usual rule, which
+    /// covers decodable challenges only.
     #[cfg(feature = "transport_udp")]
     #[test]
     fn challenge_without_token_bytes_finalizes_nothing() {
@@ -1046,13 +1107,15 @@ mod tests {
     }
 
     /// An identity token presented at the challenge step after its TTL
-    /// must be dropped exactly like a token the server never issued:
-    /// silence on the wire, with the stale entry dropped
+    /// is answered exactly like a token the server never issued: the
+    /// challenge never judges the token, so expiry binds no user here —
+    /// the stale entry is dropped by the lookup and the judgment waits
+    /// for validate, by then at a proven address
     /// ([connection-10], [connection-11] expired).
     #[cfg(feature = "test_time")]
     #[cfg(feature = "transport_udp")]
     #[test]
-    fn expired_token_at_challenge_is_dropped_like_unknown() {
+    fn expired_token_at_challenge_is_answered_like_unknown() {
         TestClock::init(0);
         let mut manager = manager_with_ttl();
         let token = IdentityToken::generate();
@@ -1060,8 +1123,8 @@ mod tests {
         TestClock::advance(61_000);
         let bytes = challenge_inbound(12345, &token);
         match maintain(&mut manager, &bytes) {
-            Ok(HandshakeAction::None) => {}
-            _ => panic!("expired token challenge must be dropped like an unknown token"),
+            Ok(HandshakeAction::SendPacket(_)) => {}
+            _ => panic!("expired token challenge must be answered like an unknown token"),
         }
         assert!(
             !manager
@@ -1072,11 +1135,11 @@ mod tests {
         TestClock::reset();
     }
 
-    /// A decodable-but-empty token at the challenge step is dropped in
-    /// silence and finalizes nothing — the same answer an unknown token
-    /// gets on this build: the challenge is address validation, not the
-    /// session decision, so there is no reject packet here, only no
-    /// finalize ([connection-18] no-token, UDP shape).
+    /// A decodable-but-empty token at the challenge step is answered
+    /// as usual but binds no user and finalizes nothing — the same
+    /// answer an unknown token gets on this build: the challenge is
+    /// address validation, not the session decision; the judgment waits
+    /// for validate ([connection-18] no-token, UDP shape).
     #[cfg(feature = "transport_udp")]
     #[test]
     fn challenge_empty_token_finalizes_nothing() {
@@ -1085,8 +1148,8 @@ mod tests {
         assert!(empty.is_empty());
         let bytes = challenge_inbound(12345, &empty);
         match maintain(&mut manager, &bytes) {
-            Ok(HandshakeAction::None) => {}
-            _ => panic!("empty token challenge must be dropped in silence"),
+            Ok(HandshakeAction::SendPacket(_)) => {}
+            _ => panic!("empty token challenge must still be answered"),
         }
         assert!(
             !manager
