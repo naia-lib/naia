@@ -34,7 +34,7 @@ on both `dev` and `nash-dev`); this table file lands on top.
 | 20 | status non-connected after reject, no special rejected status | `invalid_credentials_rejected` (02.t1: transitions to disconnected) | HONEST |
 | 21 | t1: client DisconnectEvent ONLY if previously connected (every reason except give-up). t2 (Usher 113324): never-connected give-up gets exactly one AuthTimeout, zero ConnectEvents | `silent_server_surfaces_single_auth_timeout` pins t2 (exactly-one AuthTimeout + zero-ConnectEvent assertions); `give_up_then_redial_recovers_on_same_client` pins recovery | HONEST under ruling 113324. t1 negative (non-give-up reason without connect) still unasserted — sub-gap |
 | 22 | server DisconnectEvent ONLY if previously connected | `client_disconnects_due_to_heartbeat_timeout` (positive: event after timeout-driven drop) + `server_reject_connection_produces_reject_event`, `malformed_identity_token_rejected` (negative: 20-tick `ServerDisconnectEvent` drains asserting none for the never-connected key — reject paths delete via `user_delete`/direct removal without queuing a disconnect) | HONEST: negative pinned on both reject paths |
-| 23 | disconnect → scope out-of-scope + despawn owned | `basic_connect_disconnect_lifecycle`, `client_disconnects_due_to_heartbeat_timeout` | HONEST for user/scope removal. Owned-entity despawn explicitly punted in `basic` comment (sub-gap) |
+| 23 | disconnect → scope out-of-scope + despawn owned | `basic_connect_disconnect_lifecycle` (A spawns `entity_a`, server replicates, A disconnects, bounded 40-tick wait asserts the server no longer has the entity) | HONEST: owned-entity despawn pinned — the old punt comment is removed, the server despawns on disconnect |
 | 24 | server event order Auth→Connect→Disconnect | `connect_event_ordering_stable` + `basic_connect_disconnect_lifecycle` | HONEST combined |
 | 25 | no-auth order Connect→Disconnect | `basic_connect_disconnect_lifecycle` (runs require_auth=false default) | HONEST |
 | 26 | client order Connect→Disconnect | `client_disconnects_due_to_heartbeat_timeout`, `give_up_then_redial_recovers_on_same_client` | HONEST |
@@ -93,8 +93,11 @@ on both `dev` and `nash-dev`); this table file lands on top.
    R1 pin); rows 10/11/12 verdicts updated to the new contract.
 5. Rows 19/27 DisconnectEvent-absence: CLOSED — 20-tick
    `ClientDisconnectEvent` drains asserting none on both the explicit
-   server-reject path and the tampered-token path. Remaining: row 22
-   negative; row 23 owned-entity despawn.
+   server-reject path and the tampered-token path. Row 22 negative:
+   CLOSED (row-22 commit — `ServerDisconnectEvent` drains on both
+   reject paths). Row 23 owned-entity despawn: CLOSED — `basic` pins a
+   bounded 40-tick wait for the server to drop A's replicated entity
+   after A disconnects (no behavior change; the punt was stale).
 5. Rows 15/16 absence-before: CLOSED — e2e pre-accept silence on both sides +
    R1 midpoint pins (client tick-sync gating, UDP challenge answers-only).
 5. Row 12 multi-transport: CLOSED — admission centralized above the Socket

@@ -148,10 +148,26 @@ fn basic_connect_disconnect_lifecycle() {
         },
     );
 
-    // Note: Client-spawned entities may persist on the server after disconnect
-    // The test plan says "all entities/scope for A are cleaned up" but this might
-    // mean scope cleanup, not necessarily entity despawn. The entity cleanup
-    // behavior may be implementation-dependent.
+    // [connection-23]: entity_a is owned by A — the server MUST despawn
+    // client-owned entities when their owner disconnects. Bounded wait:
+    // exit early once gone, fail shut if it survives the window.
+    let mut despawned = false;
+    for _ in 0..40 {
+        scenario.expect(|ctx| {
+            if ctx.server(|s| !s.has_entity(&entity_a)) {
+                despawned = true;
+            }
+            Some(())
+        });
+        scenario.mutate(|_| {});
+        if despawned {
+            break;
+        }
+    }
+    assert!(
+        despawned,
+        "server must despawn A's owned entity after A disconnects"
+    );
 }
 
 /// Invalid credentials are rejected
