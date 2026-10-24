@@ -30,7 +30,7 @@ on both `dev` and `nash-dev`); this table file lands on top.
 | 16 | SERVER ConnectEvent only at finalize | `no_connect_event_before_handshake_finalizes` (5-tick pre-accept window: no ServerConnectEvent; fires only after accept + completion) + R1 `fresh_token_at_challenge_finalizes_nothing` (UDP midpoint answers SendPacket, never FinalizeConnection) + identify-build token causality (finalize consumes the accept-minted token, pinned row 12) | HONEST |
 | 17 | no replication before ConnectEvent | `no_replication_before_auth_decision` [TAG-MISMATCH: tagged 13.t1] | HONEST |
 | 18 | explicit reject for no-token/bad-token/denied | `invalid_credentials_rejected`, `malformed_identity_token_rejected`, `server_reject_connection_produces_reject_event`, `server_reject_connection_carries_a_reason_message` + R1 `identify_empty_token_emits_auth_reject` (decodable empty → explicit Auth reject no larger than its trigger — anti-reflection bound pinned) + R1 `identify_without_token_bytes_finalizes_nothing`, `challenge_without_token_bytes_finalizes_nothing`, `challenge_empty_token_finalizes_nothing`, `unknown_token_chain_ends_in_bounded_reject` (UDP: answered challenge + valid cookie with no bound user → bounded Auth reject) | HONEST (Usher 115027 + 115062 implemented): wire token non-optional (undecodable → transport-04 drop, pinned); decodable empty/unknown → explicit Auth reject on identify builds (pinned + size bound); on UDP the challenge answers-as-usual (address only, FLIPS IF false — cookie carries no user binding) and validate judges at a proven address with the bounded reject (pinned full-chain). No silenced client hangs. One measured exception: the challenge-answer cookie necessarily exceeds a zero-length-token request — the cookie IS the mechanism; the bound holds for all token-bearing challenges and both reject paths |
-| 19 | reject → RejectEvent, no ConnectEvent, no DisconnectEvent | `server_reject_connection_produces_reject_event`, `malformed_identity_token_rejected` | HONEST except DisconnectEvent-absence never asserted (sub-gap) |
+| 19 | reject → RejectEvent, no ConnectEvent, no DisconnectEvent | `server_reject_connection_produces_reject_event` (reject + no-connect + 20-tick drain asserting no `ClientDisconnectEvent` for the never-connected attempt) | HONEST: DisconnectEvent-absence pinned — rejected B observes no disconnect across the pump window |
 | 20 | status non-connected after reject, no special rejected status | `invalid_credentials_rejected` (02.t1: transitions to disconnected) | HONEST |
 | 21 | t1: client DisconnectEvent ONLY if previously connected (every reason except give-up). t2 (Usher 113324): never-connected give-up gets exactly one AuthTimeout, zero ConnectEvents | `silent_server_surfaces_single_auth_timeout` pins t2 (exactly-one AuthTimeout + zero-ConnectEvent assertions); `give_up_then_redial_recovers_on_same_client` pins recovery | HONEST under ruling 113324. t1 negative (non-give-up reason without connect) still unasserted — sub-gap |
 | 22 | server DisconnectEvent ONLY if previously connected | `client_disconnects_due_to_heartbeat_timeout` | THIN: positive proven (event after timeout-driven drop); negative (no event without connect) unasserted |
@@ -38,7 +38,7 @@ on both `dev` and `nash-dev`); this table file lands on top.
 | 24 | server event order Auth→Connect→Disconnect | `connect_event_ordering_stable` + `basic_connect_disconnect_lifecycle` | HONEST combined |
 | 25 | no-auth order Connect→Disconnect | `basic_connect_disconnect_lifecycle` (runs require_auth=false default) | HONEST |
 | 26 | client order Connect→Disconnect | `client_disconnects_due_to_heartbeat_timeout`, `give_up_then_redial_recovers_on_same_client` | HONEST |
-| 27 | reject → RejectEvent ONLY, no Connect/Disconnect | `malformed_identity_token_rejected`, `expired_or_reused_token_obeys_semantics` | HONEST except DisconnectEvent-absence unasserted (same sub-gap as 19) |
+| 27 | reject → RejectEvent ONLY, no Connect/Disconnect | `malformed_identity_token_rejected` (explicit reject + no-connect + the connection-24 cleanliness pump extended to drain `ClientDisconnectEvent`, asserting none) | HONEST: DisconnectEvent-absence pinned on the tampered-token path |
 | 28 | reconnect is a fresh session | `reconnect_is_fresh_session` | HONEST |
 | 29 | protocol_id deterministic | `same_protocol_produces_same_id` + R1 `shared::protocol` id tests | HONEST (integration leg thin on id equality; R1 pins it directly) |
 | 30 | protocol_id u128 little-endian wire form | R1 `shared::protocol_id::protocol_id_tests` (`the_wire_form_is_the_sixteen_bytes_in_order`, handshake round-trip, LE value/new) | HONEST at R1. Integration 30.t1 tag is circular (connect success ≠ encoding proof) |
@@ -91,8 +91,10 @@ on both `dev` and `nash-dev`); this table file lands on top.
    challenge answers-as-usual (address only, FLIPS IF false), validate
    judges at a proven address with the bounded Auth reject (full-chain
    R1 pin); rows 10/11/12 verdicts updated to the new contract.
-   Rows 19/27 DisconnectEvent-absence; row 22 negative;
-   row 23 owned-entity despawn.
+5. Rows 19/27 DisconnectEvent-absence: CLOSED — 20-tick
+   `ClientDisconnectEvent` drains asserting none on both the explicit
+   server-reject path and the tampered-token path. Remaining: row 22
+   negative; row 23 owned-entity despawn.
 5. Rows 15/16 absence-before: CLOSED — e2e pre-accept silence on both sides +
    R1 midpoint pins (client tick-sync gating, UDP challenge answers-only).
 5. Row 12 multi-transport: CLOSED — admission centralized above the Socket

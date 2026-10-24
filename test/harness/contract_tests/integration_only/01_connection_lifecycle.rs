@@ -1292,6 +1292,26 @@ fn server_reject_connection_produces_reject_event() {
         !connect_event_received,
         "No connect event should be received"
     );
+
+    // [connection-19]: the rejected attempt must observe no DisconnectEvent
+    // either — pump ticks draining B's client disconnect queue and fail shut
+    // on any firing (B was never connected, so any disconnect is stray).
+    let mut stray_disconnect = false;
+    for _ in 0..20 {
+        scenario.expect(|ctx| {
+            ctx.client(client_b_key, |client| {
+                if client.read_event::<ClientDisconnectEvent>().is_some() {
+                    stray_disconnect = true;
+                }
+            });
+            Some(())
+        });
+        scenario.mutate(|_| {});
+    }
+    assert!(
+        !stray_disconnect,
+        "rejected client must observe no DisconnectEvent for the rejected attempt"
+    );
     // The harness presets the local hub address synchronously at client start,
     // so the rejection carries the actual learned address -- Some, never a
     // manufactured sentinel. (On transports where the address is still
@@ -1866,9 +1886,11 @@ fn malformed_identity_token_rejected() {
         "B must not connect with a tampered token"
     );
 
-    // [connection-24]: the failure must be clean — pump ticks and assert no
-    // half-state: no user, no session, no connect event for B.
+    // [connection-24]/[connection-27]: the failure must be clean — pump
+    // ticks and assert no half-state (no user, no session, no connect
+    // event for B) and no DisconnectEvent for the rejected attempt.
     let mut half_state = false;
+    let mut stray_disconnect = false;
     for _ in 0..20 {
         scenario.expect(|ctx| {
             let user = ctx.server(|s| s.user_exists(&client_b_key));
@@ -1878,6 +1900,11 @@ fn malformed_identity_token_rejected() {
             if user || connected || connect_fired {
                 half_state = true;
             }
+            ctx.client(client_b_key, |client| {
+                if client.read_event::<ClientDisconnectEvent>().is_some() {
+                    stray_disconnect = true;
+                }
+            });
             Some(())
         });
         scenario.mutate(|_| {});
@@ -1893,6 +1920,10 @@ fn malformed_identity_token_rejected() {
     assert!(
         !half_state,
         "rejected handshake must leave no user, session, or connect event"
+    );
+    assert!(
+        !stray_disconnect,
+        "rejected attempt must observe no DisconnectEvent"
     );
 }
 
