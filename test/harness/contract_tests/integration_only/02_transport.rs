@@ -85,6 +85,128 @@ fn oversize_unreliable_send_returns_err() {
 }
 
 // ============================================================================
+// [transport-05] — No transport-specific guarantees leak upward
+// ============================================================================
+
+/// Higher layers carry no transport cfgs
+/// Contract: [transport-05]
+///
+/// Given the three core crates (`client`, `server`, `shared`); when their
+/// sources are walked excluding the `transport/` subtrees (the adapters)
+/// and the `handshake/` subtrees (address-validation, owned by
+/// `01_connection_lifecycle`); then no `.rs` file carries a
+/// `transport_udp`/`transport_local` cfg outside one allowlisted
+/// module-gate line. Messaging, replication, and connection code therefore
+/// cannot assume anything about the underlying transport — any guarantee
+/// stronger than transport-01 must be proven at the packet boundary
+/// (rows 01–04), not inferred from the adapter.
+///
+/// The positive controls keep this from passing vacuously: the handshake
+/// subtrees MUST still contain transport cfgs (the scanner sees branching
+/// where it belongs), and the module-gate line itself MUST be found (the
+/// scanner reached the gate). Socket crates and Bevy adapters are outside
+/// this row's remit (the spec excludes socket-crate behavior; adapters are
+/// consumers, and their one transport cfg is `#[cfg(test)]`-only).
+#[test]
+fn higher_layers_carry_no_transport_cfgs() {
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+        for entry in fs::read_dir(dir).expect("crate src dir must be readable") {
+            let path = entry.expect("dir entry must be readable").path();
+            if path.is_dir() {
+                let name = path
+                    .file_name()
+                    .expect("dir must have a name")
+                    .to_string_lossy();
+                if name == "transport" || name == "handshake" {
+                    continue;
+                }
+                walk(&path, out);
+            } else if path.extension().is_some_and(|ext| ext == "rs") {
+                out.push(path);
+            }
+        }
+    }
+
+    let root = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
+    let mut files = Vec::new();
+    for krate in ["client/src", "server/src", "shared/src"] {
+        walk(&root.join(krate), &mut files);
+    }
+    assert!(
+        !files.is_empty(),
+        "walker must find crate sources under {root:?}"
+    );
+
+    let mut hits: Vec<(String, usize, String)> = Vec::new();
+    for path in &files {
+        let text = fs::read_to_string(path).expect("rs file must be readable");
+        for (index, line) in text.lines().enumerate() {
+            if (line.contains("transport_udp") || line.contains("transport_local"))
+                && line.contains("cfg")
+            {
+                let rel = path
+                    .strip_prefix(root)
+                    .expect("scanned file must sit under the repo root")
+                    .to_string_lossy()
+                    .into_owned();
+                hits.push((rel, index + 1, line.trim().to_string()));
+            }
+        }
+    }
+
+    // Positive control 1: the handshake subtrees still branch on transport
+    // (address-validation lives there, owned by 01_connection_lifecycle).
+    for (krate, dir) in [
+        ("client", "client/src/handshake"),
+        ("server", "server/src/handshake"),
+    ] {
+        let mut count = 0;
+        for entry in fs::read_dir(root.join(dir)).expect("handshake dir must exist") {
+            let path = entry.expect("dir entry must be readable").path();
+            if path.extension().is_some_and(|ext| ext == "rs") {
+                let text = fs::read_to_string(&path).expect("rs file must be readable");
+                count += text
+                    .lines()
+                    .filter(|line| {
+                        (line.contains("transport_udp") || line.contains("transport_local"))
+                            && line.contains("cfg")
+                    })
+                    .count();
+            }
+        }
+        assert!(
+            count > 0,
+            "{krate} handshake must still branch on transport (positive control)"
+        );
+    }
+
+    // Positive control 2 + the pin: the ONLY hit outside transport/ and
+    // handshake/ is the shared transport-module gate in lib.rs.
+    let gate = (
+        "shared/src/lib.rs".to_string(),
+        "if #[cfg(any(feature = \"transport_udp\", feature = \"transport_local\"))]{".to_string(),
+    );
+    let gate_found = hits
+        .iter()
+        .any(|(path, _, line)| path == &gate.0 && line == &gate.1);
+    assert!(
+        gate_found,
+        "the shared transport-module gate must be found (positive control); hits: {hits:?}"
+    );
+    let leaks: Vec<_> = hits
+        .iter()
+        .filter(|(path, _, line)| path != &gate.0 || line != &gate.1)
+        .collect();
+    assert!(
+        leaks.is_empty(),
+        "higher layers must carry no transport cfgs, found: {leaks:?}"
+    );
+}
+
+// ============================================================================
 // [transport-01] — Naia assumes transport is unordered & unreliable
 // ============================================================================
 

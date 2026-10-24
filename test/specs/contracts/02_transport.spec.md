@@ -106,4 +106,5 @@ A sender whose socket and address state are owned by its attempt alone (UDP: fre
 - transport-01: Verify Naia tolerates reorder/drop/duplicate at packet boundary (via test transport / local conditioner).
 - transport-03: Verify oversize outbound attempt returns Err (and does not panic).
 - transport-04: Verify malformed inbound is dropped (warn only in Debug).
+- transport-05: Verify higher layers carry no transport cfgs (`higher_layers_carry_no_transport_cfgs`: no `transport_udp`/`transport_local` cfg outside `transport/` + `handshake/` subtrees and the one module gate) and the same suites stay green across default and UDP builds.
 - transport-06: Verify shutdown is idempotent and preserves pre-connect state (`shutdown_is_idempotent_and_preserves_finding`, UDP build).
