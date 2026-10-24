@@ -30,6 +30,13 @@ pub trait Handshaker: Send + Sync {
 
     fn reset(&mut self);
 
+    /// Drop identity-token grants older than the configured TTL from both
+    /// token maps. The main server calls this once per `receive()` next to
+    /// the pending-auth sweep, so issued-but-never-presented tokens cannot
+    /// accumulate ([connection-10]). A grant revoked here behaves like a
+    /// token the server never issued if the client presents it late.
+    fn sweep_expired_identity_tokens(&mut self);
+
     /// Take the recorded client-ping count for a handshaking address,
     /// removing it. Defaults to `None` (untracked); `HandshakeManager`
     /// overrides this with its per-address counts.

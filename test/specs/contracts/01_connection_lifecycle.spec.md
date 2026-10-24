@@ -157,12 +157,26 @@ An identity token MUST be:
 - **One-time use** (cannot be used successfully more than once), and
 - **Time-limited** with TTL = **1 hour** from issuance.
 
+Mechanism: the server records the issue instant with each grant
+(`HandshakeManager`, `Instant::now`) and the TTL lives in
+`ServerConfig::identity_token_ttl` (default 3600 s). A token presented
+after its TTL is refused exactly like a token the server never issued,
+and unpresented grants older than the TTL are dropped from both token
+maps by the per-`receive()` sweep in `MainServer::maintain_socket`
+(next to the pending-auth sweep), so issued-but-never-identified
+tokens cannot accumulate.
+
 ### [connection-11] —
 
 **Obligations:**
 - **t1**: If a token is expired, already-used, or invalid, the server MUST explicitly reject the connection attempt (see “Explicit rejection”).
 
 If a token is expired, already-used, or invalid, the server MUST explicitly reject the connection attempt (see “Explicit rejection”).
+
+An expired token (see [connection-10]) takes the same refusal path as
+an unknown token: Auth reject with the pending user marked for
+deletion on builds without address validation, silence on the
+address-validating challenge step.
 
 ### [connection-12] —
 

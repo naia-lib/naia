@@ -96,7 +96,10 @@ impl MainServer {
             recv_io,
             send_io,
             auth_io: None,
-            handshake_manager: Box::new(HandshakeManager::new(protocol_id)),
+            handshake_manager: Box::new(HandshakeManager::new(
+                protocol_id,
+                server_config.identity_token_ttl,
+            )),
             // Users
             users: BigMap::new(),
             user_connections: HashMap::new(),
@@ -401,6 +404,7 @@ impl MainServer {
         self.drain_auth_events();
         self.drain_socket_packets();
         self.sweep_pending_auth_timeouts();
+        self.handshake_manager.sweep_expired_identity_tokens();
     }
 
     /// Drain inbound auth requests into user records and auth events.

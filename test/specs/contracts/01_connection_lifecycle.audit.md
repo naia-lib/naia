@@ -19,8 +19,8 @@ on both `dev` and `nash-dev`); this table file lands on top.
 | Row | Obligation (short) | Citing test(s) | Verdict |
 |-----|-------------------|----------------|---------|
 | 09 | no Naia-level auth timeout during transport handshake | `invalid_credentials_rejected`, `silent_server_surfaces_single_auth_timeout`, `give_up_then_redial_recovers_on_same_client` | HONEST (positive shape: auth decided pre-transport; give-up is generic link-silence AuthTimeout, exactly once) |
-| 10 | identity token one-time-use, TTL ≤ 1h | `expired_or_reused_token_obeys_semantics` | HONEST for one-time-use. TTL-by-age UNCITED, no test exercises expiry |
-| 11 | expired/used/invalid token → explicit reject | `malformed_identity_token_rejected`, `expired_or_reused_token_obeys_semantics` | HONEST for used/invalid. Expired-by-age shares the row-10 TTL gap |
+| 10 | identity token one-time-use, TTL ≤ 1h | `expired_or_reused_token_obeys_semantics` (one-time-use leg) + R1 `expired_token_at_identify_is_rejected_like_unknown`, `expired_token_at_challenge_is_dropped_like_unknown`, `sweep_removes_only_expired_token_entries`, `fresh_token_at_identify_finalizes_once`, `fresh_token_at_challenge_answers` (server handshaker; TTL from `ServerConfig::identity_token_ttl`, default 3600 s; virtual-clock driven) | HONEST: aged token refused like unknown on both builds, sweep drops only expired grants from both maps, fresh tokens finalize/answer |
+| 11 | expired/used/invalid token → explicit reject | `malformed_identity_token_rejected`, `expired_or_reused_token_obeys_semantics` + R1 `expired_token_at_identify_is_rejected_like_unknown` (expired leg: Auth reject + pending user for deletion) | HONEST: expired takes the unknown-token refusal path per spec mechanism |
 | 12 | tokens required for ALL transports when require_auth | whole file (harness transport only) | THIN: proven for one transport; "all transports" unproven |
 | 13 | first validation consumes; replays fail | `expired_or_reused_token_obeys_semantics` (consumed T_A replayed → explicit reject with address) | HONEST |
 | 14 | tick sync required; not Connected until sync | `connected_only_after_tick_sync_completes` (client handshaker R1: identify + 3 forged pong rounds yield None throughout; connect response after finished sync yields Connected) | HONEST |
@@ -80,8 +80,9 @@ on both `dev` and `nash-dev`); this table file lands on top.
 
 ## Open gaps (oldest first)
 
-1. Row 14 (tick-sync gating): no isolated test — next work per 113305.
-2. Row 10/11 TTL-by-age: no expiry test.
+1. Row 14 (tick-sync gating): CLOSED — `connected_only_after_tick_sync_completes`.
+2. Row 10/11 TTL-by-age: CLOSED per Usher ruling 113643 (implement TTL) — 5
+   handshaker pins + sweep + `ServerConfig::identity_token_ttl`.
 3. Row 21: RESOLVED by Usher ruling 113324 — spec amended with t2, pin
    strengthened with zero-ConnectEvent assertion. Remaining sub-gap: t1 negative
    (non-give-up disconnect reason without prior connect) unasserted.

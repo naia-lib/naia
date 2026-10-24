@@ -35,6 +35,14 @@ pub struct ServerConfig {
     /// Maximum number of replicated entities. Determines the pre-allocated capacity of
     /// `GlobalDirtyBitset`. Default: 65,536. Must be increased if entity count exceeds this.
     pub max_replicated_entities: u32,
+    /// How long an issued identity token stays valid for the handshake
+    /// identify step ([connection-10]).
+    ///
+    /// A token presented after this long is refused like a token the
+    /// server never issued, and unpresented tokens older than this are
+    /// dropped by the per-`receive()` sweep, so issued-but-never-identified
+    /// tokens cannot grow server memory without bound. Default: 1 hour.
+    pub identity_token_ttl: Duration,
 }
 
 impl Default for ServerConfig {
@@ -46,6 +54,7 @@ impl Default for ServerConfig {
             pending_auth_timeout: Duration::from_secs(10),
             max_pending_auth_users: 1_024,
             max_replicated_entities: 65_536,
+            identity_token_ttl: Duration::from_secs(3600),
         }
     }
 }
