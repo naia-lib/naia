@@ -266,9 +266,14 @@ After a `RejectEvent`, the client’s public `ConnectionStatus` MUST be (or retu
 ### [connection-21] —
 
 **Obligations:**
-- **t1**: `DisconnectEvent` (client-side) MUST only be emitted if the client previously emitted `ConnectEvent` for the session.
+- **t1**: `DisconnectEvent` (client-side) MUST only be emitted if the client previously emitted `ConnectEvent` for the session. Exception: give-up of a never-connected attempt, see t2.
+- **t2**: A client whose connection attempt gives up without ever connecting gets exactly one `ClientDisconnectEvent(AuthTimeout)` (Usher ruling 113324; product behavior stands).
 
-`DisconnectEvent` (client-side) MUST only be emitted if the client previously emitted `ConnectEvent` for the session.
+`DisconnectEvent` (client-side) MUST only be emitted if the client previously emitted `ConnectEvent` for the session, except that a connection attempt that gives up without ever connecting emits exactly one `ClientDisconnectEvent(AuthTimeout)` and no `ConnectEvent`.
+
+**Test obligations:**
+- `connection-21.t1`: every `DisconnectEvent` reason other than give-up follows a `ConnectEvent` for the session.
+- `connection-21.t2`: a silent server yields exactly one `AuthTimeout` disconnect with zero `ConnectEvent`s (`silent_server_surfaces_single_auth_timeout`).
 
 ### [connection-22] —
 
@@ -553,7 +558,8 @@ Summary of test obligations from contracts above:
 - `connection-19.t1`: Rejected client emits RejectEvent, not ConnectEvent
 
 **Disconnect:**
-- `connection-21.t1`: Client DisconnectEvent only after ConnectEvent
+- `connection-21.t1`: Client DisconnectEvent only after ConnectEvent (except give-up)
+- `connection-21.t2`: Never-connected give-up gets exactly one AuthTimeout, zero ConnectEvents
 - `connection-22.t1`: Server DisconnectEvent only after ConnectEvent
 - `connection-23.t1`: Client-owned entities despawned on disconnect
 

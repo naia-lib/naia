@@ -1503,7 +1503,7 @@ fn client_disconnects_due_to_heartbeat_timeout() {
 }
 
 /// Silent server surfaces exactly one AuthTimeout over real sockets
-/// Contract: handshake give-up (Usher 38421; unit pins under test_time)
+/// Contract: [connection-21.t2] (Usher 38421, ruling 113324; unit pins under test_time)
 ///
 /// Given a server that never accepts; when a client dials with a short
 /// link-silence deadline; then the client emits exactly one disconnect
@@ -1551,6 +1551,21 @@ fn silent_server_surfaces_single_auth_timeout() {
     assert_eq!(
         other_disconnects, 0,
         "no other disconnect reason may fire on a silent server"
+    );
+
+    // t2 never-connected leg: the giving-up client must never have emitted a
+    // ConnectEvent for this attempt. ConnectEvents sit in their own queue, so
+    // drain it now and demand emptiness.
+    let mut connects = 0usize;
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| {
+            connects += client.read_events::<ClientConnectEvent>().len();
+        });
+        Some(())
+    });
+    assert_eq!(
+        connects, 0,
+        "give-up AuthTimeout must fire without any prior ConnectEvent"
     );
 
     // The attempt is over: the client is disconnected, not still connecting.

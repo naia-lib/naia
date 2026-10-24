@@ -31,7 +31,7 @@ on both `dev` and `nash-dev`); this table file lands on top.
 | 18 | explicit reject for no-token/bad-token/denied | `invalid_credentials_rejected`, `malformed_identity_token_rejected`, `server_reject_connection_produces_reject_event`, `server_reject_connection_carries_a_reason_message` | HONEST for bad-token/denied. No-token-with-require_auth sub-case UNCITED |
 | 19 | reject → RejectEvent, no ConnectEvent, no DisconnectEvent | `server_reject_connection_produces_reject_event`, `malformed_identity_token_rejected` | HONEST except DisconnectEvent-absence never asserted (sub-gap) |
 | 20 | status non-connected after reject, no special rejected status | `invalid_credentials_rejected` (02.t1: transitions to disconnected) | HONEST |
-| 21 | client DisconnectEvent ONLY if previously connected | `silent_server_surfaces_single_auth_timeout`, `give_up_then_redial_recovers_on_same_client` | CONTESTED: both prove ClientDisconnectEvent(AuthTimeout) with NO prior ConnectEvent. Product violates the row as written, or give-up AuthTimeout is out of scope. Ruling needed, no code change made |
+| 21 | t1: client DisconnectEvent ONLY if previously connected (every reason except give-up). t2 (Usher 113324): never-connected give-up gets exactly one AuthTimeout, zero ConnectEvents | `silent_server_surfaces_single_auth_timeout` pins t2 (exactly-one AuthTimeout + zero-ConnectEvent assertions); `give_up_then_redial_recovers_on_same_client` pins recovery | HONEST under ruling 113324. t1 negative (non-give-up reason without connect) still unasserted — sub-gap |
 | 22 | server DisconnectEvent ONLY if previously connected | `client_disconnects_due_to_heartbeat_timeout` | THIN: positive proven (event after timeout-driven drop); negative (no event without connect) unasserted |
 | 23 | disconnect → scope out-of-scope + despawn owned | `basic_connect_disconnect_lifecycle`, `client_disconnects_due_to_heartbeat_timeout` | HONEST for user/scope removal. Owned-entity despawn explicitly punted in `basic` comment (sub-gap) |
 | 24 | server event order Auth→Connect→Disconnect | `connect_event_ordering_stable` + `basic_connect_disconnect_lifecycle` | HONEST combined |
@@ -82,7 +82,8 @@ on both `dev` and `nash-dev`); this table file lands on top.
 
 1. Row 14 (tick-sync gating): no isolated test — next work per 113305.
 2. Row 10/11 TTL-by-age: no expiry test.
-3. Row 21: contested, needs ruling (product emits AuthTimeout disconnects for
-   never-connected clients; `silent_server` + `give_up_redial` pin this behavior).
+3. Row 21: RESOLVED by Usher ruling 113324 — spec amended with t2, pin
+   strengthened with zero-ConnectEvent assertion. Remaining sub-gap: t1 negative
+   (non-give-up disconnect reason without prior connect) unasserted.
 4. Row 18 no-token sub-case; rows 19/27 DisconnectEvent-absence; row 22 negative;
    row 23 owned-entity despawn; rows 15/16 absence-before; row 12 multi-transport.
