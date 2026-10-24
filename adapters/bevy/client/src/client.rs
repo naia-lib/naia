@@ -106,6 +106,20 @@ impl<'w, T: Send + Sync + 'static> Client<'w, T> {
         self.client.client.disconnect();
     }
 
+    /// Cancels a pending (not yet established) connection attempt, returning
+    /// the client to `Disconnected` so a fresh [`connect`](Client::connect)
+    /// starts cleanly instead of panicking on the loaded socket.
+    ///
+    /// This is the call for a connection watchdog (e.g. a stale-leg timer)
+    /// that must abandon a stuck handshake: [`disconnect`](Client::disconnect)
+    /// panics unless the client is connected, while this is safe to call in
+    /// any state — a live connection is left untouched (orderly teardown
+    /// stays `disconnect`'s job) and an idle client stays idle. Emits no
+    /// events and drops no entities: nothing was ever established.
+    pub fn cancel_connect(&mut self) {
+        self.client.client.cancel_connect();
+    }
+
     /// Returns the current connection status (connecting, connected, or
     /// disconnected).
     pub fn connection_status(&self) -> ConnectionStatus {
@@ -381,4 +395,54 @@ pub fn take_received_messages_of_kind<T: Send + Sync + 'static, C: Channel, M: M
         .resource_mut::<ClientWrapper<T>>()
         .client
         .take_received_messages_of_kind::<C, M>()
+}
+
+#[cfg(all(test, feature = "transport_udp"))]
+mod cancel_connect_tests {
+    use bevy_ecs::{
+        entity::Entity,
+        schedule::{Schedule, ScheduleLabel},
+        world::World,
+    };
+    use naia_client::{
+        shared::Protocol, transport::udp::Socket as UdpSocket, Client as NaiaClient, ClientConfig,
+        ConnectionStatus,
+    };
+
+    use super::{Client, ClientWrapper};
+
+    struct TestTag;
+
+    #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
+    struct TestSchedule;
+
+    /// The adapter's `cancel_connect` must reach the core call: while the
+    /// client is still `Connecting`, it returns to `Disconnected` without
+    /// panicking (a watchdog may call this on a stale leg; `disconnect`
+    /// would panic there). Core pins the same transition on its own type
+    /// (`cancel_connect_abandons_pending_handshake`); this pins the
+    /// adapter forward through a real Bevy system.
+    #[test]
+    fn cancel_connect_while_connecting_returns_to_disconnected() {
+        let mut world = World::new();
+        let mut core =
+            NaiaClient::<Entity>::new(ClientConfig::default(), Protocol::builder().build());
+        core.connect(UdpSocket::new("http://127.0.0.1:1/", None));
+        assert_eq!(core.connection_status(), ConnectionStatus::Connecting);
+        world.insert_resource(ClientWrapper::<TestTag>::new(core));
+
+        let mut schedule = Schedule::new(TestSchedule);
+        schedule.add_systems(|mut client: Client<TestTag>| {
+            client.cancel_connect();
+        });
+        schedule.run(&mut world);
+
+        let wrapper = world
+            .get_resource::<ClientWrapper<TestTag>>()
+            .expect("client wrapper resource");
+        assert_eq!(
+            wrapper.client.connection_status(),
+            ConnectionStatus::Disconnected
+        );
+    }
 }
