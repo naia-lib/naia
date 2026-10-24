@@ -152,6 +152,12 @@ pub struct UnorderedChannel;
 #[derive(Channel)]
 pub struct SequencedChannel;
 
+/// Sequenced-unreliable message channel for late-update discard tests
+/// ([messaging-11]). Kept out of `protocol()` so the main protocol's
+/// fingerprint stays stable; see `protocol_with_sequenced_unreliable`.
+#[derive(Channel)]
+pub struct SequencedUnreliableChannel;
+
 #[derive(Channel)]
 pub struct TickBufferedChannel;
 
@@ -287,6 +293,65 @@ pub fn protocol() -> Protocol {
         .add_channel::<SequencedChannel>(
             ChannelDirection::Bidirectional,
             ChannelMode::SequencedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<TickBufferedChannel>(
+            ChannelDirection::ClientToServer,
+            ChannelMode::TickBuffered(TickBufferSettings::default()),
+        )
+        .add_channel::<RequestResponseChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<ServerToClientChannel>(
+            ChannelDirection::ServerToClient,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .enable_client_authoritative_entities()
+        .build()
+}
+
+/// Extended protocol that adds a `SequencedUnreliable` channel for the
+/// late-update discard test (`messaging-11`). Kept separate from `protocol()`
+/// so the main protocol's fingerprint is stable and the mismatch detection
+/// tests are unaffected.
+pub fn protocol_with_sequenced_unreliable() -> Protocol {
+    Protocol::builder()
+        .add_component::<Position>()
+        .add_component::<Velocity>()
+        .add_component::<ImmutableLabel>()
+        .add_component::<ImmutableSeed>()
+        .add_resource::<TestScore>()
+        .add_resource::<TestMatchState>()
+        .add_resource::<TestPlayerSelection>()
+        .add_message::<Auth>()
+        .add_message::<TestMessage>()
+        .add_message::<LargeTestMessage>()
+        .add_message::<EntityCommandMessage>()
+        .add_message::<TestRequest>()
+        .add_message::<TestResponse>()
+        .add_channel::<ReliableChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<UnreliableChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedUnreliable,
+        )
+        .add_channel::<OrderedChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::OrderedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<UnorderedChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<SequencedChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::SequencedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<SequencedUnreliableChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::SequencedUnreliable,
         )
         .add_channel::<TickBufferedChannel>(
             ChannelDirection::ClientToServer,

@@ -181,9 +181,20 @@ Feature: Messaging Channel Semantics
       Then the client's last sequenced message is S3
 
     # [messaging-11] — SequencedUnreliable discards late updates.
-    # Testing late-arrival discard requires transport-level reordering
-    # targeted at a specific channel; the harness's reorder binding is
-    # connection-wide, not per-channel.
+    # R2-proven, BDD-steps deferred: contract test
+    # `sequenced_unreliable_channel_discards_late_update` (03_messaging.rs)
+    # holds U1 512ms-virtual behind U2 on a new SequencedUnreliable test
+    # channel, then drains a 48-tick window past U1's due poll and asserts
+    # emptiness over the full accumulation (no retry-consumes-pass). The old
+    # "needs per-channel reorder" note is stale for the single-channel case:
+    # one SequencedUnreliable stream plus a connection-wide hold IS per-channel
+    # in effect. @PolicyOnly retained until BDD bindings land (Wesley holds
+    # the test/tests compile proof); steps will mirror the contract phases.
+    # History (NASH 2026-10-24): row was stepless @PolicyOnly since 2026-01-16
+    # with the per-channel-reorder objection. Closed at R2 with a dedicated
+    # `protocol_with_sequenced_unreliable` builder (main protocol fingerprint
+    # untouched) plus the window-drain test above; negative control (receiver
+    # forced to accept) reds `late update surfaced: [1]`, honest code green.
     @PolicyOnly
     @Scenario(08)
     Scenario: [messaging-11] SequencedUnreliable discards late updates

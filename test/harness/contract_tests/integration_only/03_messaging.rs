@@ -14,17 +14,19 @@ use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
 use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response, TestClock, Tick};
 
 use naia_test_harness::{
-    protocol, protocol_with_large_req_resp, Auth, ClientConnectEvent, ClientDisconnectEvent,
-    ClientEntityAuthDeniedEvent, ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent,
-    ClientErrorEvent, ClientKey, ClientRejectEvent, EntityCommandMessage, ExpectCtx,
-    LargeTestMessage, LargeTestRequest, LargeTestResponse, Position, Scenario, ServerAuthEvent,
+    protocol, protocol_with_large_req_resp, protocol_with_sequenced_unreliable, Auth,
+    ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
+    ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent, ClientErrorEvent, ClientKey,
+    ClientRejectEvent, EntityCommandMessage, ExpectCtx, LargeTestMessage, LargeTestRequest,
+    LargeTestResponse, LinkConditionerConfig, Position, Scenario, ServerAuthEvent,
     ServerConnectEvent, ServerDisconnectEvent, ToTicks,
 };
 
 // Test protocol types (channels and messages)
 use naia_test_harness::test_protocol::{
-    OrderedChannel, ReliableChannel, RequestResponseChannel, SequencedChannel, TestMessage,
-    TestRequest, TestResponse, TickBufferedChannel, UnorderedChannel, UnreliableChannel,
+    OrderedChannel, ReliableChannel, RequestResponseChannel, SequencedChannel,
+    SequencedUnreliableChannel, TestMessage, TestRequest, TestResponse, TickBufferedChannel,
+    UnorderedChannel, UnreliableChannel,
 };
 
 mod _helpers;
@@ -1255,6 +1257,105 @@ fn sequenced_unreliable_channel_discards_late_outdated_updates() {
                 None
             }
         },
+    );
+}
+
+/// SequencedUnreliable discards updates that arrive late
+/// Contract: [messaging-11]
+///
+/// Given a SequencedUnreliable channel; when an older update is held on the
+/// wire (512ms-virtual conditioner hold) so a newer update overtakes it; then
+/// the client keeps the newer value and the late update is silently dropped:
+/// no revert, no second delivery. The 48-tick drain window provably contains
+/// the held packet's due poll (512ms = 32 ticks), so an empty drain is proof
+/// of discard, not of a wait cut short. Premise: the link holds losslessly
+/// (loss 0.0 skips the drop draw by contract).
+#[test]
+fn sequenced_unreliable_channel_discards_late_update() {
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol_with_sequenced_unreliable();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    // Hold the server->client leg: U1 is queued with a 512ms-virtual hold,
+    // so it is still in flight when U2 goes out on a clean leg.
+    assert!(scenario.configure_link_conditioner(
+        &client_a_key,
+        None,
+        Some(LinkConditionerConfig::new(512, 0, 0.0)),
+    ));
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .send_message::<SequencedUnreliableChannel, _>(&client_a_key, &TestMessage::new(1));
+        });
+    });
+    // Two ticks: U1 is committed to the wire, still held by the conditioner.
+    scenario.expect(|_| Some(()));
+    scenario.expect(|_| Some(()));
+
+    // Clean leg for U2: it overtakes U1 on the wire.
+    assert!(scenario.configure_link_conditioner(&client_a_key, None, None));
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .send_message::<SequencedUnreliableChannel, _>(&client_a_key, &TestMessage::new(2));
+        });
+    });
+
+    // U2 must arrive FIRST. Poll until 2 is seen, but remember EVERYTHING
+    // observed along the way: a poll-until-equal would consume an early U1
+    // and forget it. The exact-sequence assert below reds on any violation.
+    let mut seen: Vec<u32> = Vec::new();
+    scenario.expect_msg(
+        "messaging-11.pre: newer update overtakes the held one",
+        |ctx| {
+            ctx.client(client_a_key, |c| {
+                seen.extend(
+                    c.read_message::<SequencedUnreliableChannel, TestMessage>()
+                        .map(|m| m.value),
+                );
+            });
+            seen.contains(&2).then_some(())
+        },
+    );
+    assert_eq!(
+        seen,
+        vec![2],
+        "reorder violated: client observed {seen:?} before the overtaking update",
+    );
+
+    // U1's due poll falls inside this window (512ms = 32 ticks; the window
+    // runs 48). Each tick drains exactly once into `late`: the closure
+    // always returns Some, so there is no retry that could consume a
+    // surfacing U1 and pass on the second look. The emptiness assert is
+    // immediate, after the window, over the full accumulation.
+    let mut late: Vec<u32> = Vec::new();
+    for _ in 0..48 {
+        scenario.expect(|ctx| {
+            ctx.client(client_a_key, |c| {
+                late.extend(
+                    c.read_message::<SequencedUnreliableChannel, TestMessage>()
+                        .map(|m| m.value),
+                );
+            });
+            Some(())
+        });
+    }
+    assert!(
+        late.is_empty(),
+        "late update surfaced after a newer one was applied: {late:?}",
     );
 }
 
