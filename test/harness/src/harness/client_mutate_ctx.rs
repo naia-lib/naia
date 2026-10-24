@@ -160,6 +160,17 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
         state.client_mut().cancel_connect();
     }
 
+    /// Store the auth payload for the next handshake (pass-through to the
+    /// core Client API). Calling this mid-session only replaces the stored
+    /// bytes; it sends nothing — the payload goes out solely via `connect()`,
+    /// which panics unless the client is disconnected. Test surface for
+    /// [connection-15]: a mid-session `auth()` must not produce a second
+    /// server-side `AuthEvent`.
+    pub fn auth<M: Message>(&mut self, auth: M) {
+        let state = self.ctx.scenario_mut().client_state_mut(&self.client_key);
+        state.client_mut().auth(auth);
+    }
+
     /// Takes a pending fail-closed authority error from the client, if any.
     ///
     /// Card 27945 test surface (additive; behavior-neutral): without the

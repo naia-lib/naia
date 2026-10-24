@@ -26,6 +26,7 @@ use naia_test_harness::{
 use naia_test_harness::test_protocol::{
     OrderedChannel, ReliableChannel, RequestResponseChannel, SequencedChannel, TestMessage,
     TestRequest, TestResponse, TickBufferedChannel, UnorderedChannel, UnreliableChannel,
+    protocol_with_sequenced_unreliable,
 };
 
 mod _helpers;
@@ -245,6 +246,110 @@ fn invalid_credentials_rejected() {
     );
 }
 
+/// Disconnect during auth is handled cleanly
+/// Contract: [connection-09]
+///
+/// Given `require_auth = true`; when A starts connecting and aborts the
+/// handshake mid-auth via `cancel_connect()`, and the server then issues a
+/// late `accept_connection()` for the aborted attempt; then A stays
+/// Disconnected, the server never creates a user for A, no ConnectEvent
+/// fires, and the server still accepts a later client (no handshake residue).
+#[test]
+fn disconnect_during_auth_handled_cleanly() {
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+
+    let server_config = ServerConfig {
+        require_auth: true,
+        ..Default::default()
+    };
+    scenario.server_start(server_config, test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+
+    // A starts connecting; the server never accepts yet: the handshake is
+    // parked mid-auth.
+    let client_a_key = scenario.client_start(
+        "Client A",
+        Auth::new("client_a", "password"),
+        test_client_config(),
+        test_protocol.clone(),
+    );
+
+    // Prove mid-auth state: the server saw A's auth, but A is not connected
+    // and has no user yet.
+    scenario.expect(|ctx| {
+        let auth_received = ctx.server(|server| {
+            server.read_event::<ServerAuthEvent<Auth>>().is_some()
+        });
+        let not_connected =
+            !ctx.client(client_a_key, |c| c.connection_status().is_connected());
+        let no_user_yet = !ctx.server(|s| s.user_exists(&client_a_key));
+        (auth_received && not_connected && no_user_yet).then_some(())
+    });
+
+    // A aborts mid-handshake.
+    scenario.mutate(|ctx| {
+        ctx.client(client_a_key, |client| {
+            client.cancel_connect();
+        });
+    });
+
+    scenario.expect(|ctx| {
+        (!ctx.client(client_a_key, |c| c.connection_status().is_connected())).then_some(())
+    });
+
+    // The server issues a late accept for the aborted attempt (the
+    // disconnect-during-auth race): it must not resurrect anything.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_a_key);
+        });
+    });
+
+    // Pump ticks: nothing for A may materialize server-side.
+    let mut stray_state = false;
+    for _ in 0..20 {
+        scenario.expect(|ctx| {
+            let connect_fired = ctx.server(|server| {
+                server.read_event::<ServerConnectEvent>().is_some()
+            });
+            let user_appeared = ctx.server(|s| s.user_exists(&client_a_key));
+            if connect_fired || user_appeared {
+                stray_state = true;
+            }
+            Some(())
+        });
+        scenario.mutate(|_| {});
+    }
+
+    scenario.spec_expect(
+        "connection-09.t1: mid-handshake abort leaves no user, no connect event",
+        |ctx| {
+            let client_down =
+                !ctx.client(client_a_key, |c| c.connection_status().is_connected());
+            let no_user = !ctx.server(|s| s.user_exists(&client_a_key));
+            (client_down && no_user && !stray_state).then_some(())
+        },
+    );
+    assert!(
+        !stray_state,
+        "no ConnectEvent or user may appear for an aborted handshake, even after a late accept"
+    );
+
+    // Server is healthy: B connects cleanly afterwards on the same server.
+    scenario.mutate(|_| {});
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+    scenario.expect(|ctx| server_and_client_connected(ctx, client_b_key));
+}
+
 /// Connect event ordering is stable
 /// Contract: [connection-03], [connection-04]
 ///
@@ -409,8 +514,94 @@ fn connect_event_ordering_stable() {
     );
 }
 
+/// Multiple concurrent auth requests serialize
+/// Contract: [connection-10]
+///
+/// Given `require_auth = true`; when A and B start connecting back-to-back
+/// with no pump between (both handshakes in flight in the same tick); then
+/// the server emits exactly one AuthEvent per client with each payload
+/// matched to the right key, and both land connected as distinct users.
+/// Wall-clock racing is impossible in the lockstep harness; overlapping
+/// in-flight handshakes are the closest constructible concurrency, and they
+/// prove the server serializes auth without confusing sessions.
+#[test]
+fn concurrent_auth_requests_serialize() {
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+
+    let server_config = ServerConfig {
+        require_auth: true,
+        ..Default::default()
+    };
+    scenario.server_start(server_config, test_protocol.clone());
+
+    let auth_a = Auth::new("client_a", "password");
+    let auth_b = Auth::new("client_b", "password");
+
+    // Back-to-back starts: no expect/mutate between, so both handshakes are
+    // in flight when the next tick pumps.
+    let client_a_key = scenario.client_start(
+        "Client A",
+        auth_a.clone(),
+        test_client_config(),
+        test_protocol.clone(),
+    );
+    let client_b_key = scenario.client_start(
+        "Client B",
+        auth_b.clone(),
+        test_client_config(),
+        test_protocol.clone(),
+    );
+
+    // Accumulate auth events until both clients' payloads are seen, each on
+    // its own key. A wrong key<->payload mapping means session confusion:
+    // fail shut.
+    let mut count_a = 0u32;
+    let mut count_b = 0u32;
+    let mut mismatched = false;
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            while let Some((key, auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
+                if key == client_a_key && auth == auth_a {
+                    count_a += 1;
+                } else if key == client_b_key && auth == auth_b {
+                    count_b += 1;
+                } else {
+                    mismatched = true;
+                }
+            }
+            (count_a >= 1 && count_b >= 1).then_some(())
+        })
+    });
+    assert!(
+        !mismatched,
+        "auth payloads must arrive matched to their own client keys"
+    );
+    assert_eq!(count_a, 1, "exactly one auth event for A");
+    assert_eq!(count_b, 1, "exactly one auth event for B");
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_a_key);
+            server.accept_connection(&client_b_key);
+        });
+    });
+
+    scenario.spec_expect(
+        "connection-10.t2: overlapping handshakes land as distinct connected users",
+        |ctx| {
+            server_and_client_connected(ctx, client_a_key)?;
+            server_and_client_connected(ctx, client_b_key)?;
+            (ctx.server(|s| s.users_count()) == 2).then_some(())
+        },
+    );
+}
+
 /// Disconnect is idempotent and clean
-/// Contract: [connection-05], [connection-06], [connection-10]
+/// Contract: [connection-05], [connection-06]
+// (NASH 2026-10-24: dropped a stale [connection-10] tag here — this test
+// connects sequentially and asserts nothing about concurrent auth; the row is
+// proven by `concurrent_auth_requests_serialize`.)
 ///
 /// Given A and B connected; when A disconnects and later a duplicate/connection-lost for A is processed;
 /// then only one disconnect event for A is exposed, A is fully removed from users and scoping, and B never sees ghost entities from A.
@@ -769,11 +960,55 @@ fn no_mid_session_reauth() {
         })
     });
 
-    // Try to send new auth (this should be ignored or cause disconnect)
-    // Note: Naia client doesn't have a direct way to re-auth, but we can test
-    // by checking that the client key doesn't change
+    // Drain the handshake's auth event: exactly one may exist for A.
+    // (Read inside `expect` — the mutate ctx has no event reader.)
+    let mut handshake_auths = 0u32;
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            while let Some((key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
+                assert_eq!(key, client_a_key, "handshake auth must belong to A");
+                handshake_auths += 1;
+            }
+            (handshake_auths == 1).then_some(())
+        })
+    });
+    assert_eq!(handshake_auths, 1, "exactly one auth event from the handshake");
+
+    // A attempts mid-session re-auth: store a hostile payload. This sends
+    // nothing — the payload goes out solely via `connect()`, which panics
+    // unless the client is disconnected — so the server must never see a
+    // second AuthEvent for A.
     scenario.mutate(|ctx| {
-        // Simulate by checking user still exists with same identity
+        ctx.client(client_a_key, |client| {
+            client.auth(Auth::new("attacker", "evil_password"));
+        });
+    });
+
+    // Pump a 20-tick window: any second AuthEvent trips the flag.
+    let mut second_auth = false;
+    for _ in 0..20 {
+        scenario.expect(|ctx| {
+            let fired = ctx.server(|server| {
+                server.read_event::<ServerAuthEvent<Auth>>().is_some()
+            });
+            if fired {
+                second_auth = true;
+            }
+            Some(())
+        });
+        scenario.mutate(|_| {});
+    }
+    assert!(
+        !second_auth,
+        "no second auth event may fire mid-session"
+    );
+
+    // The client must also report itself as not-disconnected throughout:
+    // `connect()` (the only path that emits the stored payload) panics
+    // unless disconnected, so a connected client cannot re-initiate auth.
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |c| c.connection_status().is_connected())
+            .then_some(())
     });
 
     // Verify client key hasn't changed
@@ -800,9 +1035,33 @@ fn no_mid_session_reauth() {
             },
         );
 
+        // (NASH 2026-10-24: this leg asserted `Some(())` unconditionally —
+        // vacuous. It now asserts the same session-continuity property for
+        // real: the user key is still the initial one AND the client never
+        // dropped, so no swap could have hidden behind a reconnect.)
         scenario.spec_expect(
             "connection-16.t1: no silent identity swap during session",
-            |_ctx| Some(()),
+            |ctx| {
+                let still_connected = ctx.client(client_a_key, |c| {
+                    c.connection_status().is_connected()
+                });
+                ctx.server(|server| {
+                    if let Some(user) = server.user(&client_a_key) {
+                        let current_key_opt: Option<ClientKey> = user.key();
+                        if let Some(current_client_key) = current_key_opt {
+                            if current_client_key == initial_key && still_connected {
+                                Some(())
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+            },
         );
     }
 }
@@ -1326,8 +1585,19 @@ fn protocol_handshake_mismatch_fails() {
 /// Malformed or tampered identity token is rejected cleanly
 /// Contract: [connection-23], [connection-24]
 ///
-/// Given server expecting well-formed identity tokens; when client uses a malformed/tampered token;
-/// then handshake fails, client never becomes connected, an error/reject is surfaced, and no half-connected state remains.
+/// (NASH 2026-10-24: the previous version of this test was doubly hollow —
+/// it tampered the harness-side token mirror BEFORE the server had minted
+/// any token, so the `if let Some` never fired and nothing was tampered;
+/// then it asserted `connected || rejected`, which passes on a plain
+/// successful connect. Both legs are rewritten below over the proven
+/// pre-seed mechanism from the [connection-25] replay leg.)
+///
+/// A connects and receives token T_A, then disconnects (T_A is consumed).
+/// B starts its handshake; in the same mutate that accepts B, B's auth
+/// mutex is pre-seeded with a byte-tampered T_A, so B's handshake sends
+/// ClientIdentifyRequest(tampered). The server cannot find it and must send
+/// an explicit rejection. B must never connect and no half-state (user,
+/// session, connect event) may remain.
 #[test]
 fn malformed_identity_token_rejected() {
     let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
@@ -1337,30 +1607,46 @@ fn malformed_identity_token_rejected() {
 
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
-    // Create client
-    let client_auth = Auth::new("client_a", "password");
-    let client_a_key = scenario.client_start(
+    // A connects and receives token T_A (mirror of the connection-25 leg).
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
         "Client A",
-        client_auth.clone(),
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    let mut token_a: Option<naia_shared::IdentityToken> = None;
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |c| {
+            if let Some(token) = c.identity_token() {
+                token_a = Some(token);
+                Some(())
+            } else {
+                None
+            }
+        })
+    });
+    let token_a = token_a.expect("Client A must have received an identity token");
+
+    // A disconnects — T_A is consumed server-side.
+    scenario.mutate(|ctx| {
+        ctx.client(client_a_key, |c| {
+            c.disconnect();
+        });
+    });
+    scenario.expect(|ctx| (!ctx.server(|s| s.user_exists(&client_a_key))).then_some(()));
+
+    // B starts and sends its auth credentials to the server.
+    let client_b_key = scenario.client_start(
+        "Client B",
+        Auth::new("client_b", "password"),
         test_client_config(),
         test_protocol.clone(),
     );
 
-    // Tamper with identity token before connection completes
-    scenario.mutate(|ctx| {
-        ctx.client(client_a_key, |client| {
-            if let Some(token) = client.identity_token() {
-                // Tamper at the byte level: any byte vec is a syntactically valid
-                // token, so "tampered" means it no longer matches the one the
-                // server minted — which is exactly what this test asserts on.
-                let mut bytes = token.as_bytes().to_vec();
-                bytes.extend_from_slice(b"_tampered");
-                client.set_identity_token(naia_shared::IdentityToken::from_bytes(bytes));
-            }
-        });
-    });
-
-    // Wait for auth event
+    // Wait for B's auth credentials to arrive at the server.
     scenario.expect(|ctx| {
         ctx.server(|server| {
             server
@@ -1370,28 +1656,80 @@ fn malformed_identity_token_rejected() {
         })
     });
 
-    // Accept connection (server may still accept, but handshake should fail)
+    // In the same mutate: accept B's connection AND pre-seed B's auth mutex
+    // with a byte-tampered T_A. ClientAuthIo::receive() checks the mutex
+    // first and returns it immediately, so B's handshake sends
+    // ClientIdentifyRequest(tampered-T_A), which the server cannot resolve.
+    // (Tamper runs here — not before any token exists — so the tamper always
+    // executes; the `expect` above guarantees T_A was captured.)
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.accept_connection(&client_a_key);
+            server.accept_connection(&client_b_key);
+        });
+        ctx.client(client_b_key, |client| {
+            let mut bytes = token_a.as_bytes().to_vec();
+            bytes.extend_from_slice(b"_tampered");
+            client.set_identity_token(naia_shared::IdentityToken::from_bytes(bytes));
         });
     });
 
-    // Verify client either connects (if token validation happens later) or is rejected (no half-connected state)
-    // The exact behavior depends on when token validation occurs
+    // B must be explicitly rejected and must never connect.
+    // is_rejected() is tick-scoped; capture via persistent flags instead.
+    let mut reject_event_received = false;
+    let mut connect_event_received = false;
     scenario.spec_expect(
-        "connection-23.t1: malformed token rejected with no half-connected state",
+        "connection-23.t1: tampered token produces explicit reject, never connects",
         |ctx| {
-            let connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
-            let rejected = ctx.client(client_a_key, |c| c.is_rejected());
-            // Either connection fails or succeeds, but no half-state
-            (connected || rejected).then_some(())
+            ctx.client(client_b_key, |client| {
+                if client.read_event::<ClientRejectEvent>().is_some() {
+                    reject_event_received = true;
+                }
+                if client.read_event::<ClientConnectEvent>().is_some() {
+                    connect_event_received = true;
+                }
+                reject_event_received.then_some(())
+            })
         },
     );
+    assert!(
+        reject_event_received,
+        "B must be explicitly rejected when presenting a tampered token"
+    );
+    assert!(
+        !connect_event_received,
+        "B must not connect with a tampered token"
+    );
 
+    // [connection-24]: the failure must be clean — pump ticks and assert no
+    // half-state: no user, no session, no connect event for B.
+    let mut half_state = false;
+    for _ in 0..20 {
+        scenario.expect(|ctx| {
+            let user = ctx.server(|s| s.user_exists(&client_b_key));
+            let connected =
+                ctx.client(client_b_key, |c| c.connection_status().is_connected());
+            let connect_fired = ctx.server(|server| {
+                server.read_event::<ServerConnectEvent>().is_some()
+            });
+            if user || connected || connect_fired {
+                half_state = true;
+            }
+            Some(())
+        });
+        scenario.mutate(|_| {});
+    }
     scenario.spec_expect(
-        "connection-24.t1: handshake fails cleanly on malformed token",
-        |_ctx| Some(()),
+        "connection-24.t1: failed handshake leaves no user, no session, no connect event",
+        |ctx| {
+            let no_user = !ctx.server(|s| s.user_exists(&client_b_key));
+            let down =
+                !ctx.client(client_b_key, |c| c.connection_status().is_connected());
+            (no_user && down && !half_state).then_some(())
+        },
+    );
+    assert!(
+        !half_state,
+        "rejected handshake must leave no user, session, or connect event"
     );
 }
 
@@ -1820,30 +2158,33 @@ fn matched_protocol_id_allows_connection() {
 /// Wire-relevant changes affect protocol_id
 /// Contract: [connection-32]
 ///
-/// Given protocol with specific channels, messages, components;
-/// when protocol is built; then these aspects determine protocol_id.
-/// Note: In E2E tests, we verify matching protocols connect; mismatched would fail.
+/// (NASH 2026-10-24: the previous version connected with a matching
+/// protocol and asserted `connected` — it never varied any wire aspect, so
+/// it could not fail on a wrong `protocol_id` composition. Rewritten to
+/// assert the property directly.)
+///
+/// `protocol_id` must be deterministic for a fixed definition and must
+/// change when a wire-relevant aspect changes. The
+/// `protocol_with_sequenced_unreliable()` builder adds a
+/// `SequencedUnreliable` channel to the base definition — peers that
+/// disagree on channels cannot decode each other, so the id must differ.
 #[test]
 fn protocol_id_determined_by_wire_relevant_aspects() {
-    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
-    let test_protocol = protocol();
-
-    scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
-
-    // Same protocol definition works
-    let client_a_key = client_connect(
-        &mut scenario,
-        &room_key,
-        "Client A",
-        Auth::new("client_a", "pass"),
-        test_client_config(),
-        test_protocol,
+    let mut base = protocol();
+    let base_id = base.locked_protocol_id();
+    let mut base_again = protocol();
+    let base_again_id = base_again.locked_protocol_id();
+    assert_eq!(
+        base_id, base_again_id,
+        "connection-32.t1: same definition must produce the same protocol_id"
     );
 
-    scenario.spec_expect("connection-32.t1: protocol_id determined by wire-relevant aspects (channels, messages, components)", |ctx| {
-        ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
-    });
+    let mut variant = protocol_with_sequenced_unreliable();
+    let variant_id = variant.locked_protocol_id();
+    assert_ne!(
+        base_id, variant_id,
+        "connection-32.t1: adding a channel must change protocol_id"
+    );
 }
 
 // ============================================================================
