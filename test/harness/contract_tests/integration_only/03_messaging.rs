@@ -524,23 +524,39 @@ fn messaging_19_entity_property_ttl() {
         })
     });
 
-    // Wait for entity replication and verify message dropped (with more ticks since we advanced so far)
-    scenario.until(200.ticks()).spec_expect(
-        "messaging-19.t1: EntityProperty messages beyond TTL are dropped",
-        |ctx| {
-            let replicated = ctx.client(client_a_key, |c| c.has_entity(&entity));
-            if replicated {
-                let msgs = ctx.client(client_a_key, |client| {
+    // Wait for entity replication and verify the TTL-expired message never
+    // surfaces. Absence must be asserted over a FULL post-include window,
+    // not at the first replicated tick: a live buffered message lands ~17
+    // ticks after include (probed 2026-10-24), so an early return passes
+    // without ever exercising the TTL. Drain every tick for 200 ticks and
+    // require zero total, with a replication sanity flag so a broken
+    // include cannot pass either.
+    let mut start_tick = None;
+    let mut total = 0usize;
+    let mut ever_replicated = false;
+    scenario
+        .until(300.ticks())
+        .spec_expect(
+            "messaging-19.t1: EntityProperty messages beyond TTL are dropped",
+            |ctx| {
+                let tick = ctx.global_tick();
+                let start = *start_tick.get_or_insert(tick);
+                ever_replicated |= ctx.client(client_a_key, |c| c.has_entity(&entity));
+                total += ctx.client(client_a_key, |client| {
                     client
                         .read_message::<ReliableChannel, EntityCommandMessage>()
-                        .collect::<Vec<_>>()
+                        .count()
                 });
-                (replicated && msgs.is_empty()).then_some(())
-            } else {
+                if ever_replicated && tick - start >= 200 {
+                    assert_eq!(
+                        total, 0,
+                        "messaging-19.t1: expected TTL-expired buffer drop, got {total} delivered messages",
+                    );
+                    return Some(());
+                }
                 None
-            }
-        },
-    );
+            },
+        );
 
     // Control: the delivery path itself is live. A fresh command for the
     // now-in-scope entity must arrive promptly; otherwise the absence above

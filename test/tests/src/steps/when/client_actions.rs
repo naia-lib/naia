@@ -514,42 +514,40 @@ fn when_client_collects_entity_command_messages(ctx: &mut TestWorldMut) {
 /// When the client collects all reliable entity-command messages.
 ///
 /// Reliable-channel twin of `when_client_collects_entity_command_messages`
-/// (which reads UnorderedChannel for messaging-20). Polls until the entity
-/// has replicated and delivery is stable (3 consecutive empty ticks), then
-/// stores the total under `ENTITY_COMMAND_COUNT_KEY`. Used by messaging-19,
-/// where the TTL has expired so the expected count is zero.
+/// (which reads UnorderedChannel for messaging-20). Drains the client's
+/// queue every tick for a FULL 200-tick post-include window and stores the
+/// total under `ENTITY_COMMAND_COUNT_KEY`. Used by messaging-19, where the
+/// TTL has expired so the expected count is zero. The window must be fixed,
+/// not stability-gated: a live buffered message lands ~17 ticks after
+/// include, so returning at the first replicated tick (or after 3 early
+/// empty ticks) would pass without ever exercising the TTL. A replication
+/// sanity flag keeps a broken include from passing either.
 #[when("the client collects all reliable entity-command messages")]
 fn when_client_collects_reliable_entity_command_messages(ctx: &mut TestWorldMut) {
     use naia_test_harness::test_protocol::{EntityCommandMessage, ReliableChannel};
+    use naia_test_harness::ToTicks;
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     let entity_key: naia_test_harness::EntityKey = scenario
         .bdd_get(LAST_ENTITY_KEY)
         .expect("no entity stored — missing Given for entity-command setup");
-    let mut all_count = 0usize;
-    let mut idle_ticks = 0usize;
-    let count = scenario.spec_expect(
-        "messaging-19: collect reliable entity-command messages until stable",
+    let mut start_tick = None;
+    let mut total = 0usize;
+    let mut ever_replicated = false;
+    let count = scenario.until(300usize.ticks()).spec_expect(
+        "messaging-19: drain reliable entity-command messages over 200 ticks",
         |ectx| {
-            let replicated = ectx.client(client_key, |c| c.has_entity(&entity_key));
-            if !replicated {
-                idle_ticks = 0;
-                return None;
-            }
-            let batch = ectx.client(client_key, |client| {
+            let tick = ectx.global_tick();
+            let start = *start_tick.get_or_insert(tick);
+            ever_replicated |= ectx.client(client_key, |c| c.has_entity(&entity_key));
+            total += ectx.client(client_key, |client| {
                 client
                     .read_message::<ReliableChannel, EntityCommandMessage>()
                     .count()
             });
-            all_count += batch;
-            if batch == 0 {
-                idle_ticks += 1;
-                if idle_ticks >= 3 {
-                    return Some(all_count);
-                }
-                None
+            if ever_replicated && tick - start >= 200 {
+                Some(total)
             } else {
-                idle_ticks = 0;
                 None
             }
         },

@@ -252,6 +252,11 @@ Feature: Messaging Channel Semantics
       When the server includes the entity for the client
       Then the client receives the entity-command message
 
+    # History (NASH 2026-10-24): the original contract wait returned after a
+    # single tick, and absence was checked at the first replicated tick —
+    # a live buffered message lands ~17 ticks after include, so both passed
+    # without exercising the TTL. Wait now observes TestClock past 60s and
+    # absence drains a full 200-tick post-include window (contract + steps).
     @Scenario(17)
     Scenario: [messaging-19] EntityProperty message TTL
       Given a server is running
