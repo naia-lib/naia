@@ -29,7 +29,7 @@ on both `dev` and `nash-dev`); this table file lands on top.
 | 15 | CLIENT ConnectEvent only at finalize | `no_connect_event_before_handshake_finalizes` (5-tick pre-accept window: no ClientConnectEvent, client non-connected; fires only after accept + completion) + R1 `connected_only_after_tick_sync_completes` (no Connected through identify + 3 pong rounds; Connected only on post-sync connect response, the direct `on_connect` input) | HONEST |
 | 16 | SERVER ConnectEvent only at finalize | `no_connect_event_before_handshake_finalizes` (5-tick pre-accept window: no ServerConnectEvent; fires only after accept + completion) + R1 `fresh_token_at_challenge_finalizes_nothing` (UDP midpoint answers SendPacket, never FinalizeConnection) + identify-build token causality (finalize consumes the accept-minted token, pinned row 12) | HONEST |
 | 17 | no replication before ConnectEvent | `no_replication_before_auth_decision` [TAG-MISMATCH: tagged 13.t1] | HONEST |
-| 18 | explicit reject for no-token/bad-token/denied | `invalid_credentials_rejected`, `malformed_identity_token_rejected`, `server_reject_connection_produces_reject_event`, `server_reject_connection_carries_a_reason_message` | HONEST for bad-token/denied. No-token-with-require_auth sub-case UNCITED |
+| 18 | explicit reject for no-token/bad-token/denied | `invalid_credentials_rejected`, `malformed_identity_token_rejected`, `server_reject_connection_produces_reject_event`, `server_reject_connection_carries_a_reason_message` + R1 `identify_empty_token_emits_auth_reject` (decodable empty → explicit Auth reject no larger than its trigger — anti-reflection bound pinned) + R1 `identify_without_token_bytes_finalizes_nothing`, `challenge_without_token_bytes_finalizes_nothing`, `challenge_empty_token_finalizes_nothing` | HONEST for bad-token/denied and for no-session on no-token bytes. FLIP ANSWERED (Usher 115027): the wire token is non-optional (length-prefixed `Box<[u8]>`; header-only fails decode), so undecodable bytes fall under transport-04 drop while decodable-empty takes the explicit-reject path — no behavior change, pins only. OPEN: Usher's explicit-reject ruling on the UDP challenge step, where unknown/empty tokens get silence (address-validation pre-step, no finalize); identify-build reject + UDP no-finalize currently cited |
 | 19 | reject → RejectEvent, no ConnectEvent, no DisconnectEvent | `server_reject_connection_produces_reject_event`, `malformed_identity_token_rejected` | HONEST except DisconnectEvent-absence never asserted (sub-gap) |
 | 20 | status non-connected after reject, no special rejected status | `invalid_credentials_rejected` (02.t1: transitions to disconnected) | HONEST |
 | 21 | t1: client DisconnectEvent ONLY if previously connected (every reason except give-up). t2 (Usher 113324): never-connected give-up gets exactly one AuthTimeout, zero ConnectEvents | `silent_server_surfaces_single_auth_timeout` pins t2 (exactly-one AuthTimeout + zero-ConnectEvent assertions); `give_up_then_redial_recovers_on_same_client` pins recovery | HONEST under ruling 113324. t1 negative (non-give-up reason without connect) still unasserted — sub-gap |
@@ -87,7 +87,11 @@ on both `dev` and `nash-dev`); this table file lands on top.
 3. Row 21: RESOLVED by Usher ruling 113324 — spec amended with t2, pin
    strengthened with zero-ConnectEvent assertion. Remaining sub-gap: t1 negative
    (non-give-up disconnect reason without prior connect) unasserted.
-4. Row 18 no-token sub-case; rows 19/27 DisconnectEvent-absence; row 22 negative;
+4. Row 18 no-token sub-case: FLIP ANSWERED — wire token non-optional,
+   undecodable bytes under transport-04 (pinned), decodable-empty under
+   explicit reject (pinned + size bound); verdict awaits ruling ONLY on
+   whether the UDP challenge step must also emit a reject packet.
+   Rows 19/27 DisconnectEvent-absence; row 22 negative;
    row 23 owned-entity despawn.
 5. Rows 15/16 absence-before: CLOSED — e2e pre-accept silence on both sides +
    R1 midpoint pins (client tick-sync gating, UDP challenge answers-only).

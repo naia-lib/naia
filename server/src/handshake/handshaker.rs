@@ -747,6 +747,63 @@ mod tests {
         }
     }
 
+    /// An identify presenting no identity token bytes is dropped in
+    /// silence and finalizes nothing: only a hostile or buggy peer sends
+    /// one (the honest client emits no identify until its token arrives,
+    /// pinned client-side), and undecodable wire bytes are the remit of
+    /// the malformed-drop rule, not of a session decision
+    /// ([connection-18] no-token, [transport-04]).
+    #[cfg(not(feature = "transport_udp"))]
+    #[test]
+    fn identify_without_token_bytes_finalizes_nothing() {
+        let mut manager = manager_with_ttl();
+        let bytes = inbound(&HandshakeHeader::ClientIdentifyRequest(server_pid()), None);
+        match maintain(&mut manager, &bytes) {
+            Ok(HandshakeAction::None) => {}
+            _ => panic!("token-less identify must be dropped in silence"),
+        }
+        assert!(
+            !manager
+                .authenticated_and_identified_users
+                .contains_key(&addr()),
+            "token-less identify must finalize no connection"
+        );
+    }
+
+    /// A decodable-but-empty identity token is refused exactly like a
+    /// token the server never issued: it is a credential failure, not a
+    /// protocol failure, so the wire carries an explicit Auth reject
+    /// ([connection-18] no-token: the token is non-optional on the wire,
+    /// length-prefixed, so only a decodable empty token reaches this
+    /// path — header-only bytes fail to decode and fall under
+    /// [transport-04]).
+    #[cfg(not(feature = "transport_udp"))]
+    #[test]
+    fn identify_empty_token_emits_auth_reject() {
+        let mut manager = manager_with_ttl();
+        let empty = IdentityToken::from_bytes(vec![]);
+        assert!(empty.is_empty());
+        let bytes = inbound(
+            &HandshakeHeader::ClientIdentifyRequest(server_pid()),
+            Some(&empty),
+        );
+        match maintain(&mut manager, &bytes) {
+            Ok(HandshakeAction::SendPacket(packet)) => {
+                assert_eq!(reject_reason_of(&packet), RejectReason::Auth);
+                // Anti-reflection bound ([connection-18]): the reject
+                // answers the smallest decodable trigger on this path, so
+                // it MUST be no larger than the packet that triggered it.
+                assert!(
+                    packet.slice().len() <= bytes.len(),
+                    "reject ({} B) must not exceed its trigger ({} B)",
+                    packet.slice().len(),
+                    bytes.len(),
+                );
+            }
+            _ => panic!("empty token must be auth-rejected with a packet"),
+        }
+    }
+
     /// An identity token presented after its TTL must be refused exactly
     /// like a token the server never issued: Auth reject on the wire and
     /// the pending user marked for deletion, with the stale entry dropped
@@ -963,6 +1020,31 @@ mod tests {
         );
     }
 
+    /// A challenge presenting no token bytes is dropped in silence and
+    /// finalizes nothing: only a hostile or buggy peer sends one (the
+    /// honest client emits no challenge until its token arrives), and
+    /// undecodable wire bytes are the remit of the malformed-drop rule,
+    /// not of a session decision ([connection-18] no-token,
+    /// [transport-04]).
+    #[cfg(feature = "transport_udp")]
+    #[test]
+    fn challenge_without_token_bytes_finalizes_nothing() {
+        let mut manager = manager_with_ttl();
+        let mut writer = BitWriter::new();
+        HandshakeHeader::ClientChallengeRequest(server_pid()).ser(&mut writer);
+        let bytes = writer.to_packet().slice().to_vec();
+        match maintain(&mut manager, &bytes) {
+            Ok(HandshakeAction::None) => {}
+            _ => panic!("token-less challenge must be dropped in silence"),
+        }
+        assert!(
+            !manager
+                .authenticated_and_identified_users
+                .contains_key(&addr()),
+            "token-less challenge must finalize no connection"
+        );
+    }
+
     /// An identity token presented at the challenge step after its TTL
     /// must be dropped exactly like a token the server never issued:
     /// silence on the wire, with the stale entry dropped
@@ -988,6 +1070,30 @@ mod tests {
             "expired token entry must be dropped on refusal"
         );
         TestClock::reset();
+    }
+
+    /// A decodable-but-empty token at the challenge step is dropped in
+    /// silence and finalizes nothing — the same answer an unknown token
+    /// gets on this build: the challenge is address validation, not the
+    /// session decision, so there is no reject packet here, only no
+    /// finalize ([connection-18] no-token, UDP shape).
+    #[cfg(feature = "transport_udp")]
+    #[test]
+    fn challenge_empty_token_finalizes_nothing() {
+        let mut manager = manager_with_ttl();
+        let empty = IdentityToken::from_bytes(vec![]);
+        assert!(empty.is_empty());
+        let bytes = challenge_inbound(12345, &empty);
+        match maintain(&mut manager, &bytes) {
+            Ok(HandshakeAction::None) => {}
+            _ => panic!("empty token challenge must be dropped in silence"),
+        }
+        assert!(
+            !manager
+                .authenticated_and_identified_users
+                .contains_key(&addr()),
+            "empty token must finalize no connection"
+        );
     }
 
     /// A token presented at the challenge step inside its TTL still

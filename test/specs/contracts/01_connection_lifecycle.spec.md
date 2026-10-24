@@ -266,6 +266,13 @@ The server MUST explicitly reject a connection attempt when:
 - the presented token is invalid/expired/already-used,
 - the server otherwise chooses to deny the attempt before session establishment.
 
+Token-less but decodable is not transport-04: the identity token is
+non-optional on the wire (length-prefixed bytes), so header-only bytes
+fail to decode and fall under the malformed-drop rule, while a
+decodable empty token is a credential failure answered with an
+explicit reject. That reject packet MUST be no larger than the packet
+that triggered it (anti-reflection).
+
 ### [connection-19] —
 
 **Obligations:**
