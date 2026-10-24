@@ -239,9 +239,23 @@ impl RemoteWorldWaitlist {
                 if let Ok(global_entity) =
                     local_converter.owned_entity_to_global_entity(local_entity)
                 {
-                    let world_entity = world_converter
-                        .global_entity_to_entity(global_entity)
-                        .unwrap();
+                    // Spec entity-replication-05 (Usher 113376 item 1): the
+                    // entity map is intentionally kept after despawn, so a
+                    // late or reordered update for a dead entity still
+                    // resolves above. Ignore it: no panic, no apply, no
+                    // event. The presence probe calls nothing the apply
+                    // below does not already call, so it adds no new panic
+                    // risk on any WorldMutType.
+                    let Ok(world_entity) = world_converter.global_entity_to_entity(global_entity)
+                    else {
+                        continue;
+                    };
+                    if world
+                        .component_mut_of_kind(&world_entity, component_kind)
+                        .is_none()
+                    {
+                        continue;
+                    }
                     if world
                         .component_apply_update(
                             local_converter,

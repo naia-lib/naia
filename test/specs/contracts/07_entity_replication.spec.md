@@ -108,6 +108,10 @@ This applies to:
 - reordered packets that arrive after the lifetime ended
 - packets referencing entities that are out-of-scope
 
+Scope (Usher ruling 113376 item 2): "ignored" covers ENDED lifetimes and
+out-of-scope entities only. An update for a never-seen entity is NOT ignored:
+it buffers under [entity-replication-06] until its lifetime materializes.
+
 ---
 
 ### [entity-replication-06] — Update-before-Insert buffering (within lifetime)

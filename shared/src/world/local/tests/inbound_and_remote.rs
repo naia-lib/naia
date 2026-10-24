@@ -256,6 +256,41 @@ fn a_buffered_update_for_an_unknown_entity_never_applies_to_another_entity() {
     );
 }
 
+/// A late or reordered update for a despawned entity is ignored, never panics
+/// Contract: [entity-replication-05] (Usher 113376 item 1)
+///
+/// Given 7 adopted and then despawned from the world (the entity map keeps
+/// the mapping, per production behavior); when a late update for 7 arrives;
+/// then the full apply must ignore it: no panic, nothing applied, no event.
+#[test]
+fn a_late_update_for_a_despawned_entity_is_ignored() {
+    let mut fx = Fixture::client();
+    let mut world = TestWorld::new();
+    let owned = fx.adopt_remote(&mut world, 7);
+
+    // Despawn the world entity; the map keeps resolving 7 (production
+    // behavior, pinned by
+    // despawning_a_remote_entity_notifies_the_waitlist_but_keeps_the_mapping).
+    world.despawn_entity(&7);
+
+    fx.manager
+        .insert_received_update(228, owned, full_update(&fx.kinds, &Ghost::new_complete(77)));
+
+    // Full production apply path: must not panic and must apply nothing.
+    let events = fx.take_events(&mut world);
+    assert!(
+        !events.iter().any(|event| matches!(
+            event,
+            crate::EntityEvent::UpdateComponent(_, entity, _) if *entity == global(7)
+        )),
+        "a late update for a despawned entity must surface no event"
+    );
+    assert!(
+        world.value_of::<Ghost>(&7).is_none(),
+        "nothing may be applied to a despawned entity"
+    );
+}
+
 #[test]
 fn updates_are_applied_in_buffer_order() {
     let mut fx = Fixture::client();
