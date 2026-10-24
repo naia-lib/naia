@@ -918,4 +918,33 @@ mod tests {
     fn vec_bit_writer_empty_produces_no_bytes() {
         assert_eq!(VecBitWriter::new().to_bytes().len(), 0);
     }
+
+    // ─── MTU boundary role (02_transport row 02) ──────────────────────────
+    //
+    // The default writer IS the per-packet budget: capped at MTU_SIZE_BITS
+    // with an MTU-sized backing buffer. Exactly MTU_SIZE_BYTES must fit;
+    // byte 431 must refuse. This is the boundary role the row names.
+
+    #[test]
+    fn default_writer_holds_exactly_one_mtu() {
+        use crate::constants::{MTU_SIZE_BITS, MTU_SIZE_BYTES};
+        let mut writer = BitWriter::new();
+        for _ in 0..MTU_SIZE_BYTES {
+            writer.write_byte(0xAB);
+        }
+        assert_eq!(writer.bits_written(), MTU_SIZE_BITS);
+        let packet = writer.to_packet();
+        assert_eq!(packet.slice().len(), MTU_SIZE_BYTES);
+        assert!(packet.slice().iter().all(|&b| b == 0xAB));
+    }
+
+    #[test]
+    #[should_panic(expected = "Write overflow!")]
+    fn default_writer_refuses_byte_past_the_mtu() {
+        use crate::constants::MTU_SIZE_BYTES;
+        let mut writer = BitWriter::new();
+        for _ in 0..=MTU_SIZE_BYTES {
+            writer.write_byte(0xAB);
+        }
+    }
 }
