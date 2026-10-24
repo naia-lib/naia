@@ -6,8 +6,8 @@ use ring::{hmac, rand};
 
 use naia_shared::{
     handshake::{HandshakeHeader, RejectReason},
-    BitReader, BitWriter, DisconnectReason, IdentityToken, Instant, OutgoingPacket, PacketType,
-    ProtocolId, Serde, SerdeErr, StandardHeader,
+    malformed_drop_warn, BitReader, BitWriter, DisconnectReason, IdentityToken, Instant,
+    OutgoingPacket, PacketType, ProtocolId, Serde, SerdeErr, StandardHeader,
 };
 
 #[cfg(feature = "transport_udp")]
@@ -145,6 +145,11 @@ impl Handshaker for HandshakeManager {
                         Ok(HandshakeAction::None)
                     }
                 } else {
+                    // [transport-04]: an unverifiable disconnect is dropped;
+                    // the drop warns in Debug and stays silent in Prod.
+                    malformed_drop_warn(format!(
+                        "Server: dropping unverifiable disconnect from {address}"
+                    ));
                     Ok(HandshakeAction::None)
                 }
             }

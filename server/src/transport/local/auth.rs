@@ -1,7 +1,9 @@
 use parking_lot::Mutex;
 use std::{net::SocketAddr, sync::Arc};
 
-use naia_shared::{IdentityToken, ProtocolId, PROTOCOL_ID_HEADER, PROTOCOL_MISMATCH_STATUS};
+use naia_shared::{
+    malformed_drop_warn, IdentityToken, ProtocolId, PROTOCOL_ID_HEADER, PROTOCOL_MISMATCH_STATUS,
+};
 
 use naia_shared::transport::local::{LocalTransportHub, ServerRecvError, ServerSendError};
 
@@ -34,10 +36,11 @@ impl ServerAuthIo {
 
         // Parse HTTP request
         // An unparseable request is malformed framing, not a fingerprint
-        // verdict: drop it silently like any malformed credential. It must
-        // never answer, never reach the application, and never be classified
-        // as a protocol mismatch.
+        // verdict: drop it like any malformed credential ([transport-04]:
+        // Debug warns, Prod is silent). It must never answer, never reach
+        // the application, and never be classified as a protocol mismatch.
         let Ok(request) = naia_shared::transport::bytes_to_request(&request_bytes) else {
+            malformed_drop_warn("Malformed auth request framing".to_string());
             return Ok(None);
         };
 
@@ -68,18 +71,25 @@ impl ServerAuthIo {
 
         // Extract Authorization header if present. A header that is not
         // valid ASCII, or not valid base64, is a malformed request from a
-        // peer -- dropping it is right, panicking on it is not.
+        // peer -- dropping it is right ([transport-04]: Debug warns, Prod is
+        // silent), panicking on it is not.
         let Some(auth_header) = request.headers().get("Authorization") else {
+            malformed_drop_warn("Auth request without Authorization header".to_string());
             return Ok(None);
         };
         let Ok(auth_str) = auth_header.to_str() else {
+            malformed_drop_warn("Auth request with non-ASCII Authorization header".to_string());
             return Ok(None);
         };
         let Ok(auth_bytes) = base64::decode(auth_str) else {
+            malformed_drop_warn(
+                "Auth request with undecodable Authorization credential".to_string(),
+            );
             return Ok(None);
         };
         let len = auth_bytes.len();
         if len > self.buffer.len() {
+            malformed_drop_warn("Over-large auth credential".to_string());
             return Ok(None);
         }
         self.buffer[0..len].copy_from_slice(&auth_bytes);

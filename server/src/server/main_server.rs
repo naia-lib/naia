@@ -453,7 +453,11 @@ impl MainServer {
                             let Ok(auth_message) =
                                 self.message_kinds.read(&mut reader, &FakeEntityConverter)
                             else {
-                                warn!("Server Error: cannot read auth message");
+                                // [transport-04]: undecodable auth bytes are
+                                // dropped; Debug warns, Prod is silent.
+                                naia_shared::malformed_drop_warn(
+                                    "Server Error: cannot read auth message".to_string(),
+                                );
                                 continue;
                             };
                             self.incoming_events.push_auth(user_key, auth_message);
@@ -504,6 +508,10 @@ impl MainServer {
                     let Ok(header) = StandardHeader::de(&mut reader) else {
                         // Received a malformed packet
                         // TODO: increase suspicion against packet sender
+                        // [transport-04]: dropped; Debug warns, Prod is silent.
+                        naia_shared::malformed_drop_warn(
+                            "Server Error: cannot read malformed packet".to_string(),
+                        );
                         continue;
                     };
 
@@ -583,7 +591,11 @@ impl MainServer {
                                 }
                                 Ok(HandshakeAction::None) => {}
                                 Err(_err) => {
-                                    warn!("Server Error: cannot read malformed packet");
+                                    // [transport-04]: undecodable handshake bytes
+                                    // are dropped; Debug warns, Prod is silent.
+                                    naia_shared::malformed_drop_warn(
+                                        "Server Error: cannot read malformed packet".to_string(),
+                                    );
                                 }
                             }
                         }

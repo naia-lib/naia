@@ -15,8 +15,8 @@ use std::{
 use log::warn;
 
 use naia_shared::{
-    handshake::HandshakeHeader, BitReader, DisconnectReason, OwnedBitReader, PacketType, Serde,
-    SerdeErr, StandardHeader, Tick, Timer,
+    handshake::HandshakeHeader, malformed_drop_warn, BitReader, DisconnectReason, OwnedBitReader,
+    PacketType, Serde, SerdeErr, StandardHeader, Tick, Timer,
 };
 
 use crate::{
@@ -163,6 +163,10 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                     let Ok(header) = StandardHeader::de(&mut reader) else {
                         // Received a malformed packet
                         // TODO: increase suspicion against packet sender
+                        // [transport-04]: dropped; Debug warns, Prod is silent.
+                        malformed_drop_warn(
+                            "Server Error: cannot read malformed packet".to_string(),
+                        );
                         continue;
                     };
 
@@ -175,7 +179,11 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                                 .read_data_packet(&address, &header, &mut reader)
                                 .is_err()
                             {
-                                warn!("Server Error: cannot read malformed packet");
+                                // [transport-04]: undecodable data bytes are
+                                // dropped; Debug warns, Prod is silent.
+                                malformed_drop_warn(
+                                    "Server Error: cannot read malformed packet".to_string(),
+                                );
                             }
                         }
                         PacketType::Heartbeat => {
@@ -217,14 +225,23 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                             }
                         }
                         PacketType::Handshake => {
-                            let handshake_header_result = HandshakeHeader::de(&mut reader);
-                            let Ok(HandshakeHeader::ClientConnectRequest) = handshake_header_result
-                            else {
-                                warn!(
-                                    "Server Error: received invalid handshake packet: {handshake_header_result:?}"
+                            // [transport-04]: undecodable handshake bytes are
+                            // dropped (Debug warns, Prod is silent); a
+                            // decodable-but-unexpected variant keeps its
+                            // unconditional warn as a state-machine diagnostic
+                            // outside the malformed remit.
+                            let Ok(handshake_header) = HandshakeHeader::de(&mut reader) else {
+                                malformed_drop_warn(
+                                    "Server Error: received malformed handshake packet".to_string(),
                                 );
                                 continue;
                             };
+                            if !matches!(handshake_header, HandshakeHeader::ClientConnectRequest) {
+                                warn!(
+                                    "Server Error: received invalid handshake packet: {handshake_header:?}"
+                                );
+                                continue;
+                            }
                             // 4-F.naia.c.1: defer `finalize_connection` to
                             // the coordination stage via `pending_handshakes`.
                             self.shared.pending_handshakes.lock().push(address);

@@ -10,8 +10,8 @@ use std::{
 use log::warn;
 
 use naia_shared::{
-    http_utils, IdentityToken, LinkConditionerConfig, ProtocolId, PROTOCOL_ID_HEADER,
-    PROTOCOL_MISMATCH_STATUS,
+    http_utils, malformed_drop_warn, IdentityToken, LinkConditionerConfig, ProtocolId,
+    PROTOCOL_ID_HEADER, PROTOCOL_MISMATCH_STATUS,
 };
 
 use super::{
@@ -238,7 +238,11 @@ impl AuthIo {
         };
 
         if auth_bytes.len() > self.buffer.len() {
-            warn!("Over-large auth payload in auth request from {}", addr);
+            // [transport-04]: oversize inbound is dropped; Debug warns, Prod
+            // is silent.
+            malformed_drop_warn(format!(
+                "Over-large auth payload in auth request from {addr}"
+            ));
             self.outgoing_streams.remove(&addr);
             return Ok(None);
         }
@@ -341,6 +345,13 @@ impl AuthIo {
                         let _ = stream.write_all(&response_bytes);
                         let _ = stream.flush();
                     }
+                } else {
+                    // [transport-04]: malformed framing (not a fingerprint
+                    // verdict) is dropped; Debug warns, Prod is silent.
+                    malformed_drop_warn(format!(
+                        "Malformed auth request from {:?}",
+                        pending.stream.peer_addr().ok()
+                    ));
                 }
                 continue;
             };
@@ -436,10 +447,12 @@ fn read_until_headers_complete(pending: &mut PendingAuthRead) -> HeaderReadState
             return HeaderReadState::Complete;
         }
         if pending.bytes.len() > MAX_AUTH_HEADER_BYTES {
-            warn!(
+            // [transport-04]: oversize inbound is dropped; Debug warns, Prod
+            // is silent.
+            malformed_drop_warn(format!(
                 "Over-long headers in auth request from {:?}",
                 pending.stream.peer_addr().ok()
-            );
+            ));
             return HeaderReadState::Failed;
         }
 

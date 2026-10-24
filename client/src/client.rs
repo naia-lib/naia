@@ -9,16 +9,16 @@ use naia_shared::TestClock;
 
 use naia_shared::{
     handshake::{HandshakeHeader, RejectReason},
-    AuthorityError, BitReader, BitWriter, CancelDisposition, Channel, ChannelKind, ChannelMode,
-    ComponentKind, ConnectionStats, DisconnectReason, EntityAndGlobalEntityConverter,
-    EntityAuthStatus, EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef,
-    FakeEntityConverter, GameInstant, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner,
-    GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant,
-    LocalEntityAndGlobalEntityConverter, Message, MessageContainer, OwnedLocalEntity, PacketType,
-    Protocol, ProtocolId, Replicate, ReplicatedComponent, Request, RequestPoll, Response,
-    ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig,
-    StandardHeader, Tick, Timer, UserPriorityState, WorldMutType, WorldRefType,
-    PROTOCOL_MISMATCH_STATUS,
+    malformed_drop_warn, AuthorityError, BitReader, BitWriter, CancelDisposition, Channel,
+    ChannelKind, ChannelMode, ComponentKind, ConnectionStats, DisconnectReason,
+    EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, EntityEvent,
+    EntityPriorityMut, EntityPriorityRef, FakeEntityConverter, GameInstant, GlobalEntity,
+    GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId,
+    GlobalWorldManagerType, HostType, Instant, LocalEntityAndGlobalEntityConverter, Message,
+    MessageContainer, OwnedLocalEntity, PacketType, Protocol, ProtocolId, Replicate,
+    ReplicatedComponent, Request, RequestPoll, Response, ResponseReceiveKey, ResponseSendKey,
+    Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, Tick, Timer, UserPriorityState,
+    WorldMutType, WorldRefType, PROTOCOL_MISMATCH_STATUS,
 };
 
 use super::{
@@ -618,7 +618,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 &self.protocol.component_kinds,
             ) {
                 // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
-                warn!("Error reading from buffered packet!");
+                // [transport-04]: undecodable buffered bytes are dropped;
+                // Debug warns, Prod is silent.
+                malformed_drop_warn("Error reading from buffered packet!".to_string());
             }
         }
 
@@ -2539,9 +2541,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             {
                                 Some(container)
                             } else {
-                                warn!(
+                                // [transport-04]: undecodable rejection bytes are
+                                // ignored; Debug warns, Prod is silent.
+                                malformed_drop_warn(
                                     "Server sent a rejection message this client's \
                                      protocol cannot decode. Ignoring the message."
+                                        .to_string(),
                                 );
                                 None
                             }
@@ -2719,7 +2724,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             // Server sent a handshake packet while connected -
                             // this should only be a Disconnect message
                             let Ok(handshake_header) = HandshakeHeader::de(&mut reader) else {
-                                warn!("unable to parse handshake header from server");
+                                // [transport-04]: undecodable handshake bytes are
+                                // dropped; Debug warns, Prod is silent.
+                                malformed_drop_warn(
+                                    "unable to parse handshake header from server".to_string(),
+                                );
                                 continue;
                             };
                             match handshake_header {
@@ -2752,13 +2761,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
                     // read server tick
                     let Ok(server_tick) = Tick::de(&mut reader) else {
-                        warn!("unable to parse server_tick from packet");
+                        // [transport-04]: undecodable tick bytes are dropped;
+                        // Debug warns, Prod is silent.
+                        malformed_drop_warn("unable to parse server_tick from packet".to_string());
                         continue;
                     };
 
                     // read time since last tick
                     let Ok(server_tick_instant) = GameInstant::de(&mut reader) else {
-                        warn!("unable to parse server_tick_instant from packet");
+                        // [transport-04]: undecodable tick-instant bytes are
+                        // dropped; Debug warns, Prod is silent.
+                        malformed_drop_warn(
+                            "unable to parse server_tick_instant from packet".to_string(),
+                        );
                         continue;
                     };
 
@@ -2783,7 +2798,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                                 .buffer_data_packet(&server_tick, &mut reader)
                                 .is_err()
                             {
-                                warn!("unable to parse data packet");
+                                // [transport-04]: undecodable data bytes are
+                                // dropped; Debug warns, Prod is silent.
+                                malformed_drop_warn("unable to parse data packet".to_string());
                                 continue;
                             }
 
@@ -2808,7 +2825,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             if connection.time_manager.read_pong(&mut reader).is_err() {
                                 // Malformed pong: skip this sample. RTT estimation
                                 // recovers on the next successful pong exchange.
-                                warn!("Client Error: Cannot process pong packet from Server");
+                                // [transport-04]: dropped; Debug warns, Prod is silent.
+                                malformed_drop_warn(
+                                    "Client Error: Cannot process pong packet from Server"
+                                        .to_string(),
+                                );
                             }
                         }
                         _ => {
@@ -2954,7 +2975,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         {
             Some(container)
         } else {
-            warn!("Server sent a disconnect message this client's protocol cannot decode. Ignoring the message.");
+            // [transport-04]: undecodable disconnect bytes are ignored;
+            // Debug warns, Prod is silent.
+            malformed_drop_warn(
+                "Server sent a disconnect message this client's protocol cannot decode. Ignoring the message."
+                    .to_string(),
+            );
             None
         }
     }

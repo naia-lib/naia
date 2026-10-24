@@ -5,8 +5,8 @@ use log::warn;
 #[cfg(feature = "transport_udp")]
 use naia_shared::Timestamp as stamp_time;
 use naia_shared::{
-    handshake::HandshakeHeader, BitReader, BitWriter, IdentityToken, Instant, OutgoingPacket,
-    PacketType, ProtocolId, Serde, StandardHeader, Timer,
+    handshake::HandshakeHeader, malformed_drop_warn, BitReader, BitWriter, IdentityToken, Instant,
+    OutgoingPacket, PacketType, ProtocolId, Serde, StandardHeader, Timer,
 };
 
 use crate::{
@@ -218,6 +218,9 @@ impl Handshaker for HandshakeManager {
     fn recv(&mut self, reader: &mut BitReader) -> Option<HandshakeResult> {
         let header_result = StandardHeader::de(reader);
         if header_result.is_err() {
+            // [transport-04]: undecodable header bytes are dropped; Debug
+            // warns, Prod is silent.
+            malformed_drop_warn("Client Error: cannot read malformed packet".to_string());
             return None;
         }
         let header = header_result.unwrap();
@@ -225,7 +228,9 @@ impl Handshaker for HandshakeManager {
             PacketType::Handshake => {
                 self.watch.recv_handshake += 1;
                 let Ok(handshake_header) = HandshakeHeader::de(reader) else {
-                    warn!("Could not read HandshakeHeader");
+                    // [transport-04]: undecodable handshake bytes are
+                    // dropped; Debug warns, Prod is silent.
+                    malformed_drop_warn("Could not read HandshakeHeader".to_string());
                     return None;
                 };
                 match handshake_header {
@@ -260,7 +265,9 @@ impl Handshaker for HandshakeManager {
                 if let HandshakeState::TimeSync(time_manager) = &mut self.connection_state {
                     let Ok(success_inner) = time_manager.read_pong(reader) else {
                         // TODO: bubble this up
-                        warn!("Time Manager cannot process pong");
+                        // [transport-04]: undecodable pong bytes are dropped;
+                        // Debug warns, Prod is silent.
+                        malformed_drop_warn("Time Manager cannot process pong".to_string());
                         return None;
                     };
                     success = success_inner;

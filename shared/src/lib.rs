@@ -55,6 +55,23 @@ pub use naia_socket_shared::{
     TimeQueue,
 };
 
+/// Emits the [transport-04] malformed/oversize-drop warning in Debug builds.
+///
+/// [transport-04] requires a malformed or oversize inbound packet to be
+/// dropped silently in Prod and dropped with a warning in Debug. Call this at
+/// every site that drops such a packet instead of `log::warn!` directly, so
+/// the split holds uniformly. (Exact warning text is not part of the
+/// contract.)
+#[cfg(debug_assertions)]
+pub fn malformed_drop_warn(msg: String) {
+    log::warn!("{msg}");
+}
+
+/// Release half of [transport-04]: the drop stays silent, so the message is
+/// discarded without emitting anything.
+#[cfg(not(debug_assertions))]
+pub fn malformed_drop_warn(_msg: String) {}
+
 #[cfg(feature = "test_time")]
 pub use naia_socket_shared::TestClock;
 

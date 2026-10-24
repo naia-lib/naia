@@ -27,10 +27,10 @@ use parking_lot::Mutex;
 use log::warn;
 
 use naia_shared::{
-    BigMapKey, BitWriter, Channel, ChannelKind, ComponentKind, ConnectionRequestNonce,
-    EntityAndGlobalEntityConverter, EntityAuthStatus, FrozenGlobalDirty, GlobalDiffHandler,
-    GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState,
-    GlobalRequestId, GlobalWorldManagerType, HostType, Instant,
+    malformed_drop_warn, BigMapKey, BitWriter, Channel, ChannelKind, ComponentKind,
+    ConnectionRequestNonce, EntityAndGlobalEntityConverter, EntityAuthStatus, FrozenGlobalDirty,
+    GlobalDiffHandler, GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalEntitySpawner,
+    GlobalPriorityState, GlobalRequestId, GlobalWorldManagerType, HostType, Instant,
     LocalEntityAndGlobalEntityConverter, LocalResponseId, Message, MessageContainer,
     OutgoingPacket, OutgoingPriorityHook, OwnedBitReader, PacketType, Replicate, SendPlan,
     SendUpdateEvents, Serde, SnapshotMap, Tick, Timer, UpdateKinds, UserDiffHandler,
@@ -343,7 +343,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 )
                 .is_err()
             {
-                warn!("Server Error: cannot decode tick-buffered messages from {address}");
+                // [transport-04]: undecodable tick-buffered bytes are
+                // dropped; Debug warns, Prod is silent.
+                malformed_drop_warn(format!(
+                    "Server Error: cannot decode tick-buffered messages from {address}"
+                ));
                 continue;
             }
 
@@ -366,7 +370,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 )
                 .is_err()
             {
-                warn!("Server Error: cannot decode data section from {address}");
+                // [transport-04]: undecodable data-section bytes are
+                // dropped; Debug warns, Prod is silent.
+                malformed_drop_warn(format!(
+                    "Server Error: cannot decode data section from {address}"
+                ));
                 continue;
             }
 
