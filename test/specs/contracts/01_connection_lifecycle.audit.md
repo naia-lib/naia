@@ -21,7 +21,7 @@ on both `dev` and `nash-dev`); this table file lands on top.
 | 09 | no Naia-level auth timeout during transport handshake | `invalid_credentials_rejected`, `silent_server_surfaces_single_auth_timeout`, `give_up_then_redial_recovers_on_same_client` | HONEST (positive shape: auth decided pre-transport; give-up is generic link-silence AuthTimeout, exactly once) |
 | 10 | identity token one-time-use, TTL ≤ 1h | `expired_or_reused_token_obeys_semantics` (one-time-use leg) + R1 `expired_token_at_identify_is_rejected_like_unknown`, `expired_token_at_challenge_is_dropped_like_unknown`, `sweep_removes_only_expired_token_entries`, `fresh_token_at_identify_finalizes_once`, `fresh_token_at_challenge_answers` (server handshaker; TTL from `ServerConfig::identity_token_ttl`, default 3600 s; virtual-clock driven) | HONEST: aged token refused like unknown on both builds, sweep drops only expired grants from both maps, fresh tokens finalize/answer |
 | 11 | expired/used/invalid token → explicit reject | `malformed_identity_token_rejected`, `expired_or_reused_token_obeys_semantics` + R1 `expired_token_at_identify_is_rejected_like_unknown` (expired leg: Auth reject + pending user for deletion) | HONEST: expired takes the unknown-token refusal path per spec mechanism |
-| 12 | tokens required for ALL transports when require_auth | whole file (harness transport only) | THIN: proven for one transport; "all transports" unproven |
+| 12 | tokens required for ALL transports when require_auth | `invalid_credentials_rejected`, `malformed_identity_token_rejected` (e2e, local transport) + R1 `identify_unknown_token_emits_auth_reject`, `identify_unknown_token_rejects_pending_user_for_deletion` (identify build shared by local/WebRTC) + R1 `unknown_token_at_challenge_finalizes_nothing` (UDP build) | HONEST: admission centralized above the Socket boundary (single `finalize_connection` route via token-consuming `HandshakeManager`; socket layer admits nothing), no-token → no-finalize pinned on both handshake builds, e2e rejection proven on the harness transport |
 | 13 | first validation consumes; replays fail | `expired_or_reused_token_obeys_semantics` (consumed T_A replayed → explicit reject with address) | HONEST |
 | 14 | tick sync required; not Connected until sync | `connected_only_after_tick_sync_completes` (client handshaker R1: identify + 3 forged pong rounds yield None throughout; connect response after finished sync yields Connected) | HONEST |
 | 14a | protocol_id checked first in handshake | `protocol_id_verified_before_connect_event` | THIN: matching passes; mismatch-rejected-pre-connect unproven (see hollow mismatch test) |
@@ -87,4 +87,6 @@ on both `dev` and `nash-dev`); this table file lands on top.
    strengthened with zero-ConnectEvent assertion. Remaining sub-gap: t1 negative
    (non-give-up disconnect reason without prior connect) unasserted.
 4. Row 18 no-token sub-case; rows 19/27 DisconnectEvent-absence; row 22 negative;
-   row 23 owned-entity despawn; rows 15/16 absence-before; row 12 multi-transport.
+   row 23 owned-entity despawn; rows 15/16 absence-before.
+5. Row 12 multi-transport: CLOSED — admission centralized above the Socket
+   boundary; no-token → no-finalize pinned on both handshake builds + e2e.

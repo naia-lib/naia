@@ -185,6 +185,16 @@ address-validating challenge step.
 
 Identity tokens MUST be required for **all transports** when `require_auth = true` (not only WebRTC).
 
+Admission is transport-independent: every server transport delivers
+packets through the same `PacketReceiver` path into
+`MainServer::drain_socket_packets`, and the only route to a live
+connection (the `user_connections` entry, via `finalize_connection`)
+is the `FinalizeConnection` action produced by `HandshakeManager`,
+which both handshake builds emit solely by consuming a minted,
+unexpired token. The socket layer never inspects handshake headers
+and admits nothing. Both builds pin no-token → no-finalize at R1;
+end-to-end rejection without a token is proven on the local transport.
+
 ### [connection-13] —
 
 **Obligations:**

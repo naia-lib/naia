@@ -942,6 +942,27 @@ mod tests {
         writer.to_packet().slice().to_vec()
     }
 
+    /// A challenge presenting a token the server never minted must be
+    /// dropped in silence and finalize nothing: the token gate holds on
+    /// the UDP handshake shape too ([connection-12]).
+    #[cfg(feature = "transport_udp")]
+    #[test]
+    fn unknown_token_at_challenge_finalizes_nothing() {
+        let mut manager = manager_with_ttl();
+        let token = IdentityToken::generate();
+        let bytes = challenge_inbound(12345, &token);
+        match maintain(&mut manager, &bytes) {
+            Ok(HandshakeAction::None) => {}
+            _ => panic!("unknown token challenge must be dropped in silence"),
+        }
+        assert!(
+            !manager
+                .authenticated_and_identified_users
+                .contains_key(&addr()),
+            "unknown token must finalize no connection"
+        );
+    }
+
     /// An identity token presented at the challenge step after its TTL
     /// must be dropped exactly like a token the server never issued:
     /// silence on the wire, with the stale entry dropped
