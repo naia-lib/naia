@@ -44,7 +44,7 @@ on both `dev` and `nash-dev`); this table file lands on top.
 | 30 | protocol_id u128 little-endian wire form | R1 `shared::protocol_id::protocol_id_tests` (`the_wire_form_is_the_sixteen_bytes_in_order`, handshake round-trip, LE value/new) | HONEST at R1. Integration 30.t1 tag is circular (connect success ≠ encoding proof) |
 | 31 | matched id proceeds; mismatched refused | `matched_protocol_id_allows_connection` | HONEST positive. Negative belongs to the hollow mismatch test below |
 | 32 | wire-relevant aspects change the id | `protocol_id_determined_by_wire_relevant_aspects` (negctled both directions) | HONEST |
-| 33 | exact match or reject, no partial compatibility | `no_partial_protocol_compatibility` | HOLLOW: admits "verified implicitly", only connects a matching protocol, never tries a differing one |
+| 33 | exact match or reject, no partial compatibility | `no_partial_protocol_compatibility` (control: base-protocol client connects; mismatched client on `protocol_with_sequenced_unreliable` draws `RejectReason::ProtocolMismatch`, no `ConnectEvent` for it on either side) | HONEST: differing protocol tried for real — explicit mismatch reject, no connects, no negotiation |
 
 ## Hollow / vacuous legs found and fixed in `0bb68249`
 

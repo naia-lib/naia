@@ -18,8 +18,8 @@ use naia_shared::{
 use naia_test_harness::{
     protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
     ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent, ClientKey, ClientRejectEvent,
-    ExpectCtx, Position, Scenario, ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
-    ToTicks,
+    ExpectCtx, Position, RejectReason, Scenario, ServerAuthEvent, ServerConnectEvent,
+    ServerDisconnectEvent, ToTicks,
 };
 
 // Test protocol types (channels and messages)
@@ -2430,30 +2430,79 @@ fn protocol_id_determined_by_wire_relevant_aspects() {
 /// Either protocol_id matches exactly or connection is rejected
 /// Contract: [connection-33]
 ///
-/// Given protocol identity mechanism;
-/// when protocols differ; then connection is rejected (no partial compatibility).
-/// Note: Verified implicitly - matching protocols connect, different would fail.
+/// Given a server on the base protocol; when a client built on a
+/// wire-different protocol (one extra channel, so a different
+/// protocol_id — see `protocol_id_determined_by_wire_relevant_aspects`)
+/// tries to connect; then the client is rejected with
+/// `RejectReason::ProtocolMismatch` and no ConnectEvent fires on either
+/// side. No negotiation, no partial compatibility, no retry-into-success.
 #[test]
 fn no_partial_protocol_compatibility() {
     let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
-    let test_protocol = protocol();
 
-    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    scenario.server_start(ServerConfig::default(), protocol());
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
-    // Exact match works
+    // Control leg: exact match still connects.
     let client_a_key = client_connect(
         &mut scenario,
         &room_key,
         "Client A",
         Auth::new("client_a", "pass"),
         test_client_config(),
-        test_protocol,
+        protocol(),
+    );
+    scenario.mutate(|_ctx| {});
+
+    // Mismatched client: same messages, one extra channel.
+    let mismatch_key = scenario.client_start(
+        "Mismatch Client",
+        Auth::new("mismatch", "pass"),
+        test_client_config(),
+        protocol_with_sequenced_unreliable(),
     );
 
-    scenario.spec_expect("connection-33.t1: protocol_id either matches exactly or connection rejected (no partial compatibility)", |ctx| {
-        ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
+    // The mismatched client must draw a ProtocolMismatch reject — and no
+    // ConnectEvent may fire for it on either side.
+    let mut mismatch_rejected = false;
+    let mut stray_connect = false;
+    scenario.expect(|ctx| {
+        ctx.client(mismatch_key, |client| {
+            for (_address, reason, _message) in client.read_events::<ClientRejectEvent>() {
+                if reason == RejectReason::ProtocolMismatch {
+                    mismatch_rejected = true;
+                }
+            }
+            if client.read_event::<ClientConnectEvent>().is_some() {
+                stray_connect = true;
+            }
+        });
+        ctx.server(|server| {
+            while let Some(key) = server.read_event::<ServerConnectEvent>() {
+                if key == mismatch_key {
+                    stray_connect = true;
+                }
+            }
+        });
+        mismatch_rejected.then_some(())
     });
+    assert!(
+        mismatch_rejected,
+        "differing-protocol client must be rejected with ProtocolMismatch"
+    );
+    assert!(
+        !stray_connect,
+        "no ConnectEvent may fire on either side for a mismatched protocol"
+    );
+
+    // Control leg holds: the matching client is (still) connected.
+    scenario.spec_expect(
+        "connection-33.t1: matching protocol connects, mismatched protocol is rejected with ProtocolMismatch",
+        |ctx| {
+            ctx.client(client_a_key, |c| c.connection_status().is_connected())
+                .then_some(())
+        },
+    );
 }
 
 /// Give-up then re-dial on the same client recovers
