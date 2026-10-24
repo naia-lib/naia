@@ -567,8 +567,13 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
         | connection-16 |
 
     # [connection-19] — Heartbeat timeout triggers client disconnect.
-    # Simulating real-time silence for a timeout duration requires wallclock
-    # advancement beyond the harness's tick model; not testable.
+    # R2-proven: `client_disconnects_due_to_heartbeat_timeout`
+    # (01_connection_lifecycle.rs) pauses traffic with heartbeat 100ms /
+    # timeout 200ms and requires BOTH sides' timeout disconnect events plus
+    # server-side user removal. The old "needs wallclock, not testable" note
+    # is stale: ticks advance virtual time, and the conditioner/hub honor it.
+    # History (NASH 2026-10-24): proof pre-existed; note linked. Row stays
+    # stepless @PolicyOnly (BDD bindings deferred).
     @PolicyOnly
     @Scenario(06)
     Scenario: [connection-19] Client disconnects on heartbeat timeout
@@ -707,14 +712,25 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     Scenario: [connection-11] Auth payload survives handshake roundtrip
 
     # [connection-18] — Heartbeat liveness triggers timeout disconnect.
-    # Simulating heartbeat timeout requires wallclock advancement beyond
-    # the harness's tick model; not testable.
+    # R2-proven: same `client_disconnects_due_to_heartbeat_timeout` proof as
+    # [connection-19] (silence past the timeout disconnects both sides). The
+    # old "needs wallclock, not testable" note is stale (see 19). History
+    # (NASH 2026-10-24): note linked; the `[connection-18]` tag on the
+    # server-reject test was a mis-tag for this row and is removed there.
     @PolicyOnly
     @Scenario(31)
     Scenario: [connection-18] Heartbeat liveness triggers timeout disconnect
 
     # [connection-20] — Reconnect after timeout is fresh session.
-    # Requires heartbeat timeout simulation; same constraint as [connection-18].
+    # R2-proven: `client_disconnects_due_to_heartbeat_timeout` now resumes
+    # traffic and rejoins the same client; the new session re-authenticates
+    # the same key (new server UserKey), re-registers the removed user, and
+    # re-replicates the entity. Every leg assert is presence- or
+    # transition-gated; no-resume negative control reds on expect timeout.
+    # The old "same constraint as 18" note is stale (see 18/19). History
+    # (NASH 2026-10-24): replaced the vacuous `expect(|_| Some(()))` stub
+    # (which never reconnected) with the honest leg above. Row stays
+    # stepless @PolicyOnly (BDD bindings deferred).
     @PolicyOnly
     @Scenario(32)
     Scenario: [connection-20] Reconnect after timeout is fresh session
