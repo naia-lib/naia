@@ -628,17 +628,18 @@ fn a_received_despawn_for_an_unknown_host_entity_is_discarded() {
 }
 
 /// The host never accepts world-shaping messages -- accepting them would let a
-/// client spawn entities in the server's own host world.
+/// client spawn entities in the server's own host world. A forged spawn is
+/// dropped with a warning, never panicking (Usher 115662, common-02).
 #[test]
-#[should_panic(expected = "Host should not receive messages of this type")]
 fn the_host_refuses_a_received_spawn() {
     let (mut engine, _map) = host_engine(&[1]);
 
     engine.receive_message(1, 1, EntityMessage::Spawn(HostEntity::new(1)));
+
+    assert!(engine.take_incoming_events().is_empty());
 }
 
 #[test]
-#[should_panic(expected = "Host should not receive messages of this type")]
 fn the_host_refuses_a_received_component_insert() {
     let (mut engine, _map) = host_engine(&[1]);
 
@@ -647,6 +648,8 @@ fn the_host_refuses_a_received_component_insert() {
         1,
         EntityMessage::InsertComponent(HostEntity::new(1), component_kind::<Alpha>()),
     );
+
+    assert!(engine.take_incoming_events().is_empty());
 }
 
 /// A received `Noop` carries no entity, so it has to be dropped before the
