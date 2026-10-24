@@ -4142,6 +4142,13 @@ mod client_disconnect_tests {
         client
             .handshake_manager
             .set_identity_token(IdentityToken::generate());
+        // A real handshake always sets the challenge digest before
+        // reaching Connected; the fake above must carry it too, or UDP
+        // graceful-disconnect signing (infallible in production) panics.
+        // No-op off the UDP build.
+        client
+            .handshake_manager
+            .seed_challenge_digest_for_tests(vec![0u8; 32]);
         let time_manager = TimeManager::from_parts(
             Duration::from_millis(100),
             BaseTimeManager::new(),

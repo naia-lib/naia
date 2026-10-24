@@ -58,7 +58,11 @@ the three `quiet_data_tests` added with that regression. It retains
 active-worker coverage; only the separate quiet-link target enables
 `deterministic`. The server port-release targets explicitly enable
 `transport_udp`, or both `transport_udp,transport_webrtc`, matching
-their crate-level gates.
+their crate-level gates. The client UDP floor leg is:
+
+```sh
+lint:clippy-client-udp = cargo clippy -p naia-client --all-targets --features transport_udp --keep-going -- -D warnings
+```
 
 Do not infer a rung from a Cargo target kind. Existing targets mix pure
 logic, injected-clock local links, actual worker threads and real port

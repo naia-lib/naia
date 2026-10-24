@@ -14,6 +14,11 @@ pub enum HandshakeResult {
 
 pub trait Handshaker: Send + Sync {
     fn set_identity_token(&mut self, identity_token: IdentityToken);
+    /// Test-only: seed the challenge digest a real handshake always sets
+    /// before Connected, for helpers that fake a post-handshake client.
+    /// Zero production surface (`cfg(test)` compiled out).
+    #[cfg(test)]
+    fn seed_challenge_digest_for_tests(&mut self, digest: Vec<u8>);
     // fn is_connected(&self) -> bool;
     fn send(&mut self) -> Option<OutgoingPacket>;
     fn recv(&mut self, reader: &mut BitReader) -> Option<HandshakeResult>;

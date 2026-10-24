@@ -148,6 +148,22 @@ impl Handshaker for HandshakeManager {
         self.identity_token = Some(identity_token);
     }
 
+    #[cfg(test)]
+    fn seed_challenge_digest_for_tests(&mut self, digest: Vec<u8>) {
+        // A real handshake always sets the challenge digest before
+        // reaching Connected, so graceful-disconnect signing is
+        // infallible in production; only helpers faking a
+        // post-handshake client need this seam.
+        #[cfg(feature = "transport_udp")]
+        {
+            self.pre_connection_digest = Some(digest);
+        }
+        #[cfg(not(feature = "transport_udp"))]
+        {
+            let _ = digest;
+        }
+    }
+
     // Give handshake manager the opportunity to send out messages to the server
     fn send(&mut self) -> Option<OutgoingPacket> {
         if !self.handshake_timer.ringing() {

@@ -94,7 +94,16 @@ Any guarantee stronger than transport-01 MUST be explicitly specified in `03_mes
 
 ---
 
+### [transport-06] — Retried attempts never share the wire with a stale one
+
+**Obligations:**
+- **t1**: Every transport sender MUST release its attempt's live connection on `shutdown`, idempotently, so a retried attempt dials fresh state.
+A sender whose socket and address state are owned by its attempt alone (UDP: fresh socket and address cell per `Socket::new`, shared only between that attempt's sender and receiver) releases them by teardown-drop and documents the no-op; backends holding shared connection state MUST close it eagerly instead.
+
+---
+
 ## Test obligations (TODO)
 - transport-01: Verify Naia tolerates reorder/drop/duplicate at packet boundary (via test transport / local conditioner).
 - transport-03: Verify oversize outbound attempt returns Err (and does not panic).
 - transport-04: Verify malformed inbound is dropped (warn only in Debug).
+- transport-06: Verify shutdown is idempotent and preserves pre-connect state (`shutdown_is_idempotent_and_preserves_finding`, UDP build).

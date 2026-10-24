@@ -64,7 +64,7 @@ impl Socket {
     }
 
     fn connect_inner(
-        self: Box<Self>,
+        self,
         protocol_id: ProtocolId,
         auth_bytes_opt: Option<Vec<u8>>,
         auth_headers_opt: Option<Vec<(String, String)>>,
@@ -100,9 +100,9 @@ impl Socket {
     }
 }
 
-impl Into<Box<dyn TransportSocket>> for Socket {
-    fn into(self) -> Box<dyn TransportSocket> {
-        Box::new(self)
+impl From<Socket> for Box<dyn TransportSocket> {
+    fn from(val: Socket) -> Self {
+        Box::new(val)
     }
 }
 
@@ -188,6 +188,40 @@ impl TransportSender for PacketSender {
     /// Get the Server's Socket address
     fn server_addr(&self) -> TransportAddr {
         self.addr_cell.get()
+    }
+
+    fn shutdown(&mut self) {
+        // Documented no-op: the socket and address cell are owned by this
+        // attempt alone (both minted fresh in `Socket::new`, shared only
+        // between this attempt's sender and receiver). Teardown is the
+        // drop itself: replacing the Io drops the last Arcs, which closes
+        // the socket and discards the learned address, so a retried
+        // attempt dials on a new socket and never shares the wire with a
+        // stale one. There is nothing to close eagerly.
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn unconnected_sender() -> PacketSender {
+        let socket = Arc::new(Mutex::new(
+            UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).unwrap(),
+        ));
+        PacketSender::new(AddrCell::default(), socket)
+    }
+
+    /// Attempt teardown must release the attempt's transport without
+    /// disturbing a retry: shutdown is safe to repeat and leaves a
+    /// never-connected sender exactly as it was ([transport-06]).
+    #[test]
+    fn shutdown_is_idempotent_and_preserves_finding() {
+        let mut sender = unconnected_sender();
+        sender.shutdown();
+        sender.shutdown();
+        assert!(matches!(sender.server_addr(), TransportAddr::Finding));
+        assert!(sender.send(&[1, 2, 3]).is_err());
     }
 }
 
