@@ -808,7 +808,10 @@ fn no_mid_session_reauth() {
 }
 
 /// Server explicit reject produces RejectEvent, not ConnectEvent
-/// Contract: [connection-17], [connection-18]
+/// Contract: [connection-17]
+/// (NASH 2026-10-24: dropped a stale [connection-18] tag here — that row is
+/// heartbeat-timeout disconnect, proven by
+/// `client_disconnects_due_to_heartbeat_timeout`, not by this reject test.)
 ///
 /// Given a connected client A; when client B connects and the server calls reject_connection();
 /// then a reject event is emitted to B, no connect event is emitted, and B remains disconnected.
@@ -1130,10 +1133,75 @@ fn client_disconnects_due_to_heartbeat_timeout() {
         },
     );
 
-    scenario.spec_expect(
-        "connection-20.t1: both sides emit timeout disconnect event",
-        |_ctx| Some(()),
-    );
+    // [connection-20] Fresh session after timeout: the same client rejoins
+    // and the new session carries state with none of the old session's
+    // standing. Every assert below is presence- or transition-gated: the
+    // user was gone (proven above) and the client was disconnected, so a
+    // rejoin that succeeds, re-registers the user, and re-replicates the
+    // entity proves freshness. A stale session (old user never dropped)
+    // would block the rejoin or duplicate the user instead.
+    scenario.resume_traffic();
+    scenario.client_reconnect(client_a_key);
+
+    // Server sees the re-auth for the same key (presence: the rejoin lands).
+    let auth = Auth::new("client_a", "password");
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some((incoming_client_key, incoming_auth)) =
+                server.read_event::<ServerAuthEvent<Auth>>()
+            {
+                if incoming_client_key == client_a_key && incoming_auth == auth {
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+
+    // Server accepts the fresh attempt.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_a_key);
+        });
+    });
+
+    // Server emits connect for the same key (presence: new session opens).
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some(incoming_client_key) = server.read_event::<ServerConnectEvent>() {
+                if incoming_client_key == client_a_key {
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+
+    // Fresh scope: re-add the user to the room (the old membership died
+    // with the timed-out user) and require client-connected + user-exists
+    // together (transitions: both were false minutes — ticks — ago).
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .room_mut(&room_key)
+                .expect("room to exist")
+                .add_user(&client_a_key);
+        });
+    });
+    scenario.expect(|ctx| {
+        let client_connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
+        let user_exists = ctx.server(|s| s.user_exists(&client_a_key));
+        (client_connected && user_exists).then_some(())
+    });
+
+    // The entity re-replicates onto the new session (presence: the fresh
+    // session carries state; no ghost of the old session is required or
+    // consulted for this to flow).
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |client| {
+            client.has_entity(&entity).then_some(())
+        })
+    });
 }
 
 /// Silent server surfaces exactly one AuthTimeout over real sockets
