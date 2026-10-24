@@ -5,8 +5,10 @@
 
 use naia_server::ServerConfig;
 
-use naia_test_harness::test_protocol::{ReliableChannel, UnreliableChannel};
-use naia_test_harness::{protocol, Auth, ExpectCtx, LargeTestMessage, Scenario};
+use naia_test_harness::test_protocol::{ReliableChannel, TestMessage, UnreliableChannel};
+use naia_test_harness::{
+    protocol, Auth, ExpectCtx, LargeTestMessage, LinkConditionerConfig, Scenario,
+};
 
 mod _helpers;
 use _helpers::{client_connect, test_client_config};
@@ -75,6 +77,75 @@ fn oversize_unreliable_send_returns_err() {
     // no panic or teardown follows the refusal.
     scenario.spec_expect(
         "transport-03.t1: oversize unreliable send refused, session unaffected",
+        |ctx: &mut ExpectCtx<'_>| {
+            ctx.client(client_a_key, |c| c.connection_status().is_connected())
+                .then_some(())
+        },
+    );
+}
+
+// ============================================================================
+// [transport-01] — Naia assumes transport is unordered & unreliable
+// ============================================================================
+
+/// Reliable delivery survives packet loss at the packet boundary
+/// Contract: [transport-01]
+///
+/// Given a connected client with a lossy server→client leg (20% of
+/// packets dropped by the link conditioner); when the server sends on a
+/// reliable channel; then the message still arrives (resend covers the
+/// drops) and the session stays healthy after the loss clears. Reorder
+/// tolerance is pinned at the messaging layer (`03_messaging`
+/// hold/overtake leg); duplicate tolerance at the receiver unit level
+/// (`duplicates_and_stale_indices_are_still_ignored`).
+#[test]
+fn reliable_delivery_survives_packet_loss() {
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "pass"),
+        test_client_config(),
+        test_protocol,
+    );
+    scenario.mutate(|_ctx| {});
+
+    // Drop 20% of server→client packets at the boundary.
+    assert!(scenario.configure_link_conditioner(
+        &client_a_key,
+        None,
+        Some(LinkConditionerConfig::new(0, 0, 0.2)),
+    ));
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.send_message::<ReliableChannel, _>(&client_a_key, &TestMessage::new(7));
+        });
+    });
+
+    // The message must still arrive: drops cost ticks, not delivery.
+    let mut seen = false;
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |client| {
+            for message in client.read_message::<ReliableChannel, TestMessage>() {
+                if message.value == 7 {
+                    seen = true;
+                }
+            }
+        });
+        seen.then_some(())
+    });
+    assert!(seen, "reliable message must arrive despite 20% packet loss");
+
+    // Clear the loss; the session underneath is healthy, not limping.
+    assert!(scenario.configure_link_conditioner(&client_a_key, None, None));
+    scenario.spec_expect(
+        "transport-01.t1: session healthy after lossy window",
         |ctx: &mut ExpectCtx<'_>| {
             ctx.client(client_a_key, |c| c.connection_status().is_connected())
                 .then_some(())
