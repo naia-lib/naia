@@ -141,6 +141,14 @@ field updates, self updates, waitlist entries), not just unapplied updates.
 apply to the new one, and a packet arriving after the despawn reads as
 ended-lifetime (ignore per 05), never as pre-spawn bufferable.
 
+Remove-before-Insert (Usher ruling 113376 item 4: **06d**): a Remove sent
+before its entity's Spawn belongs to no lifetime and dies with the epoch --
+the later Insert applies normally and the component is present. A
+post-spawn Remove racing a relation-parked insert cancels the parked
+insert silently, and the component ends up absent. Park-then-apply across
+an epoch is NOT wanted: the channel's epoch barrier makes that scenario
+unreachable, and resurrecting epoch-stale messages is forbidden.
+
 Early-drain APIs that expose buffered updates before the full apply (e.g. `take_received_updates_of_kind`) MUST NOT discard updates they cannot yet apply: an update whose target entity or component is not yet materialized stays buffered for the full apply path, which parks it per this rule. Only updates applied by the drain may leave the buffer; malformed updates on an already-present component are dropped, as in the full apply path.
 
 ---

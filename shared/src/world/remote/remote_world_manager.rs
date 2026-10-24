@@ -1581,16 +1581,132 @@ mod remote_world_manager_tests {
         );
     }
 
-    // NOTE (Usher 113376 item 4: 06d Remove-before-Insert): the literal
-    // scenario -- a Remove for an unmapped entity that parks and applies
-    // after the later Insert -- is unstageable. The entity channel drops a
-    // pre-spawn Remove as stale epoch (`buffer_pop_front_until_and_excluding`
-    // at Spawn) and wedges a post-spawn pre-insert Remove at the component
-    // channel head, so the manager's RemoveComponent arm only ever sees
-    // mapped entities and its map lookup cannot fail. The reachable
-    // Remove-before-Insert cases already resolve sanely: pre-spawn Removes
-    // die with the epoch, and a Remove racing a relation-parked insert
-    // cancels the parked insert silently with the component absent.
+    /// A Remove sent before its entity's Spawn belongs to no lifetime and
+    /// dies with the epoch: the later Insert applies normally and the
+    /// component is present. Contract: [entity-replication-06] (Usher
+    /// 113376 item 4: 06d variant (a) -- park-then-apply across an epoch
+    /// is not wanted; the channel's epoch barrier makes it unreachable).
+    #[test]
+    fn a_pre_spawn_remove_dies_with_the_epoch() {
+        let mut fixture = Fixture::new(HostType::Client);
+
+        // Remove for never-spawned 2: no lifetime owns it. Nothing
+        // surfaces, nothing panics -- the channel holds it pre-spawn.
+        let events = fixture.deliver(vec![(
+            5,
+            EntityMessage::RemoveComponent(remote(2), ghost()),
+        )]);
+        assert!(
+            summarize(&events).is_empty(),
+            "a pre-spawn remove surfaces nothing",
+        );
+
+        // Spawn maps 2 and the epoch drops the stale Remove; the Insert
+        // applies normally and the component is present.
+        let mut components: Vec<(Tick, OwnedLocalEntity, ComponentKind, Box<dyn Replicate>)> =
+            Vec::new();
+        components.push((
+            7,
+            remote(2).copy_to_owned(),
+            ghost(),
+            remote_component(&fixture.kinds, &Ghost::new_complete(5)),
+        ));
+        let events = fixture.deliver_with(
+            vec![
+                (6, EntityMessage::Spawn(remote(2))),
+                (7, EntityMessage::InsertComponent(remote(2), ghost())),
+            ],
+            &mut components,
+        );
+        let global = *fixture
+            .map
+            .global_entity_from_remote(remote(2))
+            .expect("spawn must have mapped 2");
+        let kinds: Vec<Option<EntityMessageType>> = summarize(&events)
+            .into_iter()
+            .filter_map(|(kind, entity)| (entity == global).then_some(kind))
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                Some(EntityMessageType::Spawn),
+                Some(EntityMessageType::InsertComponent)
+            ],
+            "spawn maps, the insert applies, the epoch-stale remove is gone",
+        );
+        assert!(
+            fixture.world.value_of::<Ghost>(&global.to_u64()).is_some(),
+            "the component is present after the insert",
+        );
+    }
+
+    /// A post-spawn Remove racing a relation-parked insert cancels the
+    /// parked insert: the component ends up absent, with no panic and no
+    /// Remove event (nothing materialized to remove).
+    /// Contract: [entity-replication-06] (Usher 113376 item 4: 06d
+    /// variant (b)).
+    #[test]
+    fn a_remove_racing_a_parked_insert_cancels_it() {
+        let mut fixture = Fixture::new(HostType::Client);
+        fixture.kinds.add_component::<Haunt>();
+        fixture.spawn_with_ghost(remote(1));
+
+        // Park a Haunt insert for 1 behind unknown dep 2.
+        let waiting = a_haunt_component_pointing_at(
+            &fixture.kinds,
+            5,
+            remote(2),
+            fixture.map.entity_converter(),
+        );
+        let mut components: Vec<(Tick, OwnedLocalEntity, ComponentKind, Box<dyn Replicate>)> =
+            Vec::new();
+        components.push((
+            1,
+            remote(1).copy_to_owned(),
+            ComponentKind::of::<Haunt>(),
+            waiting,
+        ));
+        let events = fixture.deliver_with(
+            vec![(
+                1,
+                EntityMessage::InsertComponent(remote(1), ComponentKind::of::<Haunt>()),
+            )],
+            &mut components,
+        );
+        assert!(
+            summarize(&events).is_empty(),
+            "the insert parks behind the unknown dep",
+        );
+
+        // Remove arrives while the insert is still parked: cancels it.
+        let events = fixture.deliver(vec![(
+            2,
+            EntityMessage::RemoveComponent(remote(1), ComponentKind::of::<Haunt>()),
+        )]);
+        assert!(
+            summarize(&events).is_empty(),
+            "cancelling a parked insert surfaces nothing, and must not panic",
+        );
+
+        // The dep arrives and releases are polled: nothing comes back.
+        fixture.deliver(vec![(3, EntityMessage::Spawn(remote(2)))]);
+        fixture.manager.spawn_entity(remote(2));
+        let events = fixture.deliver(Vec::new());
+        assert!(
+            summarize(&events)
+                .iter()
+                .all(|(kind, _)| *kind != Some(EntityMessageType::InsertComponent)),
+            "the cancelled insert stays gone after the dep arrives",
+        );
+        let global = *fixture
+            .map
+            .global_entity_from_remote(remote(1))
+            .expect("1 stays mapped");
+        assert!(
+            fixture.world.value_of::<Haunt>(&global.to_u64()).is_none(),
+            "the component ends up absent",
+        );
+    }
 
     // -- the entity channels the connection reaches for ---------------------
 
