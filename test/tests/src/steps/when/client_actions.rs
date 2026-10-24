@@ -511,6 +511,52 @@ fn when_client_collects_entity_command_messages(ctx: &mut TestWorldMut) {
     scenario.bdd_store(ENTITY_COMMAND_COUNT_KEY, count);
 }
 
+/// When the client collects all reliable entity-command messages.
+///
+/// Reliable-channel twin of `when_client_collects_entity_command_messages`
+/// (which reads UnorderedChannel for messaging-20). Polls until the entity
+/// has replicated and delivery is stable (3 consecutive empty ticks), then
+/// stores the total under `ENTITY_COMMAND_COUNT_KEY`. Used by messaging-19,
+/// where the TTL has expired so the expected count is zero.
+#[when("the client collects all reliable entity-command messages")]
+fn when_client_collects_reliable_entity_command_messages(ctx: &mut TestWorldMut) {
+    use naia_test_harness::test_protocol::{EntityCommandMessage, ReliableChannel};
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let entity_key: naia_test_harness::EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no entity stored — missing Given for entity-command setup");
+    let mut all_count = 0usize;
+    let mut idle_ticks = 0usize;
+    let count = scenario.spec_expect(
+        "messaging-19: collect reliable entity-command messages until stable",
+        |ectx| {
+            let replicated = ectx.client(client_key, |c| c.has_entity(&entity_key));
+            if !replicated {
+                idle_ticks = 0;
+                return None;
+            }
+            let batch = ectx.client(client_key, |client| {
+                client
+                    .read_message::<ReliableChannel, EntityCommandMessage>()
+                    .count()
+            });
+            all_count += batch;
+            if batch == 0 {
+                idle_ticks += 1;
+                if idle_ticks >= 3 {
+                    return Some(all_count);
+                }
+                None
+            } else {
+                idle_ticks = 0;
+                None
+            }
+        },
+    );
+    scenario.bdd_store(ENTITY_COMMAND_COUNT_KEY, count);
+}
+
 /// When the client spawns a client-owned entity with a replicated component (non-blocking).
 ///
 /// Spawns a Public entity with Position(0,0) and stores the entity_key.

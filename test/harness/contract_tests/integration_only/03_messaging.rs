@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use naia_client::{ClientConfig, JitterBufferType, Publicity as ClientReplicationConfig};
 use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
-use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response, Tick};
+use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response, TestClock, Tick};
 
 use naia_test_harness::{
     protocol, protocol_with_large_req_resp, Auth, ClientConnectEvent, ClientDisconnectEvent,
@@ -504,9 +504,15 @@ fn messaging_19_entity_property_ttl() {
         })
     });
 
-    // Advance time > 60 seconds (TTL threshold)
-    // 60 seconds = 60,000ms / 16ms per tick = 3,750 ticks, use 4,000 for margin
-    scenario.until(4000.ticks()).expect(|_ctx| Some(()));
+    // Advance > 60 seconds of simulated time (TTL threshold).
+    // 60 seconds = 60,000ms / 16ms per tick = 3,750 ticks, budget 4,000.
+    // The predicate MUST observe the clock: an immediately-true closure
+    // returns after a single tick and the TTL never elapses (the wait is
+    // then vacuous and the test proves nothing).
+    let start_ms = TestClock::current_time_ms();
+    scenario
+        .until(4000.ticks())
+        .expect(|_ctx| (TestClock::current_time_ms() - start_ms > 60_000).then_some(()));
 
     // Include entity in scope (after TTL expired)
     scenario.mutate(|ctx| {
@@ -533,6 +539,28 @@ fn messaging_19_entity_property_ttl() {
             } else {
                 None
             }
+        },
+    );
+
+    // Control: the delivery path itself is live. A fresh command for the
+    // now-in-scope entity must arrive promptly; otherwise the absence above
+    // could mean broken delivery rather than TTL expiry.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let mut cmd = EntityCommandMessage::new("post_ttl_control");
+            server.set_entity_property(&mut cmd.target, &entity);
+            server.send_message::<ReliableChannel, _>(&client_a_key, &cmd);
+        })
+    });
+    scenario.until(200.ticks()).spec_expect(
+        "messaging-19.t2: control message for in-scope entity is delivered",
+        |ctx| {
+            let msgs = ctx.client(client_a_key, |client| {
+                client
+                    .read_message::<ReliableChannel, EntityCommandMessage>()
+                    .collect::<Vec<_>>()
+            });
+            (!msgs.is_empty()).then_some(())
         },
     );
 }

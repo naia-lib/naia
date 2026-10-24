@@ -582,3 +582,24 @@ fn then_client_received_exactly_128_entity_commands(ctx: &TestWorldRef) -> Asser
         ),
     }
 }
+
+/// Then the client received no entity-command messages.
+///
+/// Reads the total count stored under `ENTITY_COMMAND_COUNT_KEY` by
+/// `when_client_collects_reliable_entity_command_messages` and asserts it
+/// is 0 (the buffered EntityProperty message expired past its TTL before
+/// the entity entered scope). Used by messaging-19.
+#[then("the client received no entity-command messages")]
+fn then_client_received_no_entity_commands(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    match ctx.scenario().bdd_get::<usize>(ENTITY_COMMAND_COUNT_KEY) {
+        Some(0) => AssertOutcome::Passed(()),
+        Some(count) => AssertOutcome::Failed(format!(
+            "Expected 0 entity-command messages (TTL-expired buffer drop), got {}",
+            count
+        )),
+        None => AssertOutcome::Failed(
+            "No entity-command count stored — did 'client collects all reliable entity-command messages' run?"
+                .to_string(),
+        ),
+    }
+}

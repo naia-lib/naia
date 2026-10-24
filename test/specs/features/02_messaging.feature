@@ -252,14 +252,15 @@ Feature: Messaging Channel Semantics
       When the server includes the entity for the client
       Then the client receives the entity-command message
 
-    # [messaging-19] — EntityProperty message TTL.
-    # The contract test (messaging-19 in 03_messaging.rs) is broken: the
-    # expect closure always returns Some(()), so the TTL wait (60s ≈ 3750
-    # ticks) never actually elapses. Fixing it requires TestClock injection
-    # which the harness does not support.
-    @PolicyOnly
     @Scenario(17)
     Scenario: [messaging-19] EntityProperty message TTL
+      Given a server is running
+      And a client connects
+      And the server spawns an entity not yet in client scope with a pending entity-command
+      When 3800 ticks elapse
+      And the server includes the entity for the client
+      And the client collects all reliable entity-command messages
+      Then the client received no entity-command messages
 
     @Scenario(18)
     Scenario: [messaging-20] EntityProperty buffer caps with FIFO eviction
