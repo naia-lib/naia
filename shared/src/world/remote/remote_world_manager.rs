@@ -5,6 +5,7 @@ use log::warn;
 use naia_socket_shared::Instant;
 
 use crate::{
+    malformed_drop_warn,
     world::{
         entity::in_scope_entities::InScopeEntities,
         entity_event::EntityEvent,
@@ -363,6 +364,15 @@ impl RemoteWorldManager {
                     // world_server.rs before the despawn — firing it again here would cause
                     // remove_component_worldless to be called for an entity whose component
                     // records have already been cleaned up.
+                    // [115662-5] common-02: no mapping (migration cleanup or an
+                    // earlier despawn in this drain removed it) drops the
+                    // despawn instead of panicking in either lookup below.
+                    if !local_entity_map.contains_remote_entity(remote_entity) {
+                        malformed_drop_warn(format!(
+                            "dropping Despawn for unmapped remote entity {remote_entity:?}"
+                        ));
+                        continue;
+                    }
                     let is_client = self.authed_entities_opt.is_some();
                     let global_entity = if is_client {
                         *local_entity_map
@@ -404,7 +414,6 @@ impl RemoteWorldManager {
                     let local_entity = remote_entity.copy_to_owned();
                     // Consume this tick's own payload: inserts are never
                     // collapsed, so match the exact (tick, entity, kind) entry.
-                    // A missing payload is a programming error, never a guess.
                     let position = incoming_components.iter().position(
                         |(entry_tick, entry_entity, entry_kind, _)| {
                             *entry_tick == tick
@@ -412,19 +421,16 @@ impl RemoteWorldManager {
                                 && *entry_kind == component_kind
                         },
                     );
+                    // [115662-8] common-02: the message and its payload ride
+                    // separate buffers a rogue peer can desync. A missing
+                    // payload drops the insert instead of panicking; honest
+                    // paired inserts still hit the lookup above.
                     let Some(position) = position else {
-                        let buffered: Vec<(Tick, OwnedLocalEntity, ComponentKind)> =
-                            incoming_components
-                                .iter()
-                                .map(|(entry_tick, entry_entity, entry_kind, _)| {
-                                    (*entry_tick, *entry_entity, *entry_kind)
-                                })
-                                .collect();
-                        panic!(
-                            "an InsertComponent message must carry its own ticked payload: \
-                             missing (tick {tick:?}, entity {local_entity:?}, kind {component_kind:?}); \
-                             buffered payload keys: {buffered:?}"
-                        );
+                        malformed_drop_warn(format!(
+                            "dropping InsertComponent with no payload: \
+                             (tick {tick:?}, entity {local_entity:?}, kind {component_kind:?})"
+                        ));
+                        continue;
                     };
                     let (_, _, _, component) = incoming_components.remove(position);
 
@@ -449,6 +455,15 @@ impl RemoteWorldManager {
                     }
                 }
                 EntityMessage::RemoveComponent(remote_entity, component_kind) => {
+                    // [115662-5] common-02: same guard as the Despawn arm
+                    // above — no mapping drops the remove instead of
+                    // panicking in the lookup below.
+                    if !local_entity_map.contains_remote_entity(remote_entity) {
+                        malformed_drop_warn(format!(
+                            "dropping RemoveComponent for unmapped remote entity {remote_entity:?}"
+                        ));
+                        continue;
+                    }
                     let global_entity = local_entity_map
                         .global_entity_from_remote(remote_entity)
                         .unwrap();
@@ -887,6 +902,26 @@ mod remote_world_manager_tests {
             )
         }
 
+        /// Feeds `messages` straight to the apply arms, bypassing the remote
+        /// engine's per-entity channel. The channel parks pre-spawn messages
+        /// and swallows same-lifetime duplicates before the arms ever see
+        /// them, so arm-level guards (mapping gone via migration cleanup or
+        /// an earlier despawn in the same drain) are only reachable this way.
+        fn deliver_direct(
+            &mut self,
+            messages: Vec<(Tick, EntityMessage<RemoteEntity>)>,
+        ) -> Vec<EntityEvent> {
+            self.manager.process_ready_messages(
+                &mut self.spawner,
+                &self.gwm,
+                &mut self.map,
+                &mut self.world,
+                &mut Vec::new(),
+                messages,
+            );
+            std::mem::take(&mut self.manager.incoming_events)
+        }
+
         /// Feeds `updates` through the manager with no messages.
         fn deliver_updates(
             &mut self,
@@ -991,6 +1026,94 @@ mod remote_world_manager_tests {
         assert!(
             summarize(&events).is_empty(),
             "a component for an unknown entity must not raise an insert event",
+        );
+    }
+
+    // ---- [115662-5] RED: a Despawn naming an entity with no mapping.
+    // Direct arm delivery: the engine channel parks pre-spawn messages, so
+    // the public path buffers this instead of panicking; the arm guard
+    // covers mapping-removal races (migration cleanup, an earlier despawn
+    // in the same drain). Pre-fix the lookup unwraps and panics.
+    #[test]
+    fn despawn_for_an_unmapped_entity_is_dropped() {
+        // common-02: remote input must not panic. An unmapped despawn
+        // carries nothing to tear down, so it raises no event.
+        let mut fixture = Fixture::new(HostType::Client);
+        let events = fixture.deliver_direct(vec![(1, EntityMessage::Despawn(remote(9)))]);
+        assert!(
+            summarize(&events).is_empty(),
+            "a despawn for an unmapped entity must raise no event",
+        );
+    }
+
+    // ---- [115662-5] RED: a RemoveComponent naming an entity with no
+    // mapping. Same direct-arm shape as the despawn above.
+    #[test]
+    fn remove_component_for_an_unmapped_entity_is_dropped() {
+        // common-02: remote input must not panic. An unmapped remove
+        // carries nothing to process, so it raises no event.
+        let mut fixture = Fixture::new(HostType::Client);
+        let events = fixture.deliver_direct(vec![(
+            1,
+            EntityMessage::RemoveComponent(remote(9), ghost()),
+        )]);
+        assert!(
+            summarize(&events).is_empty(),
+            "a remove for an unmapped entity must raise no event",
+        );
+    }
+
+    // ---- [115662-8] RED: a rogue re-insert whose component payload never
+    // arrived. The payload and the message ride separate buffers a rogue
+    // peer can desync: the ghost is inserted with its payload at tick 0,
+    // removed at tick 1, then re-inserted at tick 2 with no payload. The
+    // component channel forwards the re-insert (no longer inserted) and
+    // pre-fix the missing entry panics. Honest paired inserts are
+    // untouched: the lookup succeeds and the flow is identical.
+    #[test]
+    fn insert_component_without_its_payload_is_dropped() {
+        // common-02: remote input must not panic. A payload-less insert
+        // carries nothing to apply, so it raises no event.
+        let mut fixture = Fixture::new(HostType::Client);
+        fixture.spawn_with_ghost(remote(1));
+        let removed = fixture.deliver(vec![(
+            1,
+            EntityMessage::RemoveComponent(remote(1), ghost()),
+        )]);
+        assert_eq!(
+            summarize(&removed).len(),
+            1,
+            "setup: the tick-1 remove must apply so the tick-2 insert forwards",
+        );
+        let events = fixture.deliver_with(
+            vec![(2, EntityMessage::InsertComponent(remote(1), ghost()))],
+            &mut Vec::new(),
+        );
+        assert!(
+            summarize(&events).is_empty(),
+            "a payload-less insert must raise no event",
+        );
+    }
+
+    // ---- [115662-5] RED: the same entity despawned twice in one drain.
+    // Direct arm delivery: the engine channel swallows same-lifetime
+    // duplicates, so the public path never shows the arm two despawns; the
+    // arm guard covers the second despawn after the first removed the
+    // mapping. Pre-fix the second unwraps and panics.
+    #[test]
+    fn repeated_despawn_of_the_same_entity_is_dropped() {
+        // common-02: remote input must not panic. A duplicate despawn is a
+        // no-op: exactly one spawn and one despawn event for the drain.
+        let mut fixture = Fixture::new(HostType::Client);
+        let events = fixture.deliver_direct(vec![
+            (1, EntityMessage::Spawn(remote(1))),
+            (2, EntityMessage::Despawn(remote(1))),
+            (2, EntityMessage::Despawn(remote(1))),
+        ]);
+        assert_eq!(
+            summarize(&events).len(),
+            2,
+            "a duplicate despawn must not raise a second despawn event",
         );
     }
 

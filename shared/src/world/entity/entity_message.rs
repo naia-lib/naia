@@ -1,7 +1,7 @@
 use log::error;
 
 use crate::{
-    messages::channels::receivers::reliable_receiver::UpgradableMessage,
+    malformed_drop_warn, messages::channels::receivers::reliable_receiver::UpgradableMessage,
     world::component::component_kinds::ComponentKind,
     world::host::host_world_manager::SubCommandId, EntityAuthStatus, EntityEvent,
     EntityMessageType, HostEntity, LocalEntityMap, RemoteEntity,
@@ -265,7 +265,13 @@ impl EntityMessage<RemoteEntity> {
             EntityMessage::Unpublish(_, _) => EntityEvent::Unpublish(global_entity),
             EntityMessage::EnableDelegation(_, _) => EntityEvent::EnableDelegation(global_entity),
             EntityMessage::EnableDelegationResponse(_, _) => {
-                panic!("EnableDelegationResponse should not be sent by remote")
+                // common-02 + [transport-04]: only the host sends this
+                // direction; a remote flavor is rogue. Drop (None) rather
+                // than panic; Debug warns, Prod is silent.
+                malformed_drop_warn(
+                    "dropping remote EnableDelegationResponse: forbidden direction".to_string(),
+                );
+                return None;
             }
             EntityMessage::DisableDelegation(_, _) => EntityEvent::DisableDelegation(global_entity),
             EntityMessage::RequestAuthority(_, _) => EntityEvent::RequestAuthority(global_entity),
@@ -274,9 +280,13 @@ impl EntityMessage<RemoteEntity> {
                 EntityEvent::SetAuthority(global_entity, status)
             }
             EntityMessage::MigrateResponse(_, _, _new_remote_entity) => {
-                // MigrateResponse should never be EntityMessage<RemoteEntity>!
-                // It should be EntityMessage<HostEntity> so the client can look it up
-                panic!("MigrateResponse should be EntityMessage<HostEntity>, not EntityMessage<RemoteEntity>!");
+                // common-02 + [transport-04]: migrations arrive as
+                // EntityMessage<HostEntity>; a RemoteEntity flavor is rogue.
+                // Drop (None) rather than panic; Debug warns, Prod is silent.
+                malformed_drop_warn(
+                    "dropping remote-flavored MigrateResponse: forbidden flavor".to_string(),
+                );
+                return None;
             }
             EntityMessage::Spawn(_)
             | EntityMessage::SpawnWithComponents(_, _)
@@ -358,5 +368,40 @@ mod to_event_tests {
         // message was queued. Must fail closed, never abort the worker.
         let map = LocalEntityMap::new(HostType::Server);
         assert!(publish(4).to_event(&map).is_none());
+    }
+
+    // ---- [115662-4] RED: a remote EnableDelegationResponse names a real
+    // mapped entity but the direction is forbidden (only the host sends
+    // it). Pre-fix `to_event` panics; post-fix it returns None (skipped).
+    #[test]
+    fn remote_to_event_returns_none_for_forbidden_delegation_response() {
+        // common-02: remote input must not panic. The direction is rogue
+        // even though the entity resolves, so the message is dropped.
+        let mut map = LocalEntityMap::new(HostType::Server);
+        let global = GlobalEntity::from_u64(7);
+        map.insert_with_remote_entity(global, RemoteEntity::new(7));
+        let forbidden = EntityMessage::EnableDelegationResponse(0, RemoteEntity::new(7));
+        assert!(
+            forbidden.to_event(&map).is_none(),
+            "a remote EnableDelegationResponse must be dropped, never panic",
+        );
+    }
+
+    // ---- [115662-4] RED: a remote-flavored MigrateResponse is never
+    // legitimate (migrations arrive as HostEntity-flavored). Pre-fix
+    // `to_event` panics; post-fix it returns None (skipped).
+    #[test]
+    fn remote_to_event_returns_none_for_remote_flavored_migrate_response() {
+        // common-02: remote input must not panic. The flavor is rogue even
+        // though the entity resolves, so the message is dropped.
+        let mut map = LocalEntityMap::new(HostType::Server);
+        let global = GlobalEntity::from_u64(7);
+        map.insert_with_remote_entity(global, RemoteEntity::new(7));
+        let forbidden =
+            EntityMessage::MigrateResponse(0, RemoteEntity::new(7), RemoteEntity::new(9));
+        assert!(
+            forbidden.to_event(&map).is_none(),
+            "a remote-flavored MigrateResponse must be dropped, never panic",
+        );
     }
 }

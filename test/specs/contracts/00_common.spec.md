@@ -67,6 +67,12 @@ When an error is caused by **remote input** or **network behavior** (malformed p
 
 Examples:
 - Malformed or oversize inbound packet (including a Ping with an undecodable ping_index, which is dropped without a pong)
+- Ping with an undecodable ping_index on either endpoint (client and server drop it; no pong is owed for bytes unheard)
+- Corrupt compressed payload (undecodable zstd frame is dropped at the io layer)
+- Tick-buffer read naming a registered but non-tick-buffered channel (fails closed)
+- Entity lifecycle/authority event in a forbidden direction (server receiving client-only events and vice versa; entity_message `to_event` returns None)
+- Despawn / RemoveComponent / InsertComponent naming an entity with no local mapping (unknown or already removed, including same-batch duplicates)
+- InsertComponent whose component payload never arrived (message and payload ride separate buffers a rogue peer can desync)
 - Duplicate replication messages
 - Authority request for out-of-scope entity (server-side)
 - Late command for already-processed tick

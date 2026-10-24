@@ -195,12 +195,18 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                             // 4-F.naia.c.1: queue the pong response on
                             // `pending_outbound_packets`; the send thread
                             // flushes it at the top of `send_all_packets`.
-                            let response = self
-                                .shared
-                                .time_manager
-                                .read()
-                                .process_ping(&mut reader)
-                                .unwrap();
+                            let Ok(response) =
+                                self.shared.time_manager.read().process_ping(&mut reader)
+                            else {
+                                // common-02 + [transport-04]: undecodable ping
+                                // bytes are dropped, never fatal; Debug warns,
+                                // Prod is silent. No pong is owed for a
+                                // ping_index never decoded.
+                                malformed_drop_warn(
+                                    "Server Error: cannot read ping index".to_string(),
+                                );
+                                continue;
+                            };
                             self.shared
                                 .pending_outbound_packets
                                 .lock()
@@ -373,4 +379,79 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
 fn _assert_recv_state_send<E: Copy + Eq + std::hash::Hash + Send + Sync + 'static>() {
     fn require_send<T: Send>() {}
     require_send::<RecvState<E>>();
+}
+
+// ---- [115662-1] truncated server Ping: a Ping whose ping_index is cut
+// short must drop like any other malformed inbound, never panic the recv
+// loop. Mirrors the client-side `truncated_ping_index_is_dropped_without_panic`.
+#[cfg(test)]
+mod truncated_ping_tests {
+    use std::net::SocketAddr;
+
+    use naia_shared::{BitWriter, PacketType, Protocol, Serde, StandardHeader};
+
+    use crate::{
+        server::{InternalWorldServer, ServerConfig},
+        transport::{PacketReceiver, PacketSender, RecvError, SendError},
+    };
+
+    #[derive(Clone)]
+    struct OkPacketSender;
+
+    impl PacketSender for OkPacketSender {
+        fn send(&self, _address: &SocketAddr, _payload: &[u8]) -> Result<(), SendError> {
+            Ok(())
+        }
+    }
+
+    #[derive(Clone)]
+    struct ScriptedReceiver {
+        packets: Vec<(SocketAddr, Vec<u8>)>,
+        next: usize,
+    }
+
+    impl PacketReceiver for ScriptedReceiver {
+        fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
+            let out = self
+                .packets
+                .get(self.next)
+                .map(|(address, bytes)| (*address, bytes.as_slice()));
+            if out.is_some() {
+                self.next += 1;
+            }
+            Ok(out)
+        }
+    }
+
+    /// A Ping whose ping_index (`u16`) is truncated to one trailing byte:
+    /// undecodable at the packet boundary, the way a malformed client Ping
+    /// arrives.
+    fn truncated_ping_packet() -> Vec<u8> {
+        let mut writer = BitWriter::new();
+        StandardHeader::new(PacketType::Ping, 0, 0, 0).ser(&mut writer);
+        0xABu8.ser(&mut writer);
+        writer.to_packet().slice().to_vec()
+    }
+
+    #[test]
+    fn truncated_ping_index_is_dropped_without_panic() {
+        // common-02: remote input must not panic. A Ping with an undecodable
+        // ping_index is dropped like any other malformed inbound; no pong is
+        // owed for bytes unheard.
+        let mut server =
+            InternalWorldServer::<u64>::new(ServerConfig::default(), Protocol::builder().build());
+        let address: SocketAddr = "127.0.0.1:9999".parse().unwrap();
+        server.io_load(
+            Box::new(OkPacketSender),
+            Box::new(ScriptedReceiver {
+                packets: vec![(address, truncated_ping_packet())],
+                next: 0,
+            }),
+        );
+        server.receive_all_packets();
+        assert!(
+            server.shared.pending_outbound_packets.lock().is_empty(),
+            "no pong is owed for a ping_index never decoded",
+        );
+    }
 }

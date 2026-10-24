@@ -1,7 +1,8 @@
 use std::{net::SocketAddr, time::Duration};
 
 use naia_shared::{
-    BandwidthMonitor, BitReader, CompressionConfig, Decoder, Encoder, OutgoingPacket,
+    malformed_drop_warn, BandwidthMonitor, BitReader, CompressionConfig, Decoder, Encoder,
+    OutgoingPacket,
 };
 
 use crate::{
@@ -131,7 +132,7 @@ impl Io {
             .expect("Cannot call Client.receive_packet() until you call Client.connect()!")
             .receive();
 
-        if let Ok(Some(mut payload)) = receive_result {
+        if let Ok(Some(payload)) = receive_result {
             // Bandwidth monitoring
             if let Some(monitor) = &mut self.incoming_bandwidth_monitor {
                 monitor.record_packet(payload.len());
@@ -139,7 +140,15 @@ impl Io {
 
             // Decompression
             if let Some(decoder) = &mut self.incoming_decoder {
-                payload = decoder.decode(payload);
+                // [115662-2] common-02: undecodable bytes drop the
+                // packet instead of panicking inside the decoder.
+                let Some(plain) = decoder.decode(payload) else {
+                    malformed_drop_warn(
+                        "dropping packet with corrupt compressed payload".to_string(),
+                    );
+                    return Ok(None);
+                };
+                return Ok(Some(BitReader::new(plain)));
             }
 
             Ok(Some(BitReader::new(payload)))

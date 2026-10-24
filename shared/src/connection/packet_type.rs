@@ -33,6 +33,8 @@ impl Serde for PacketType {
         }
 
         let index = match self {
+            // Local-only: excluded by the `is_data` early return above;
+            // unreachable by either endpoint's input.
             PacketType::Data => panic!("shouldn't happen, caught above"),
             PacketType::Heartbeat => 0,
             PacketType::Handshake => 1,
@@ -54,6 +56,9 @@ impl Serde for PacketType {
             1 => Ok(PacketType::Handshake),
             2 => Ok(PacketType::Ping),
             3 => Ok(PacketType::Pong),
+            // Local-only: a 2-bit unsigned integer decodes only to 0..=3,
+            // so the wire width itself excludes this arm — no peer input
+            // can land here.
             _ => panic!("shouldn't happen, caught above"),
         }
     }

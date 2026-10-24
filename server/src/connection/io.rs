@@ -7,7 +7,9 @@
 
 use std::{net::SocketAddr, time::Duration};
 
-use naia_shared::{CompressionConfig, Decoder, Encoder, OutgoingPacket, OwnedBitReader};
+use naia_shared::{
+    malformed_drop_warn, CompressionConfig, Decoder, Encoder, OutgoingPacket, OwnedBitReader,
+};
 
 use super::bandwidth_monitor::BandwidthMonitor;
 use crate::{
@@ -98,12 +100,20 @@ impl RecvIo {
             .receive();
 
         match receive_result {
-            Ok(Some((address, mut payload))) => {
+            Ok(Some((address, payload))) => {
                 if let Some(monitor) = &mut self.incoming_bandwidth_monitor {
                     monitor.record_packet(&address, payload.len());
                 }
                 if let Some(decoder) = &mut self.incoming_decoder {
-                    payload = decoder.decode(payload);
+                    // [115662-2] common-02: undecodable bytes drop the
+                    // packet instead of panicking inside the decoder.
+                    let Some(plain) = decoder.decode(payload) else {
+                        malformed_drop_warn(
+                            "dropping packet with corrupt compressed payload".to_string(),
+                        );
+                        return Ok(None);
+                    };
+                    return Ok(Some((address, OwnedBitReader::new(plain))));
                 }
                 Ok(Some((address, OwnedBitReader::new(payload))))
             }

@@ -77,6 +77,9 @@ impl PingStore {
             }
 
             if found {
+                // Local-only: vec_index just returned Some from `.get`
+                // above with no mutation between; the remove cannot miss.
+                // Unknown peer ping_indexes return None via the paths above.
                 let (_, ping_instant) = self.buffer.remove(vec_index).unwrap();
                 return Some(ping_instant);
             }

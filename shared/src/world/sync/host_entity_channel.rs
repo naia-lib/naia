@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
+    malformed_drop_warn,
     world::sync::{auth_channel::AuthChannel, ordered_ids::OrderedIds},
     ComponentKind, EntityCommand, EntityMessage, EntityMessageType, HostEntity, HostType,
     MessageIndex, Tick,
@@ -58,6 +59,9 @@ impl HostEntityChannel {
             | EntityMessageType::SpawnWithComponents
             | EntityMessageType::Despawn
             | EntityMessageType::Noop => {
+                // Local-only: this is the outbound command path — commands
+                // are constructed by local code and routed by the engine
+                // before reaching here, never decoded from the wire.
                 panic!("These should be handled by the Engine, not the EntityChannelSender");
             }
             EntityMessageType::InsertComponent => {
@@ -145,7 +149,15 @@ impl HostEntityChannel {
                     // Drop it
                 }
                 msg => {
-                    panic!("EntityChannelSender::process_messages() received an unexpected message type: {msg:?}");
+                    // [115662-6] common-02: server-to-host directions the
+                    // server never legitimately sends (Publish/Unpublish,
+                    // delegation, authority) drop here instead of panicking.
+                    // The message is popped: leaving it would stall the
+                    // channel behind bytes no later tick replaces.
+                    malformed_drop_warn(format!(
+                        "dropping unexpected host-channel message type: {msg:?}"
+                    ));
+                    let _ = self.buffered_messages.pop_front();
                 }
             }
         }
@@ -239,6 +251,8 @@ impl HostEntityChannel {
             | EntityMessageType::EnableDelegationResponse
             | EntityMessageType::MigrateResponse => {}
             other => {
+                // Local-only: reservations are made by local delegation
+                // code with locally constructed commands, never from wire bytes.
                 panic!(
                     "HostEntityChannel::reserve_first_command only accepts auth-channel command \
                      types; got {other:?}"

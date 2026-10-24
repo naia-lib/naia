@@ -9,28 +9,41 @@ cfg_if! {
 
         use super::compression_config::CompressionMode;
 
-        #[derive(Clone)]
         pub struct Encoder {
+            mode: CompressionMode,
             result: Vec<u8>,
             encoder: EncoderType,
         }
 
+        // Manual `Clone`: zstd's `Compressor` handle is not `Clone`, so a
+        // clone rebuilds an identical encoder from the stored mode. The
+        // training sample buffer is intentionally NOT carried over: a clone
+        // starts a fresh training run, matching `new`.
+        impl Clone for Encoder {
+            fn clone(&self) -> Self {
+                let mut out = Self::new(self.mode.clone());
+                out.result = self.result.clone();
+                out
+            }
+        }
+
         impl Encoder {
             pub fn new(compression_mode: CompressionMode) -> Self {
-                let encoder = match compression_mode {
+                let encoder = match &compression_mode {
                     CompressionMode::Training(sample_size) => {
-                        EncoderType::DictionaryTrainer(DictionaryTrainer::new(sample_size))
+                        EncoderType::DictionaryTrainer(DictionaryTrainer::new(*sample_size))
                     }
                     CompressionMode::Default(compression_level) => EncoderType::Compressor(
-                        Compressor::new(compression_level).expect("error creating Compressor"),
+                        Compressor::new(*compression_level).expect("error creating Compressor"),
                     ),
                     CompressionMode::Dictionary(compression_level, dictionary) => EncoderType::Compressor(
-                        Compressor::with_dictionary(compression_level, &dictionary)
+                        Compressor::with_dictionary(*compression_level, dictionary)
                             .expect("error creating Compressor with dictionary"),
                     ),
                 };
 
                 Self {
+                    mode: compression_mode,
                     result: Vec::new(),
                     encoder,
                 }
@@ -65,7 +78,6 @@ cfg_if! {
             }
         }
 
-        #[derive(Clone)]
         pub enum EncoderType {
             Compressor(Compressor<'static>),
             DictionaryTrainer(DictionaryTrainer),

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use log::warn;
 
 use crate::{
+    malformed_drop_warn,
     world::sync::{config::EngineConfig, HostEntityChannel},
     EntityCommand, EntityMessage, EntityMessageType, HostEntity, HostType,
     LocalEntityAndGlobalEntityConverter, MessageIndex, Tick,
@@ -52,10 +53,14 @@ impl HostEngine {
             | EntityMessageType::SpawnWithComponents
             | EntityMessageType::InsertComponent
             | EntityMessageType::RemoveComponent => {
-                panic!(
-                    "Host should not receive messages of this type: {:?}",
+                // [115662-6] common-02: a rogue server sending
+                // server-owned lifecycle messages about host entities drops
+                // instead of panicking.
+                malformed_drop_warn(format!(
+                    "Host received message of unexpected type: {:?}, discarding",
                     msg.get_type()
-                );
+                ));
+                return;
             }
             EntityMessageType::Despawn => {
                 // A client with Granted authority may send a Despawn for a server-created entity.

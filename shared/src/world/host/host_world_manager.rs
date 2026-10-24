@@ -608,7 +608,7 @@ mod tests {
     use crate::{
         bigmap::BigMapKey,
         world::{component::property::Property, test_support::TestGwm},
-        ComponentFieldUpdate, EntityAndGlobalEntityConverter, GlobalEntityMap,
+        ComponentFieldUpdate, EntityAndGlobalEntityConverter, EntityAuthStatus, GlobalEntityMap,
         PendingComponentUpdate, RemoteEntity, ReplicaDynMutWrapper, ReplicaDynRefWrapper,
         ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicatedComponent, SerdeErr,
         WorldRefType,
@@ -1425,6 +1425,52 @@ mod tests {
         assert!(
             matches!(&events[0], EntityEvent::Despawn(_, e) if *e == global_entity),
             "the despawn did not name the global entity",
+        );
+    }
+
+    // ---- [115662-6] RED: every server-to-host direction the server never
+    // sends about the client's own entities. Each arm below is
+    // `unreachable!` pre-fix; a rogue server emitting any of them panics
+    // the client. Post-fix each is skipped with a warn and raises nothing.
+    #[test]
+    fn rogue_server_messages_about_host_entities_are_dropped() {
+        // common-02: remote input must not panic. None of these directions
+        // is ever legitimate server-to-host, so all eight are dropped and
+        // no event is raised for any of them.
+        let fx = Fixture::new();
+        let mut map = LocalEntityMap::new(HostType::Client);
+        let (global_entity, host_entity) = mapped(&mut map, 1);
+        let mut manager = HostWorldManager::new(HostType::Client, 0);
+        manager.send_command(map.entity_converter(), EntityCommand::Spawn(global_entity));
+        let _ = manager.take_outgoing_commands();
+
+        let mut spawner = GlobalEntityMap::<u64>::new();
+        let mut world = InertWorld;
+        let events = manager.take_incoming_events(
+            &mut spawner,
+            &fx.gwm,
+            &map,
+            &mut world,
+            vec![
+                (1, 1, EntityMessage::Spawn(host_entity)),
+                (2, 2, EntityMessage::InsertComponent(host_entity, ghost())),
+                (3, 3, EntityMessage::RemoveComponent(host_entity, ghost())),
+                (4, 4, EntityMessage::Publish(0, host_entity)),
+                (5, 5, EntityMessage::Unpublish(0, host_entity)),
+                (6, 6, EntityMessage::EnableDelegation(0, host_entity)),
+                (7, 7, EntityMessage::DisableDelegation(0, host_entity)),
+                (
+                    8,
+                    8,
+                    EntityMessage::SetAuthority(0, host_entity, EntityAuthStatus::Granted),
+                ),
+            ],
+        );
+
+        assert!(
+            events.is_empty(),
+            "rogue server-to-host messages must raise no event ({} raised)",
+            events.len(),
         );
     }
 

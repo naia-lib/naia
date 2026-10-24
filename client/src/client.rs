@@ -2112,7 +2112,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .entity_replication_config(global_entity)
             != Some(Publicity::Private)
         {
-            panic!("Server can only publish Private entities");
+            // [115662-7] common-02: a rogue server publishing a
+            // non-Private entity drops instead of panicking; the
+            // replication config is left untouched.
+            malformed_drop_warn(
+                "dropping server-sent Publish for a non-Private entity".to_string(),
+            );
+            return;
         }
         self.global_world_manager.entity_publish(global_entity);
         // don't need to publish the Entity/Component via the World here, because Remote entities work the same whether they are published or not
@@ -2138,7 +2144,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .entity_replication_config(global_entity)
             != Some(Publicity::Public)
         {
-            panic!("Server can only unpublish Public entities");
+            // [115662-7] common-02: a rogue server unpublishing a
+            // non-Public entity drops instead of panicking; the
+            // replication config is left untouched.
+            malformed_drop_warn(
+                "dropping server-sent Unpublish for a non-Public entity".to_string(),
+            );
+            return;
         }
         self.global_world_manager.entity_unpublish(global_entity);
         // don't need to publish the Entity/Component via the World here, because Remote entities work the same whether they are published or not
@@ -3264,6 +3276,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .global_entity_map
                         .global_entity_to_entity(global_entity)
                         .unwrap();
+                    // [115662-7] gate: a dropped publish emits no world
+                    // event either (publish_entity guards direct callers).
+                    if self
+                        .global_world_manager
+                        .entity_replication_config(&global_entity)
+                        != Some(Publicity::Private)
+                    {
+                        malformed_drop_warn(
+                            "dropping server-sent Publish for a non-Private entity".to_string(),
+                        );
+                        continue;
+                    }
                     self.publish_entity(&global_entity, false);
                     self.incoming_world_events.push_publish(world_entity);
                 }
@@ -3272,6 +3296,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .global_entity_map
                         .global_entity_to_entity(global_entity)
                         .unwrap();
+                    // [115662-7] gate: a dropped unpublish emits no world
+                    // event either (unpublish_entity guards direct callers).
+                    if self
+                        .global_world_manager
+                        .entity_replication_config(&global_entity)
+                        != Some(Publicity::Public)
+                    {
+                        malformed_drop_warn(
+                            "dropping server-sent Unpublish for a non-Public entity".to_string(),
+                        );
+                        continue;
+                    }
                     self.unpublish_entity(&global_entity, false);
                     self.incoming_world_events.push_unpublish(world_entity);
                 }
@@ -3301,7 +3337,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
                 #[cfg(feature = "entity_delegation")]
                 EntityEvent::EnableDelegationResponse(_global_entity) => {
-                    panic!("Client should never receive an EnableDelegationEntityResponse event");
+                    // [115662-7] common-02: only the client sends this; a
+                    // server echo is dropped before it can touch the world.
+                    malformed_drop_warn(
+                        "dropping server-sent EnableDelegationResponse event".to_string(),
+                    );
+                    continue;
                 }
                 #[cfg(feature = "entity_delegation")]
                 EntityEvent::DisableDelegation(global_entity) => {
@@ -3324,11 +3365,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
                 #[cfg(feature = "entity_delegation")]
                 EntityEvent::RequestAuthority(_global_entity) => {
-                    panic!("Client should never receive an EntityRequestAuthority event");
+                    // [115662-7] common-02: only the client sends this; a
+                    // server echo is dropped before it can touch the world.
+                    malformed_drop_warn("dropping server-sent RequestAuthority event".to_string());
+                    continue;
                 }
                 #[cfg(feature = "entity_delegation")]
                 EntityEvent::ReleaseAuthority(_global_entity) => {
-                    panic!("Client should never receive an EntityReleaseAuthority event");
+                    // [115662-7] common-02: only the client sends this; a
+                    // server echo is dropped before it can touch the world.
+                    malformed_drop_warn("dropping server-sent ReleaseAuthority event".to_string());
+                    continue;
                 }
                 #[cfg(feature = "entity_delegation")]
                 EntityEvent::SetAuthority(global_entity, new_auth_status) => {
@@ -5186,6 +5233,280 @@ mod diag_progress_tests {
             client.diag_progress().poll_calls,
             3,
             "counts must keep accumulating across calls",
+        );
+    }
+}
+
+// ---- [115662-7] client forbidden-direction events: a rogue server sends
+// an event only the client ever emits (or a publish/unpublish whose
+// replication config contradicts the direction). Pre-fix each arm panics;
+// post-fix each is dropped via `malformed_drop_warn` and the connection is
+// untouched.
+#[cfg(test)]
+mod forbidden_entity_event_tests {
+    use naia_shared::{
+        BigMapKey, ComponentFieldUpdate, ComponentKinds, PendingComponentUpdate,
+        ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, SerdeErr,
+    };
+
+    use super::*;
+
+    /// Minimal world: dropped events return before touching the world, so
+    /// every `WorldMutType` method is `unimplemented!()` — reaching one
+    /// would itself prove the event was not dropped.
+    struct StubWorld;
+
+    impl WorldRefType<u64> for StubWorld {
+        fn has_entity(&self, _world_entity: &u64) -> bool {
+            false
+        }
+        fn entities(&self) -> Vec<u64> {
+            Vec::new()
+        }
+        fn has_component<R: ReplicatedComponent>(&self, _world_entity: &u64) -> bool {
+            false
+        }
+        fn has_component_of_kind(
+            &self,
+            _world_entity: &u64,
+            _component_kind: ComponentKind,
+        ) -> bool {
+            false
+        }
+        fn component<'a, R: ReplicatedComponent>(
+            &'a self,
+            _entity: &u64,
+        ) -> Option<ReplicaRefWrapper<'a, R>> {
+            None
+        }
+        fn component_of_kind<'a>(
+            &'a self,
+            _entity: &u64,
+            _component_kind: ComponentKind,
+        ) -> Option<ReplicaDynRefWrapper<'a>> {
+            None
+        }
+    }
+
+    impl WorldMutType<u64> for StubWorld {
+        fn spawn_entity(&mut self) -> u64 {
+            unimplemented!()
+        }
+        fn local_duplicate_entity(&mut self, _world_entity: &u64) -> u64 {
+            unimplemented!()
+        }
+        fn local_duplicate_components(&mut self, _mutable_entity: &u64, _immutable_entity: &u64) {
+            unimplemented!()
+        }
+        fn despawn_entity(&mut self, _world_entity: &u64) {
+            unimplemented!()
+        }
+        fn component_kinds(&mut self, _world_entity: &u64) -> Vec<ComponentKind> {
+            unimplemented!()
+        }
+        fn component_mut<'a, R: ReplicatedComponent>(
+            &'a mut self,
+            _world_entity: &u64,
+        ) -> Option<ReplicaMutWrapper<'a, R>> {
+            unimplemented!()
+        }
+        fn component_mut_of_kind<'a>(
+            &'a mut self,
+            _world_entity: &u64,
+            _component_kind: ComponentKind,
+        ) -> Option<ReplicaDynMutWrapper<'a>> {
+            unimplemented!()
+        }
+        fn component_apply_update(
+            &mut self,
+            _converter: &dyn LocalEntityAndGlobalEntityConverter,
+            _world_entity: &u64,
+            _component_kind: ComponentKind,
+            _update: PendingComponentUpdate,
+        ) -> Result<(), SerdeErr> {
+            unimplemented!()
+        }
+        fn component_apply_field_update(
+            &mut self,
+            _converter: &dyn LocalEntityAndGlobalEntityConverter,
+            _world_entity: &u64,
+            _component_kind: ComponentKind,
+            _update: ComponentFieldUpdate,
+        ) -> Result<(), SerdeErr> {
+            unimplemented!()
+        }
+        fn mirror_entities(&mut self, _mutable_entity: &u64, _immutable_entity: &u64) {
+            unimplemented!()
+        }
+        fn mirror_components(
+            &mut self,
+            _mutable_entity: &u64,
+            _immutable_entity: &u64,
+            _component_kind: ComponentKind,
+        ) {
+            unimplemented!()
+        }
+        fn insert_component<R: ReplicatedComponent>(
+            &mut self,
+            _world_entity: &u64,
+            _component_ref: R,
+        ) {
+            unimplemented!()
+        }
+        fn insert_boxed_component(
+            &mut self,
+            _world_entity: &u64,
+            _boxed_component: Box<dyn Replicate>,
+        ) {
+            unimplemented!()
+        }
+        fn remove_component<R: ReplicatedComponent>(&mut self, _world_entity: &u64) -> Option<R> {
+            unimplemented!()
+        }
+        fn remove_component_of_kind(
+            &mut self,
+            _world_entity: &u64,
+            _component_kind: ComponentKind,
+        ) -> Option<Box<dyn Replicate>> {
+            unimplemented!()
+        }
+        fn entity_publish(
+            &mut self,
+            _component_kinds: &ComponentKinds,
+            _converter: &dyn EntityAndGlobalEntityConverter<u64>,
+            _global_world_manager: &dyn GlobalWorldManagerType,
+            _world_entity: &u64,
+        ) {
+            unimplemented!()
+        }
+        fn component_publish(
+            &mut self,
+            _component_kinds: &ComponentKinds,
+            _converter: &dyn EntityAndGlobalEntityConverter<u64>,
+            _global_world_manager: &dyn GlobalWorldManagerType,
+            _world_entity: &u64,
+            _component_kind: ComponentKind,
+        ) {
+            unimplemented!()
+        }
+        fn entity_unpublish(&mut self, _world_entity: &u64) {
+            unimplemented!()
+        }
+        fn component_unpublish(&mut self, _world_entity: &u64, _component_kind: ComponentKind) {
+            unimplemented!()
+        }
+        fn entity_enable_delegation(
+            &mut self,
+            _component_kinds: &ComponentKinds,
+            _converter: &dyn EntityAndGlobalEntityConverter<u64>,
+            _global_world_manager: &dyn GlobalWorldManagerType,
+            _world_entity: &u64,
+        ) {
+            unimplemented!()
+        }
+        fn component_enable_delegation(
+            &mut self,
+            _component_kinds: &ComponentKinds,
+            _converter: &dyn EntityAndGlobalEntityConverter<u64>,
+            _global_world_manager: &dyn GlobalWorldManagerType,
+            _world_entity: &u64,
+            _component_kind: ComponentKind,
+        ) {
+            unimplemented!()
+        }
+        fn entity_disable_delegation(&mut self, _world_entity: &u64) {
+            unimplemented!()
+        }
+        fn component_disable_delegation(
+            &mut self,
+            _world_entity: &u64,
+            _component_kind: ComponentKind,
+        ) {
+            unimplemented!()
+        }
+    }
+
+    fn fresh_client() -> Client<u64> {
+        Client::<u64>::new(ClientConfig::default(), Protocol::builder().build())
+    }
+
+    #[test]
+    fn rogue_publish_of_a_public_entity_is_dropped() {
+        // common-02: remote input must not panic. A server-originated
+        // Publish for an already-Public entity contradicts the direction,
+        // so it is dropped and the config is untouched.
+        let mut client = fresh_client();
+        let global_entity = GlobalEntity::from_u64(1);
+        client
+            .global_world_manager
+            .remote_spawn_entity(&global_entity);
+        client.publish_entity(&global_entity, false);
+        assert_eq!(
+            client
+                .global_world_manager
+                .entity_replication_config(&global_entity),
+            Some(Publicity::Public),
+            "a dropped publish must not alter the replication config",
+        );
+    }
+
+    #[test]
+    fn rogue_unpublish_of_a_private_entity_is_dropped() {
+        // common-02: remote input must not panic. A server-originated
+        // Unpublish for an already-Private entity contradicts the
+        // direction, so it is dropped and the config is untouched.
+        let mut client = fresh_client();
+        let global_entity = GlobalEntity::from_u64(1);
+        client
+            .global_world_manager
+            .remote_spawn_entity(&global_entity);
+        client.global_world_manager.entity_unpublish(&global_entity);
+        client.unpublish_entity(&global_entity, false);
+        assert_eq!(
+            client
+                .global_world_manager
+                .entity_replication_config(&global_entity),
+            Some(Publicity::Private),
+            "a dropped unpublish must not alter the replication config",
+        );
+    }
+
+    #[test]
+    fn rogue_delegation_response_is_dropped() {
+        // common-02: remote input must not panic. Only the client sends
+        // EnableDelegationResponse; a server echo of it is dropped before
+        // it can touch the world (every world method above would abort).
+        let mut client = fresh_client();
+        let global_entity = GlobalEntity::from_u64(1);
+        client.process_entity_events(
+            &mut StubWorld,
+            vec![EntityEvent::EnableDelegationResponse(global_entity)],
+        );
+    }
+
+    #[test]
+    fn rogue_request_authority_is_dropped() {
+        // common-02: remote input must not panic. Only the client sends
+        // RequestAuthority; a server echo of it is dropped before it can
+        // touch the world.
+        let mut client = fresh_client();
+        let global_entity = GlobalEntity::from_u64(1);
+        client.process_entity_events(
+            &mut StubWorld,
+            vec![EntityEvent::RequestAuthority(global_entity)],
+        );
+    }
+
+    #[test]
+    fn rogue_release_authority_is_dropped() {
+        // common-02: remote input must not panic. Only the client sends
+        // ReleaseAuthority; a server echo of it is dropped before it can
+        // touch the world.
+        let mut client = fresh_client();
+        let global_entity = GlobalEntity::from_u64(1);
+        client.process_entity_events(
+            &mut StubWorld,
+            vec![EntityEvent::ReleaseAuthority(global_entity)],
         );
     }
 }
