@@ -126,6 +126,13 @@ Within an active lifetime:
 
 The same rule applies symmetrically for any component action that requires the component to exist first (e.g. Remove received before Insert): Naia MUST ensure the action is not misapplied.
 
+Purge on despawn (Usher ruling 113376 item 3): **06b** — when the lifetime
+ends, Naia MUST drop every buffered entry owned by that id (parked inserts,
+field updates, self updates, waitlist entries), not just unapplied updates.
+**06c** — a same-id respawn starts clean: no entry from the ended lifetime may
+apply to the new one, and a packet arriving after the despawn reads as
+ended-lifetime (ignore per 05), never as pre-spawn bufferable.
+
 Early-drain APIs that expose buffered updates before the full apply (e.g. `take_received_updates_of_kind`) MUST NOT discard updates they cannot yet apply: an update whose target entity or component is not yet materialized stays buffered for the full apply path, which parks it per this rule. Only updates applied by the drain may leave the buffer; malformed updates on an already-present component are dropped, as in the full apply path.
 
 ---

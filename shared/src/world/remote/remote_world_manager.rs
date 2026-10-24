@@ -240,13 +240,17 @@ impl RemoteWorldManager {
         self.waitlist.spawn_entity(&self.remote_engine, entity);
     }
 
-    /// Removes `entity` from the waitlist tracking structures.
-    ///
-    /// This forwards to `RemoteWorldWaitlist::despawn_entity`, which forwards
-    /// to a stub with an empty body, so the whole call is observably a no-op
-    /// and no test can distinguish it from one. Triaged, not missing coverage.
+    /// Purges `entity`'s buffered waitlist entries and tombstones the id.
+    /// Spec entity-replication-06b (Usher 113376 item 3). Forwards to
+    /// `RemoteWorldWaitlist::despawn_entity`.
     pub fn despawn_entity(&mut self, _local_entity_map: &mut LocalEntityMap, entity: RemoteEntity) {
         self.waitlist.despawn_entity(entity);
+    }
+
+    /// Whether `entity`'s lifetime has ended. Park paths consult this to
+    /// drop late old-lifetime packets instead of buffering them.
+    pub(crate) fn is_tombstoned(&self, entity: RemoteEntity) -> bool {
+        self.waitlist.is_tombstoned(entity)
     }
 
     /// Processes all buffered incoming messages and updates, applying them to `world` and returning the resulting [`EntityEvent`]s.
@@ -387,6 +391,10 @@ impl RemoteWorldManager {
                     if is_client {
                         local_entity_map.remove_by_remote_entity(remote_entity);
                     }
+                    // Spec entity-replication-06b (Usher 113376 item 3): the
+                    // lifetime ends here -- purge buffered entries for this id
+                    // and tombstone it so late packets read as ended-lifetime.
+                    self.waitlist.despawn_entity(remote_entity);
                     world.despawn_entity(&world_entity);
 
                     self.incoming_events
@@ -1517,6 +1525,59 @@ mod remote_world_manager_tests {
             summarize(&events),
             vec![(None, global)],
             "the spawn must release the update that was waiting for it",
+        );
+    }
+
+    /// Despawn purges relation-parked entries: after a same-id respawn,
+    /// satisfying the old dependency must not release the stale insert.
+    /// Contract: [entity-replication-06] (Usher 113376 item 3: 06b purge)
+    #[test]
+    fn despawn_purges_relation_parked_inserts_before_a_same_id_respawn() {
+        let mut fixture = Fixture::new(HostType::Client);
+        fixture.kinds.add_component::<Haunt>();
+        fixture.spawn_with_ghost(remote(1));
+
+        // Park a Haunt insert for 1 behind unknown dep 2.
+        let waiting = a_haunt_component_pointing_at(
+            &fixture.kinds,
+            5,
+            remote(2),
+            fixture.map.entity_converter(),
+        );
+        let mut components: Vec<(Tick, OwnedLocalEntity, ComponentKind, Box<dyn Replicate>)> =
+            Vec::new();
+        components.push((
+            1,
+            remote(1).copy_to_owned(),
+            ComponentKind::of::<Haunt>(),
+            waiting,
+        ));
+        let events = fixture.deliver_with(
+            vec![(
+                1,
+                EntityMessage::InsertComponent(remote(1), ComponentKind::of::<Haunt>()),
+            )],
+            &mut components,
+        );
+        assert!(
+            summarize(&events).is_empty(),
+            "the insert must park behind the unknown dep",
+        );
+
+        // Lifetime ends: purge + tombstone.
+        fixture.deliver(vec![(2, EntityMessage::Despawn(remote(1)))]);
+
+        // Same id respawns; the old dep arrives and releases are polled.
+        // The purged insert must not come back.
+        fixture.spawn_with_ghost(remote(1));
+        fixture.deliver(vec![(3, EntityMessage::Spawn(remote(2)))]);
+        fixture.manager.spawn_entity(remote(2));
+        let events = fixture.deliver(Vec::new());
+        assert!(
+            summarize(&events)
+                .iter()
+                .all(|(kind, _)| *kind != Some(EntityMessageType::InsertComponent)),
+            "the respawn must not inherit the purged insert",
         );
     }
 

@@ -46,6 +46,17 @@ pub struct RemoteEntityWaitlist {
     removed_handles: HashSet<WaitlistHandle>,
     handle_ttls: VecDeque<(Instant, WaitlistHandle)>,
     handle_ttl: Duration,
+    /// Ids whose lifetime has ended. A parked entry is indistinguishable on
+    /// the wire whether it arrived before its entity's spawn (buffer per
+    /// spec 06) or after its despawn (ignore per spec 05); the tombstone is
+    /// the history that tells them apart. Bounded like the waitlist itself:
+    /// oldest-first eviction past the cap. A tombstone is never cleared by a
+    /// respawn reusing the id -- after respawn the id is mapped again so the
+    /// park paths below never consult it, and a late old-lifetime packet
+    /// arriving post-respawn must still read as ended-lifetime, not as
+    /// never-seen (Usher 113376 item 3).
+    tombstones: VecDeque<RemoteEntity>,
+    tombstone_set: HashSet<RemoteEntity>,
 }
 
 impl RemoteEntityWaitlist {
@@ -62,6 +73,8 @@ impl RemoteEntityWaitlist {
             removed_handles: HashSet::new(),
             handle_ttls: VecDeque::new(),
             handle_ttl: Duration::from_mins(1),
+            tombstones: VecDeque::new(),
+            tombstone_set: HashSet::new(),
         }
     }
 
@@ -198,8 +211,65 @@ impl RemoteEntityWaitlist {
         }
     }
 
-    pub fn despawn_entity(&mut self, _entity: RemoteEntity) {
-        // stub
+    /// Retires every handle whose dependency set names `entity` and records
+    /// the id as ended-lifetime. Spec entity-replication-06b (Usher 113376
+    /// item 3): a despawn purges that entity's waitlist entries; the
+    /// tombstone lets the park paths tell a late old-lifetime packet
+    /// (ignore per 05) from a pre-spawn one (buffer per 06).
+    pub fn despawn_entity(&mut self, entity: RemoteEntity) {
+        let doomed: Vec<WaitlistHandle> = self
+            .handle_to_required_entities
+            .iter()
+            .filter(|(_, deps)| deps.contains(&entity))
+            .map(|(handle, _)| *handle)
+            .collect();
+        for handle in doomed {
+            self.retire_handle(handle);
+        }
+        if self.tombstone_set.insert(entity) {
+            self.tombstones.push_back(entity);
+            while self.tombstones.len() > TOTAL_WAITLIST_CAP {
+                if let Some(oldest) = self.tombstones.pop_front() {
+                    self.tombstone_set.remove(&oldest);
+                }
+            }
+        }
+    }
+
+    /// Whether `entity`'s lifetime has ended. Park paths consult this to
+    /// drop late old-lifetime packets instead of buffering them.
+    pub fn is_tombstoned(&self, entity: RemoteEntity) -> bool {
+        self.tombstone_set.contains(&entity)
+    }
+
+    /// Fully retires one handle: out of the ready set, the TTL list and the
+    /// dependency indexes, with its owning store directed to relinquish the
+    /// item on next poll. Unlike `remove_waiting_handle`, safe for handles
+    /// that never entered the dependency indexes (queued while in scope).
+    pub fn retire_handle(&mut self, handle: WaitlistHandle) {
+        self.ready_handles.remove(&handle);
+        if let Some(ttl_index) = self
+            .handle_ttls
+            .iter()
+            .position(|(_, ttl_handle)| *ttl_handle == handle)
+        {
+            self.handle_ttls.remove(ttl_index);
+        }
+        if let Some(deps) = self.handle_to_required_entities.remove(&handle) {
+            for entity in deps {
+                let mut remove_key = false;
+                if let Some(queue) = self.waiting_entity_to_handles.get_mut(&entity) {
+                    queue.retain(|h| *h != handle);
+                    if queue.is_empty() {
+                        remove_key = true;
+                    }
+                }
+                if remove_key {
+                    self.waiting_entity_to_handles.remove(&entity);
+                }
+            }
+        }
+        self.removed_handles.insert(handle);
     }
 
     pub fn remove_waiting_handle(&mut self, handle: WaitlistHandle) {
@@ -322,6 +392,22 @@ impl<T> WaitlistStore<T> {
     pub fn remove(&mut self, handle: WaitlistHandle) -> Option<T> {
         self.item_handles.remove(&handle);
         self.items.remove(&handle)
+    }
+
+    /// Removes every item matching `pred`, returning the retired handles so
+    /// the caller can retire them from the entity waitlist. Used by the
+    /// despawn purge, which has no per-item handle map for this store.
+    pub fn remove_matching(&mut self, mut pred: impl FnMut(&T) -> bool) -> Vec<WaitlistHandle> {
+        let doomed: Vec<WaitlistHandle> = self
+            .items
+            .iter()
+            .filter(|(_, item)| pred(item))
+            .map(|(handle, _)| *handle)
+            .collect();
+        for handle in &doomed {
+            self.remove(*handle);
+        }
+        doomed
     }
 }
 

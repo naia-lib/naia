@@ -123,15 +123,53 @@ impl RemoteWorldWaitlist {
         self.entity_waitlist.spawn_entity(in_scope_entities, entity);
     }
 
-    /// Forwards a despawn to the entity waitlist.
-    ///
-    /// `RemoteEntityWaitlist::despawn_entity` is currently a stub, so this
-    /// whole call is observably a no-op and no test can distinguish it from
-    /// one. Triaged, not missing coverage. Readiness is decided by the
-    /// `InScopeEntities` set consulted at queue and release time, which a
-    /// despawn updates independently.
+    /// Purges every buffered item owned by `entity` -- parked inserts,
+    /// parked field updates, parked self updates -- and retires the entity
+    /// waitlist handles that name it. Spec entity-replication-06b (Usher
+    /// 113376 item 3): buffered updates, components and waitlist entries are
+    /// dropped when the lifetime ends, so a same-id respawn (06c) never
+    /// inherits stale entries. Readiness is still decided by the
+    /// `InScopeEntities` set consulted at queue and release time.
     pub fn despawn_entity(&mut self, entity: RemoteEntity) {
+        let kinds: Vec<ComponentKind> = self
+            .insert_waitlist_map
+            .keys()
+            .filter(|(id, _)| *id == entity)
+            .map(|(_, kind)| *kind)
+            .collect();
+        for kind in kinds {
+            if let Some(handle) = self.insert_waitlist_map.remove(&(entity, kind)) {
+                self.insert_waitlist_store.remove(handle);
+                self.entity_waitlist.retire_handle(handle);
+            }
+        }
+        let kinds: Vec<ComponentKind> = self
+            .update_waitlist_map
+            .keys()
+            .filter(|(id, _)| *id == entity)
+            .map(|(_, kind)| *kind)
+            .collect();
+        for kind in kinds {
+            if let Some(field_handles) = self.update_waitlist_map.remove(&(entity, kind)) {
+                for (_, handle) in field_handles {
+                    self.update_waitlist_store.remove(handle);
+                    self.entity_waitlist.retire_handle(handle);
+                }
+            }
+        }
+        for handle in self
+            .update_self_waitlist_store
+            .remove_matching(|(_, id, _, _)| *id == entity)
+        {
+            self.entity_waitlist.retire_handle(handle);
+        }
         self.entity_waitlist.despawn_entity(entity);
+    }
+
+    /// Whether `entity`'s lifetime has ended. Park paths consult this to
+    /// drop late old-lifetime packets instead of buffering them.
+    pub(crate) fn is_tombstoned(&self, entity: RemoteEntity) -> bool {
+        self.entity_waitlist.is_tombstoned(entity)
     }
 
     pub(crate) fn process_remove(
@@ -279,6 +317,13 @@ impl RemoteWorldWaitlist {
                         continue;
                     };
                     let remote_entity = local_entity.take_remote();
+                    // Spec 05 + 06b (Usher 113376 item 3): an unmapped id
+                    // that was despawned is an ended lifetime, not a
+                    // pre-spawn one -- ignore the late packet instead of
+                    // parking it. Never-seen ids still buffer below per 06.
+                    if self.entity_waitlist.is_tombstoned(remote_entity) {
+                        continue;
+                    }
                     let mut deps = HashSet::new();
                     deps.insert(remote_entity);
                     self.entity_waitlist.queue(
@@ -382,6 +427,17 @@ impl RemoteWorldWaitlist {
                 else {
                     continue;
                 };
+                // Same 05-ignore rule as the ready arm above: the map may
+                // legitimately outlive the world entity (despawn keeps the
+                // mapping), so a resolvable converter result is not proof
+                // the target is alive. Skip dead targets instead of
+                // applying into the void and emitting a phantom event.
+                if world
+                    .component_mut_of_kind(&world_entity, component_kind)
+                    .is_none()
+                {
+                    continue;
+                }
                 if world
                     .component_apply_update(
                         local_converter,
@@ -789,6 +845,173 @@ mod remote_world_waitlist_tests {
                 .is_empty(),
             "the flush must survive an entity that vanished under it",
         );
+    }
+
+    /// Spec entity-replication-06b (Usher 113376 item 3): despawn purges a
+    /// parked self update, so a same-id respawn starts clean.
+    #[test]
+    fn despawn_purges_a_parked_self_update_before_a_same_id_respawn() {
+        let mut waitlist = RemoteWorldWaitlist::new();
+        let mut scope = Scope::default();
+        let entity = remote(1);
+        let mut world = TestWorld::new();
+
+        // Parked while unmapped, per 06.
+        let applied = apply_ready(
+            &mut waitlist,
+            &scope,
+            &Map::default(),
+            &mut world,
+            vec![(0, entity.copy_to_owned(), an_update_setting(7))],
+        );
+        assert!(applied.is_empty(), "nothing can be applied yet");
+
+        // Lifetime ends: purge.
+        waitlist.despawn_entity(entity);
+
+        // Same id respawns; the release poll must not resurrect the stale update.
+        let map = Map::with(&[entity]);
+        let mut world = world_holding_ghost(1);
+        scope.0.insert(entity);
+        waitlist.spawn_entity(&scope, entity);
+        assert!(
+            waitlist
+                .process_self_waitlist_updates(
+                    &map,
+                    &IdentityConverter,
+                    &mut world,
+                    &Instant::now(),
+                )
+                .is_empty(),
+            "the purged update must not resurface on respawn",
+        );
+        assert_eq!(
+            value_in(&world, 1),
+            0,
+            "the fresh lifetime keeps its baseline"
+        );
+    }
+
+    /// Spec entity-replication-06b (Usher 113376 item 3): despawn purges a
+    /// parked insert, so a same-id respawn starts clean.
+    #[test]
+    fn despawn_purges_a_parked_insert_before_a_same_id_respawn() {
+        let mut waitlist = RemoteWorldWaitlist::new();
+        let mut scope = Scope::default();
+        let target = remote(1);
+        let dependency = remote(2);
+        let map = Map::with(&[target, dependency]);
+
+        waitlist.waitlist_queue_entity(
+            &scope,
+            target,
+            1,
+            crate::world::test_world::remote_component(&kinds(), &Ghost::new_complete(5)),
+            ghost(),
+            &HashSet::from([dependency]),
+        );
+
+        // Lifetime ends: purge.
+        waitlist.despawn_entity(target);
+
+        // The old dependency arrives and the respawned target spawns; the
+        // purged insert must not come back.
+        scope.0.insert(dependency);
+        scope.0.insert(target);
+        waitlist.spawn_entity(&scope, dependency);
+        waitlist.spawn_entity(&scope, target);
+        assert!(
+            waitlist
+                .entities_to_insert(&Instant::now(), &map)
+                .is_empty(),
+            "the purged insert must not resurface on respawn",
+        );
+    }
+
+    /// Spec entity-replication-05 + 06c (Usher 113376 item 3): a packet
+    /// arriving after its entity's despawn is an ended lifetime, not a
+    /// pre-spawn one -- it is dropped, never parked, so a same-id respawn
+    /// cannot inherit it.
+    #[test]
+    fn a_packet_arriving_after_despawn_is_dropped_never_parked() {
+        let mut waitlist = RemoteWorldWaitlist::new();
+        let mut scope = Scope::default();
+        let entity = remote(1);
+        let mut world = TestWorld::new();
+
+        // Lifetime ends with nothing parked.
+        waitlist.despawn_entity(entity);
+
+        // Late packet for the ended lifetime: dropped, not parked.
+        let applied = apply_ready(
+            &mut waitlist,
+            &scope,
+            &Map::default(),
+            &mut world,
+            vec![(0, entity.copy_to_owned(), an_update_setting(7))],
+        );
+        assert!(applied.is_empty(), "nothing can be applied yet");
+
+        // Same id respawns; nothing stale may surface.
+        let map = Map::with(&[entity]);
+        let mut world = world_holding_ghost(1);
+        scope.0.insert(entity);
+        waitlist.spawn_entity(&scope, entity);
+        assert!(
+            waitlist
+                .process_self_waitlist_updates(
+                    &map,
+                    &IdentityConverter,
+                    &mut world,
+                    &Instant::now(),
+                )
+                .is_empty(),
+            "the dropped packet must not resurface on respawn",
+        );
+        assert_eq!(
+            value_in(&world, 1),
+            0,
+            "the fresh lifetime keeps its baseline"
+        );
+    }
+
+    /// The tombstone only covers ended lifetimes: a never-seen id still
+    /// buffers per 06 and releases on spawn.
+    #[test]
+    fn a_tombstone_for_another_id_does_not_break_pre_spawn_buffering() {
+        let mut waitlist = RemoteWorldWaitlist::new();
+        let mut scope = Scope::default();
+        let entity = remote(1);
+        let mut world = TestWorld::new();
+
+        // Some other lifetime ends; entity 1 was never seen.
+        waitlist.despawn_entity(remote(9));
+
+        let applied = apply_ready(
+            &mut waitlist,
+            &scope,
+            &Map::default(),
+            &mut world,
+            vec![(0, entity.copy_to_owned(), an_update_setting(7))],
+        );
+        assert!(applied.is_empty(), "nothing can be applied yet");
+
+        let map = Map::with(&[entity]);
+        let mut world = world_holding_ghost(1);
+        scope.0.insert(entity);
+        waitlist.spawn_entity(&scope, entity);
+        let flushed = waitlist.process_self_waitlist_updates(
+            &map,
+            &IdentityConverter,
+            &mut world,
+            &Instant::now(),
+        );
+        assert_eq!(
+            flushed,
+            vec![(0, entity, ghost())],
+            "the held update must be flushed by the spawn",
+        );
+        assert_eq!(value_in(&world, 1), 7);
     }
 
     /// Only remote-addressed entities can be waited on -- a host entity is this

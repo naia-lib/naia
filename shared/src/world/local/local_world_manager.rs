@@ -982,7 +982,15 @@ impl LocalWorldManager {
             // TTL/cap-bounded entity waitlist. Only applied updates leave the
             // buffer, so the full apply never re-applies them.
             let Ok(global_entity) = entity_map.owned_entity_to_global_entity(local_entity) else {
-                // Target entity not yet materialized (spawn pending): keep.
+                // Target entity not yet materialized: keep for a never-seen
+                // id (buffer per 06), but drop for a despawned one (ignore
+                // per 05 -- the tombstone tells them apart). Spec 06b,
+                // Usher 113376 item 3.
+                if let OwnedLocalEntity::Remote { .. } = local_entity {
+                    if self.remote.is_tombstoned(local_entity.take_remote()) {
+                        continue;
+                    }
+                }
                 kept.push((tick, local_entity, update));
                 continue;
             };
