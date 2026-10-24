@@ -66,7 +66,7 @@ When an error is caused by **remote input** or **network behavior** (malformed p
 - Warning text is not part of the contract
 
 Examples:
-- Malformed or oversize inbound packet
+- Malformed or oversize inbound packet (including a Ping with an undecodable ping_index, which is dropped without a pong)
 - Duplicate replication messages
 - Authority request for out-of-scope entity (server-side)
 - Late command for already-processed tick

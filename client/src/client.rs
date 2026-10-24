@@ -2813,7 +2813,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         }
                         PacketType::Ping => {
                             let Ok(ping_index) = BaseTimeManager::read_ping(&mut reader) else {
-                                panic!("unable to read ping index");
+                                // common-02 + [transport-04]: undecodable ping
+                                // bytes are dropped, never fatal; Debug warns,
+                                // Prod is silent. No pong is owed for a
+                                // ping_index never decoded.
+                                malformed_drop_warn(
+                                    "Client Error: cannot read ping index".to_string(),
+                                );
+                                continue;
                             };
                             BaseTimeManager::send_pong(connection, &mut self.io, ping_index);
                         }
@@ -4368,6 +4375,48 @@ mod client_disconnect_tests {
             client.server_disconnect_details,
             Some((DisconnectReason::Kicked, Some(vec![1u8, 2, 3]))),
             "a repeated server disconnect must not clobber the first reason",
+        );
+    }
+
+    /// A Ping whose ping_index is truncated to one byte (`PingIndex` is a
+    /// `u16`): undecodable at the packet boundary, the way a malformed
+    /// server Ping arrives.
+    fn truncated_ping_packet() -> Vec<u8> {
+        let mut writer = BitWriter::new();
+        StandardHeader::new(PacketType::Ping, 0, 0, 0).ser(&mut writer);
+        0u16.ser(&mut writer);
+        GameInstant::new(&Instant::now()).ser(&mut writer);
+        0xABu8.ser(&mut writer);
+        writer.to_packet().slice().to_vec()
+    }
+
+    #[test]
+    fn truncated_ping_index_is_dropped_without_panic() {
+        // common-02: remote input must not panic. A Ping with an undecodable
+        // ping_index is dropped like any other malformed inbound; the live
+        // connection is untouched and no pong is owed for bytes unheard.
+        let sent = Arc::new(AtomicUsize::new(0));
+        let mut client = connected_client_with_receiver(
+            Box::new(CountingSender { sent: sent.clone() }),
+            Box::new(ScriptedReceiver {
+                packets: vec![truncated_ping_packet()],
+                next: 0,
+            }),
+        );
+        client.maintain_socket();
+        assert_eq!(
+            client.connection_status(),
+            ConnectionStatus::Connected,
+            "a malformed Ping must not disturb the live connection",
+        );
+        assert!(
+            !client.server_disconnect,
+            "a malformed Ping is not a server disconnect",
+        );
+        assert_eq!(
+            sent.load(Ordering::SeqCst),
+            0,
+            "no pong is owed for a ping_index never decoded",
         );
     }
 
