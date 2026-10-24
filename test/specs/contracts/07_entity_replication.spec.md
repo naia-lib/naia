@@ -112,6 +112,14 @@ Scope (Usher ruling 113376 item 2): "ignored" covers ENDED lifetimes and
 out-of-scope entities only. An update for a never-seen entity is NOT ignored:
 it buffers under [entity-replication-06] until its lifetime materializes.
 
+Out-of-scope means scope exit (Usher ruling 113376 item 4): under the
+default scope exit that is a despawn, so it is an ENDED lifetime already
+covered above. A Persist-style scope exit keeps the mapping; its late
+updates are still ignored, told apart by the paused set, and dropping is
+safe because re-entry re-sends the accumulated state. A malformed update
+is likewise dropped with no apply and no panic (silent in production,
+warning in debug).
+
 ---
 
 ### [entity-replication-06] — Update-before-Insert buffering (within lifetime)

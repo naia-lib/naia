@@ -291,6 +291,122 @@ fn a_late_update_for_a_despawned_entity_is_ignored() {
     );
 }
 
+/// A malformed update is dropped silently by both apply paths: no apply,
+/// no event, no panic. Contract: [entity-replication-05] (Usher 113376
+/// item 4: 05c silent-in-prod/warn-in-debug). This pins the behavior, not
+/// the log: the warn arms stay, but no test asserts on `warn!` output.
+#[test]
+fn a_malformed_update_is_dropped_by_both_apply_paths() {
+    use crate::world::update::component_update::PendingComponentUpdate;
+    use naia_serde::OwnedBitReader;
+
+    // A Ghost-kind tag over a truncated payload: the field read fails.
+    let malformed =
+        || PendingComponentUpdate::new(ComponentKind::of::<Ghost>(), OwnedBitReader::new(&[0xFF]));
+
+    // Early drain: dropped, never applied.
+    let mut fx = Fixture::client();
+    let mut world = TestWorld::new();
+    let owned = fx.adopt_remote(&mut world, 7);
+    fx.manager.insert_received_update(9, owned, malformed());
+    let taken = fx
+        .manager
+        .take_received_updates_of_kind::<u64, TestWorld, Ghost>(&IdentityConverter, &mut world);
+    assert!(
+        taken.is_empty(),
+        "a malformed update must not survive the early drain"
+    );
+    assert_eq!(
+        *world.value_of::<Ghost>(&7).expect("7 holds Ghost").value,
+        0,
+        "a malformed update must not touch the world"
+    );
+
+    // Full apply: dropped, no event, no panic.
+    let mut fx = Fixture::client();
+    let mut world = TestWorld::new();
+    let owned = fx.adopt_remote(&mut world, 7);
+    fx.manager.insert_received_update(9, owned, malformed());
+    let events = fx.take_events(&mut world);
+    assert!(
+        !events.iter().any(|event| matches!(
+            event,
+            crate::EntityEvent::UpdateComponent(_, entity, _) if *entity == global(7)
+        )),
+        "a malformed update must surface no event"
+    );
+    assert_eq!(
+        *world.value_of::<Ghost>(&7).expect("7 holds Ghost").value,
+        0,
+        "a malformed update must not touch the world"
+    );
+}
+
+/// A late update for a scope-exited-but-persisted entity is ignored, not
+/// applied. Contract: [entity-replication-05] (Usher 113376 item 4: 05b --
+/// the Persist-style scope exit keeps the mapping, so the tombstone rule
+/// cannot tell it apart from a live entity; the paused set can).
+///
+/// Dropping (rather than keeping) is safe: `resume_entity` re-sends the
+/// accumulated state on re-entry, so the next post-resume update heals.
+#[test]
+fn an_update_for_a_paused_entity_is_ignored() {
+    let mut fx = Fixture::client();
+    let mut world = TestWorld::new();
+    let owned = fx.adopt_remote(&mut world, 7);
+    fx.manager.pause_entity(global(7));
+
+    fx.manager
+        .insert_received_update(9, owned, full_update(&fx.kinds, &Ghost::new_complete(42)));
+
+    // Early drain must not apply to a paused entity.
+    let taken = fx
+        .manager
+        .take_received_updates_of_kind::<u64, TestWorld, Ghost>(&IdentityConverter, &mut world);
+    assert!(
+        taken.is_empty(),
+        "a paused entity's update must not apply through the drain"
+    );
+    assert_eq!(
+        *world.value_of::<Ghost>(&7).expect("7 holds Ghost").value,
+        0,
+        "a paused entity keeps its old value"
+    );
+
+    // Full apply: no event, no panic, nothing applied.
+    let events = fx.take_events(&mut world);
+    assert!(
+        !events.iter().any(|event| matches!(
+            event,
+            crate::EntityEvent::UpdateComponent(_, entity, _) if *entity == global(7)
+        )),
+        "a paused entity's update must surface no event"
+    );
+    assert_eq!(
+        *world.value_of::<Ghost>(&7).expect("7 holds Ghost").value,
+        0,
+        "a paused entity keeps its old value"
+    );
+
+    // Resume heals: the next post-resume update applies normally.
+    fx.manager.resume_entity(global(7));
+    fx.manager
+        .insert_received_update(10, owned, full_update(&fx.kinds, &Ghost::new_complete(42)));
+    let taken = fx
+        .manager
+        .take_received_updates_of_kind::<u64, TestWorld, Ghost>(&IdentityConverter, &mut world);
+    assert_eq!(
+        taken.len(),
+        1,
+        "after resume the entity accepts updates again"
+    );
+    assert_eq!(
+        *world.value_of::<Ghost>(&7).expect("7 holds Ghost").value,
+        42,
+        "the post-resume update applies"
+    );
+}
+
 #[test]
 fn updates_are_applied_in_buffer_order() {
     let mut fx = Fixture::client();

@@ -994,6 +994,14 @@ impl LocalWorldManager {
                 kept.push((tick, local_entity, update));
                 continue;
             };
+            // Spec entity-replication-05 (Usher 113376 item 4: 05b): a
+            // Persist-style scope-exited entity keeps its mapping, so the
+            // tombstone rule cannot tell it apart from a live entity; the
+            // paused set can. Its updates are ignored -- dropping is safe
+            // because `resume_entity` re-sends the accumulated state.
+            if self.paused_entities.contains(&global_entity) {
+                continue;
+            }
             let Ok(world_entity) = world_converter.global_entity_to_entity(global_entity) else {
                 // Mapped but not yet spawned into this world: keep.
                 kept.push((tick, local_entity, update));
@@ -1117,6 +1125,25 @@ impl LocalWorldManager {
             world,
             incoming_host_messages,
         );
+        // Spec entity-replication-05 (Usher 113376 item 4: 05b): drop updates
+        // for paused (Persist-style scope-exited) entities here too -- the
+        // early drain is user-driven and may never run before the tick's
+        // full apply. Unresolvable entities still flow through (buffer per
+        // 06); dropping is safe because `resume_entity` re-sends state.
+        let incoming_updates: Vec<_> = std::mem::take(&mut self.incoming_updates)
+            .into_iter()
+            .filter(|(_, local_entity, _)| {
+                match self
+                    .entity_map
+                    .read()
+                    .expect("LocalEntityMap lock poisoned")
+                    .owned_entity_to_global_entity(*local_entity)
+                {
+                    Ok(global_entity) => !self.paused_entities.contains(&global_entity),
+                    Err(_) => true,
+                }
+            })
+            .collect();
         let mut remote_events = self.remote.take_incoming_events(
             spawner,
             global_world_manager,
@@ -1128,7 +1155,7 @@ impl LocalWorldManager {
             world,
             now,
             &mut self.incoming_components,
-            std::mem::take(&mut self.incoming_updates),
+            incoming_updates,
             incoming_remote_messages,
         );
 

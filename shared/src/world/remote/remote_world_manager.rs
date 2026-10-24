@@ -1581,6 +1581,17 @@ mod remote_world_manager_tests {
         );
     }
 
+    // NOTE (Usher 113376 item 4: 06d Remove-before-Insert): the literal
+    // scenario -- a Remove for an unmapped entity that parks and applies
+    // after the later Insert -- is unstageable. The entity channel drops a
+    // pre-spawn Remove as stale epoch (`buffer_pop_front_until_and_excluding`
+    // at Spawn) and wedges a post-spawn pre-insert Remove at the component
+    // channel head, so the manager's RemoveComponent arm only ever sees
+    // mapped entities and its map lookup cannot fail. The reachable
+    // Remove-before-Insert cases already resolve sanely: pre-spawn Removes
+    // die with the epoch, and a Remove racing a relation-parked insert
+    // cancels the parked insert silently with the component absent.
+
     // -- the entity channels the connection reaches for ---------------------
 
     #[test]
