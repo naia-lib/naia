@@ -13,11 +13,12 @@ use naia_client::{ClientConfig, JitterBufferType, Publicity as ClientReplication
 use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
 use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response, Tick};
 
+use naia_test_harness::test_protocol::ImmutableSeed;
 use naia_test_harness::{
     protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
     ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent, ClientKey, ClientRejectEvent,
-    ClientSpawnEntityEvent, EntityKey, ExpectCtx, Position, Scenario, ServerAuthEvent,
-    ServerConnectEvent, ServerDisconnectEvent, ToTicks,
+    ClientSpawnEntityEvent, EntityKey, ExpectCtx, ImmutableLabel, Position, Scenario,
+    ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent, ToTicks, Velocity,
 };
 
 // Test protocol types (channels and messages)
@@ -1884,5 +1885,107 @@ fn resident_a_room_join_spawns_entities_in_the_same_order_on_every_fresh_server(
 fn pipelined_a_room_join_spawns_entities_in_the_same_order_on_every_fresh_server() {
     a_room_join_spawns_entities_in_the_same_order_on_every_fresh_server(
         naia_server::ServerMode::Pipelined,
+    );
+}
+
+/// Replication preserves component-set parity
+/// Contract: [entity-replication-08]
+///
+/// Given a server entity carrying exactly {Position, Velocity} in scope; when
+/// it replicates; then the client holds exactly that set: both members
+/// present (polled — presence is sound), and every other registered
+/// component (ImmutableLabel, ImmutableSeed) absent over a 20-tick window
+/// past first parity (catches late-appearing ghosts; a single-tick check
+/// would miss them, and poll-until-empty would consume the evidence).
+/// Exact-set over the closed test protocol: these four are all the
+/// components the protocol registers.
+#[test]
+fn replication_preserves_component_set_parity() {
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    let entity = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let e = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.insert_component(Velocity::new(3.0, 4.0));
+                    e.enter_room(&room_key);
+                })
+                .0;
+            server.user_scope_mut(&client_a_key).unwrap().include(&e);
+            e
+        })
+    });
+
+    // Both members present (poll until replicated — presence is sound).
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |c| {
+            let has_p = c
+                .entity(&entity)
+                .as_ref()
+                .map(|r| r.has_component::<Position>())
+                .unwrap_or(false);
+            let has_v = c
+                .entity(&entity)
+                .as_ref()
+                .map(|r| r.has_component::<Velocity>())
+                .unwrap_or(false);
+            (has_p && has_v).then_some(())
+        })
+    });
+
+    // Exact set over a 20-tick window: every tick drains single-shot into
+    // `violations` (always-Some, no retry-consumes-pass); the immediate
+    // assert after the window fails on any dropped member or late ghost.
+    let mut violations: Vec<String> = Vec::new();
+    for _ in 0..20 {
+        scenario.expect(|ctx| {
+            ctx.client(client_a_key, |c| {
+                let has_p = c
+                    .entity(&entity)
+                    .as_ref()
+                    .map(|r| r.has_component::<Position>())
+                    .unwrap_or(false);
+                let has_v = c
+                    .entity(&entity)
+                    .as_ref()
+                    .map(|r| r.has_component::<Velocity>())
+                    .unwrap_or(false);
+                let has_il = c
+                    .entity(&entity)
+                    .as_ref()
+                    .map(|r| r.has_component::<ImmutableLabel>())
+                    .unwrap_or(false);
+                let has_is = c
+                    .entity(&entity)
+                    .as_ref()
+                    .map(|r| r.has_component::<ImmutableSeed>())
+                    .unwrap_or(false);
+                if !(has_p && has_v && !has_il && !has_is) {
+                    violations.push(format!(
+                        "set drift: P={has_p} V={has_v} IL={has_il} IS={has_is}"
+                    ));
+                }
+            });
+            Some(())
+        });
+    }
+    assert!(
+        violations.is_empty(),
+        "component-set parity broke mid-window: {violations:?}",
     );
 }

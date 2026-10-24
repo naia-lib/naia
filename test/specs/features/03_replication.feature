@@ -194,8 +194,17 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
       Then the client world no longer has the component on the entity
 
     # [entity-replication-08] — Replication preserves component-set parity.
-    # Component enumeration API not exposed by the test harness; parity
-    # is implicitly verified by the spawn-with-components scenarios in Rule(02).
+    # R2-proven: `replication_preserves_component_set_parity`
+    # (06_entity_scopes.rs) spawns {Position, Velocity}, polls both present,
+    # then asserts the exact set over a 20-tick window via per-component
+    # has_component over the closed test protocol (the other registered
+    # components, ImmutableLabel/ImmutableSeed, must stay absent — no
+    # enumeration API needed). Negative control (server also inserts
+    # ImmutableLabel) reds all 20 ticks; honest code green. The old
+    # "implicitly verified by spawn-with-components" note was presence-only
+    # and could not see ghosts. History (NASH 2026-10-24): row was bare
+    # stepless @PolicyOnly since 2026-01-16. Row stays stepless @PolicyOnly
+    # (BDD bindings deferred).
     @PolicyOnly
     @Scenario(03)
     Scenario: [entity-replication-08] Replication preserves component-set parity
