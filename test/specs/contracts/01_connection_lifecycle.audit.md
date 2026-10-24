@@ -23,7 +23,7 @@ on both `dev` and `nash-dev`); this table file lands on top.
 | 11 | expired/used/invalid token → explicit reject | `malformed_identity_token_rejected`, `expired_or_reused_token_obeys_semantics` | HONEST for used/invalid. Expired-by-age shares the row-10 TTL gap |
 | 12 | tokens required for ALL transports when require_auth | whole file (harness transport only) | THIN: proven for one transport; "all transports" unproven |
 | 13 | first validation consumes; replays fail | `expired_or_reused_token_obeys_semantics` (consumed T_A replayed → explicit reject with address) | HONEST |
-| 14 | tick sync required; not Connected until sync | none isolated | UNCITED (implicit only via `is_connected` asserts). Oldest uncited row: next work |
+| 14 | tick sync required; not Connected until sync | `connected_only_after_tick_sync_completes` (client handshaker R1: identify + 3 forged pong rounds yield None throughout; connect response after finished sync yields Connected) | HONEST |
 | 14a | protocol_id checked first in handshake | `protocol_id_verified_before_connect_event` | THIN: matching passes; mismatch-rejected-pre-connect unproven (see hollow mismatch test) |
 | 15 | CLIENT ConnectEvent only at finalize | `connect_event_ordering_stable` | THIN: observes connect after accept; absence-before unasserted |
 | 16 | SERVER ConnectEvent only at finalize | `connect_event_ordering_stable` | THIN: same as 15, server side |

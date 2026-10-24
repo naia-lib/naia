@@ -499,8 +499,8 @@ mod tests {
 
     use naia_shared::{
         handshake::{HandshakeHeader, RejectReason},
-        BitReader, BitWriter, IdentityToken, PacketType, ProtocolId, Serde, StandardHeader,
-        TestClock,
+        BitReader, BitWriter, GameInstant, IdentityToken, PacketType, PingIndex, ProtocolId, Serde,
+        StandardHeader, TestClock, Tick, UnsignedVariableInteger,
     };
 
     use super::{HandshakeManager, HandshakeResult, HandshakeWatch, Handshaker};
@@ -678,6 +678,59 @@ mod tests {
             packet_type_of_first_send(&mut manager),
             Some(PacketType::Ping),
             "stray connect response must leave the timesync stage intact",
+        );
+    }
+
+    /// Row 14: tick sync gates Connected. The client reports no Connected
+    /// result through identify and time-sync -- not even when the sync
+    /// finishes -- and only the connect response after a finished sync
+    /// yields Connected.
+    #[test]
+    fn connected_only_after_tick_sync_completes() {
+        init_clock();
+        let mut manager = manager();
+        with_token(&mut manager);
+
+        // Identify moves to TimeSync, not Connected.
+        assert!(recv_handshake(&mut manager, HandshakeHeader::ServerIdentifyResponse).is_none());
+
+        // Three ping/pong rounds finish the sync. Each pong echoes the
+        // ping the manager just emitted, mirroring the server's pong
+        // writer field for field. Sync traffic never yields Connected by
+        // itself: finishing the sync is not enough, the connect exchange
+        // must follow.
+        for _ in 0..3 {
+            TestClock::advance(SEND_INTERVAL_MS + 1);
+            let packet = manager.send().expect("timesync must keep emitting pings");
+            let mut ping_reader = BitReader::new(packet.slice());
+            StandardHeader::de(&mut ping_reader).expect("ping carries a header");
+            let ping_index = PingIndex::de(&mut ping_reader).expect("ping carries its index");
+
+            let mut pong = BitWriter::new();
+            StandardHeader::new(PacketType::Pong, 0, 0, 0).ser(&mut pong);
+            let tick: Tick = 41;
+            tick.ser(&mut pong);
+            GameInstant::from_millis(1_000_000).ser(&mut pong);
+            ping_index.ser(&mut pong);
+            GameInstant::from_millis(1_000_100).ser(&mut pong);
+            UnsignedVariableInteger::<9>::new(16_000).ser(&mut pong);
+            UnsignedVariableInteger::<9>::new(0).ser(&mut pong);
+            GameInstant::from_millis(1_000_200).ser(&mut pong);
+
+            let bytes = pong.to_packet().slice().to_vec();
+            let mut pong_reader = BitReader::new(&bytes);
+            assert!(
+                manager.recv(&mut pong_reader).is_none(),
+                "sync traffic never yields Connected by itself",
+            );
+        }
+
+        // Sync finished: the connect response now yields Connected. (Had
+        // the sync not finished, this would be a wrong-stage None.)
+        let result = recv_handshake(&mut manager, HandshakeHeader::ServerConnectResponse);
+        assert!(
+            matches!(result, Some(HandshakeResult::Connected(_))),
+            "Connected only after tick sync completes and the connect responds",
         );
     }
 
