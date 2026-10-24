@@ -183,7 +183,7 @@ impl MainServer {
         // info!("adding authenticated user {}", &auth_addr);
         let identity_token = naia_shared::IdentityToken::generate();
         self.handshake_manager
-            .authenticate_user(&identity_token, *user_key);
+            .authenticate_user(&identity_token, *user_key, &auth_addr);
 
         let (auth_sender, _) = self
             .auth_io
@@ -458,8 +458,11 @@ impl MainServer {
                             let user = self.users.get_mut(&user_key).expect("user just inserted");
                             let _ = user.take_auth_address(); // consume the auth address
                             let identity_token = naia_shared::IdentityToken::generate();
-                            self.handshake_manager
-                                .authenticate_user(&identity_token, user_key);
+                            self.handshake_manager.authenticate_user(
+                                &identity_token,
+                                user_key,
+                                &auth_addr,
+                            );
                             if auth_sender.accept(&auth_addr, &identity_token).is_err() {
                                 warn!(
                                     "Server Error: Cannot send auto-accept packet to {:?}",
@@ -536,6 +539,18 @@ impl MainServer {
                                     // Verified disconnect request - queue disconnect in world server
                                     // The Server struct will handle queuing it properly
                                     self.incoming_events.push_queued_disconnect(user_key);
+                                }
+                                Ok(HandshakeAction::RejectUser(user_key, packet)) => {
+                                    // Failed identify ([connection-24]): the
+                                    // handshake never finalized, so delete
+                                    // the never-connected user directly,
+                                    // then send the Auth reject.
+                                    self.handshake_manager.delete_user(user_key, None);
+                                    self.users.remove(&user_key);
+                                    self.pending_auth_users.remove(&user_key);
+                                    if self.send_io.send_packet(&address, &packet).is_err() {
+                                        warn!("Server Error: Cannot send packet to {}", address);
+                                    }
                                 }
                                 Ok(HandshakeAction::SendPacket(packet)) => {
                                     if self.send_io.send_packet(&address, &packet).is_err() {

@@ -47,6 +47,18 @@ impl<'a> ServerExpectCtx<'a> {
         self.events.read::<V>().next()
     }
 
+    /// Read all events of one type queued this tick. Prefer this over
+    /// repeated `read_event` calls: each `read_event` constructs a fresh
+    /// iterator that takes ownership of the tick's remaining queue, so a
+    /// second call can never observe a second same-tick event.
+    /// ([connection-10]: overlapping handshakes land on the same tick.)
+    pub fn read_events<V: ServerEvent>(&mut self) -> Vec<V::Item>
+    where
+        V::Iter: Iterator<Item = V::Item>,
+    {
+        self.events.read::<V>().collect()
+    }
+
     /// Expect that the server has replicated/created a concrete entity
     pub fn has_entity(&self, entity: &EntityKey) -> bool {
         let Some(server_entity) = self.scenario.entity_registry().server_entity(entity) else {

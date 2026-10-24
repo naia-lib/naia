@@ -24,9 +24,9 @@ use naia_test_harness::{
 
 // Test protocol types (channels and messages)
 use naia_test_harness::test_protocol::{
-    OrderedChannel, ReliableChannel, RequestResponseChannel, SequencedChannel, TestMessage,
-    TestRequest, TestResponse, TickBufferedChannel, UnorderedChannel, UnreliableChannel,
-    protocol_with_sequenced_unreliable,
+    protocol_with_sequenced_unreliable, OrderedChannel, ReliableChannel, RequestResponseChannel,
+    SequencedChannel, TestMessage, TestRequest, TestResponse, TickBufferedChannel,
+    UnorderedChannel, UnreliableChannel,
 };
 
 mod _helpers;
@@ -252,8 +252,11 @@ fn invalid_credentials_rejected() {
 /// Given `require_auth = true`; when A starts connecting and aborts the
 /// handshake mid-auth via `cancel_connect()`, and the server then issues a
 /// late `accept_connection()` for the aborted attempt; then A stays
-/// Disconnected, the server never creates a user for A, no ConnectEvent
-/// fires, and the server still accepts a later client (no handshake residue).
+/// Disconnected, no ConnectEvent fires, and the server still accepts a
+/// later client (no handshake residue). The pending user record created
+/// at auth-drain legitimately still exists — it is swept only by the
+/// pending-auth timeout — so the leg asserts on connection state, not
+/// on user absence.
 #[test]
 fn disconnect_during_auth_handled_cleanly() {
     let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
@@ -276,16 +279,21 @@ fn disconnect_during_auth_handled_cleanly() {
         test_protocol.clone(),
     );
 
-    // Prove mid-auth state: the server saw A's auth, but A is not connected
-    // and has no user yet.
+    // Prove mid-auth state: the server saw A's auth, but A is not
+    // connected. The user record already exists: it is created at
+    // auth-drain, before accept, and stays pending (no address bound)
+    // until the handshake finalizes — so "no user yet" is not an
+    // honest mid-auth assertion.
+    let auth_a = Auth::new("client_a", "password");
+    let mut auth_seen = false;
     scenario.expect(|ctx| {
-        let auth_received = ctx.server(|server| {
-            server.read_event::<ServerAuthEvent<Auth>>().is_some()
-        });
-        let not_connected =
-            !ctx.client(client_a_key, |c| c.connection_status().is_connected());
-        let no_user_yet = !ctx.server(|s| s.user_exists(&client_a_key));
-        (auth_received && not_connected && no_user_yet).then_some(())
+        let not_connected = !ctx.client(client_a_key, |c| c.connection_status().is_connected());
+        let user_pending = ctx.server(|s| s.user_exists(&client_a_key));
+        if !auth_seen {
+            let auths = ctx.server(|server| server.read_events::<ServerAuthEvent<Auth>>());
+            auth_seen = auths.len() == 1 && auths[0].0 == client_a_key && auths[0].1 == auth_a;
+        }
+        (auth_seen && not_connected && user_pending).then_some(())
     });
 
     // A aborts mid-handshake.
@@ -307,16 +315,16 @@ fn disconnect_during_auth_handled_cleanly() {
         });
     });
 
-    // Pump ticks: nothing for A may materialize server-side.
-    let mut stray_state = false;
+    // Pump ticks: no ConnectEvent for A may materialize server-side. The
+    // pending user record legitimately still exists (it is swept only by
+    // the pending-auth timeout), so only a connect event counts as stray.
+    let mut stray_connect = false;
     for _ in 0..20 {
         scenario.expect(|ctx| {
-            let connect_fired = ctx.server(|server| {
-                server.read_event::<ServerConnectEvent>().is_some()
-            });
-            let user_appeared = ctx.server(|s| s.user_exists(&client_a_key));
-            if connect_fired || user_appeared {
-                stray_state = true;
+            let connect_fired =
+                ctx.server(|server| server.read_event::<ServerConnectEvent>().is_some());
+            if connect_fired {
+                stray_connect = true;
             }
             Some(())
         });
@@ -324,17 +332,15 @@ fn disconnect_during_auth_handled_cleanly() {
     }
 
     scenario.spec_expect(
-        "connection-09.t1: mid-handshake abort leaves no user, no connect event",
+        "connection-09.t1: mid-handshake abort leaves no connect event",
         |ctx| {
-            let client_down =
-                !ctx.client(client_a_key, |c| c.connection_status().is_connected());
-            let no_user = !ctx.server(|s| s.user_exists(&client_a_key));
-            (client_down && no_user && !stray_state).then_some(())
+            let client_down = !ctx.client(client_a_key, |c| c.connection_status().is_connected());
+            (client_down && !stray_connect).then_some(())
         },
     );
     assert!(
-        !stray_state,
-        "no ConnectEvent or user may appear for an aborted handshake, even after a late accept"
+        !stray_connect,
+        "no ConnectEvent may appear for an aborted handshake, even after a late accept"
     );
 
     // Server is healthy: B connects cleanly afterwards on the same server.
@@ -555,13 +561,16 @@ fn concurrent_auth_requests_serialize() {
 
     // Accumulate auth events until both clients' payloads are seen, each on
     // its own key. A wrong key<->payload mapping means session confusion:
-    // fail shut.
+    // fail shut. Both handshakes land on the same tick, so a single
+    // `read_events` call must observe both: repeated `read_event` calls
+    // each take ownership of the tick's remaining queue and the second
+    // same-tick event is unobservable.
     let mut count_a = 0u32;
     let mut count_b = 0u32;
     let mut mismatched = false;
     scenario.expect(|ctx| {
         ctx.server(|server| {
-            while let Some((key, auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
+            for (key, auth) in server.read_events::<ServerAuthEvent<Auth>>() {
                 if key == client_a_key && auth == auth_a {
                     count_a += 1;
                 } else if key == client_b_key && auth == auth_b {
@@ -930,17 +939,64 @@ fn no_mid_session_reauth() {
     };
     scenario.server_start(server_config, test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    let _room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_auth = Auth::new("user_a", "password_a");
-    let client_a_key = client_connect(
-        &mut scenario,
-        &room_key,
+    // Manual handshake: the `client_connect` helper consumes the handshake
+    // auth event itself, leaving this leg nothing honest to count. Drive
+    // the handshake here so the single auth event is observed directly.
+    let client_a_key = scenario.client_start(
         "Client A",
         client_auth.clone(),
-        ClientConfig::default(),
+        test_client_config(),
         test_protocol.clone(),
     );
+
+    // The handshake emits exactly one auth event, for A, with A's payload.
+    let mut handshake_auths = 0u32;
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            for (key, auth) in server.read_events::<ServerAuthEvent<Auth>>() {
+                assert_eq!(key, client_a_key, "handshake auth must belong to A");
+                assert!(
+                    auth.username == client_auth.username && auth.password == client_auth.password,
+                    "handshake auth payload must match"
+                );
+                handshake_auths += 1;
+            }
+            (handshake_auths == 1).then_some(())
+        })
+    });
+    assert_eq!(
+        handshake_auths, 1,
+        "exactly one auth event from the handshake"
+    );
+
+    // Server: accept connection.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_a_key);
+        });
+    });
+
+    // Server: read connect event.
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some(incoming_client_key) = server.read_event::<ServerConnectEvent>() {
+                if incoming_client_key == client_a_key {
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+
+    // Client has fully established the connection.
+    scenario.expect(|ctx| {
+        let client_connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
+        let user_exists = ctx.server(|s| s.user_exists(&client_a_key));
+        (client_connected && user_exists).then_some(())
+    });
 
     // Get initial client key - use a mutable variable to capture it
     let mut initial_client_key: Option<ClientKey> = None;
@@ -960,20 +1016,6 @@ fn no_mid_session_reauth() {
         })
     });
 
-    // Drain the handshake's auth event: exactly one may exist for A.
-    // (Read inside `expect` — the mutate ctx has no event reader.)
-    let mut handshake_auths = 0u32;
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            while let Some((key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
-                assert_eq!(key, client_a_key, "handshake auth must belong to A");
-                handshake_auths += 1;
-            }
-            (handshake_auths == 1).then_some(())
-        })
-    });
-    assert_eq!(handshake_auths, 1, "exactly one auth event from the handshake");
-
     // A attempts mid-session re-auth: store a hostile payload. This sends
     // nothing — the payload goes out solely via `connect()`, which panics
     // unless the client is disconnected — so the server must never see a
@@ -988,9 +1030,7 @@ fn no_mid_session_reauth() {
     let mut second_auth = false;
     for _ in 0..20 {
         scenario.expect(|ctx| {
-            let fired = ctx.server(|server| {
-                server.read_event::<ServerAuthEvent<Auth>>().is_some()
-            });
+            let fired = ctx.server(|server| server.read_event::<ServerAuthEvent<Auth>>().is_some());
             if fired {
                 second_auth = true;
             }
@@ -998,10 +1038,7 @@ fn no_mid_session_reauth() {
         });
         scenario.mutate(|_| {});
     }
-    assert!(
-        !second_auth,
-        "no second auth event may fire mid-session"
-    );
+    assert!(!second_auth, "no second auth event may fire mid-session");
 
     // The client must also report itself as not-disconnected throughout:
     // `connect()` (the only path that emits the stored payload) panics
@@ -1011,8 +1048,11 @@ fn no_mid_session_reauth() {
             .then_some(())
     });
 
-    // Verify client key hasn't changed
-    if let Some(initial_key) = initial_client_key {
+    // Verify client key hasn't changed. Fail shut: if the initial key was
+    // never captured, neither row below may silently pass.
+    let initial_key = initial_client_key
+        .expect("must capture the initial client key before asserting rows 15/16");
+    {
         scenario.spec_expect(
             "connection-15.t1: identity does not change mid-session",
             |ctx| {
@@ -1042,9 +1082,8 @@ fn no_mid_session_reauth() {
         scenario.spec_expect(
             "connection-16.t1: no silent identity swap during session",
             |ctx| {
-                let still_connected = ctx.client(client_a_key, |c| {
-                    c.connection_status().is_connected()
-                });
+                let still_connected =
+                    ctx.client(client_a_key, |c| c.connection_status().is_connected());
                 ctx.server(|server| {
                     if let Some(user) = server.user(&client_a_key) {
                         let current_key_opt: Option<ClientKey> = user.key();
@@ -1706,11 +1745,9 @@ fn malformed_identity_token_rejected() {
     for _ in 0..20 {
         scenario.expect(|ctx| {
             let user = ctx.server(|s| s.user_exists(&client_b_key));
-            let connected =
-                ctx.client(client_b_key, |c| c.connection_status().is_connected());
-            let connect_fired = ctx.server(|server| {
-                server.read_event::<ServerConnectEvent>().is_some()
-            });
+            let connected = ctx.client(client_b_key, |c| c.connection_status().is_connected());
+            let connect_fired =
+                ctx.server(|server| server.read_event::<ServerConnectEvent>().is_some());
             if user || connected || connect_fired {
                 half_state = true;
             }
@@ -1722,8 +1759,7 @@ fn malformed_identity_token_rejected() {
         "connection-24.t1: failed handshake leaves no user, no session, no connect event",
         |ctx| {
             let no_user = !ctx.server(|s| s.user_exists(&client_b_key));
-            let down =
-                !ctx.client(client_b_key, |c| c.connection_status().is_connected());
+            let down = !ctx.client(client_b_key, |c| c.connection_status().is_connected());
             (no_user && down && !half_state).then_some(())
         },
     );

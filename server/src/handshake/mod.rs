@@ -11,7 +11,12 @@ mod handshaker;
 pub use handshaker::HandshakeManager;
 
 pub trait Handshaker: Send + Sync {
-    fn authenticate_user(&mut self, identity_token: &IdentityToken, user_key: UserKey);
+    fn authenticate_user(
+        &mut self,
+        identity_token: &IdentityToken,
+        user_key: UserKey,
+        address: &SocketAddr,
+    );
 
     // address is optional because user may not have been identified yet
     fn delete_user(&mut self, user_key: UserKey, address_opt: Option<SocketAddr>);
@@ -49,4 +54,9 @@ pub enum HandshakeAction {
     ForwardPacket,
     /// Disconnect the user (for verified disconnect requests)
     DisconnectUser(UserKey),
+    /// Reject the identify and delete the never-connected user, so a failed
+    /// handshake leaves no half-connected state ([connection-24]). Only
+    /// constructed when `transport_udp` is disabled.
+    #[cfg_attr(feature = "transport_udp", allow(dead_code))]
+    RejectUser(UserKey, OutgoingPacket),
 }

@@ -45,6 +45,10 @@ pub struct HandshakeManager {
     authenticated_and_identified_users: HashMap<SocketAddr, UserKey>,
     authenticated_unidentified_users: HashMap<IdentityToken, UserKey>,
     identity_token_map: HashMap<UserKey, IdentityToken>,
+    /// Source address of each accepted-but-unidentified handshake, so a
+    /// failed identify can resolve back to the user record it must delete
+    /// ([connection-24]). Removed at finalize, disconnect, or reset.
+    unidentified_addresses: HashMap<SocketAddr, UserKey>,
     #[cfg(feature = "transport_udp")]
     been_handshaked_users: HashMap<SocketAddr, UserKey>,
 
@@ -64,11 +68,17 @@ pub struct HandshakeManager {
 }
 
 impl Handshaker for HandshakeManager {
-    fn authenticate_user(&mut self, identity_token: &IdentityToken, user_key: UserKey) {
+    fn authenticate_user(
+        &mut self,
+        identity_token: &IdentityToken,
+        user_key: UserKey,
+        address: &SocketAddr,
+    ) {
         self.authenticated_unidentified_users
             .insert(identity_token.clone(), user_key);
         self.identity_token_map
             .insert(user_key, identity_token.clone());
+        self.unidentified_addresses.insert(*address, user_key);
     }
 
     fn delete_user(&mut self, user_key: UserKey, address_opt: Option<SocketAddr>) {
@@ -76,6 +86,8 @@ impl Handshaker for HandshakeManager {
             self.authenticated_unidentified_users
                 .remove(&identity_token);
         }
+        self.unidentified_addresses
+            .retain(|_, pending_key| *pending_key != user_key);
         if let Some(address) = address_opt {
             self.authenticated_and_identified_users.remove(&address);
             self.ping_counts.remove(&address);
@@ -147,6 +159,7 @@ impl Handshaker for HandshakeManager {
         self.authenticated_and_identified_users.clear();
         self.authenticated_unidentified_users.clear();
         self.identity_token_map.clear();
+        self.unidentified_addresses.clear();
         self.ping_counts.clear();
         #[cfg(feature = "transport_udp")]
         {
@@ -297,7 +310,14 @@ impl HandshakeManager {
                     let identify_response = Self::write_identity_response().to_packet();
                     return HandshakeAction::SendPacket(identify_response);
                 }
+                // Unknown-token identify ([connection-24]): the accept created
+                // an authentication record for this address, but the client
+                // cannot prove ownership of any token. Delete the never-
+                // connected user so no half-connected state persists.
                 let reject_response = Self::write_reject_response(RejectReason::Auth).to_packet();
+                if let Some(pending_key) = self.unidentified_addresses.remove(address) {
+                    return HandshakeAction::RejectUser(pending_key, reject_response);
+                }
                 return HandshakeAction::SendPacket(reject_response);
             };
             // Verify identity token exists (but keep it for disconnect verification)
@@ -306,6 +326,7 @@ impl HandshakeManager {
             // User is authenticated
             self.authenticated_and_identified_users
                 .insert(*address, user_key);
+            self.unidentified_addresses.remove(address);
 
             // send identify response
             let identify_response = Self::write_identity_response().to_packet();
@@ -351,6 +372,7 @@ impl HandshakeManager {
             authenticated_and_identified_users: HashMap::new(),
             authenticated_unidentified_users: HashMap::new(),
             identity_token_map: HashMap::new(),
+            unidentified_addresses: HashMap::new(),
             #[cfg(feature = "transport_udp")]
             been_handshaked_users: HashMap::new(),
 
@@ -641,6 +663,72 @@ mod tests {
         }
     }
 
+    /// An unknown-token identify for an address the server accepted both
+    /// rejects on the wire and marks the never-connected user for
+    /// deletion, so a failed handshake leaves no half-connected
+    /// authentication state ([connection-24]).
+    #[cfg(not(feature = "transport_udp"))]
+    #[test]
+    fn identify_unknown_token_rejects_pending_user_for_deletion() {
+        let mut manager = HandshakeManager::new(server_pid());
+        let token = IdentityToken::generate();
+        let user_key = UserKey::from_u64(7);
+        manager.authenticate_user(&token, user_key, &addr());
+        let tampered = IdentityToken::generate();
+        let bytes = inbound(
+            &HandshakeHeader::ClientIdentifyRequest(server_pid()),
+            Some(&tampered),
+        );
+        match maintain(&mut manager, &bytes) {
+            Ok(HandshakeAction::RejectUser(rejected_key, packet)) => {
+                assert_eq!(rejected_key, user_key);
+                assert_eq!(reject_reason_of(&packet), RejectReason::Auth);
+            }
+            _ => panic!("unknown token must reject the pending user with a packet"),
+        }
+    }
+
+    /// A successful identify clears the pending-address record, so a
+    /// later retry for the same finalized address resends the response
+    /// instead of resolving to a stale pending user.
+    #[cfg(not(feature = "transport_udp"))]
+    #[test]
+    fn successful_identify_clears_pending_address() {
+        let mut manager = HandshakeManager::new(server_pid());
+        let token = IdentityToken::generate();
+        let user_key = UserKey::from_u64(7);
+        manager.authenticate_user(&token, user_key, &addr());
+        let bytes = inbound(
+            &HandshakeHeader::ClientIdentifyRequest(server_pid()),
+            Some(&token),
+        );
+        match maintain(&mut manager, &bytes) {
+            Ok(HandshakeAction::FinalizeConnection(finalized_key, _)) => {
+                assert_eq!(finalized_key, user_key)
+            }
+            _ => panic!("known token must finalize the connection"),
+        }
+        assert!(
+            !manager.unidentified_addresses.contains_key(&addr()),
+            "finalized address must leave no pending-address record"
+        );
+    }
+
+    /// Deleting a never-finalized user also clears its pending-address
+    /// record, so a pre-finalization drop leaks no handshake state.
+    #[test]
+    fn delete_user_clears_pending_address() {
+        let mut manager = HandshakeManager::new(server_pid());
+        let token = IdentityToken::generate();
+        let user_key = UserKey::from_u64(7);
+        manager.authenticate_user(&token, user_key, &addr());
+        manager.delete_user(user_key, None);
+        assert!(
+            !manager.unidentified_addresses.contains_key(&addr()),
+            "deleted user must leave no pending-address record"
+        );
+    }
+
     /// A client retransmit of identify after a dropped server response must
     /// be answered again, never rejected. The client resends every
     /// send_handshake_interval over an unreliable channel, so the first
@@ -652,7 +740,7 @@ mod tests {
         let mut manager = HandshakeManager::new(server_pid());
         let token = IdentityToken::generate();
         let user_key = UserKey::from_u64(7);
-        manager.authenticate_user(&token, user_key);
+        manager.authenticate_user(&token, user_key, &addr());
         let bytes = inbound(
             &HandshakeHeader::ClientIdentifyRequest(server_pid()),
             Some(&token),
@@ -694,7 +782,7 @@ mod tests {
         let mut manager = HandshakeManager::new(server_pid());
         let token = IdentityToken::generate();
         let user_key = UserKey::from_u64(7);
-        manager.authenticate_user(&token, user_key);
+        manager.authenticate_user(&token, user_key, &addr());
         let bytes = inbound(
             &HandshakeHeader::ClientIdentifyRequest(server_pid()),
             Some(&token),
@@ -745,7 +833,7 @@ mod tests {
         let mut manager = HandshakeManager::new(server_pid());
         let token = IdentityToken::generate();
         let user_key = UserKey::from_u64(7);
-        manager.authenticate_user(&token, user_key);
+        manager.authenticate_user(&token, user_key, &addr());
         let bytes = challenge_inbound(12345, &token);
         let first = match maintain(&mut manager, &bytes) {
             Ok(HandshakeAction::SendPacket(packet)) => packet,
@@ -774,7 +862,7 @@ mod tests {
         let mut manager = HandshakeManager::new(server_pid());
         let token = IdentityToken::generate();
         let user_key = UserKey::from_u64(7);
-        manager.authenticate_user(&token, user_key);
+        manager.authenticate_user(&token, user_key, &addr());
         let bytes = challenge_inbound(12345, &token);
         assert!(maintain(&mut manager, &bytes).is_ok());
         assert!(maintain(&mut manager, &bytes).is_ok());
@@ -790,7 +878,7 @@ mod tests {
         let mut manager = HandshakeManager::new(server_pid());
         let token = IdentityToken::generate();
         let user_key = UserKey::from_u64(7);
-        manager.authenticate_user(&token, user_key);
+        manager.authenticate_user(&token, user_key, &addr());
         let bytes = inbound(
             &HandshakeHeader::ClientIdentifyRequest(server_pid()),
             Some(&token),
