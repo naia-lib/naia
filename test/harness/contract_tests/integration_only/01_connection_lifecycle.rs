@@ -520,6 +520,118 @@ fn connect_event_ordering_stable() {
     );
 }
 
+/// No ConnectEvent before the handshake finalizes
+/// Contract: [connection-15], [connection-16]
+///
+/// Given a started client whose auth the server has seen but not yet
+/// accepted; when ticks pump with no accept; then neither side emits a
+/// connect event and the client stays non-connected. Only after accept
+/// plus handshake completion do both connect events fire. The pre-accept
+/// silence holds by token causality: the server mints the identity
+/// token at accept, so no finalize can precede it (the consume-a-minted-
+/// token gate is pinned at R1 on both handshake builds).
+#[test]
+fn no_connect_event_before_handshake_finalizes() {
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let client_auth = Auth::new("client_a", "password");
+    let client_key = scenario.client_start(
+        "Client A",
+        client_auth.clone(),
+        test_client_config(),
+        test_protocol.clone(),
+    );
+
+    // Server: read auth event.
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some((incoming_client_key, incoming_auth)) =
+                server.read_event::<ServerAuthEvent<Auth>>()
+            {
+                if incoming_client_key == client_key && incoming_auth == client_auth {
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+
+    // Absence window: pump ticks with no accept. The client is still in
+    // the auth phase (no token minted yet), so any connect event on
+    // either side trips its flag — fail shut outside expect.
+    let mut server_connected_early = false;
+    let mut client_connected_early = false;
+    for _ in 0..5 {
+        scenario.expect(|ctx| {
+            let fired = ctx.server(|server| server.read_event::<ServerConnectEvent>().is_some());
+            if fired {
+                server_connected_early = true;
+            }
+            ctx.client(client_key, |client| {
+                if client.read_event::<ClientConnectEvent>().is_some() {
+                    client_connected_early = true;
+                }
+            });
+            Some(())
+        });
+        scenario.mutate(|_| {});
+    }
+    assert!(
+        !server_connected_early,
+        "no ServerConnectEvent may fire before accept"
+    );
+    assert!(
+        !client_connected_early,
+        "no ClientConnectEvent may fire before finalize"
+    );
+
+    // The client must also report itself non-connected throughout.
+    scenario.spec_expect(
+        "connection-15.t1: client emits ConnectEvent only at finalize",
+        |ctx| (!ctx.client(client_key, |c| c.connection_status().is_connected())).then_some(()),
+    );
+
+    // Intermediate step to satisfy alternating mutate/expect requirement.
+    scenario.mutate(|_| {});
+
+    scenario.spec_expect(
+        "connection-16.t1: server emits ConnectEvent only at finalize",
+        |ctx| {
+            ctx.server(|server| server.read_event::<ServerConnectEvent>().is_none())
+                .then_some(())
+        },
+    );
+
+    // Server: accept connection.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_key);
+        });
+    });
+
+    // Server: read connect event — it fires only now that the handshake
+    // ran to completion against the minted token.
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some(incoming_client_key) = server.read_event::<ServerConnectEvent>() {
+                if incoming_client_key == client_key {
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+
+    // Client has fully established the connection.
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |c| c.connection_status().is_connected())
+            .then_some(())
+    });
+}
+
 /// Multiple concurrent auth requests serialize
 /// Contract: [connection-10]
 ///

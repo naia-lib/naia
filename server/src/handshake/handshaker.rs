@@ -1006,6 +1006,23 @@ mod tests {
         }
     }
 
+    /// A fresh-token challenge answers with the challenge response but
+    /// finalizes nothing: the only route to a live connection
+    /// (`FinalizeConnection`) opens at the connect step, after
+    /// validation — never mid-handshake ([connection-16]).
+    #[cfg(feature = "transport_udp")]
+    #[test]
+    fn fresh_token_at_challenge_finalizes_nothing() {
+        let mut manager = manager_with_ttl();
+        let token = IdentityToken::generate();
+        manager.authenticate_user(&token, UserKey::from_u64(7), &addr());
+        let bytes = challenge_inbound(12345, &token);
+        match maintain(&mut manager, &bytes) {
+            Ok(HandshakeAction::SendPacket(_)) => {}
+            _ => panic!("fresh token challenge must answer, never finalize"),
+        }
+    }
+
     /// A client retransmit of the challenge request after a dropped server
     /// response must be answered with the identical response bytes, never
     /// silence. The first pass consumes the token; the retry must observe

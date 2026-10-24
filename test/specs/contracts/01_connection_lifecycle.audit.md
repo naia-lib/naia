@@ -9,8 +9,9 @@ verdict, and the fix commit where one was needed.
 Gates for this audit: `cargo fmt --check` clean (pinned 1.98.0 toolchain),
 `cargo clippy -p naia-server --all-targets -- -D warnings` clean,
 `cargo clippy -p naia-test-harness --all-targets -- -D warnings` clean,
-`integration_only_01_connection_lifecycle` 27/27,
-`naia-server --lib` 105/105 (incl. 3 new handshake unit tests).
+`integration_only_01_connection_lifecycle` 28/28,
+`naia-server --lib` 106/106 default, 119/119 `transport_udp`
+(incl. 4 new handshake unit tests).
 Product fix + leg rewrites landed as `0bb68249` (FF `eb006054`..`0bb68249`
 on both `dev` and `nash-dev`); this table file lands on top.
 
@@ -25,8 +26,8 @@ on both `dev` and `nash-dev`); this table file lands on top.
 | 13 | first validation consumes; replays fail | `expired_or_reused_token_obeys_semantics` (consumed T_A replayed → explicit reject with address) | HONEST |
 | 14 | tick sync required; not Connected until sync | `connected_only_after_tick_sync_completes` (client handshaker R1: identify + 3 forged pong rounds yield None throughout; connect response after finished sync yields Connected) | HONEST |
 | 14a | protocol_id checked first in handshake | `protocol_id_verified_before_connect_event` | THIN: matching passes; mismatch-rejected-pre-connect unproven (see hollow mismatch test) |
-| 15 | CLIENT ConnectEvent only at finalize | `connect_event_ordering_stable` | THIN: observes connect after accept; absence-before unasserted |
-| 16 | SERVER ConnectEvent only at finalize | `connect_event_ordering_stable` | THIN: same as 15, server side |
+| 15 | CLIENT ConnectEvent only at finalize | `no_connect_event_before_handshake_finalizes` (5-tick pre-accept window: no ClientConnectEvent, client non-connected; fires only after accept + completion) + R1 `connected_only_after_tick_sync_completes` (no Connected through identify + 3 pong rounds; Connected only on post-sync connect response, the direct `on_connect` input) | HONEST |
+| 16 | SERVER ConnectEvent only at finalize | `no_connect_event_before_handshake_finalizes` (5-tick pre-accept window: no ServerConnectEvent; fires only after accept + completion) + R1 `fresh_token_at_challenge_finalizes_nothing` (UDP midpoint answers SendPacket, never FinalizeConnection) + identify-build token causality (finalize consumes the accept-minted token, pinned row 12) | HONEST |
 | 17 | no replication before ConnectEvent | `no_replication_before_auth_decision` [TAG-MISMATCH: tagged 13.t1] | HONEST |
 | 18 | explicit reject for no-token/bad-token/denied | `invalid_credentials_rejected`, `malformed_identity_token_rejected`, `server_reject_connection_produces_reject_event`, `server_reject_connection_carries_a_reason_message` | HONEST for bad-token/denied. No-token-with-require_auth sub-case UNCITED |
 | 19 | reject → RejectEvent, no ConnectEvent, no DisconnectEvent | `server_reject_connection_produces_reject_event`, `malformed_identity_token_rejected` | HONEST except DisconnectEvent-absence never asserted (sub-gap) |
@@ -87,6 +88,8 @@ on both `dev` and `nash-dev`); this table file lands on top.
    strengthened with zero-ConnectEvent assertion. Remaining sub-gap: t1 negative
    (non-give-up disconnect reason without prior connect) unasserted.
 4. Row 18 no-token sub-case; rows 19/27 DisconnectEvent-absence; row 22 negative;
-   row 23 owned-entity despawn; rows 15/16 absence-before.
+   row 23 owned-entity despawn.
+5. Rows 15/16 absence-before: CLOSED — e2e pre-accept silence on both sides +
+   R1 midpoint pins (client tick-sync gating, UDP challenge answers-only).
 5. Row 12 multi-transport: CLOSED — admission centralized above the Socket
    boundary; no-token → no-finalize pinned on both handshake builds + e2e.
