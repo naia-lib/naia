@@ -1296,12 +1296,22 @@ fn server_reject_connection_produces_reject_event() {
     // [connection-19]: the rejected attempt must observe no DisconnectEvent
     // either — pump ticks draining B's client disconnect queue and fail shut
     // on any firing (B was never connected, so any disconnect is stray).
+    // [connection-22]: the server side must also stay silent — no
+    // ServerDisconnectEvent for a key that never connected.
     let mut stray_disconnect = false;
+    let mut stray_server_disconnect = false;
     for _ in 0..20 {
         scenario.expect(|ctx| {
             ctx.client(client_b_key, |client| {
                 if client.read_event::<ClientDisconnectEvent>().is_some() {
                     stray_disconnect = true;
+                }
+            });
+            ctx.server(|server| {
+                while let Some(key) = server.read_event::<ServerDisconnectEvent>() {
+                    if key == client_b_key {
+                        stray_server_disconnect = true;
+                    }
                 }
             });
             Some(())
@@ -1311,6 +1321,10 @@ fn server_reject_connection_produces_reject_event() {
     assert!(
         !stray_disconnect,
         "rejected client must observe no DisconnectEvent for the rejected attempt"
+    );
+    assert!(
+        !stray_server_disconnect,
+        "server must emit no DisconnectEvent for a key that never connected"
     );
     // The harness presets the local hub address synchronously at client start,
     // so the rejection carries the actual learned address -- Some, never a
@@ -1891,6 +1905,7 @@ fn malformed_identity_token_rejected() {
     // event for B) and no DisconnectEvent for the rejected attempt.
     let mut half_state = false;
     let mut stray_disconnect = false;
+    let mut stray_server_disconnect = false;
     for _ in 0..20 {
         scenario.expect(|ctx| {
             let user = ctx.server(|s| s.user_exists(&client_b_key));
@@ -1903,6 +1918,13 @@ fn malformed_identity_token_rejected() {
             ctx.client(client_b_key, |client| {
                 if client.read_event::<ClientDisconnectEvent>().is_some() {
                     stray_disconnect = true;
+                }
+            });
+            ctx.server(|server| {
+                while let Some(key) = server.read_event::<ServerDisconnectEvent>() {
+                    if key == client_b_key {
+                        stray_server_disconnect = true;
+                    }
                 }
             });
             Some(())
@@ -1924,6 +1946,10 @@ fn malformed_identity_token_rejected() {
     assert!(
         !stray_disconnect,
         "rejected attempt must observe no DisconnectEvent"
+    );
+    assert!(
+        !stray_server_disconnect,
+        "server must emit no DisconnectEvent for a key that never connected"
     );
 }
 
