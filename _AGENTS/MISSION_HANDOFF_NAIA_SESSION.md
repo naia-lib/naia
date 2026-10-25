@@ -8,8 +8,10 @@ if you need the history. Read this fully before touching anything.
 
 ## Ground rules (non-negotiable)
 - **naia is dev-trunk**: commit on `dev`, NEVER `main`.
-- **No wire-format changes in naia, ever** — byte-padding, bit→byte, D.1 bumps
-  are off the table. Any protocol addition goes through Connor as an approval gate.
+- **No wire-format changes in naia for perf, ever** — byte-padding, bit→byte, D.1 bumps
+  are off the table as performance work (perf rule stands). Protocol/wire/message/channel
+  changes need no approval: design them right, build them, land them on the normal seam,
+  and send one line to Usher when it lands so Connor can track it (Connor ruling 2026-10-25).
 - **No env vars. No tokio.** (`thiserror`/`anyhow` are fine in test/tooling only
   where already used; core stays async-std/smol style.)
 - **Determinism moat is the gate**: `cargo test -p cyberlith_test_harness
