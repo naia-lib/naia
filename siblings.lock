@@ -1,0 +1,3 @@
+# Sibling pins: exact `dev` SHAs this naia revision builds against.
+# Path deps only, never git/rev/tag (sibling law, Connor 2026-10-22).
+webrtc-unreliable-client = "8233c3f8b942631da68adc360ae52a1c4af0329f"

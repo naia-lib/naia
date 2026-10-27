@@ -6,7 +6,7 @@ use super::{
     addr_cell::AddrCell, identity_receiver::IdentityReceiver, packet_receiver::PlainPacketReceiver,
     packet_sender::PacketSender,
 };
-use crate::{backends::native::runtime::get_runtime, packet_receiver::PacketReceiver};
+use crate::packet_receiver::PacketReceiver;
 
 /// A client-side socket which communicates with an underlying unordered &
 /// unreliable protocol
@@ -101,11 +101,14 @@ impl Socket {
         // The address arrives once, later, over a oneshot; AddrCell is the
         // polled view of it that the sender and receiver both hold.
         let addr_cell = AddrCell::new(io.to_client_addr_receiver);
-        get_runtime().spawn(async move {
+        // smol's global executor drives its own background thread, so no
+        // runtime handle is needed: spawn and detach the connect task.
+        smol::spawn(async move {
             socket
                 .connect(&server_session_string, auth_bytes_opt, auth_headers_opt)
                 .await;
-        });
+        })
+        .detach();
 
         // Setup Packet Sender
         let packet_sender = PacketSender::new(

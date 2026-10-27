@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use tokio::sync::oneshot;
+use futures_channel::oneshot;
 
 use naia_socket_shared::IdentityToken;
 
@@ -30,7 +30,7 @@ impl IdentityReceiver {
     /// over the signaling channel. Returns `Waiting` until a result arrives.
     pub fn receive(&mut self) -> IdentityReceiverResult {
         if let Ok(mut receiver) = self.receiver_channel.lock() {
-            if let Ok(recv_result) = receiver.try_recv() {
+            if let Ok(Some(recv_result)) = receiver.try_recv() {
                 match recv_result {
                     Ok(identity_token_string) => {
                         // webrtc-unreliable-client hands the signaling JSON's `id` field
@@ -86,7 +86,7 @@ mod session_error_tests {
     #[test]
     fn pre_auth_session_error_is_surfaced_once_then_waiting() {
         let expected: &[u8] = b"native-reject-reason";
-        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let (sender, receiver) = futures_channel::oneshot::channel();
         let mut receiver = IdentityReceiver::new(receiver);
         sender
             .send(Err(SessionError {

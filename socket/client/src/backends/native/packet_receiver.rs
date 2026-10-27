@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use tokio::sync::mpsc::UnboundedReceiver;
+use async_channel::Receiver;
 
 use super::addr_cell::AddrCell;
 use crate::{error::NaiaClientSocketError, server_addr::ServerAddr};
@@ -9,7 +9,7 @@ use crate::{error::NaiaClientSocketError, server_addr::ServerAddr};
 #[derive(Clone)]
 pub struct PlainPacketReceiver {
     server_addr: AddrCell,
-    receiver_channel: Arc<Mutex<UnboundedReceiver<Box<[u8]>>>>,
+    receiver_channel: Arc<Mutex<Receiver<Box<[u8]>>>>,
     receive_buffer: Vec<u8>,
 }
 
@@ -17,7 +17,7 @@ impl PlainPacketReceiver {
     /// Create a new `PacketReceiver`, if supplied with the Server's address & a
     /// reference back to the parent Socket
     #[must_use]
-    pub fn new(server_addr: AddrCell, receiver_channel: UnboundedReceiver<Box<[u8]>>) -> Self {
+    pub fn new(server_addr: AddrCell, receiver_channel: Receiver<Box<[u8]>>) -> Self {
         PlainPacketReceiver {
             server_addr,
             receiver_channel: Arc::new(Mutex::new(receiver_channel)),
@@ -29,7 +29,7 @@ impl PlainPacketReceiver {
 impl PlainPacketReceiver {
     /// Receives a packet from the Server, or `None` if none is waiting.
     pub fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
-        if let Ok(mut receiver) = self.receiver_channel.lock() {
+        if let Ok(receiver) = self.receiver_channel.lock() {
             if let Ok(bytes) = receiver.try_recv() {
                 let length = bytes.len();
                 self.receive_buffer[..length].clone_from_slice(&bytes);

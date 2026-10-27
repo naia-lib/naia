@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use tokio::sync::oneshot::{error::TryRecvError, Receiver};
+use futures_channel::oneshot::Receiver;
 
 use crate::server_addr::ServerAddr;
 
@@ -60,15 +60,15 @@ impl AddrCell {
         };
 
         match receiver.try_recv() {
-            Ok(addr) => {
+            Ok(Some(addr)) => {
                 cell.addr = ServerAddr::Found(addr);
                 cell.receiver = None;
                 ServerAddr::Found(addr)
             }
-            Err(TryRecvError::Empty) => ServerAddr::Finding,
+            Ok(None) => ServerAddr::Finding,
             // The socket task ended without resolving an address. Nothing more
             // is coming, so stop polling.
-            Err(TryRecvError::Closed) => {
+            Err(_) => {
                 cell.receiver = None;
                 ServerAddr::Finding
             }
@@ -79,7 +79,7 @@ impl AddrCell {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::sync::oneshot;
+    use futures_channel::oneshot;
 
     fn addr() -> SocketAddr {
         "127.0.0.1:4433".parse().unwrap()

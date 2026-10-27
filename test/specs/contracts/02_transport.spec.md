@@ -102,6 +102,14 @@ A sender whose socket and address state are owned by its attempt alone (UDP: fre
 
 ---
 
+### [transport-07] — Native client socket runs on smol, never tokio
+
+**Obligations:**
+- **t1**: The native client socket (`naia-client-socket`, non-wasm backends) MUST run on smol. It MUST NOT construct or depend on a tokio runtime: spawning uses `smol::spawn` on the global executor, and all channels are runtime-agnostic (`async-channel`, `futures-channel`).
+- **t2**: `webrtc-unreliable-client` is consumed by sibling path pin (`siblings.lock`), never a registry version that reintroduces a tokio runtime.
+
+---
+
 ## Test obligations (TODO)
 - transport-01: Verify Naia tolerates reorder/drop/duplicate at packet boundary (via test transport / local conditioner).
 - transport-03: Verify oversize outbound attempt returns Err (and does not panic).

@@ -2,7 +2,6 @@ mod addr_cell;
 mod identity_receiver;
 mod packet_receiver;
 mod packet_sender;
-mod runtime;
 mod socket;
 
 pub use addr_cell::AddrCell;

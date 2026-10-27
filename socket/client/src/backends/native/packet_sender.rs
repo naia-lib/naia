@@ -1,4 +1,4 @@
-use tokio::sync::mpsc::{error::SendError, Sender, UnboundedSender};
+use async_channel::Sender;
 
 use super::addr_cell::AddrCell;
 use crate::{error::NaiaClientSocketError, server_addr::ServerAddr};
@@ -7,7 +7,7 @@ use crate::{error::NaiaClientSocketError, server_addr::ServerAddr};
 #[derive(Clone)]
 pub struct PacketSender {
     server_addr: AddrCell,
-    sender_channel: UnboundedSender<Box<[u8]>>,
+    sender_channel: Sender<Box<[u8]>>,
     disconnect_channel: Sender<()>,
 }
 
@@ -17,7 +17,7 @@ impl PacketSender {
     #[must_use]
     pub fn new(
         server_addr: AddrCell,
-        sender_channel: UnboundedSender<Box<[u8]>>,
+        sender_channel: Sender<Box<[u8]>>,
         disconnect_channel: Sender<()>,
     ) -> Self {
         Self {
@@ -32,8 +32,8 @@ impl PacketSender {
     /// Send a Packet to the Server
     pub fn send(&self, payload: &[u8]) -> Result<(), NaiaClientSocketError> {
         self.sender_channel
-            .send(payload.into())
-            .map_err(|_err: SendError<_>| NaiaClientSocketError::SendError)
+            .try_send(payload.into())
+            .map_err(|_| NaiaClientSocketError::SendError)
     }
 
     /// Get the Server's Socket address
@@ -50,7 +50,9 @@ impl PacketSender {
 
     /// Signals the socket task to disconnect from the server.
     pub fn disconnect(&mut self) {
-        let _ = self.disconnect_channel.blocking_send(());
+        // The disconnect channel is bounded(1): a Full error means a signal is
+        // already queued, which carries the same meaning, so it is ignored.
+        let _ = self.disconnect_channel.try_send(());
     }
 
     /// Tears down this attempt's socket: the disconnect signal stops the
