@@ -37,7 +37,7 @@ impl RequestSender {
         global_request_id: GlobalRequestId,
         nonce: ConnectionRequestNonce,
         request: MessageContainer,
-    ) -> MessageContainer {
+    ) -> (MessageContainer, LocalRequestId) {
         let local_request_id = self.local_key_generator.generate();
         self.local_to_global_ids
             .insert(local_request_id, global_request_id);
@@ -47,7 +47,22 @@ impl RequestSender {
         request.write(message_kinds, &mut writer, converter);
         let request_bytes = writer.to_bytes();
         let request_message = RequestOrResponse::request(local_request_id, nonce, request_bytes);
-        MessageContainer::new(Box::new(request_message))
+        (
+            MessageContainer::new(Box::new(request_message)),
+            local_request_id,
+        )
+    }
+
+    /// Rolls back an outgoing request the channel refused to queue: the
+    /// local id returns to the key pool and both routing entries vanish.
+    /// This mirrors the resolve path, so a refused request leaves routing
+    /// byte-identical to before the send while live exchanges are
+    /// untouched. The refused nonce stays caller-owned: nothing here
+    /// reuses or reissues it.
+    pub(crate) fn cancel_outgoing_request(&mut self, local_request_id: &LocalRequestId) {
+        self.local_key_generator.recycle_key(local_request_id);
+        self.local_to_global_ids.remove(local_request_id);
+        self.local_to_nonce.remove(local_request_id);
     }
 
     pub(crate) fn process_outgoing_response(
@@ -87,6 +102,14 @@ impl RequestSender {
             }
             _ => None,
         }
+    }
+
+    /// Test-only routing census: `(local→global entries, local→nonce
+    /// entries)`. A refused request must leave both at their pre-send
+    /// values — admission owns cleanup, so nothing refused may commit.
+    #[cfg(test)]
+    pub(crate) fn outstanding(&self) -> (usize, usize) {
+        (self.local_to_global_ids.len(), self.local_to_nonce.len())
     }
 }
 
@@ -293,7 +316,7 @@ mod request_sender_tests {
         let mut converter = FakeEntityConverter;
         let nonce = ConnectionRequestNonce::from_wire(7);
 
-        let wrapped = sender.process_outgoing_request(
+        let (wrapped, _) = sender.process_outgoing_request(
             &kinds(),
             &mut converter,
             GlobalRequestId::new(11),
@@ -315,7 +338,7 @@ mod request_sender_tests {
         let global_id = GlobalRequestId::new(11);
         let nonce = ConnectionRequestNonce::from_wire(7);
 
-        let wrapped = sender.process_outgoing_request(
+        let (wrapped, _) = sender.process_outgoing_request(
             &kinds(),
             &mut converter,
             global_id,
@@ -338,7 +361,7 @@ mod request_sender_tests {
         let mut converter = FakeEntityConverter;
         let nonce = ConnectionRequestNonce::from_wire(7);
 
-        let wrapped = sender.process_outgoing_request(
+        let (wrapped, _) = sender.process_outgoing_request(
             &kinds(),
             &mut converter,
             GlobalRequestId::new(11),

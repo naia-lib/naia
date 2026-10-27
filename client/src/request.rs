@@ -122,6 +122,14 @@ impl GlobalRequestManager {
         }
     }
 
+    /// Drops a slot whose request never reached the wire: plain removal,
+    /// with NO abandonment tombstone. The peer never saw the exchange, so
+    /// there is nothing to suppress — and the spent nonce stays spent,
+    /// never recycled, so a live nonce is never aliased.
+    pub(crate) fn discard_unsent_request(&mut self, request_id: &GlobalRequestId) {
+        self.slots.remove(request_id);
+    }
+
     /// Non-destructive read of an arrived response. The slot keeps its
     /// copy; take it with [`destroy_request_id`](Self::destroy_request_id).
     pub(crate) fn peek_request(&self, request_id: &GlobalRequestId) -> Option<MessageContainer> {
@@ -351,6 +359,33 @@ mod tests {
         assert_eq!(nonce.value(), 0);
         assert!(!manager.has_response(&id));
         assert_eq!(manager.poll_slot(&id), SlotPoll::Abandoned);
+    }
+
+    #[test]
+    fn discard_unsent_request_drops_the_slot_without_abandoning() {
+        // A request the queue refuses never reached the wire: its slot
+        // must vanish, but no abandonment tombstone may record it — the
+        // peer never saw the exchange, so there is nothing to suppress.
+        let mut manager = request_manager();
+        let (id, first_nonce) = manager.create_request_id().expect("capacity remains");
+        assert_eq!(manager.outstanding(), 1);
+
+        manager.discard_unsent_request(&id);
+        assert_eq!(manager.outstanding(), 0);
+        assert_eq!(manager.poll_slot(&id), SlotPoll::Abandoned);
+        assert!(
+            manager.abandoned.is_empty(),
+            "an unsent request leaves no tombstone: the peer never saw it"
+        );
+
+        // The spent nonce stays spent: the next allocation moves forward,
+        // never back onto the discarded exchange.
+        let (_, second_nonce) = manager.create_request_id().expect("capacity remains");
+        assert_ne!(
+            second_nonce.value(),
+            first_nonce.value(),
+            "a discarded exchange's nonce must never be reissued"
+        );
     }
 
     #[test]

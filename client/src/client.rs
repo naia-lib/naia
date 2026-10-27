@@ -842,8 +842,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             nonce,
             message,
         ) {
-            // Queue-depth cap reached: nothing was enqueued. Report it rather than
-            // handing back an id whose response will never arrive.
+            // Queue-depth cap reached: nothing was enqueued. Drop the slot
+            // this send just created — without an abandonment tombstone,
+            // since the peer never saw the exchange — and report it rather
+            // than handing back an id whose response will never arrive.
+            connection
+                .global_request_manager
+                .discard_unsent_request(&request_id);
             return Err(NaiaClientError::MessageQueueFull);
         }
 

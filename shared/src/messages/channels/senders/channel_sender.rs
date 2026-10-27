@@ -69,4 +69,9 @@ pub trait MessageChannelSender: ChannelSender<MessageContainer> {
         local_request_id: LocalRequestId,
         wire_nonce: ConnectionRequestNonce,
     ) -> Option<GlobalRequestId>;
+
+    /// Test-only routing census: `(local→global entries, local→nonce
+    /// entries)` held for requests. Unreliable senders hold none.
+    #[cfg(test)]
+    fn outstanding_request_routes(&self) -> (usize, usize);
 }

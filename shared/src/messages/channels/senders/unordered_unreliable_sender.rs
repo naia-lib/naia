@@ -143,6 +143,11 @@ impl MessageChannelSender for UnorderedUnreliableSender {
     ) -> bool {
         panic!("UnorderedUnreliable channel does not support requests");
     }
+
+    #[cfg(test)]
+    fn outstanding_request_routes(&self) -> (usize, usize) {
+        (0, 0)
+    }
 }
 
 #[cfg(test)]

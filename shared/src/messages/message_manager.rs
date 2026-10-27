@@ -286,6 +286,16 @@ impl MessageManager {
         channel.send_outgoing_request(message_kinds, converter, global_request_id, nonce, request)
     }
 
+    /// Test-only routing census for one channel: `(local→global entries,
+    /// local→nonce entries)` held for requests.
+    #[cfg(test)]
+    pub(crate) fn outstanding_request_routes(&self, channel_kind: &ChannelKind) -> (usize, usize) {
+        self.channel_senders
+            .get(channel_kind)
+            .expect("test channel configured")
+            .outstanding_request_routes()
+    }
+
     /// Queues a response keyed by `local_response_id` into the given channel's send buffer.
     ///
     /// H3: `nonce` echoes the incoming request's wire nonce, so the
@@ -1753,6 +1763,97 @@ mod message_manager_tests {
             ),
             "the second must be refused, not silently swallowed"
         );
+    }
+
+    #[test]
+    fn a_refused_request_leaves_request_routing_byte_identical() {
+        // Admission owns cleanup: a request the queue refuses must not
+        // commit routing state. Committing the local→global and local→nonce
+        // entries before the capacity decision leaks one twin-map entry per
+        // refusal, and the leaked local id can later alias a live exchange
+        // and resolve — or drop — the wrong response. Both endpoints keep
+        // the same shared sender, so both host types are pinned.
+        for host in [HostType::Client, HostType::Server] {
+            let mut kinds = ChannelKinds::new();
+            kinds.add_channel::<BothWays>(ChannelSettings::new(
+                ChannelMode::OrderedReliable(ReliableSettings {
+                    rtt_resend_factor: 1.5,
+                    max_queue_depth: Some(1),
+                }),
+                ChannelDirection::Bidirectional,
+            ));
+            let messages = message_kinds();
+            let channel = ChannelKind::of::<BothWays>();
+            let mut manager = MessageManager::new(host, &kinds);
+
+            assert_eq!(
+                manager.outstanding_request_routes(&channel),
+                (0, 0),
+                "{host:?}: no routing before the first send"
+            );
+            assert!(
+                manager.send_request(
+                    &messages,
+                    &mut FakeEntityConverter,
+                    &channel,
+                    GlobalRequestId::new(0),
+                    crate::ConnectionRequestNonce::from_wire(0),
+                    ping(1),
+                ),
+                "{host:?}: the first request fits the one-deep queue"
+            );
+            assert_eq!(
+                manager.outstanding_request_routes(&channel),
+                (1, 1),
+                "{host:?}: one accepted request holds one twin-map entry"
+            );
+            assert!(
+                !manager.send_request(
+                    &messages,
+                    &mut FakeEntityConverter,
+                    &channel,
+                    GlobalRequestId::new(1),
+                    crate::ConnectionRequestNonce::from_wire(1),
+                    ping(2),
+                ),
+                "{host:?}: the second must be refused, not silently swallowed"
+            );
+            assert_eq!(
+                manager.outstanding_request_routes(&channel),
+                (1, 1),
+                "{host:?}: a refused request must leave routing byte-identical"
+            );
+
+            // The live mapping survives the refusal: the accepted request
+            // still round-trips and resolves to the id its caller waits on.
+            let mut peer = MessageManager::new(host.invert(), &kinds);
+            deliver(&mut manager, &mut peer, &kinds, &messages);
+            let (requests, _) = peer.receive_requests_and_responses();
+            assert_eq!(
+                requests.len(),
+                1,
+                "{host:?}: the peer must see the accepted request"
+            );
+            let (_, mut on_channel) = requests.into_iter().next().unwrap();
+            let (response_id, request_nonce, _) = on_channel.remove(0);
+            assert!(peer.send_response(
+                &messages,
+                &mut FakeEntityConverter,
+                &channel,
+                response_id,
+                request_nonce,
+                ping(3),
+            ));
+            deliver(&mut peer, &mut manager, &kinds, &messages);
+            let (_, responses) = manager.receive_requests_and_responses();
+            assert_eq!(responses.len(), 1, "{host:?}: the response must come back");
+            let (global_request_id, _) = responses.into_iter().next().unwrap();
+            assert_eq!(
+                global_request_id,
+                GlobalRequestId::new(0),
+                "{host:?}: the response must resolve to the accepted request's id"
+            );
+        }
     }
 
     #[test]

@@ -494,6 +494,7 @@ This ensures cleanup and prevents resource leaks.
 
 **Obligations:**
 - **t1**: Request/Response transport and deduplication.
+- **t2**: Refused requests commit no routing state.
 
 **Transport channel:**
 Requests and Responses are transported over a **reliable, ordered channel** (OrderedReliable mode per messaging-09).
@@ -520,9 +521,18 @@ Naia MUST deduplicate Requests by `(connection, request_id)`:
 - Response handler invoked exactly once per logical Response
 - E2E: Duplicate Request injection does not trigger multiple handler events
 
+**Admission-owned cleanup (t2):**
+Admission precedes routing: a Request the transport refuses (reliable
+queue-depth cap reached) MUST leave every routing table byte-identical
+to before the send — no local→global entry, no nonce entry, no caller
+slot, no abandonment tombstone. The refused nonce stays spent and MUST
+NOT be reissued to a later exchange. An accepted exchange that is still
+outstanding MUST be unaffected by a later refusal.
+
 **Test obligations:**
 - `messaging-25.t1`: Duplicate Request delivery does not duplicate processing
 - `messaging-25.t2`: Duplicate Response delivery does not duplicate handling
+- `messaging-25.t3`: Refused request leaves routing byte-identical
 
 ---
 

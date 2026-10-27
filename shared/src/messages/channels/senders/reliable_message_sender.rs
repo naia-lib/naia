@@ -120,14 +120,22 @@ impl MessageChannelSender for ReliableMessageSender {
         nonce: ConnectionRequestNonce,
         request: MessageContainer,
     ) -> bool {
-        let processed = self.request_sender.process_outgoing_request(
+        let (processed, local_request_id) = self.request_sender.process_outgoing_request(
             message_kinds,
             converter,
             global_request_id,
             nonce,
             request,
         );
-        self.send_or_fragment(message_kinds, converter, processed)
+        if self.send_or_fragment(message_kinds, converter, processed) {
+            true
+        } else {
+            // Admission refused: roll back the routing this send just
+            // committed, so the refusal leaves routing byte-identical.
+            self.request_sender
+                .cancel_outgoing_request(&local_request_id);
+            false
+        }
     }
 
     fn send_outgoing_response(
@@ -155,5 +163,10 @@ impl MessageChannelSender for ReliableMessageSender {
     ) -> Option<GlobalRequestId> {
         self.request_sender
             .process_incoming_response(local_request_id, wire_nonce)
+    }
+
+    #[cfg(test)]
+    fn outstanding_request_routes(&self) -> (usize, usize) {
+        self.request_sender.outstanding()
     }
 }
