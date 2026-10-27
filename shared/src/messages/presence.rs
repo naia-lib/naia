@@ -92,32 +92,55 @@ impl PresenceSeq {
     }
 }
 
-/// Controller slot bitmap for one presence observation.
+/// Controller seat mask for one presence observation: the agreed 4-bit
+/// wire with Social (nyc).
 ///
-/// Bit `i` set means the local controller in slot `i` is observed present.
-/// Width is a codec decision (16 local slots); content semantics belong to
-/// the host controller API via the consumer, never to the transport.
+/// Bit `i` (0-3) set means `LocalPadSlot` `i + 1` is observed present:
+/// slot 1 is the Host, slots 2-4 are Guests. Bits are seats assigned by
+/// the embedder's device router, never raw OS device indices, so a fifth
+/// device never reaches a bit and cannot alias. Out-of-range bits are
+/// rejected at construction, fail-closed.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct ControllerBitmap {
-    bits: u16,
+pub struct SeatBitmap {
+    bits: u8,
 }
 
-impl ControllerBitmap {
+impl SeatBitmap {
+    /// Maximum representable seats: Host + 3 Guests.
+    pub const SEAT_COUNT: u8 = 4;
+
     /// No controller observed present.
     #[must_use]
     pub fn empty() -> Self {
         Self { bits: 0 }
     }
 
-    /// Builds the bitmap from raw slot bits.
+    /// Builds the mask from seat bits; returns `None` when any bit above
+    /// the four seats is set, so unmapped slots can never alias a seat.
     #[must_use]
-    pub fn from_bits(bits: u16) -> Self {
-        Self { bits }
+    pub fn from_bits(bits: u8) -> Option<Self> {
+        if bits & !0x0F == 0 {
+            Some(Self { bits })
+        } else {
+            None
+        }
     }
 
-    /// Reads the raw slot bits.
+    /// Names a single seat (`LocalPadSlot` 1-4); returns `None` for any
+    /// other slot number.
     #[must_use]
-    pub fn bits(self) -> u16 {
+    pub fn seat(slot: u8) -> Option<Self> {
+        match slot {
+            1..=4 => Some(Self {
+                bits: 1 << (slot - 1),
+            }),
+            _ => None,
+        }
+    }
+
+    /// Reads the seat bits.
+    #[must_use]
+    pub fn bits(self) -> u8 {
         self.bits
     }
 }
@@ -129,8 +152,8 @@ pub struct PresenceFrame {
     pub epoch: PresenceEpoch,
     /// Strictly increasing within [`PresenceFrame::epoch`], from 1.
     pub seq: PresenceSeq,
-    /// Observed controller slots at emission.
-    pub bitmap: ControllerBitmap,
+    /// Observed controller seats at emission.
+    pub bitmap: SeatBitmap,
 }
 
 /// Outcome of offering a [`PresenceFrame`] to a [`PresenceTracker`].
@@ -168,7 +191,7 @@ pub struct PresenceProducer {
     epoch: PresenceEpoch,
     next_seq: u64,
     exhausted: bool,
-    bitmap: ControllerBitmap,
+    bitmap: SeatBitmap,
 }
 
 impl PresenceProducer {
@@ -182,7 +205,7 @@ impl PresenceProducer {
             epoch,
             next_seq: 1,
             exhausted: false,
-            bitmap: ControllerBitmap::empty(),
+            bitmap: SeatBitmap::empty(),
         }
     }
 
@@ -194,12 +217,14 @@ impl PresenceProducer {
         self.emit()
     }
 
-    /// Records an OS controller observation and emits it immediately on
-    /// the event path, independent of the heartbeat tick. Returns `None`
-    /// under the same exhaustion freeze as
-    /// [`heartbeat_tick`](PresenceProducer::heartbeat_tick); the bitmap
-    /// is still recorded so a live producer emits it next tick.
-    pub fn controller_event(&mut self, bitmap: ControllerBitmap) -> Option<PresenceFrame> {
+    /// Records a seat observation from the embedder's device router and
+    /// emits it immediately on the event path, independent of the
+    /// heartbeat tick. The seats are already mapped (Host = 1, Guests =
+    /// 2-4); out-of-range bits cannot be constructed, so no unmapped
+    /// device can alias a seat. Returns `None` under the same exhaustion
+    /// freeze as [`heartbeat_tick`](PresenceProducer::heartbeat_tick);
+    /// the bitmap is still recorded so a live producer emits it next tick.
+    pub fn controller_event(&mut self, bitmap: SeatBitmap) -> Option<PresenceFrame> {
         self.bitmap = bitmap;
         self.emit()
     }
@@ -246,7 +271,7 @@ pub struct PresenceTracker {
     active_epoch: Option<PresenceEpoch>,
     last_seq: u64,
     misses: u32,
-    last_bitmap: Option<ControllerBitmap>,
+    last_bitmap: Option<SeatBitmap>,
 }
 
 impl PresenceTracker {
@@ -332,7 +357,7 @@ impl PresenceTracker {
     /// controller lifetimes — until the new carrier's own frames arrive,
     /// the last known observation still reads.
     #[must_use]
-    pub fn last_bitmap(&self) -> Option<ControllerBitmap> {
+    pub fn last_bitmap(&self) -> Option<SeatBitmap> {
         self.last_bitmap
     }
 
@@ -362,13 +387,33 @@ impl Default for PresenceTracker {
 #[cfg(test)]
 mod tests {
     use super::{
-        ControllerBitmap, PresenceApply, PresenceEpoch, PresenceProducer, PresenceTracker,
+        PresenceApply, PresenceEpoch, PresenceProducer, PresenceTracker, SeatBitmap,
         HEARTBEAT_LOSS_MISSES,
     };
     use crate::ConnectionConfig;
 
     fn epoch(value: u64) -> PresenceEpoch {
         PresenceEpoch::from_wire(value)
+    }
+
+    #[test]
+    fn seat_bits_cover_host_and_three_guests() {
+        assert_eq!(SeatBitmap::SEAT_COUNT, 4);
+        assert_eq!(SeatBitmap::seat(1).expect("host").bits(), 0b0001);
+        assert_eq!(SeatBitmap::seat(4).expect("guest 4").bits(), 0b1000);
+        assert_eq!(
+            SeatBitmap::from_bits(0b1111).expect("all seats").bits(),
+            0b1111
+        );
+        assert_eq!(SeatBitmap::empty().bits(), 0);
+    }
+
+    #[test]
+    fn seat_bits_reject_out_of_range_fail_closed() {
+        assert!(SeatBitmap::from_bits(0b1_0000).is_none());
+        assert!(SeatBitmap::from_bits(0xFF).is_none());
+        assert!(SeatBitmap::seat(0).is_none());
+        assert!(SeatBitmap::seat(5).is_none());
     }
 
     #[test]
@@ -395,10 +440,13 @@ mod tests {
         let mut producer = PresenceProducer::new(epoch(1));
         let _ = producer.heartbeat_tick().expect("capacity");
         let event = producer
-            .controller_event(ControllerBitmap::from_bits(0b11))
+            .controller_event(SeatBitmap::from_bits(0b11).expect("seats 1-2 in range"))
             .expect("capacity");
         assert_eq!(event.seq.value(), 2);
-        assert_eq!(event.bitmap, ControllerBitmap::from_bits(0b11));
+        assert_eq!(
+            event.bitmap,
+            SeatBitmap::from_bits(0b11).expect("seats 1-2 in range")
+        );
     }
 
     #[test]
@@ -427,7 +475,7 @@ mod tests {
         let frame = super::PresenceFrame {
             epoch: epoch(1),
             seq: super::PresenceSeq::from_wire(0),
-            bitmap: ControllerBitmap::empty(),
+            bitmap: SeatBitmap::empty(),
         };
         assert_eq!(tracker.apply(frame), PresenceApply::RejectedSeqZero);
     }
@@ -469,7 +517,7 @@ mod tests {
         let old_epoch_frame = super::PresenceFrame {
             epoch: epoch(1),
             seq: super::PresenceSeq::from_wire(u64::MAX),
-            bitmap: ControllerBitmap::empty(),
+            bitmap: SeatBitmap::empty(),
         };
         assert_eq!(
             tracker.apply(old_epoch_frame),
@@ -490,7 +538,7 @@ mod tests {
         let late_v1 = super::PresenceFrame {
             epoch: epoch(1),
             seq: super::PresenceSeq::from_wire(9000),
-            bitmap: ControllerBitmap::empty(),
+            bitmap: SeatBitmap::empty(),
         };
         assert_eq!(tracker.apply(late_v1), PresenceApply::RejectedRetiredEpoch);
     }

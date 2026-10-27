@@ -170,8 +170,8 @@ pub use messages::{
     message_kinds::{MessageKind, MessageKinds},
     message_manager::MessageManager,
     presence::{
-        ControllerBitmap, PresenceApply, PresenceEpoch, PresenceFrame, PresenceProducer,
-        PresenceSeq, PresenceTracker, HEARTBEAT_LOSS_MISSES,
+        PresenceApply, PresenceEpoch, PresenceFrame, PresenceProducer, PresenceSeq,
+        PresenceTracker, SeatBitmap, HEARTBEAT_LOSS_MISSES,
     },
     request::{
         GlobalRequestId, GlobalResponseId, Request, Response, ResponseReceiveKey, ResponseSendKey,
