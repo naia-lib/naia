@@ -169,10 +169,6 @@ pub use messages::{
     message_container::MessageContainer,
     message_kinds::{MessageKind, MessageKinds},
     message_manager::MessageManager,
-    presence::{
-        PresenceApply, PresenceEpoch, PresenceFrame, PresenceProducer, PresenceSeq,
-        PresenceTracker, SeatBitmap, HEARTBEAT_LOSS_MISSES,
-    },
     request::{
         GlobalRequestId, GlobalResponseId, Request, Response, ResponseReceiveKey, ResponseSendKey,
     },
