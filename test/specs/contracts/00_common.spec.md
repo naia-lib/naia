@@ -368,6 +368,30 @@ Rationale: Simplifies implementation and ensures clean state.
 
 ---
 
+## 7) Application Boundary
+
+### [common-15] — naia carries application messages; it does not own application policy
+
+**Obligations:**
+- **t1**: Public naia APIs are expressible in networking terms without a particular game's names, fixed player counts or gameplay deadlines.
+
+naia owns connection lifecycle, transport, typed-message delivery and entity
+replication. Application state and policy — including devices, local seats,
+guests, controller presence, application carrier epochs, Hold and grace
+periods — belong to the application protocol and its consumer. A motivating
+game example does not transfer ownership of its rules.
+
+The author checks each new public type, fixed limit and state transition
+against this rule before landing on `dev`; the Game consumer's ownership is
+checked in the consumer pass. This is a source responsibility, not a new
+sign-off or keyword gate.
+
+Rationale: naia is a public repo. Cyberlith-specific functionality must not
+enter it; the library stays usable by a second application without adopting
+Cyberlith's domain model or constants.
+
+---
+
 ## Removed / not wanted
 
 The following were deliberately removed from this repo and MUST NOT be reintroduced without an explicit ruling overturning the one cited.
@@ -377,6 +401,12 @@ The following were deliberately removed from this repo and MUST NOT be reintrodu
 - **What:** the build-enforcement legs of tracked `tools/hooks/pre-push` (rustfmt drift check, warning-clean native workspace check, three wasm32-unknown-unknown checks, mquad clippy leg), removed 2026-10-23. The hook now enforces only `refs/heads/main` protection.
 - **Why:** no git-hook build enforcement in this Kingdom; hooks duplicate Fabro legs instead of crediting them and block landing on fleet capacity. Seam gates (clerc/clippy/CI) own build enforcement.
 - **Ruled by:** Connor, 2026-10-22, via Trevor/Kepler (NO GIT HOOKS, naia main-protection hook possibly the only keeper; relayed Usher 107809).
+
+### controller presence in naia
+
+- **What:** `shared/src/messages/presence.rs` (`PresenceProducer`, `PresenceTracker`, `SeatBitmap`, epoch/sequence carrier, miss-count freshness), its `shared/src/lib.rs` export and its tests, removed 2026-10-27.
+- **Why:** naia must not know anything about controllers, local seats or guests; for naia the server sees a single client connection. Presence is an on-change reliable application message owned by the application protocol and its consumer, not a naia heartbeat payload. Ordinary reliable application messages and connection events suffice.
+- **Ruled by:** Connor, 2026-10-27, via Usher 126729 (supersedes the 126713 on-change close-out).
 
 ---
 

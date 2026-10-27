@@ -34,6 +34,18 @@ server and the client agree on. Given that protocol:
 naia is ECS-agnostic. Bevy and macroquad adapters are included; the core crate
 works with any entity type that is `Copy + Eq + Hash + Send + Sync`.
 
+### Application boundary
+
+naia owns connection lifecycle, transport, typed-message delivery and entity
+replication. Application state and policy — including devices, local seats,
+guests, controller presence, application carrier epochs, Hold and grace
+periods — belong to the application protocol and its consumer. Public naia
+APIs must be expressible in networking terms without a particular game's
+names, fixed player counts or gameplay deadlines. A motivating game example
+does not transfer ownership of its rules. Controller presence in naia is
+removed on Connor's 2026-10-27 direction; ordinary reliable application
+messages and connection events suffice.
+
 The internal networking model follows the
 [Tribes 2 Networking Model](https://www.gamedevs.org/uploads/tribes-networking-model.pdf).
 
