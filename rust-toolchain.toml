@@ -1,5 +1,7 @@
-# Pinned toolchain for the whole naia workspace (Usher 109706, flip from
-# nightly-2026-08-27 recorded below).
+# Pinned toolchain for the whole naia workspace (nydus-kp4, Featherweight
+# Part 3: one fleet toolchain, Connor via Kepler 131481/131489 — every repo
+# uses cyberlith's pinned nightly from the single tress-owned source
+# (nydus-h8v; moved fleet-wide by Vale, once per cycle, like sibling pins).
 #
 # Why: naia ships to players inside cyberlith. Without this file every host
 # built naia on its own floating stable (Lifetop 1.96.0, Dino 1.96.1,
@@ -9,7 +11,10 @@
 # Flip history: nightly-2026-08-27 (cy's channel) failed naia's own clippy
 # gate on Lifetop — 3 pre-existing lints in naia-test-harness that the
 # nightly's newer clippy denies. Per 109706, flipped to 1.98.0, the fleet
-# stable with the same sha256 on all 4 hosts.
+# stable with the same sha256 on all 4 hosts. Per nydus-kp4, back to the
+# fleet nightly; the harness lints are fixed at their lowest rung instead
+# of weakening the gate.
 [toolchain]
-channel = "1.98.0"
-components = ["rustfmt", "clippy"]
+channel = "nightly-2026-08-27"
+components = ["rustfmt", "clippy", "rust-src"]
+targets = ["wasm32-unknown-unknown"]

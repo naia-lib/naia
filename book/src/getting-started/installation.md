@@ -134,4 +134,7 @@ to discover that one side forgot to enable a feature flag.
 
 ## Rust Toolchain
 
-naia uses stable Rust. No nightly features are required.
+naia uses the fleet pinned nightly toolchain (`nightly-2026-08-27`, see
+`rust-toolchain.toml` — Featherweight Part 3, one toolchain for all repos
+from the single tress-owned source). No additional nightly features are
+required beyond the pinned channel.

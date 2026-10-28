@@ -73,14 +73,18 @@ impl App {
         }
         for (server_address, reason, _message) in world_events.read::<RejectEvent>() {
             match server_address {
-                Some(addr) => info!(
-                    "Client received unauthorized response from: {} (reason: {:?})",
-                    addr, reason
-                ),
-                None => info!(
-                    "Client refused before the server address was known (reason: {:?})",
-                    reason
-                ),
+                Some(addr) => {
+                    info!(
+                        "Client received unauthorized response from: {} (reason: {:?})",
+                        addr, reason
+                    );
+                }
+                None => {
+                    info!(
+                        "Client refused before the server address was known (reason: {:?})",
+                        reason
+                    );
+                }
             }
 
             // Now give the correct username / password
