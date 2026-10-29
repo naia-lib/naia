@@ -4,7 +4,7 @@ Ground truth is the row text in `02_transport.spec.md`.
 For each row: the test that actually proves the obligation (by test NAME),
 the verdict, and the fix commit where one was needed.
 
-Gates for this audit: `cargo fmt --check` clean (pinned 1.98.0 toolchain),
+Gates for this audit: `cargo fmt --check` clean (pinned nightly-2026-08-27 toolchain),
 `cargo clippy -p naia-test-harness --all-targets -- -D warnings` clean,
 `integration_only_01_connection_lifecycle` 28/28 (row-33 pin),
 `naia-client --lib` 48/48 `transport_udp`.

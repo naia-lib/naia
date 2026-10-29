@@ -6,7 +6,7 @@ many `spec_expect` tags in the lifecycle file use a different row vocabulary
 and are flagged `[TAG-MISMATCH]` where the tag names another row), the
 verdict, and the fix commit where one was needed.
 
-Gates for this audit: `cargo fmt --check` clean (pinned 1.98.0 toolchain),
+Gates for this audit: `cargo fmt --check` clean (pinned nightly-2026-08-27 toolchain),
 `cargo clippy -p naia-server --all-targets -- -D warnings` clean,
 `cargo clippy -p naia-test-harness --all-targets -- -D warnings` clean,
 `integration_only_01_connection_lifecycle` 28/28,
