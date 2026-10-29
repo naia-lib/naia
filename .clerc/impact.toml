@@ -687,7 +687,7 @@ argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "preapply_messages
 
 [[leg]]
 checks = ["test:naia-test-harness:quiet_request_response_after_idle"]
-argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "quiet_request_response_after_idle", "--no-fail-fast"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "quiet_request_response_after_idle", "--features", "deterministic", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-test-harness:quiet_tick_progress"]
