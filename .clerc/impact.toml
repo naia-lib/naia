@@ -1,9 +1,10 @@
 # Naia's impact selector, inventoried from the 42 public workspace members.
 # 125 test-bearing Cargo targets share 122 logical target IDs; a same-name
 # library and binary keep both selectors in the same physical command.
-# This adoption declares a map and explicit argv, not gate rungs. Use
-# 'clerc impact plan', not 'impact run', until rung adoption is complete.
-# docs/IMPACT.md records scope, feature profiles and the qualification route.
+# Rung adoption (nydus-kp4-rungs, fleet ladder TESTING.md R0-R3 / ADR 0006):
+# every suite check lands on exactly one [[rung]]; 'clerc impact run' is the
+# native aggregate. docs/IMPACT.md records scope, feature profiles and the
+# qualification route.
 
 [suite]
 id = "naia"
@@ -37,9 +38,12 @@ checks = [
     "test:naia-bevy-server-demo:naia-bevy-server-demo",
     "test:naia-bevy-server:apply_receive_output_with_sim_receiver",
     "test:naia-bevy-server:authority_commands_bevy",
+    "test:naia-bevy-server:change_tracker_order",
     "test:naia-bevy-server:cross_frame_enable_bevy",
     "test:naia-bevy-server:naia_bevy_server",
     "test:naia-bevy-server:replicated_resources_bevy",
+    "test:naia-bevy-server:request_after_reconnect_client_plugin",
+    "test:naia-bevy-server:request_events_pump_after_idle",
     "test:naia-bevy-server:scope_change_retry_survivability",
     "test:naia-bevy-server:send_message_to_address",
     "test:naia-bevy-server:send_message_to_user",
@@ -91,6 +95,7 @@ checks = [
     "test:naia-server-socket:close_releases_port",
     "test:naia-server-socket:naia_server_socket",
     "test:naia-server-socket:webrtc_loopback",
+    "test:naia-server-socket:webrtc_unreliable_loopback",
     "test:naia-server:close_releases_ports",
     "test:naia-server:naia_server",
     "test:naia-server:udp_close_releases_port",
@@ -123,6 +128,7 @@ checks = [
     "test:naia-test-harness:integration_only_00_common",
     "test:naia-test-harness:integration_only_01_connection_lifecycle",
     "test:naia-test-harness:integration_only_02_static_entities",
+    "test:naia-test-harness:integration_only_02_transport",
     "test:naia-test-harness:integration_only_03_messaging",
     "test:naia-test-harness:integration_only_06_entity_scopes",
     "test:naia-test-harness:integration_only_09_entity_ownership",
@@ -135,9 +141,11 @@ checks = [
     "test:naia-test-harness:pipeline_recv_send_independent",
     "test:naia-test-harness:pipelined_admission",
     "test:naia-test-harness:preapply_messages",
+    "test:naia-test-harness:quiet_request_response_after_idle",
     "test:naia-test-harness:quiet_tick_progress",
     "test:naia-test-harness:replicated_resources",
     "test:naia-test-harness:router_basic",
+    "test:naia-test-harness:send_gate_finalizes_drained_acks",
     "test:naia-test-harness:typed_request_refusals",
     "test:naia-test-harness:world_server_enum_shell",
 ]
@@ -152,6 +160,14 @@ prefix = "test"
 # Real-port server tests explicitly enable their crate-level transport cfgs.
 # A Cargo target declaration is an inventory entry, never a test-count claim.
 
+[[cargo_targets.unchecked]]
+check = "test:webrtc-unreliable-client:webrtc_unreliable_client"
+reason = "Vendored provider's own lib unit tests: vendor/ is not a workspace member, so naia never builds this target; the provider's unit (9 passed) and loopback (6 passed) suites were qualified upstream at pin 15f7f85 (Fabro jobs f3e9497027bbb/fca879d396979, receipts held, sent Usher seq 133843). A re-vendor reselects naia dependents through the vendor/ fallback root."
+
+[[leg]]
+checks = ["lint:fmt"]
+argv = ["clerc", "plan-admin", "verify-fmt-fileset", "--root", "."]
+
 [[leg]]
 checks = ["lint:clippy"]
 argv = ["cargo", "clippy", "--workspace", "--all-targets", "--keep-going", "--", "-D", "warnings"]
@@ -163,6 +179,7 @@ argv = ["cargo", "check", "--workspace", "--all-targets", "--keep-going"]
 [[leg]]
 checks = ["lint:public-paths"]
 argv = ["cargo", "run", "-p", "naia-ci-checks", "--bin", "check_no_escaping_path_deps"]
+credit_scope = "tree"
 
 [[leg]]
 checks = ["lint:wasm-shared"]
@@ -253,6 +270,10 @@ checks = ["test:naia-bevy-server:authority_commands_bevy"]
 argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "authority_commands_bevy", "--no-fail-fast"]
 
 [[leg]]
+checks = ["test:naia-bevy-server:change_tracker_order"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "change_tracker_order", "--no-fail-fast"]
+
+[[leg]]
 checks = ["test:naia-bevy-server:cross_frame_enable_bevy"]
 argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "cross_frame_enable_bevy", "--no-fail-fast"]
 
@@ -263,6 +284,14 @@ argv = ["cargo", "test", "-p", "naia-bevy-server", "--lib", "--no-fail-fast"]
 [[leg]]
 checks = ["test:naia-bevy-server:replicated_resources_bevy"]
 argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "replicated_resources_bevy", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:request_after_reconnect_client_plugin"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "request_after_reconnect_client_plugin", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-bevy-server:request_events_pump_after_idle"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "request_events_pump_after_idle", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-bevy-server:scope_change_retry_survivability"]
@@ -481,6 +510,10 @@ checks = ["test:naia-server-socket:webrtc_loopback"]
 argv = ["cargo", "test", "-p", "naia-server-socket", "--test", "webrtc_loopback", "--no-fail-fast"]
 
 [[leg]]
+checks = ["test:naia-server-socket:webrtc_unreliable_loopback"]
+argv = ["cargo", "test", "-p", "naia-server-socket", "--test", "webrtc_unreliable_loopback", "--no-fail-fast"]
+
+[[leg]]
 checks = ["test:naia-server-socket-demo:naia-server-socket-demo"]
 argv = ["cargo", "test", "-p", "naia-server-socket-demo", "--bin", "naia-server-socket-demo", "--no-fail-fast"]
 
@@ -601,6 +634,10 @@ checks = ["test:naia-test-harness:integration_only_02_static_entities"]
 argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "integration_only_02_static_entities", "--no-fail-fast"]
 
 [[leg]]
+checks = ["test:naia-test-harness:integration_only_02_transport"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "integration_only_02_transport", "--no-fail-fast"]
+
+[[leg]]
 checks = ["test:naia-test-harness:integration_only_03_messaging"]
 argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "integration_only_03_messaging", "--no-fail-fast"]
 
@@ -649,6 +686,10 @@ checks = ["test:naia-test-harness:preapply_messages"]
 argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "preapply_messages", "--no-fail-fast"]
 
 [[leg]]
+checks = ["test:naia-test-harness:quiet_request_response_after_idle"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "quiet_request_response_after_idle", "--no-fail-fast"]
+
+[[leg]]
 checks = ["test:naia-test-harness:quiet_tick_progress"]
 argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "quiet_tick_progress", "--features", "deterministic", "--no-fail-fast"]
 
@@ -659,6 +700,10 @@ argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "replicated_resour
 [[leg]]
 checks = ["test:naia-test-harness:router_basic"]
 argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "router_basic", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:send_gate_finalizes_drained_acks"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "send_gate_finalizes_drained_acks", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-test-harness:typed_request_refusals"]
@@ -806,6 +851,10 @@ to = "test:naia-bevy-server:authority_commands_bevy"
 
 [[edge]]
 from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:change_tracker_order"
+
+[[edge]]
+from = "adapters/bevy/server/"
 to = "test:naia-bevy-server:cross_frame_enable_bevy"
 
 [[edge]]
@@ -815,6 +864,14 @@ to = "test:naia-bevy-server:naia_bevy_server"
 [[edge]]
 from = "adapters/bevy/server/"
 to = "test:naia-bevy-server:replicated_resources_bevy"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:request_after_reconnect_client_plugin"
+
+[[edge]]
+from = "adapters/bevy/server/"
+to = "test:naia-bevy-server:request_events_pump_after_idle"
 
 [[edge]]
 from = "adapters/bevy/server/"
@@ -1137,6 +1194,10 @@ to = "test:naia-server-socket:naia_server_socket"
 from = "socket/server/"
 to = "test:naia-server-socket:webrtc_loopback"
 
+[[edge]]
+from = "socket/server/"
+to = "test:naia-server-socket:webrtc_unreliable_loopback"
+
 [[package]]
 name = "naia-server-socket-demo"
 paths = ["demos/socket/server/"]
@@ -1304,6 +1365,10 @@ to = "test:naia-test-harness:integration_only_02_static_entities"
 
 [[edge]]
 from = "test/harness/"
+to = "test:naia-test-harness:integration_only_02_transport"
+
+[[edge]]
+from = "test/harness/"
 to = "test:naia-test-harness:integration_only_03_messaging"
 
 [[edge]]
@@ -1352,6 +1417,10 @@ to = "test:naia-test-harness:preapply_messages"
 
 [[edge]]
 from = "test/harness/"
+to = "test:naia-test-harness:quiet_request_response_after_idle"
+
+[[edge]]
+from = "test/harness/"
 to = "test:naia-test-harness:quiet_tick_progress"
 
 [[edge]]
@@ -1361,6 +1430,10 @@ to = "test:naia-test-harness:replicated_resources"
 [[edge]]
 from = "test/harness/"
 to = "test:naia-test-harness:router_basic"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:send_gate_finalizes_drained_acks"
 
 [[edge]]
 from = "test/harness/"
@@ -1390,6 +1463,26 @@ reason = "Cargo configuration can change compilation and test execution."
 path = "Cargo.toml"
 mode = "cargo-workspace"
 reason = "Resolve workspace dependency/profile changes through Cargo manifests; undecidable changes fall back."
+
+[[root]]
+path = "rust-toolchain.toml"
+mode = "fallback"
+reason = "The toolchain changes the meaning of every check."
+
+[[root]]
+path = "siblings.lock"
+mode = "fallback"
+reason = "Sibling pins change what the build resolves; conservatively select the whole suite."
+
+[[root]]
+path = "vendor/"
+mode = "fallback"
+reason = "Byte-exact snapshots of pinned siblings; a re-vendor changes provider bytes every dependent check builds against."
+
+[[root]]
+path = "AGENTS.md"
+mode = "scan-only"
+reason = "Agent doctrine, not build input."
 
 [[root]]
 path = "deny.toml"
@@ -1490,3 +1583,183 @@ reason = "Published FAQ sources."
 path = "rust-analyzer.toml"
 mode = "scan-only"
 reason = "Editor analysis configuration."
+
+# ---------------------------------------------------------------------------
+# R0 — static floor (TESTING.md ladder R0): no execution. Covers the suite
+# floor: file-set formatting (verify-fmt-fileset is the maintained R0
+# formatter command per docs/IMPACT.md), strict workspace Clippy, native
+# warning-clean checking, the public-path invariant, and all four
+# existing Wasm profiles.
+[[rung]]
+level = 0
+checks = [
+    "lint:fmt",
+    "lint:clippy",
+    "lint:native-check",
+    "lint:public-paths",
+    "lint:wasm-shared",
+    "lint:wasm-client",
+    "lint:wasm-bevy-client",
+    "lint:wasm-mquad",
+]
+budget_minutes = 60
+
+# ---------------------------------------------------------------------------
+# R1 — pure deterministic unit (TESTING.md ladder R1): lib targets whose
+# tests use no clock, thread, or socket. Covers 24 vacuous lib targets
+# (zero #[test] in src, machine-verified) plus naia-serde wire roundtrips
+# and naia-server-socket HTTP-parsing tests (both audited pure).
+[[rung]]
+level = 1
+checks = [
+    "test:naia-basic-client-demo-app:naia_basic_client_demo_app",
+    "test:naia-basic-client-demo-wb:naia_basic_client_demo_wb",
+    "test:naia-basic-demo-shared:naia_basic_demo_shared",
+    "test:naia-benches:naia_benches",
+    "test:naia-bevy-client-demo:naia_bevy_client_demo",
+    "test:naia-bevy-client:naia_bevy_client",
+    "test:naia-bevy-demo-shared:naia_bevy_demo_shared",
+    "test:naia-bevy-derive:naia_bevy_derive",
+    "test:naia-bevy-metrics:naia_bevy_metrics",
+    "test:naia-bevy-server:naia_bevy_server",
+    "test:naia-bevy-shared:naia_bevy_shared",
+    "test:naia-demo-world:naia_demo_world",
+    "test:naia-derive-core:naia_derive_core",
+    "test:naia-derive:naia_derive",
+    "test:naia-empty-world:naia_empty_world",
+    "test:naia-loom:naia_loom",
+    "test:naia-macroquad-demo-shared:naia_macroquad_demo_shared",
+    "test:naia-metrics:naia_metrics",
+    "test:naia-serde-derive-core:naia_serde_derive_core",
+    "test:naia-serde-derive:naia_serde_derive",
+    "test:naia-serde:bit_budget",
+    "test:naia-serde:malformed_input",
+    "test:naia-serde:naia_serde",
+    "test:naia-serde:serde_roundtrip",
+    "test:naia-server-socket:naia_server_socket",
+    "test:naia-socket-client-demo-app:naia_socket_client_demo_app",
+    "test:naia-socket-client-demo-wb:naia_socket_client_demo_wb",
+    "test:naia-socket-demo-shared:naia_socket_demo_shared",
+    "test:naia-test-harness:naia_test_harness",
+]
+budget_minutes = 30
+
+# ---------------------------------------------------------------------------
+# R2 — in-process integration (TESTING.md ladder R2): every other test
+# target runs in one process against injected clocks/local links. Host
+# flakiness here is a defect, never a pass.
+[[rung]]
+level = 2
+checks = [
+    "test:naia-basic-client-demo-mq:naia_basic_client_demo_mq",
+    "test:naia-basic-server-demo:naia-basic-server-demo",
+    "test:naia-benches:component_kind_wire",
+    "test:naia-benches:local_entity_wire",
+    "test:naia-benches:many_kinds_no_64_cap",
+    "test:naia-benches:static_split_bytes",
+    "test:naia-bevy-client:client_marker_bevy",
+    "test:naia-bevy-server:apply_receive_output_with_sim_receiver",
+    "test:naia-bevy-server:authority_commands_bevy",
+    "test:naia-bevy-server:cross_frame_enable_bevy",
+    "test:naia-bevy-server-demo:naia-bevy-server-demo",
+    "test:naia-bevy-server:change_tracker_order",
+    "test:naia-bevy-server:replicated_resources_bevy",
+    "test:naia-bevy-server:request_after_reconnect_client_plugin",
+    "test:naia-bevy-server:request_events_pump_after_idle",
+    "test:naia-bevy-server:scope_change_retry_survivability",
+    "test:naia-bevy-server:send_message_to_address",
+    "test:naia-bevy-server:send_message_to_user",
+    "test:naia-bevy-server:send_preamble_split",
+    "test:naia-bevy-server:send_scope_changes_drain",
+    "test:naia-bevy-server:sim_configure_entity_replication",
+    "test:naia-bevy-server:sim_configure_replication_deferred",
+    "test:naia-bevy-server:sim_converter",
+    "test:naia-bevy-server:sim_enable_entity_replication",
+    "test:naia-bevy-server:sim_event_receiver",
+    "test:naia-bevy-server:sim_host_sync",
+    "test:naia-bevy-server:sim_integration_full_bracket_drive",
+    "test:naia-bevy-server:sim_integration_full_lifecycle",
+    "test:naia-bevy-server:sim_integration_full_panic",
+    "test:naia-bevy-server:sim_integration_full_park",
+    "test:naia-bevy-server:sim_integration_full_shutdown",
+    "test:naia-bevy-server:sim_integration_full_tick_buffer",
+    "test:naia-bevy-server:sim_integration_iris2",
+    "test:naia-bevy-server:sim_integration_schedule_label",
+    "test:naia-bevy-server:sim_mark_entity_as_static",
+    "test:naia-bevy-server:sim_replicated_resources",
+    "test:naia-bevy-server:sim_single_world_drains",
+    "test:naia-bevy-server:snapshot_sender",
+    "test:naia-bevy-server:snapshot_world_wire_identity",
+    "test:naia-bevy-shared:derive_flavor_parity",
+    "test:naia-bevy-shared:facade_tier_parity",
+    "test:naia-ci-checks:check_no_escaping_path_deps",
+    "test:naia-client:naia_client",
+    "test:naia-client-socket:naia_client_socket",
+    "test:naia-compile-fail:compile_fail",
+    "test:naia-ice-gather-sensor:session_proxy",
+    "test:naia-macroquad-client-demo:naia_macroquad_client_demo",
+    "test:naia-macroquad-server-demo:naia-macroquad-server-demo",
+    "test:naia-server:naia_server",
+    "test:naia-server-socket-demo:naia-server-socket-demo",
+    "test:naia-shared:delegation_tag_stability",
+    "test:naia-shared:derive_enum",
+    "test:naia-shared:derive_message_enum",
+    "test:naia-shared:derive_replicate",
+    "test:naia-shared:derive_shorthand_guard",
+    "test:naia-shared:derive_struct",
+    "test:naia-shared:derive_tuple_struct",
+    "test:naia-shared:derive_unit_struct",
+    "test:naia-shared:det1_quat_normalize_probe",
+    "test:naia-shared:disconnect_reason_wire_stability",
+    "test:naia-shared:handshake_header_wire_stability",
+    "test:naia-shared:key_generator",
+    "test:naia-shared:naia_shared",
+    "test:naia-shared:packet_type_wire_stability",
+    "test:naia-shared:reject_reason_wire_stability",
+    "test:naia-shared:structural_registries",
+    "test:naia-shared:unlabeled_surfaces",
+    "test:naia-socket-client-demo-mq:naia_socket_client_demo_mq",
+    "test:naia-socket-shared:naia_socket_shared",
+    "test:naia-spec-tool:naia-spec-tool",
+    "test:naia-test-harness:12_reconnect_cancel",
+    "test:naia-test-harness:g8_real_ack_byte_identity",
+    "test:naia-test-harness:g9pre_resident_pipelined_byte_identity",
+    "test:naia-test-harness:integration_only_00_common",
+    "test:naia-test-harness:integration_only_01_connection_lifecycle",
+    "test:naia-test-harness:integration_only_02_static_entities",
+    "test:naia-test-harness:integration_only_02_transport",
+    "test:naia-test-harness:integration_only_03_messaging",
+    "test:naia-test-harness:integration_only_09_entity_ownership",
+    "test:naia-test-harness:integration_only_10_entity_delegation",
+    "test:naia-test-harness:integration_only_11_cross_feature_delegation",
+    "test:naia-test-harness:lagged_send_drops_final_value",
+    "test:naia-test-harness:parallel_send_matches_serial",
+    "test:naia-test-harness:pipeline_bracket",
+    "test:naia-test-harness:pipelined_admission",
+    "test:naia-test-harness:pipeline_recv_send_independent",
+    "test:naia-test-harness:preapply_messages",
+    "test:naia-test-harness:quiet_request_response_after_idle",
+    "test:naia-test-harness:quiet_tick_progress",
+    "test:naia-test-harness:replicated_resources",
+    "test:naia-test-harness:router_basic",
+    "test:naia-test-harness:send_gate_finalizes_drained_acks",
+    "test:naia-test-harness:typed_request_refusals",
+    "test:naia-test-harness:world_server_enum_shell",
+]
+budget_minutes = 180
+
+# ---------------------------------------------------------------------------
+# R3 — real sockets (TESTING.md ladder R3): binds real localhost UDP/TCP
+# ports or runs the real WebRTC stack. Integrator-side; host flakiness
+# is a defect under the red-test rule.
+[[rung]]
+level = 3
+checks = [
+    "test:naia-server:close_releases_ports",
+    "test:naia-server:udp_close_releases_port",
+    "test:naia-server-socket:close_releases_port",
+    "test:naia-server-socket:webrtc_loopback",
+    "test:naia-server-socket:webrtc_unreliable_loopback",
+    "test:naia-test-harness:integration_only_06_entity_scopes",
+]
+budget_minutes = 60

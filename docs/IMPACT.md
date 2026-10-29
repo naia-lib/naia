@@ -1,12 +1,14 @@
 # Naia impact selection
 
 The suite is `naia`, declared in `.clerc/impact.toml`. It inventories the
-42 public Cargo workspace members: 125 test-bearing targets share 122
-logical target IDs. Eight static checks form the mandatory floor. These
+42 public Cargo workspace members: 131 test-bearing targets share 128
+logical target IDs (129 legs at kp4 plus `lint:fmt` and six adopted
+2026-10-24 targets). Eight static checks form the mandatory floor. These
 are target counts, not passing-test counts.
 
-This is the selector adoption authorized by Kepler 97404. Until Naia
-declares rungs, use `impact plan`; `impact run` requires rung adoption.
+This is the selector adoption authorized by Kepler 97404, with rung
+adoption nydus-kp4-rungs (Kepler 133661/133663): every check lands on
+exactly one `[[rung]]` R0-R3 and `impact run` is the native aggregate.
 The fleet ladder remains defined in Clerc's `docs/TESTING.md`. Naia
 `main` moves only on Connor's word; this adoption lands on `dev`.
 
@@ -64,12 +66,16 @@ their crate-level gates. The client UDP floor leg is:
 lint:clippy-client-udp = cargo clippy -p naia-client --all-targets --features transport_udp --keep-going -- -D warnings
 ```
 
-Do not infer a rung from a Cargo target kind. Existing targets mix pure
-logic, injected-clock local links, actual worker threads and real port
-bindings. Their complete rung classification and native rung runner are
-a subsequent adoption. A metadata target with zero executed tests is
-never behavioral coverage; report the native test counts and ignore
-counts alongside every result.
+Do not infer a rung from a Cargo target kind. Rung placement is curated
+in `.clerc/impact.toml` (R0 static floor; R1 audited-pure unit lib
+targets; R2 in-process integration; R3 the real-port bindings).
+The six raw-provider loopback tests relocated from
+`webrtc-unreliable-client` (2026-10-29, Kepler ruling ii: the provider
+path dev-dep cannot resolve vendored) run as
+`test:naia-server-socket:webrtc_unreliable_loopback` on R3, where both
+client and server exist.
+A metadata target with zero executed tests is never behavioral coverage;
+report the native test counts and ignore counts alongside every result.
 
 ## Static floor and existing push protection
 

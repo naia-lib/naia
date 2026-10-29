@@ -106,7 +106,7 @@ A sender whose socket and address state are owned by its attempt alone (UDP: fre
 
 **Obligations:**
 - **t1**: The native client socket (`naia-client-socket`, non-wasm backends) MUST run on smol. It MUST NOT construct or depend on a tokio runtime: spawning uses `smol::spawn` on the global executor, and all channels are runtime-agnostic (`async-channel`, `futures-channel`).
-- **t2**: `webrtc-unreliable-client` is consumed as a byte-exact vendor copy of the sibling pin (`siblings.lock`, see `vendor/README.md`), never a registry version that reintroduces a tokio runtime, and never a live out-of-repo path (public-repo invariant, Connor 2026-09-17).
+- **t2**: `webrtc-unreliable-client` is consumed as a byte-exact vendor copy of the sibling pin (`siblings.lock`, see `vendor/README.md`), never a registry version that reintroduces a tokio runtime, and never a live out-of-repo path (public-repo invariant, Connor 2026-09-17). INTERIM (Kepler 2026-10-29, pending Connor): the sibling-path consumption ordered by 7zv trips the invariant, so the vendor copy stands until Connor rules; see Removed / not wanted below.
 
 ---
 
@@ -116,3 +116,23 @@ A sender whose socket and address state are owned by its attempt alone (UDP: fre
 - transport-04: Verify malformed inbound is dropped (warn only in Debug).
 - transport-05: Verify higher layers carry no transport cfgs (`higher_layers_carry_no_transport_cfgs`: no `transport_udp`/`transport_local` cfg outside `transport/` + `handshake/` subtrees and the one module gate) and the same suites stay green across default and UDP builds.
 - transport-06: Verify shutdown is idempotent and preserves pre-connect state (`shutdown_is_idempotent_and_preserves_finding`, UDP build).
+
+---
+
+## Removed / not wanted
+
+The following was deliberately removed from this repo and MUST NOT be reintroduced without an explicit ruling overturning the one cited.
+
+### sibling-path consumption of webrtc-unreliable-client
+
+- **What:** `socket/client` consuming the provider through the ordinary
+  relative sibling path (`../../../webrtc-unreliable-client`), restoring
+  commit `21d82b98` (never pushed).
+- **Why not:** trips the standing public-repo invariant (Connor 2026-09-17):
+  sibling path deps must never reach naia `dev`/`main`. Demonstrated by the
+  native `lint:public-paths` gate-leg on `21d82b98`
+  (`socket/client/Cargo.toml:39 escapes repo`, R0 stops the climb).
+- **Interim:** Kepler 2026-10-29 (pending Connor's final ruling) supersedes
+  only the 7zv "no re-vendor" clause: the sibling pin `15f7f85` is consumed
+  as the byte-exact vendor copy again, with zero local deltas. Revisit when
+  Connor rules; if he grants an exception, this entry records the switch.

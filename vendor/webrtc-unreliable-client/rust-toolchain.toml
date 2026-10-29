@@ -1,0 +1,13 @@
+# Pinned toolchain for webrtc-unreliable-client (nydus-7zv: one fleet
+# toolchain, Connor via Kepler 131481/131489 — every repo uses cyberlith's
+# pinned nightly from the single tress-owned source (nydus-h8v; moved
+# fleet-wide by Vale, once per cycle, like sibling pins).
+#
+# Why: naia consumes this provider through the ordinary sibling path, built
+# under the fleet nightly. Without this file each host builds on its own
+# floating stable, and Fabro correctly refuses to relay when the worker
+# cannot match the toolchain.
+[toolchain]
+channel = "nightly-2026-08-27"
+components = ["rustfmt", "clippy", "rust-src"]
+targets = ["wasm32-unknown-unknown"]

@@ -3,4 +3,4 @@
 # ruling 2026-09-17): each pinned sibling is consumed as a byte-exact vendor
 # copy under vendor/, never git/rev/tag and never a live out-of-repo path.
 # Refresh by re-archiving the sibling at the new SHA (see vendor/README.md).
-webrtc-unreliable-client = "8233c3f8b942631da68adc360ae52a1c4af0329f"
+webrtc-unreliable-client = "022e9dea73a10c1157fe81fab5eae41be3842aec"

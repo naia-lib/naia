@@ -45,10 +45,10 @@ x25519-dalek = { version = "2.0.1", features = ["static_secrets"]}
 hmac = { version = "0.12"}
 base64 = { version = "0.13" }
 
-# Vendored into naia (see naia vendor/README.md): the original
-# [dev-dependencies] back-path on ../naia/socket/server (used only by this
-# crate's own loopback test, never built when consumed as a dependency) is
-# excised so the vendor copy is self-contained. Re-apply on refresh.
+# The loopback interop tests that used to live in tests/loopback.rs now run
+# from naia's socket/server/tests (Kepler ruling, 2026-10-29): a path
+# dev-dep on naia cannot resolve when this crate is consumed as a vendored
+# dependency, so this crate carries no dev-dependencies.
 [target.'cfg(not(windows))'.dependencies]
 nix = { version = "0.23" }
 
