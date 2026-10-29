@@ -1,6 +1,9 @@
 # Naia's impact selector, inventoried from the 42 public workspace members.
-# 125 test-bearing Cargo targets share 122 logical target IDs; a same-name
-# library and binary keep both selectors in the same physical command.
+# 131 legs (8 lint floor + 123 test-selected checks); a same-name library
+# and binary keep both selectors in the same physical command. Six testless
+# demo bins left test selection per Kepler ruling seq 135988 option (b) and
+# live in [[cargo_targets.unchecked]]; their bins still compile under clippy
+# --workspace --all-targets on the static rung.
 # Rung adoption (nydus-kp4-rungs, fleet ladder TESTING.md R0-R3 / ADR 0006):
 # every suite check lands on exactly one [[rung]]; 'clerc impact run' is the
 # native aggregate. docs/IMPACT.md records scope, feature profiles and the
@@ -20,10 +23,8 @@ checks = [
     "lint:wasm-mquad",
     "lint:wasm-shared",
     "test:naia-basic-client-demo-app:naia_basic_client_demo_app",
-    "test:naia-basic-client-demo-mq:naia_basic_client_demo_mq",
     "test:naia-basic-client-demo-wb:naia_basic_client_demo_wb",
     "test:naia-basic-demo-shared:naia_basic_demo_shared",
-    "test:naia-basic-server-demo:naia-basic-server-demo",
     "test:naia-benches:component_kind_wire",
     "test:naia-benches:local_entity_wire",
     "test:naia-benches:many_kinds_no_64_cap",
@@ -35,7 +36,6 @@ checks = [
     "test:naia-bevy-demo-shared:naia_bevy_demo_shared",
     "test:naia-bevy-derive:naia_bevy_derive",
     "test:naia-bevy-metrics:naia_bevy_metrics",
-    "test:naia-bevy-server-demo:naia-bevy-server-demo",
     "test:naia-bevy-server:apply_receive_output_with_sim_receiver",
     "test:naia-bevy-server:authority_commands_bevy",
     "test:naia-bevy-server:change_tracker_order",
@@ -81,9 +81,7 @@ checks = [
     "test:naia-empty-world:naia_empty_world",
     "test:naia-ice-gather-sensor:session_proxy",
     "test:naia-loom:naia_loom",
-    "test:naia-macroquad-client-demo:naia_macroquad_client_demo",
     "test:naia-macroquad-demo-shared:naia_macroquad_demo_shared",
-    "test:naia-macroquad-server-demo:naia-macroquad-server-demo",
     "test:naia-metrics:naia_metrics",
     "test:naia-serde-derive-core:naia_serde_derive_core",
     "test:naia-serde-derive:naia_serde_derive",
@@ -117,7 +115,6 @@ checks = [
     "test:naia-shared:structural_registries",
     "test:naia-shared:unlabeled_surfaces",
     "test:naia-socket-client-demo-app:naia_socket_client_demo_app",
-    "test:naia-socket-client-demo-mq:naia_socket_client_demo_mq",
     "test:naia-socket-client-demo-wb:naia_socket_client_demo_wb",
     "test:naia-socket-demo-shared:naia_socket_demo_shared",
     "test:naia-socket-shared:naia_socket_shared",
@@ -164,6 +161,30 @@ prefix = "test"
 check = "test:webrtc-unreliable-client:webrtc_unreliable_client"
 reason = "Vendored provider's own lib unit tests: vendor/ is not a workspace member, so naia never builds this target; the provider's unit (9 passed) and loopback (6 passed) suites were qualified upstream at pin 15f7f85 (Fabro jobs f3e9497027bbb/fca879d396979, receipts held, sent Usher seq 133843). A re-vendor reselects naia dependents through the vendor/ fallback root."
 
+[[cargo_targets.unchecked]]
+check = "test:naia-basic-client-demo-mq:naia_basic_client_demo_mq"
+reason = "Kepler ruling seq 135988 option (b): testless demo bin, 0 #[test] attributes in demos/basic/client/miniquad/ (final2 leg 2/0 GREEN tests=null is the defect, zero-test gate is not coverage). Out of test selection; the bin still compiles under the static rung (clippy --workspace --all-targets)."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-basic-server-demo:naia-basic-server-demo"
+reason = "Kepler ruling seq 135988 option (b): testless demo bin, 0 #[test] attributes in demos/basic/server/ (final2 leg 2/1 GREEN tests=null). Out of test selection; the bin still compiles under the static rung."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-bevy-server-demo:naia-bevy-server-demo"
+reason = "Kepler ruling seq 135988 option (b): testless demo bin, 0 #[test] attributes in demos/bevy/server/ (final2 leg 2/4 GREEN tests=null). Out of test selection; the bin still compiles under the static rung."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-macroquad-client-demo:naia_macroquad_client_demo"
+reason = "Kepler ruling seq 135988 option (b): testless demo bin, 0 #[test] attributes in demos/macroquad/client/ (final2 leg 2/12 key 5679de09 RED on host libasound, final4 fresh-attempt UNKNOWN with 0 tests). Out of test selection; the bin still compiles under the static rung. Kepler seq 135995 also drops its libasound footgun (macroquad default-features = false; quad-alsa-sys/quad-snd gone from Cargo.lock)."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-macroquad-server-demo:naia-macroquad-server-demo"
+reason = "Kepler ruling seq 135988 option (b): testless demo bin, 0 #[test] attributes in demos/macroquad/server/ (final2 leg 2/13 GREEN tests=null). Out of test selection; the bin still compiles under the static rung."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-socket-client-demo-mq:naia_socket_client_demo_mq"
+reason = "Kepler ruling seq 135988 option (b): testless demo bin, 0 #[test] attributes in demos/socket/client/miniquad/ (final2 leg 2/17 GREEN tests=null). Out of test selection; the bin still compiles under the static rung."
+
 [[leg]]
 checks = ["lint:fmt"]
 argv = ["clerc", "plan-admin", "verify-fmt-fileset", "--root", "."]
@@ -202,20 +223,12 @@ checks = ["test:naia-basic-client-demo-app:naia_basic_client_demo_app"]
 argv = ["cargo", "test", "-p", "naia-basic-client-demo-app", "--lib", "--no-fail-fast"]
 
 [[leg]]
-checks = ["test:naia-basic-client-demo-mq:naia_basic_client_demo_mq"]
-argv = ["cargo", "test", "-p", "naia-basic-client-demo-mq", "--bin", "naia_basic_client_demo_mq", "--no-fail-fast"]
-
-[[leg]]
 checks = ["test:naia-basic-client-demo-wb:naia_basic_client_demo_wb"]
 argv = ["cargo", "test", "-p", "naia-basic-client-demo-wb", "--bin", "naia_basic_client_demo_wb", "--lib", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-basic-demo-shared:naia_basic_demo_shared"]
 argv = ["cargo", "test", "-p", "naia-basic-demo-shared", "--lib", "--no-fail-fast"]
-
-[[leg]]
-checks = ["test:naia-basic-server-demo:naia-basic-server-demo"]
-argv = ["cargo", "test", "-p", "naia-basic-server-demo", "--bin", "naia-basic-server-demo", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-benches:component_kind_wire"]
@@ -390,10 +403,6 @@ checks = ["test:naia-bevy-server:snapshot_world_wire_identity"]
 argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "snapshot_world_wire_identity", "--no-fail-fast"]
 
 [[leg]]
-checks = ["test:naia-bevy-server-demo:naia-bevy-server-demo"]
-argv = ["cargo", "test", "-p", "naia-bevy-server-demo", "--bin", "naia-bevy-server-demo", "--no-fail-fast"]
-
-[[leg]]
 checks = ["test:naia-bevy-shared:derive_flavor_parity"]
 argv = ["cargo", "test", "-p", "naia-bevy-shared", "--test", "derive_flavor_parity", "--no-fail-fast"]
 
@@ -446,16 +455,8 @@ checks = ["test:naia-loom:naia_loom"]
 argv = ["cargo", "test", "-p", "naia-loom", "--lib", "--no-fail-fast"]
 
 [[leg]]
-checks = ["test:naia-macroquad-client-demo:naia_macroquad_client_demo"]
-argv = ["cargo", "test", "-p", "naia-macroquad-client-demo", "--bin", "naia_macroquad_client_demo", "--no-fail-fast"]
-
-[[leg]]
 checks = ["test:naia-macroquad-demo-shared:naia_macroquad_demo_shared"]
 argv = ["cargo", "test", "-p", "naia-macroquad-demo-shared", "--lib", "--no-fail-fast"]
-
-[[leg]]
-checks = ["test:naia-macroquad-server-demo:naia-macroquad-server-demo"]
-argv = ["cargo", "test", "-p", "naia-macroquad-server-demo", "--bin", "naia-macroquad-server-demo", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-metrics:naia_metrics"]
@@ -588,10 +589,6 @@ argv = ["cargo", "test", "-p", "naia-shared", "--test", "unlabeled_surfaces", "-
 [[leg]]
 checks = ["test:naia-socket-client-demo-app:naia_socket_client_demo_app"]
 argv = ["cargo", "test", "-p", "naia-socket-client-demo-app", "--lib", "--no-fail-fast"]
-
-[[leg]]
-checks = ["test:naia-socket-client-demo-mq:naia_socket_client_demo_mq"]
-argv = ["cargo", "test", "-p", "naia-socket-client-demo-mq", "--bin", "naia_socket_client_demo_mq", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-socket-client-demo-wb:naia_socket_client_demo_wb"]
@@ -1465,6 +1462,11 @@ mode = "cargo-workspace"
 reason = "Resolve workspace dependency/profile changes through Cargo manifests; undecidable changes fall back."
 
 [[root]]
+path = "Cargo.lock"
+mode = "fallback"
+reason = "Tracked since 3b7d8035: the resolved dependency graph changes what every check builds and links against; conservatively select the whole suite."
+
+[[root]]
 path = "rust-toolchain.toml"
 mode = "fallback"
 reason = "The toolchain changes the meaning of every check."
@@ -1651,8 +1653,6 @@ budget_minutes = 30
 [[rung]]
 level = 2
 checks = [
-    "test:naia-basic-client-demo-mq:naia_basic_client_demo_mq",
-    "test:naia-basic-server-demo:naia-basic-server-demo",
     "test:naia-benches:component_kind_wire",
     "test:naia-benches:local_entity_wire",
     "test:naia-benches:many_kinds_no_64_cap",
@@ -1661,7 +1661,6 @@ checks = [
     "test:naia-bevy-server:apply_receive_output_with_sim_receiver",
     "test:naia-bevy-server:authority_commands_bevy",
     "test:naia-bevy-server:cross_frame_enable_bevy",
-    "test:naia-bevy-server-demo:naia-bevy-server-demo",
     "test:naia-bevy-server:change_tracker_order",
     "test:naia-bevy-server:replicated_resources_bevy",
     "test:naia-bevy-server:request_after_reconnect_client_plugin",
@@ -1697,8 +1696,6 @@ checks = [
     "test:naia-client-socket:naia_client_socket",
     "test:naia-compile-fail:compile_fail",
     "test:naia-ice-gather-sensor:session_proxy",
-    "test:naia-macroquad-client-demo:naia_macroquad_client_demo",
-    "test:naia-macroquad-server-demo:naia-macroquad-server-demo",
     "test:naia-server:naia_server",
     "test:naia-server-socket-demo:naia-server-socket-demo",
     "test:naia-shared:delegation_tag_stability",
@@ -1718,7 +1715,6 @@ checks = [
     "test:naia-shared:reject_reason_wire_stability",
     "test:naia-shared:structural_registries",
     "test:naia-shared:unlabeled_surfaces",
-    "test:naia-socket-client-demo-mq:naia_socket_client_demo_mq",
     "test:naia-socket-shared:naia_socket_shared",
     "test:naia-spec-tool:naia-spec-tool",
     "test:naia-test-harness:12_reconnect_cancel",

@@ -1,9 +1,11 @@
 # Naia impact selection
 
 The suite is `naia`, declared in `.clerc/impact.toml`. It inventories the
-42 public Cargo workspace members: 131 test-bearing targets share 128
-logical target IDs (129 legs at kp4 plus `lint:fmt` and six adopted
-2026-10-24 targets). Eight static checks form the mandatory floor. These
+42 public Cargo workspace members: 123 test-selected checks in 131 legs
+(8 lint floor + 123 test). Six testless demo bins left test selection
+per Kepler ruling seq 135988 option (b) and live in
+`[[cargo_targets.unchecked]]`; their bins still compile under the static
+rung. Eight static checks form the mandatory floor. These
 are target counts, not passing-test counts.
 
 This is the selector adoption authorized by Kepler 97404, with rung
@@ -76,6 +78,10 @@ path dev-dep cannot resolve vendored) run as
 client and server exist.
 A metadata target with zero executed tests is never behavioral coverage;
 report the native test counts and ignore counts alongside every result.
+`demos/macroquad/client` builds with `macroquad` `default-features = false`
+(Kepler seq 135995): the demo uses no audio code, and the default audio
+feature pulled `quad-snd`/`quad-alsa-sys`, forcing a host ALSA package on
+every build host. `quad-alsa-sys` and `quad-snd` are gone from `Cargo.lock`.
 
 ## Static floor and existing push protection
 
@@ -96,8 +102,9 @@ key. The mquad Wasm profile retains its explicit `-D warnings`.
 
 The public-path command examines every workspace member manifest and
 refuses a dependency escaping this public repository. Never add private
-sibling path dependencies to make a test executable. Cargo.lock remains
-an ignored developer artifact, as required by this library repository.
+sibling path dependencies to make a test executable. `Cargo.lock` is
+tracked since 3b7d8035 and declared in the map as a fallback `[[root]]`:
+a resolved-graph change conservatively selects the whole suite.
 
 Before a `dev` landing, qualify the committed content and require
 `clerc plan-admin land-key --root . --commit HEAD -- cargo clippy --workspace --all-targets --keep-going -- -D warnings`.

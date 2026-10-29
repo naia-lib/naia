@@ -497,24 +497,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "audir-sles"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea47348666a8edb7ad80cbee3940eb2bccf70df0e6ce09009abe1a836cb779f5"
-
-[[package]]
-name = "audrey"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58b92a84e89497e3cd25d3672cd5d1c288abaac02c18ff21283f17d118b889b8"
-dependencies = [
- "dasp_frame",
- "dasp_sample",
- "hound",
- "lewton",
-]
-
-[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -695,7 +677,7 @@ dependencies = [
  "derive_more",
  "downcast-rs",
  "serde",
- "smallvec 1.16.3",
+ "smallvec",
  "thiserror 2.0.21",
  "wgpu-types",
 ]
@@ -843,7 +825,7 @@ dependencies = [
  "nonmax",
  "serde",
  "slotmap",
- "smallvec 1.16.3",
+ "smallvec",
  "thiserror 2.0.21",
  "variadics_please",
 ]
@@ -1101,7 +1083,7 @@ dependencies = [
  "bevy_transform",
  "bevy_utils",
  "half",
- "smallvec 1.16.3",
+ "smallvec",
  "tracing",
  "wgpu-types",
 ]
@@ -1152,7 +1134,7 @@ dependencies = [
  "bevy_shader",
  "bevy_utils",
  "encase",
- "smallvec 1.16.3",
+ "smallvec",
  "thiserror 2.0.21",
  "tracing",
  "variadics_please",
@@ -1259,7 +1241,7 @@ dependencies = [
  "indexmap",
  "nonmax",
  "offset-allocator",
- "smallvec 1.16.3",
+ "smallvec",
  "static_assertions",
  "thiserror 2.0.21",
  "tracing",
@@ -1330,7 +1312,7 @@ dependencies = [
  "bevy_render",
  "bevy_shader",
  "bevy_utils",
- "smallvec 1.16.3",
+ "smallvec",
  "thiserror 2.0.21",
  "tracing",
 ]
@@ -1361,7 +1343,7 @@ dependencies = [
  "indexmap",
  "inventory",
  "serde",
- "smallvec 1.16.3",
+ "smallvec",
  "smol_str",
  "thiserror 2.0.21",
  "uuid",
@@ -1427,7 +1409,7 @@ dependencies = [
  "nonmax",
  "offset-allocator",
  "send_wrapper",
- "smallvec 1.16.3",
+ "smallvec",
  "thiserror 2.0.21",
  "variadics_please",
  "wasm-bindgen",
@@ -1464,7 +1446,7 @@ dependencies = [
  "bevy_reflect",
  "bevy_scene_macros",
  "bevy_utils",
- "smallvec 1.16.3",
+ "smallvec",
  "thiserror 2.0.21",
  "tracing",
  "variadics_please",
@@ -1624,7 +1606,7 @@ dependencies = [
  "bevy_utils",
  "parley",
  "serde",
- "smallvec 1.16.3",
+ "smallvec",
  "smol_str",
  "swash",
  "sys-locale",
@@ -1695,7 +1677,7 @@ dependencies = [
  "bevy_window",
  "derive_more",
  "parley",
- "smallvec 1.16.3",
+ "smallvec",
  "swash",
  "taffy",
  "thiserror 2.0.21",
@@ -2516,21 +2498,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dasp_frame"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2a3937f5fe2135702897535c8d4a5553f8b116f76c1529088797f2eee7c5cd6"
-dependencies = [
- "dasp_sample",
-]
-
-[[package]]
-name = "dasp_sample"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c87e182de0887fd5361989c677c4e8f5000cd9491d6d563161a8f3a5519fc7f"
-
-[[package]]
 name = "data-encoding"
 version = "2.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2906,7 +2873,7 @@ dependencies = [
  "memmap2",
  "parlance",
  "read-fonts 0.39.2",
- "smallvec 1.16.3",
+ "smallvec",
 ]
 
 [[package]]
@@ -3244,7 +3211,7 @@ dependencies = [
  "bytemuck",
  "core_maths",
  "read-fonts 0.39.2",
- "smallvec 1.16.3",
+ "smallvec",
 ]
 
 [[package]]
@@ -3355,12 +3322,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hound"
-version = "3.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62adaabb884c94955b19907d60019f4e145d091c75345379e70d1ee696f7854f"
-
-[[package]]
 name = "http"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3439,7 +3400,7 @@ dependencies = [
  "icu_normalizer_data",
  "icu_properties",
  "icu_provider",
- "smallvec 1.16.3",
+ "smallvec",
  "zerovec",
 ]
 
@@ -3498,7 +3459,7 @@ dependencies = [
  "icu_provider",
  "icu_segmenter_data",
  "potential_utf",
- "smallvec 1.16.3",
+ "smallvec",
  "utf8_iter",
  "zerovec",
 ]
@@ -3516,7 +3477,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b0875f23caa03898994f6ddc501886a45c7d3d62d04d2d90788d47be1b1e4de"
 dependencies = [
  "idna_adapter",
- "smallvec 1.16.3",
+ "smallvec",
  "utf8_iter",
 ]
 
@@ -3733,17 +3694,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 
 [[package]]
-name = "lewton"
-version = "0.9.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d542c1a317036c45c2aa1cf10cc9d403ca91eb2d333ef1a4917e5cb10628bd0"
-dependencies = [
- "byteorder",
- "ogg",
- "smallvec 0.6.14",
-]
-
-[[package]]
 name = "libc"
 version = "0.2.190"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3854,7 +3804,6 @@ dependencies = [
  "macroquad_macro",
  "miniquad",
  "quad-rand",
- "quad-snd",
 ]
 
 [[package]]
@@ -3880,12 +3829,6 @@ checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
 dependencies = [
  "regex-automata",
 ]
-
-[[package]]
-name = "maybe-uninit"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60302e4db3a61da70c0cb7991976248362f30319e88850c487b9b95bbf059e00"
 
 [[package]]
 name = "memchr"
@@ -4928,15 +4871,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ogg"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13e571c3517af9e1729d4c63571a27edd660ade0667973bfc74a67c660c2b651"
-dependencies = [
- "byteorder",
-]
-
-[[package]]
 name = "oid-registry"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5062,7 +4996,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "redox_syscall 0.5.18",
- "smallvec 1.16.3",
+ "smallvec",
  "windows-link",
 ]
 
@@ -5366,32 +5300,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
-name = "quad-alsa-sys"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c66c2f04a6946293477973d85adc251d502da51c57b08cd9c997f0cfd8dcd4b5"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "quad-rand"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a651516ddc9168ebd67b24afd085a718be02f8858fe406591b013d101ce2f40"
-
-[[package]]
-name = "quad-snd"
-version = "0.2.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cba0c4943fc67147fbe9d1eb731fb9e678bfc9d926507eebbbfe0103e154e5b0"
-dependencies = [
- "audir-sles",
- "audrey",
- "libc",
- "quad-alsa-sys",
- "winapi",
-]
 
 [[package]]
 name = "quick-error"
@@ -5995,15 +5907,6 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "0.6.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b97fcaeba89edba30f044a10c6a3cc39df9c3f17d7cd829dd1446cab35f890e0"
-dependencies = [
- "maybe-uninit",
-]
-
-[[package]]
-name = "smallvec"
 version = "1.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b3dc8af474f516a851ff4bd12db780f948b9250ad37211e4eec0bccea54e01b"
@@ -6457,7 +6360,7 @@ dependencies = [
  "once_cell",
  "regex-automata",
  "sharded-slab",
- "smallvec 1.16.3",
+ "smallvec",
  "thread_local",
  "tracing",
  "tracing-core",
@@ -6926,7 +6829,7 @@ dependencies = [
  "portable-atomic",
  "profiling",
  "raw-window-handle",
- "smallvec 1.16.3",
+ "smallvec",
  "static_assertions",
  "wasm-bindgen",
  "web-sys",
@@ -6958,7 +6861,7 @@ dependencies = [
  "profiling",
  "raw-window-handle",
  "rustc-hash",
- "smallvec 1.16.3",
+ "smallvec",
  "thiserror 2.0.21",
  "wgpu-core-deps-apple",
  "wgpu-core-deps-wasm",
@@ -7037,7 +6940,7 @@ dependencies = [
  "raw-window-handle",
  "raw-window-metal",
  "renderdoc-sys",
- "smallvec 1.16.3",
+ "smallvec",
  "thiserror 2.0.21",
  "wasm-bindgen",
  "wayland-sys",
