@@ -6774,7 +6774,9 @@ dependencies = [
 
 [[package]]
 name = "webrtc-unreliable-client"
-version = "0.5.0"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eeccc87ecfe18dac90b2b3b62ba6655551c5f493534ba9481e92c25a26ac4a49"
 dependencies = [
  "aes-gcm",
  "anyhow",

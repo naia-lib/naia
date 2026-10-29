@@ -36,7 +36,7 @@ tinyjson = { version = "2.3", optional = true }
 miniquad = { version = "0.3", features = ["log-impl"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-webrtc-unreliable-client = { version = "0.5.0", path = "../../vendor/webrtc-unreliable-client" }
+webrtc-unreliable-client = { version = "0.6.0" }
 smol = { version = "2" }
 async-channel = { version = "2" }
 futures-channel = { version = "0.3" }

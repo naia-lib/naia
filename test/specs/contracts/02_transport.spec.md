@@ -106,7 +106,7 @@ A sender whose socket and address state are owned by its attempt alone (UDP: fre
 
 **Obligations:**
 - **t1**: The native client socket (`naia-client-socket`, non-wasm backends) MUST run on smol. It MUST NOT construct or depend on a tokio runtime: spawning uses `smol::spawn` on the global executor, and all channels are runtime-agnostic (`async-channel`, `futures-channel`).
-- **t2**: `webrtc-unreliable-client` is consumed as a byte-exact vendor copy of the sibling pin (`siblings.lock`, see `vendor/README.md`), never a registry version that reintroduces a tokio runtime, and never a live out-of-repo path (public-repo invariant, Connor 2026-09-17). INTERIM (Kepler 2026-10-29, pending Connor): the sibling-path consumption ordered by 7zv trips the invariant, so the vendor copy stands until Connor rules; see Removed / not wanted below.
+- **t2**: `webrtc-unreliable-client` is consumed as the published registry version (`0.6.0`, smol runtime, no tokio), never a vendor copy and never a live out-of-repo path (public-repo invariant, Connor 2026-09-17; Connor 2026-10-29: "Obviously A is the only way to go. I'm furious that we ever vendored `webrtc-unreliable-client`!!!"). See Removed / not wanted below.
 
 ---
 
@@ -134,5 +134,17 @@ The following was deliberately removed from this repo and MUST NOT be reintroduc
   (`socket/client/Cargo.toml:39 escapes repo`, R0 stops the climb).
 - **Interim:** Kepler 2026-10-29 (pending Connor's final ruling) supersedes
   only the 7zv "no re-vendor" clause: the sibling pin `15f7f85` is consumed
-  as the byte-exact vendor copy again, with zero local deltas. Revisit when
-  Connor rules; if he grants an exception, this entry records the switch.
+  as the byte-exact vendor copy again, with zero local deltas. RESOLVED by
+  Connor 2026-10-29 (nydus-ffl): the provider is published as registry
+  `0.6.0` and consumed from the registry; see below.
+
+### vendoring of webrtc-unreliable-client
+
+- **What:** `socket/client` and `socket/server` consuming the provider
+  through the byte-exact vendor copy under `vendor/webrtc-unreliable-client`
+  (pin `022e9de`, refreshed per `vendor/README.md`, entry in
+  `siblings.lock`, fallback root in `.clerc/impact.toml`).
+- **Why not:** Connor 2026-10-29 (nydus-ffl): "Obviously A is the only way
+  to go. I'm furious that we ever vendored `webrtc-unreliable-client`!!!"
+  (A = publish to crates.io; naia depends on the published version; no
+  vendor copy).

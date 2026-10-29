@@ -32,5 +32,5 @@ base64 = { version = "0.13" }
 naia-client-socket = { version = "0.25", path = "../client" }
 # Raw-provider loopback interop (tests/webrtc_unreliable_loopback.rs,
 # relocated from the provider 2026-10-29): in-repo path, never escaping.
-webrtc-unreliable-client = { version = "0.5.0", path = "../../vendor/webrtc-unreliable-client" }
+webrtc-unreliable-client = { version = "0.6.0" }
 async-net = { version = "2" }

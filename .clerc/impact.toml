@@ -158,10 +158,6 @@ prefix = "test"
 # A Cargo target declaration is an inventory entry, never a test-count claim.
 
 [[cargo_targets.unchecked]]
-check = "test:webrtc-unreliable-client:webrtc_unreliable_client"
-reason = "Vendored provider's own lib unit tests: vendor/ is not a workspace member, so naia never builds this target; the provider's unit (9 passed) and loopback (6 passed) suites were qualified upstream at pin 15f7f85 (Fabro jobs f3e9497027bbb/fca879d396979, receipts held, sent Usher seq 133843). A re-vendor reselects naia dependents through the vendor/ fallback root."
-
-[[cargo_targets.unchecked]]
 check = "test:naia-basic-client-demo-mq:naia_basic_client_demo_mq"
 reason = "Kepler ruling seq 135988 option (b): testless demo bin, 0 #[test] attributes in demos/basic/client/miniquad/ (final2 leg 2/0 GREEN tests=null is the defect, zero-test gate is not coverage). Out of test selection; the bin still compiles under the static rung (clippy --workspace --all-targets)."
 
@@ -1475,11 +1471,6 @@ reason = "The toolchain changes the meaning of every check."
 path = "siblings.lock"
 mode = "fallback"
 reason = "Sibling pins change what the build resolves; conservatively select the whole suite."
-
-[[root]]
-path = "vendor/"
-mode = "fallback"
-reason = "Byte-exact snapshots of pinned siblings; a re-vendor changes provider bytes every dependent check builds against."
 
 [[root]]
 path = "AGENTS.md"
