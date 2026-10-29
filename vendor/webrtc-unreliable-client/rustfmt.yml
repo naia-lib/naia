@@ -1,0 +1,10 @@
+newline_style = "Unix"
+use_field_init_shorthand = true
+
+reorder_impl_items = true
+format_strings = false
+imports_granularity='Crate'
+unstable_features = true
+wrap_comments = true
+comment_width = 100
+normalize_comments = true

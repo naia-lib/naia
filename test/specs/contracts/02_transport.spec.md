@@ -106,7 +106,7 @@ A sender whose socket and address state are owned by its attempt alone (UDP: fre
 
 **Obligations:**
 - **t1**: The native client socket (`naia-client-socket`, non-wasm backends) MUST run on smol. It MUST NOT construct or depend on a tokio runtime: spawning uses `smol::spawn` on the global executor, and all channels are runtime-agnostic (`async-channel`, `futures-channel`).
-- **t2**: `webrtc-unreliable-client` is consumed by sibling path pin (`siblings.lock`), never a registry version that reintroduces a tokio runtime.
+- **t2**: `webrtc-unreliable-client` is consumed as a byte-exact vendor copy of the sibling pin (`siblings.lock`, see `vendor/README.md`), never a registry version that reintroduces a tokio runtime, and never a live out-of-repo path (public-repo invariant, Connor 2026-09-17).
 
 ---
 

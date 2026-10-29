@@ -1,3 +1,6 @@
-# Sibling pins: exact `dev` SHAs this naia revision builds against.
-# Path deps only, never git/rev/tag (sibling law, Connor 2026-10-22).
+# Sibling pins: exact SHAs this naia revision builds against.
+# Naia is public, so out-of-repo path deps are forbidden on dev (Connor
+# ruling 2026-09-17): each pinned sibling is consumed as a byte-exact vendor
+# copy under vendor/, never git/rev/tag and never a live out-of-repo path.
+# Refresh by re-archiving the sibling at the new SHA (see vendor/README.md).
 webrtc-unreliable-client = "8233c3f8b942631da68adc360ae52a1c4af0329f"

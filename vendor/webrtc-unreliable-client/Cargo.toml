@@ -1,0 +1,62 @@
+[package]
+name = "webrtc-unreliable-client"
+version = "0.5.0"
+authors = []
+description = "Just enough hacks to connect a native client to a https://github.com/triplehex/webrtc-unreliable server"
+license = "MIT OR Apache-2.0"
+edition = "2021"
+repository = "https://github.com/naia-lib/webrtc-unreliable-client"
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[features]
+
+
+[dependencies]
+anyhow = { version = "1.0"}
+bytes = { version = "1.1"}
+tinyjson = { version = "2.3" }
+smol = { version = "2" }
+futures-channel = { version = "0.3" }
+futures-core = { version = "0.3" }
+futures-util = { version = "0.3", features = ["io"] }
+async-lock = { version = "3" }
+async-net = { version = "2" }
+async-broadcast = { version = "0.7" }
+log = { version = "0.4" }
+async-trait = "0.1.52"
+rand = { version = "0.8.4"}
+thiserror = { version = "1.0.30"}
+waitgroup = { version = "0.1.2"}
+rcgen = { version = "0.12" }
+ring = { version = "0.17"}
+sha2 = { version = "0.10"}
+lazy_static = { version = "1.4.0"}
+crc = { version = "2.1.0"}
+ipnet = { version = "2.3.1"}
+byteorder = { version = "1.4.3"}
+subtle = { version = "2.4.1"}
+aes-gcm = { version = "0.10"}
+x509-parser = { version = "0.15.0"}
+rand_core = { version = "0.6.3"}
+p256 = { version = "0.13", features=["default", "ecdh", "ecdsa"] }
+x25519-dalek = { version = "2.0.1", features = ["static_secrets"]}
+hmac = { version = "0.12"}
+base64 = { version = "0.13" }
+
+# Vendored into naia (see naia vendor/README.md): the original
+# [dev-dependencies] back-path on ../naia/socket/server (used only by this
+# crate's own loopback test, never built when consumed as a dependency) is
+# excised so the vendor copy is self-contained. Re-apply on refresh.
+[target.'cfg(not(windows))'.dependencies]
+nix = { version = "0.23" }
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3.9", features = [
+    "basetsd",
+    "guiddef",
+    "ws2def",
+    "winerror",
+    "ws2ipdef",
+] }

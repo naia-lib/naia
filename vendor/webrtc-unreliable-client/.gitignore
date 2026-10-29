@@ -1,0 +1,12 @@
+/target
+**/*.rs.bk
+.idea
+.idea/*
+/Cargo.lock
+node_modules
+demo/client/miniquad/target
+demo/client/miniquad/target/
+demo/client/miniquad/target/*
+demo/client/wasm_bindgen/target
+demo/client/wasm_bindgen/target/
+demo/client/wasm_bindgen/target/*
