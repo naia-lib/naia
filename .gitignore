@@ -8,7 +8,8 @@
 test/specs/test_*_plan.json
 test/specs/test_*_report.json
 **/*.rs.bk
-/Cargo.lock
+# Cargo.lock IS tracked (fleet gate runs every leg with --locked on any host;
+# committed content must resolve without network re-resolve).
 node_modules
 /demos/basic/client/miniquad/target
 /demos/basic/client/miniquad/target/
