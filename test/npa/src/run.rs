@@ -14,9 +14,10 @@ use std::sync::Arc;
 use anyhow::{bail, Context, Result};
 use clap::Args;
 use namako_engine::codegen::{inventory, StepConstructor, WorldInventory};
+use namako_engine::evidence::{dispatch_step, scenario_result};
 use namako_engine::npap::{
-    BindingSignature, ResolvedPlan, RunReport, ScenarioResult, ScenarioStatus, SemanticBinding,
-    StepResult, StepStatus,
+    BindingSignature, PlannedStep, ResolvedPlan, RunReport, ScenarioResult, ScenarioStatus,
+    SemanticBinding, StepResult,
 };
 use namako_engine::step::{Context as StepContext, Step};
 use rayon::prelude::*;
@@ -52,6 +53,7 @@ pub struct RunArgs {
 struct StepEntry<W> {
     func: Step<W>,
     impl_hash: String,
+    binding: SemanticBinding,
     regex: regex::Regex,
 }
 
@@ -67,6 +69,10 @@ fn _assert_step_entry_sync<W>() {
 
 /// Build a dispatch table mapping binding_id → step entry from inventory.
 fn build_dispatch_table<W: WorldInventory>() -> HashMap<String, StepEntry<W>> {
+    let bindings: HashMap<String, SemanticBinding> = collect_bindings::<W>()
+        .into_iter()
+        .map(|b| (b.binding_id.clone(), b))
+        .collect();
     let mut table = HashMap::new();
 
     macro_rules! insert_steps {
@@ -80,6 +86,7 @@ fn build_dispatch_table<W: WorldInventory>() -> HashMap<String, StepEntry<W>> {
                         func,
                         impl_hash: meta.impl_hash.to_string(),
                         regex: regex_fn(),
+                        binding: bindings[meta.binding_id].clone(),
                     },
                 );
             }
@@ -166,118 +173,77 @@ fn levenshtein(a: &str, b: &str) -> usize {
     prev[b.len()]
 }
 
+/// Capture values the binding's own matcher extracts from `text`, in group
+/// order; empty when the text does not match.
+fn matched_captures(regex: &regex::Regex, text: &str) -> Vec<String> {
+    regex.captures(text).map_or_else(Vec::new, |caps| {
+        caps.iter()
+            .skip(1)
+            .map(|m| m.map_or_else(String::new, |m| m.as_str().to_owned()))
+            .collect()
+    })
+}
+
+/// Dispatches one planned step through namako's faithful dispatch boundary:
+/// the step function receives exactly the planned captures, docstring and
+/// table, and the executed identity is derived from those values.
+fn dispatch<W>(world: &mut W, step: &PlannedStep, entry: Option<&StepEntry<W>>) -> StepResult {
+    let captures = entry.map_or_else(Vec::new, |e| matched_captures(&e.regex, &step.step_text));
+    dispatch_step(step, entry.map(|e| &e.binding), &captures, |payload| {
+        let Some(e) = entry else {
+            return Err(format!("no step function for {}", payload.binding_id));
+        };
+        let context = StepContext {
+            step: namako_engine::gherkin::Step {
+                keyword: payload.effective_kind.to_owned(),
+                ty: match payload.effective_kind {
+                    "Given" => namako_engine::gherkin::StepType::Given,
+                    "When" => namako_engine::gherkin::StepType::When,
+                    _ => namako_engine::gherkin::StepType::Then,
+                },
+                value: payload.step_text.to_owned(),
+                docstring: payload.docstring.map(str::to_owned),
+                table: payload.datatable.map(|rows| namako_engine::gherkin::Table {
+                    rows: rows.to_vec(),
+                    span: namako_engine::gherkin::Span { start: 0, end: 0 },
+                    position: namako_engine::gherkin::LineCol { line: 0, col: 1 },
+                }),
+                span: namako_engine::gherkin::Span { start: 0, end: 0 },
+                position: namako_engine::gherkin::LineCol { line: 0, col: 1 },
+            },
+            matches: e
+                .regex
+                .capture_names()
+                .zip(std::iter::once(payload.step_text.to_owned()).chain(payload.captures.iter().cloned()))
+                .map(|(name, value)| (name.map(String::from), value))
+                .collect(),
+        };
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            futures::executor::block_on((e.func)(world, context));
+        }))
+        .map_err(|panic_info| {
+            panic_info
+                .downcast_ref::<&str>()
+                .map(|s| (*s).to_owned())
+                .or_else(|| panic_info.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "Step panicked".to_owned())
+        })
+    })
+}
+
 /// Execute a single scenario against the dispatch table.
 /// Each call creates a fresh `TestWorld`; no state is shared between calls.
 fn run_scenario(
     scenario: &namako_engine::npap::ResolvedScenario,
     dispatch_table: &HashMap<String, StepEntry<TestWorld>>,
 ) -> ScenarioResult {
-    let mut step_results = Vec::with_capacity(scenario.steps.len());
-    let mut scenario_status = ScenarioStatus::Passed;
     let mut world = TestWorld::default();
-
-    for step in &scenario.steps {
-        let entry = dispatch_table.get(&step.binding_id);
-
-        let step_result = match entry {
-            Some(e) => {
-                let mut captures = e.regex.capture_locations();
-                let names = e.regex.capture_names();
-                let matched = e.regex.captures_read(&mut captures, &step.step_text);
-
-                let matches: Vec<(Option<String>, String)> = if matched.is_some() {
-                    names
-                        .zip(std::iter::once(step.step_text.clone()).chain(
-                            (1..captures.len()).map(|group_id| {
-                                captures.get(group_id).map_or(String::new(), |(s, end)| {
-                                    step.step_text[s..end].to_string()
-                                })
-                            }),
-                        ))
-                        .map(|(name, val)| (name.map(String::from), val))
-                        .collect()
-                } else {
-                    vec![]
-                };
-
-                let context = StepContext {
-                    step: namako_engine::gherkin::Step {
-                        keyword: step.effective_kind.clone(),
-                        ty: match step.effective_kind.as_str() {
-                            "Given" => namako_engine::gherkin::StepType::Given,
-                            "When" => namako_engine::gherkin::StepType::When,
-                            _ => namako_engine::gherkin::StepType::Then,
-                        },
-                        value: step.step_text.clone(),
-                        docstring: None,
-                        table: None,
-                        span: namako_engine::gherkin::Span { start: 0, end: 0 },
-                        position: namako_engine::gherkin::LineCol { line: 0, col: 1 },
-                    },
-                    matches,
-                };
-
-                let exec_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    futures::executor::block_on((e.func)(&mut world, context))
-                }));
-
-                match exec_result {
-                    Ok(()) => StepResult {
-                        planned_binding_id: step.binding_id.clone(),
-                        executed_binding_id: step.binding_id.clone(),
-                        planned_payload_hash: step.payload_hash.clone(),
-                        executed_payload_hash: step.payload_hash.clone(),
-                        executed_impl_hash: e.impl_hash.clone(),
-                        status: StepStatus::Passed,
-                        error_message: None,
-                    },
-                    Err(panic_info) => {
-                        let msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
-                            s.to_string()
-                        } else if let Some(s) = panic_info.downcast_ref::<String>() {
-                            s.clone()
-                        } else {
-                            "Step panicked".to_string()
-                        };
-                        scenario_status = ScenarioStatus::Failed;
-                        StepResult {
-                            planned_binding_id: step.binding_id.clone(),
-                            executed_binding_id: step.binding_id.clone(),
-                            planned_payload_hash: step.payload_hash.clone(),
-                            executed_payload_hash: step.payload_hash.clone(),
-                            executed_impl_hash: e.impl_hash.clone(),
-                            status: StepStatus::Failed,
-                            error_message: Some(msg),
-                        }
-                    }
-                }
-            }
-            None => {
-                scenario_status = ScenarioStatus::Failed;
-                StepResult {
-                    planned_binding_id: step.binding_id.clone(),
-                    executed_binding_id: String::new(),
-                    planned_payload_hash: step.payload_hash.clone(),
-                    executed_payload_hash: String::new(),
-                    executed_impl_hash: String::new(),
-                    status: StepStatus::Failed,
-                    error_message: Some(format!("Unknown binding_id: {}", step.binding_id)),
-                }
-            }
-        };
-
-        if step_result.status == StepStatus::Failed {
-            scenario_status = ScenarioStatus::Failed;
-        }
-
-        step_results.push(step_result);
-    }
-
-    ScenarioResult {
-        scenario_key: scenario.scenario_key.clone(),
-        status: scenario_status,
-        steps: step_results,
-    }
+    let steps = scenario
+        .steps
+        .iter()
+        .map(|step| dispatch(&mut world, step, dispatch_table.get(&step.binding_id)))
+        .collect();
+    scenario_result(scenario.scenario_key.clone(), steps)
 }
 
 /// Run the run command.
