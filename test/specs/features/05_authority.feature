@@ -601,6 +601,7 @@ Feature: Entity Ownership, Publication, Delegation, Authority
       Then client A is granted authority for the delegated entity
       When client A releases authority for the delegated entity
       Then client A is available for the delegated entity
+      And client B is available for the delegated entity
       When client B requests authority for the delegated entity
       Then client B is granted authority for the delegated entity
 
