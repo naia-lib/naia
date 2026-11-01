@@ -162,3 +162,22 @@ fn when_n_ticks_elapse(ctx: &mut TestWorldMut, n: u32) {
     tick_n(ctx, n);
     ctx.scenario_mut().allow_flexible_next();
 }
+
+/// When the entity-property TTL elapses on a running client.
+///
+/// Advances more than 60 s of simulated time through observing ticks,
+/// so the client collects its events every tick like a running app and
+/// the buffered message starts its TTL when it arrives. Bare `mutate`
+/// ticks never collect, so the TTL would start only at include. Mirrors
+/// the in-process twin `messaging_19_entity_property_ttl`. Used by
+/// messaging-19.
+#[when("the entity-property TTL elapses on a running client")]
+fn when_entity_property_ttl_elapses(ctx: &mut TestWorldMut) {
+    use naia_shared::TestClock;
+    use naia_test_harness::ToTicks;
+    let start_ms = TestClock::current_time_ms();
+    ctx.scenario_mut()
+        .until(4000usize.ticks())
+        .expect(|_| (TestClock::current_time_ms() - start_ms > 60_000).then_some(()));
+    ctx.scenario_mut().allow_flexible_next();
+}
