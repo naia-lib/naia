@@ -2,11 +2,11 @@
 # Fast NPA adapter runner for naia BDD specs.
 #
 # Replaces `cargo run --manifest-path test/npa/Cargo.toml --` as the
-# adapter_cmd in .tesaki/config.toml. On warm builds (nothing changed),
+# adapter command (namako -a). On warm builds (nothing changed),
 # `cargo build` completes in < 0.5s. Cold builds pay the full compile cost
 # once; all subsequent invocations in the same session are fast.
 #
-# Usage (via .tesaki/config.toml):
+# Usage (as the namako adapter command):
 #   adapter_cmd = "bash test/npa/run_npa.sh"
 #
 # To force a release build (faster binary, slower compile):

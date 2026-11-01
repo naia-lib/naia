@@ -680,13 +680,11 @@ Feature: Synthetic\n\
 // Committed spec artifacts stay current
 // ============================================================================
 
-/// `test/specs/{resolved_plan,run_report,certification}.json` are committed
-/// and read by default (bench/suite reads the plan; Tesaki's gate reads the
-/// report and certification). This fails when any of them is stale against
-/// the live feature tree and step bindings.
+/// `test/specs/resolved_plan.json` is committed and read by default
+/// (bench/suite reads it). This fails when it is stale against the live
+/// feature tree and step bindings.
 ///
-/// To refresh: `namako lint -s test/specs -o resolved_plan.json`, run the
-/// adapter on that plan to `run_report.json`, then `namako update-cert`.
+/// To refresh: `namako lint -s test/specs -o resolved_plan.json -a <adapter>`.
 #[test]
 fn committed_spec_artifacts_match_live_specs() {
     let fresh_plan = "staleness_plan.json";
@@ -707,21 +705,5 @@ fn committed_spec_artifacts_match_live_specs() {
     assert_eq!(
         committed, fresh,
         "test/specs/resolved_plan.json is stale against the live specs; regenerate it"
-    );
-
-    let verify_output = run_namako_cli(
-        "verify",
-        &[
-            "-s",
-            ".",
-            "-r",
-            "run_report.json",
-            "-c",
-            "certification.json",
-        ],
-    );
-    assert_success(
-        &verify_output,
-        "committed run_report.json and certification.json verify against the live specs",
     );
 }

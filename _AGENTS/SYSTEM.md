@@ -16,7 +16,7 @@
 - `test/npa/`: Namako Protocol Adapter (test runner).
 - `test/harness/`: Test harness with Scenario abstraction.
 
-## 2. Spec-Driven Development (SDD) with Namako + Tesaki
+## 2. Spec-Driven Development (SDD) with Namako
 
 ### Quick Start (for new agents)
 
@@ -24,25 +24,6 @@
 # Check current status
 cd naia
 namako lint --adapter-cmd "cargo run --manifest-path test/npa/Cargo.toml --" --specs-dir test/specs
-
-# Run autonomous development loop
-tesaki
-> loop 10   # Runs up to 10 missions autonomously
-```
-
-### The SDD Stack
-1. **Namako** - Measures truth (parses specs, runs tests, produces packets)
-2. **Tesaki** - Drives development (selects missions, invokes runners, validates)
-3. **Runner** - Executes missions (Copilot CLI, Claude Code, Codex)
-
-### Configuration
-```toml
-# naia/.tesaki/config.toml
-specs_dir = "test/specs"
-adapter_cmd = "cargo run --manifest-path test/npa/Cargo.toml --"
-runner = "copilot"
-planner = "copilot"
-max_retries = 0
 ```
 
 ## 3. Current State (2026-02-02)
@@ -68,20 +49,6 @@ max_retries = 0
 2. **Run lint**: `namako lint ...` to see missing bindings
 3. **Add bindings**: Create step functions in `test/tests/src/steps/`
 4. **Verify**: `namako gate ...` should pass
-
-### B. Using Tesaki Autonomous Mode
-```bash
-tesaki
-> loop 5   # Run 5 missions
-> exit
-```
-
-Or interactively:
-```bash
-tesaki
-> propose a mission
-> run it
-```
 
 ### C. Manual Commands
 ```bash
@@ -118,8 +85,6 @@ async fn client_connected(world: &mut NaiaWorld) {
 ## 6. Best Practices
 
 1. **Spec is truth** - If code and spec disagree, spec wins
-2. **Small missions** - One focused task > large batch
-3. **`max_retries = 0`** - Fresh context beats stale retries
 4. **Check lint first** - Always know your binding status before coding
 
 ## 7. Troubleshooting
@@ -127,9 +92,7 @@ async fn client_connected(world: &mut NaiaWorld) {
 | Issue | Solution |
 |-------|----------|
 | "Missing bindings" | Add step functions matching the Gherkin text |
-| "Dirty workspace" | Use `tesaki` REPL (auto-allows dirty) |
 | "Gate failed" | Check `namako gate --json` for details |
-| "Copilot not found" | Install GitHub Copilot CLI |
 
 ---
 
