@@ -147,7 +147,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
     # removes it from the client without destroying it on the server; true despawn
     # removes it from the server entirely. These three events are distinct.
     @Scenario(03)
-    Scenario: [entity-scopes-08] Room entry and exit control client visibility lifecycle
+    Scenario: [entity-scopes-16] Room entry and exit control client visibility lifecycle
       Given a server is running
       And a client connects
       And a server-owned entity exists with a replicated component
@@ -206,7 +206,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
     # server. Re-including the entity restores visibility. True despawn removes
     # the entity from the server entirely and cannot be reversed.
     @Scenario(04)
-    Scenario: [entity-scopes-15] Scope leave is reversible; true despawn is permanent
+    Scenario: [entity-scopes-17] Scope leave is reversible; true despawn is permanent
       Given a server is running
       And a client connects
       And a server-owned entity exists
