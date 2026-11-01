@@ -273,7 +273,7 @@ Feature: Messaging Channel Semantics
       Given a server is running
       And a client connects
       And the server spawns an entity not yet in client scope with a pending entity-command
-      When 4000 ticks elapse
+      When the entity-property TTL elapses on a running client
       And the server includes the entity for the client
       And the client collects all reliable entity-command messages
       Then the client received no entity-command messages
