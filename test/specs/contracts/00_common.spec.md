@@ -402,6 +402,12 @@ The following were deliberately removed from this repo and MUST NOT be reintrodu
 - **Why:** no git-hook build enforcement in this Kingdom; hooks duplicate Fabro legs instead of crediting them and block landing on fleet capacity. Seam gates (clerc/clippy/CI) own build enforcement.
 - **Ruled by:** Connor, 2026-10-22, via Trevor/Kepler (NO GIT HOOKS, naia main-protection hook possibly the only keeper; relayed Usher 107809).
 
+### Tesaki
+
+- **What:** `.tesaki/config.toml`, the Tesaki instructions in `_AGENTS/SYSTEM.md` §2, and the committed `test/specs/certification.json` and `test/specs/run_report.json`, removed 2026-11-01. The committed-artifact staleness check covers `resolved_plan.json` only.
+- **Why:** Tesaki: a second orchestrator; retired Nov 1, 2026 by Usher (King) on fleet doctrine; it was dormant since May.
+- **Ruled by:** Usher (King), 2026-11-01. Restore from git history only if Connor says Tesaki is wanted.
+
 ### controller presence in naia
 
 - **What:** `shared/src/messages/presence.rs` (`PresenceProducer`, `PresenceTracker`, `SeatBitmap`, epoch/sequence carrier, miss-count freshness), its `shared/src/lib.rs` export and its tests, removed 2026-10-27.
