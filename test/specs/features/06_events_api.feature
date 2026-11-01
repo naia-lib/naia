@@ -479,12 +479,12 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     # still observe the driver's advancing time, so connected sends are not
     # gated shut (RED 108734: frozen translate starved ClientTickEvent,
     # stalling the post-rejoin publish within 200 ticks).
+    # Covered in-process by adapters/bevy/client/tests/request_after_reconnect_client_plugin.rs
+    # (RED pre-fix, GREEN at fix). Row stays stepless @PolicyOnly: its steps had no
+    # bindings and red the npa lint (NASH 2026-10-31, nydus-386).
+    @PolicyOnly
     @Scenario(24)
     Scenario: [client-events-15] TickEvent fires when the tick pipeline runs off the driving thread
-      Given a server is running
-      And a client connects
-      When the client's tick pipeline runs on a thread that never advances the simulated clock
-      Then the client observes tick events and its queued request is answered within 200 ticks
 
 
   # ==========================================================================
