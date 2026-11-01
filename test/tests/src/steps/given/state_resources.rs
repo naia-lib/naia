@@ -20,7 +20,7 @@ fn given_protocol_with_score(_ctx: &mut TestWorldMut) {
     let p = protocol();
     let kind = naia_shared::ComponentKind::of::<TestScore>();
     assert!(
-        p.resource_kinds.is_resource(&kind),
+        p.resource_kinds.is_resource(kind),
         "TestScore must be registered as a resource"
     );
 }
@@ -32,7 +32,7 @@ fn given_protocol_with_matchstate(_ctx: &mut TestWorldMut) {
     let p = protocol();
     let kind = naia_shared::ComponentKind::of::<TestMatchState>();
     assert!(
-        p.resource_kinds.is_resource(&kind),
+        p.resource_kinds.is_resource(kind),
         "TestMatchState must be registered as a resource"
     );
 }
@@ -44,7 +44,7 @@ fn given_protocol_with_player_selection(_ctx: &mut TestWorldMut) {
     let p = protocol();
     let kind = naia_shared::ComponentKind::of::<TestPlayerSelection>();
     assert!(
-        p.resource_kinds.is_resource(&kind),
+        p.resource_kinds.is_resource(kind),
         "TestPlayerSelection must be registered as a resource"
     );
 }
