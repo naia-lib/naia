@@ -675,3 +675,53 @@ Feature: Synthetic\n\
         "output contains gate-failed message",
     );
 }
+
+// ============================================================================
+// Committed spec artifacts stay current
+// ============================================================================
+
+/// `test/specs/{resolved_plan,run_report,certification}.json` are committed
+/// and read by default (bench/suite reads the plan; Tesaki's gate reads the
+/// report and certification). This fails when any of them is stale against
+/// the live feature tree and step bindings.
+///
+/// To refresh: `namako lint -s test/specs -o resolved_plan.json`, run the
+/// adapter on that plan to `run_report.json`, then `namako update-cert`.
+#[test]
+fn committed_spec_artifacts_match_live_specs() {
+    let fresh_plan = "staleness_plan.json";
+    let lint_output = run_namako_cli("lint", &["-s", ".", "-o", fresh_plan]);
+    assert_success(&lint_output, "lint for staleness check");
+
+    let header = |name: &str| -> serde_json::Value {
+        let path = specs_dir().join(name);
+        let text =
+            fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+        let json: serde_json::Value =
+            serde_json::from_str(&text).unwrap_or_else(|e| panic!("parse {}: {e}", path.display()));
+        json["header"].clone()
+    };
+    let fresh = header(fresh_plan);
+    let committed = header("resolved_plan.json");
+    let _ = fs::remove_file(specs_dir().join(fresh_plan));
+    assert_eq!(
+        committed, fresh,
+        "test/specs/resolved_plan.json is stale against the live specs; regenerate it"
+    );
+
+    let verify_output = run_namako_cli(
+        "verify",
+        &[
+            "-s",
+            ".",
+            "-r",
+            "run_report.json",
+            "-c",
+            "certification.json",
+        ],
+    );
+    assert_success(
+        &verify_output,
+        "committed run_report.json and certification.json verify against the live specs",
+    );
+}
