@@ -6,8 +6,8 @@ use clap::Args;
 use namako_engine::codegen::{inventory, StepConstructor, WorldInventory};
 use namako_engine::evidence::{dispatch_step, scenario_result};
 use namako_engine::npap::{
-    BindingSignature, PlannedStep, ResolvedPlan, RunReport, ScenarioResult, ScenarioStatus,
-    SemanticBinding, StepResult,
+    BindingSignature, PlannedStep, ResolvedPlan, RunReport, ScenarioStatus, SemanticBinding,
+    StepResult,
 };
 use namako_engine::step::{Context as StepContext, Step};
 
@@ -23,7 +23,6 @@ pub struct RunArgs {
 
 struct StepEntry<W> {
     func: Step<W>,
-    impl_hash: String,
     binding: SemanticBinding,
     regex: regex::Regex,
 }
@@ -41,7 +40,6 @@ fn build_dispatch_table<W: WorldInventory>() -> HashMap<String, StepEntry<W>> {
             meta.binding_id.to_string(),
             StepEntry {
                 func,
-                impl_hash: meta.impl_hash.to_string(),
                 regex: regex_fn(),
                 binding: bindings[meta.binding_id].clone(),
             },
@@ -54,8 +52,8 @@ fn build_dispatch_table<W: WorldInventory>() -> HashMap<String, StepEntry<W>> {
             meta.binding_id.to_string(),
             StepEntry {
                 func,
-                impl_hash: meta.impl_hash.to_string(),
                 regex: regex_fn(),
+                binding: bindings[meta.binding_id].clone(),
             },
         );
     }
@@ -66,8 +64,8 @@ fn build_dispatch_table<W: WorldInventory>() -> HashMap<String, StepEntry<W>> {
             meta.binding_id.to_string(),
             StepEntry {
                 func,
-                impl_hash: meta.impl_hash.to_string(),
                 regex: regex_fn(),
+                binding: bindings[meta.binding_id].clone(),
             },
         );
     }
@@ -165,7 +163,10 @@ fn dispatch<W>(world: &mut W, step: &PlannedStep, entry: Option<&StepEntry<W>>) 
             matches: e
                 .regex
                 .capture_names()
-                .zip(std::iter::once(payload.step_text.to_owned()).chain(payload.captures.iter().cloned()))
+                .zip(
+                    std::iter::once(payload.step_text.to_owned())
+                        .chain(payload.captures.iter().cloned()),
+                )
                 .map(|(name, value)| (name.map(String::from), value))
                 .collect(),
         };
