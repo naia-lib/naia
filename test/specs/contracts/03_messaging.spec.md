@@ -293,6 +293,26 @@ For UnorderedReliable / OrderedReliable / SequencedReliable:
 - If a user attempts to send a message requiring more than the bound, Naia MUST return `Result::Err`. (user-initiated)
 - If Naia internally attempts to exceed this bound, Naia MUST panic. (framework invariant)
 
+### [messaging-16c] — Inconsistent fragment indices and overlapping ranges are dropped
+
+For every reliable channel, a fragment sequence fixes its first message index
+from the first arriving fragment: `message_index - fragment_index`, wrapping
+in the u16 message-index space. Every subsequent fragment MUST have
+`message_index == first_message_index + fragment_index` with the same wrapping.
+Mismatches are dropped before payload insertion or reassembly, including when
+fragment zero arrives last. A rejected fragment does not replace accepted data.
+The ordered arranger MUST drop stale or overlapping message ranges without
+partially occupying slots or replacing accepted messages. Remote input MUST
+NOT panic (common-02). Drops warn for diagnosis; warnings remain non-normative
+and tests do not assert on logs (common-04/common-07).
+
+**Test obligations:**
+- `messaging-16c.t1`: On ordered and unordered reliable receivers, fragments
+  0 and 1 of 3 at message indices 5 and 6, plain message 7, then fragment 2 at
+  8 do not panic or deliver the malformed reassembly; accepted plain data remains.
+- `messaging-16c.t2`: An overlapping ordered range is rejected atomically;
+  missing slots can still be filled and accepted data delivered in order.
+
 ### [messaging-16b] — Request/response bodies exceeding MTU MUST be fragmented transparently
 
 **Obligations:**
