@@ -9,6 +9,7 @@ cfg_if! {
 
         use super::compression_config::CompressionMode;
 
+        /// Encodes packet bodies using the configured compression mode.
         pub struct Encoder {
             mode: CompressionMode,
             result: Vec<u8>,
@@ -28,6 +29,7 @@ cfg_if! {
         }
 
         impl Encoder {
+            /// Creates an encoder with the configured compression mode.
             pub fn new(compression_mode: CompressionMode) -> Self {
                 let encoder = match &compression_mode {
                     CompressionMode::Training(sample_size) => {
@@ -49,6 +51,7 @@ cfg_if! {
                 }
             }
 
+            /// Encodes a packet body, including its compression flag.
             pub fn encode(&mut self, payload: &[u8]) -> &[u8] {
                 match &mut self.encoder {
                     EncoderType::DictionaryTrainer(trainer) => {
@@ -57,7 +60,7 @@ cfg_if! {
                         self.result = Vec::with_capacity(1 + payload.len());
                         self.result.push(0u8);
                         self.result.extend_from_slice(payload);
-                        return &self.result;
+                        &self.result
                     }
                     EncoderType::Compressor(encoder) => {
                         let compressed = encoder.compress(payload).expect("encode error");
@@ -72,7 +75,7 @@ cfg_if! {
                             self.result.push(0u8);
                             self.result.extend_from_slice(payload);
                         }
-                        return &self.result;
+                        &self.result
                     }
                 }
             }
