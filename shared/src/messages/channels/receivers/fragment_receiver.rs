@@ -210,6 +210,61 @@ mod tests {
     /// Reassembly must still work, and must not depend on arrival order -- the
     /// payloads are keyed by index now rather than written into a pre-sized Vec.
     #[test]
+    fn reused_fragment_id_does_not_mix_incomplete_generations() {
+        use crate::messages::channels::senders::message_fragmenter::MessageFragmenter;
+        use crate::Protocol;
+
+        let mut protocol = Protocol::builder();
+        protocol.add_message::<StringMessage>();
+        let protocol = protocol.build();
+        let kinds = &protocol.message_kinds;
+        let mut fragmenter = MessageFragmenter::new();
+        let mut make_fragments = |value: char| {
+            fragmenter.fragment_message(
+                kinds,
+                &mut FakeEntityConverter,
+                MessageContainer::new(Box::new(StringMessage {
+                    inner: value.to_string().repeat(1000),
+                })),
+            )
+        };
+        let old = make_fragments('a');
+        for _ in 1..1024 {
+            make_fragments('x');
+        }
+        let new = make_fragments('b');
+        assert_eq!(old.len(), new.len());
+        assert!(old.len() > 1);
+        let mut receiver = FragmentReceiver::new();
+        assert!(receiver
+            .receive(kinds, &FakeEntityConverter, 0, old[0].clone())
+            .is_none());
+        // The old first fragment remains in flight when its ten-bit ID wraps.
+        // Later fragments from the new generation must not complete it.
+        for (index, fragment) in new.iter().enumerate().skip(1) {
+            assert!(receiver
+                .receive(kinds, &FakeEntityConverter, 4000 + index as u16, fragment.clone())
+                .is_none());
+        }
+        let (_, _, rebuilt) = receiver
+            .receive(kinds, &FakeEntityConverter, 4000, new[0].clone())
+            .expect("new generation reassembles independently");
+        assert_eq!(
+            rebuilt.to_boxed_any().downcast::<StringMessage>().unwrap().inner,
+            "b".repeat(1000)
+        );
+        let mut rebuilt_old = None;
+        for (index, fragment) in old.into_iter().enumerate().skip(1) {
+            rebuilt_old = receiver.receive(kinds, &FakeEntityConverter, index as u16, fragment);
+        }
+        let (_, _, rebuilt) = rebuilt_old.expect("old generation remains intact");
+        assert_eq!(
+            rebuilt.to_boxed_any().downcast::<StringMessage>().unwrap().inner,
+            "a".repeat(1000)
+        );
+    }
+
+    #[test]
     fn a_real_fragmented_message_reassembles_in_any_order() {
         use crate::messages::channels::senders::message_fragmenter::MessageFragmenter;
         use crate::Protocol;
