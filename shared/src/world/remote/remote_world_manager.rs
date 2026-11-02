@@ -120,6 +120,7 @@ impl RemoteWorldManager {
         authed_entities.insert(remote_entity);
     }
 
+    /// Returns the auth diagnostic for one remote entity's channel (E2E-debug only).
     #[cfg(feature = "e2e_debug")]
     pub fn debug_channel_diagnostic(
         &self,
@@ -130,10 +131,11 @@ impl RemoteWorldManager {
     )> {
         self.remote_engine
             .get_world()
-            .get(remote_entity)
+            .get(&remote_entity)
             .map(|channel| channel.debug_auth_diagnostic())
     }
 
+    /// Returns the channel snapshot for one remote entity (E2E-debug only).
     #[cfg(feature = "e2e_debug")]
     pub fn debug_channel_snapshot(
         &self,
@@ -147,7 +149,7 @@ impl RemoteWorldManager {
     )> {
         self.remote_engine
             .get_world()
-            .get(remote_entity)
+            .get(&remote_entity)
             .map(|channel| channel.debug_channel_snapshot())
     }
 

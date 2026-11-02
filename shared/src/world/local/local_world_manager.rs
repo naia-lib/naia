@@ -750,6 +750,7 @@ impl LocalWorldManager {
         self.em_read().remote_entities()
     }
 
+    /// Returns the auth diagnostic for one remote entity's channel (E2E-debug only).
     #[cfg(feature = "e2e_debug")]
     pub fn debug_remote_channel_diagnostic(
         &self,
@@ -761,6 +762,7 @@ impl LocalWorldManager {
         self.remote.debug_channel_diagnostic(remote_entity)
     }
 
+    /// Returns the channel snapshot for one remote entity (E2E-debug only).
     #[cfg(feature = "e2e_debug")]
     pub fn debug_remote_channel_snapshot(
         &self,
