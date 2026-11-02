@@ -240,3 +240,79 @@ impl<A: ReceiverArranger> MessageChannelReceiver for ReliableMessageReceiver<A> 
         )
     }
 }
+
+#[cfg(test)]
+mod fragment_index_contract_tests {
+    use super::*;
+    use crate::{
+        messages::channels::{
+            receivers::{
+                ordered_reliable_receiver::OrderedReliableReceiver,
+                unordered_reliable_receiver::UnorderedReliableReceiver,
+            },
+            senders::message_fragmenter::MessageFragmenter,
+        },
+        world::test_support::TestGwm,
+        ComponentKinds, FakeEntityConverter, HostType, Protocol,
+    };
+    use naia_derive::MessageInternal;
+
+    #[derive(MessageInternal)]
+    struct Body {
+        value: String,
+    }
+
+    // messaging-16c.t1: actual reliable receive funnel, both arrangements.
+    fn attack<A: ReceiverArranger>(mut receiver: ReliableMessageReceiver<A>, ordered: bool) {
+        let mut protocol = Protocol::builder();
+        protocol.add_message::<Body>();
+        let protocol = protocol.build();
+        let kinds = &protocol.message_kinds;
+        let components = ComponentKinds::new();
+        let gwm = TestGwm::new(&components);
+        let mut world = LocalWorldManager::new(&None, HostType::Server, 0, &gwm);
+        let plain = || {
+            MessageContainer::new(Box::new(Body {
+                value: "plain".into(),
+            }))
+        };
+        for index in 0..5 {
+            receiver.buffer_message(kinds, &mut world, index, plain());
+        }
+        let fragments = MessageFragmenter::new().fragment_message(
+            kinds,
+            &mut FakeEntityConverter,
+            MessageContainer::new(Box::new(Body {
+                value: "x".repeat(1000),
+            })),
+        );
+        assert_eq!(fragments.len(), 3);
+        let mut fragments = fragments.into_iter();
+        receiver.buffer_message(kinds, &mut world, 5, fragments.next().unwrap());
+        receiver.buffer_message(kinds, &mut world, 6, fragments.next().unwrap());
+        receiver.buffer_message(kinds, &mut world, 7, plain());
+        receiver.buffer_message(kinds, &mut world, 8, fragments.next().unwrap());
+        // The malformed sequence never becomes an application message. Ordered
+        // delivery retains its gap; unordered delivery still delivers plain 7.
+        assert_eq!(
+            receiver.incoming_messages.len(),
+            if ordered { 5 } else { 6 }
+        );
+        for message in receiver.incoming_messages {
+            assert_eq!(
+                message.to_boxed_any().downcast::<Body>().unwrap().value,
+                "plain"
+            );
+        }
+    }
+
+    #[test]
+    fn messaging_16c_t1_ordered_fragment_index_attack_is_dropped() {
+        attack(OrderedReliableReceiver::new(), true);
+    }
+
+    #[test]
+    fn messaging_16c_t1_unordered_fragment_index_attack_is_dropped() {
+        attack(UnorderedReliableReceiver::new(), false);
+    }
+}
