@@ -152,6 +152,12 @@ UnorderedReliable:
 - MUST dedupe so each message is observed at most once
 - MUST NOT guarantee send-order delivery
 
+Deduplication state MUST survive draining received payloads while an earlier
+message index remains missing. A retransmission of an already complete payload
+is not a placeholder upgrade. A genuine placeholder may upgrade to complete
+content once; subsequent complete retransmissions MUST be ignored. This applies
+to all reliable channel modes and to entity-command receive buffering.
+
 ---
 
 ## OrderedReliable

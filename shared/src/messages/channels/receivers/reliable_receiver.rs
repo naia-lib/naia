@@ -12,9 +12,16 @@ use crate::{sequence_less_than, MessageIndex};
 /// unconfigured channel falls back to.
 const MAX_RECEIVE_WINDOW: u16 = u16::MAX / 2;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ReceivedState {
+    Missing,
+    Placeholder,
+    Complete,
+}
+
 pub struct ReliableReceiver<M> {
     oldest_received_message_index: MessageIndex,
-    record: VecDeque<(MessageIndex, bool)>,
+    record: VecDeque<(MessageIndex, ReceivedState)>,
     incoming_messages: Vec<(MessageIndex, M)>,
     max_receive_window: Option<u16>,
 }
@@ -117,44 +124,36 @@ impl<M> ReliableReceiver<M> {
 
         loop {
             let mut should_push_message = false;
-            // Immutable pre-probe: the record borrow must end before the
-            // upgrade path below touches `incoming_messages`.
-            let duplicate_read = matches!(
-                self.record.get(current_index),
-                Some((old_message_index, true)) if *old_message_index == message_index
-            );
-            if duplicate_read {
-                // Same id re-read. A placeholder may upgrade to real content
-                // on retransmit: deliver the richest content per id, never
-                // strand an upgrade.
-                match self
-                    .incoming_messages
-                    .iter_mut()
-                    .find(|(id, _)| *id == message_index)
-                {
-                    Some((_, buffered))
-                        if buffered.is_placeholder() && !message.is_placeholder() =>
-                    {
-                        *buffered = message;
+            if let Some((old_message_index, state)) = self.record.get_mut(current_index) {
+                if *old_message_index == message_index && *state != ReceivedState::Missing {
+                    // The record outlives the drained payload while an earlier
+                    // index is missing. Remember its richness here, rather than
+                    // treating every absent payload as an upgradeable placeholder.
+                    if *state == ReceivedState::Placeholder && !message.is_placeholder() {
+                        *state = ReceivedState::Complete;
+                        if let Some((_, buffered)) = self
+                            .incoming_messages
+                            .iter_mut()
+                            .find(|(id, _)| *id == message_index)
+                        {
+                            *buffered = message;
+                        } else {
+                            self.incoming_messages.push((message_index, message));
+                        }
                         return BufferOutcome::ReplacedUpgrade;
                     }
-                    None if !message.is_placeholder() => {
-                        // The old content was already taken; the upgrade
-                        // still has to be delivered.
-                        self.incoming_messages.push((message_index, message));
-                        self.clear_old_messages();
-                        return BufferOutcome::ReplacedUpgrade;
-                    }
-                    _ => {
-                        // already received this message
-                        return BufferOutcome::IgnoredDuplicate;
-                    }
+                    return BufferOutcome::IgnoredDuplicate;
                 }
             }
             if current_index < self.record.len() {
                 if let Some((old_message_index, old_message)) = self.record.get_mut(current_index) {
-                    if *old_message_index == message_index && !(*old_message) {
-                        *old_message = true;
+                    if *old_message_index == message_index && *old_message == ReceivedState::Missing
+                    {
+                        *old_message = if message.is_placeholder() {
+                            ReceivedState::Placeholder
+                        } else {
+                            ReceivedState::Complete
+                        };
                         should_push_message = true;
                     }
                 }
@@ -164,10 +163,18 @@ impl<M> ReliableReceiver<M> {
                     .wrapping_add(current_index as u16);
 
                 if next_message_index == message_index {
-                    self.record.push_back((next_message_index, true));
+                    self.record.push_back((
+                        next_message_index,
+                        if message.is_placeholder() {
+                            ReceivedState::Placeholder
+                        } else {
+                            ReceivedState::Complete
+                        },
+                    ));
                     should_push_message = true;
                 } else {
-                    self.record.push_back((next_message_index, false));
+                    self.record
+                        .push_back((next_message_index, ReceivedState::Missing));
                     // keep filling up buffer
                 }
             }
@@ -186,8 +193,8 @@ impl<M> ReliableReceiver<M> {
         // clear all received messages from record
         loop {
             let mut has_message = false;
-            if let Some((_, true)) = self.record.front() {
-                has_message = true;
+            if let Some((_, state)) = self.record.front() {
+                has_message = *state != ReceivedState::Missing;
             }
             if has_message {
                 self.record.pop_front();
