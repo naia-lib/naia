@@ -187,7 +187,7 @@ argv = ["clerc", "plan-admin", "verify-fmt-fileset", "--root", "."]
 
 [[leg]]
 checks = ["lint:clippy"]
-argv = ["cargo", "clippy", "--workspace", "--all-targets", "--keep-going", "--", "-D", "warnings"]
+argv = ["cargo", "clippy", "--workspace", "--all-targets", "--features", "naia-bevy-client/transport_udp,naia-bevy-client/interior_visibility,naia-bevy-metrics/client,naia-bevy-metrics/server,naia-bevy-server/transport_udp,naia-bevy-server/interior_visibility,naia-bevy-shared/address_validation,naia-bevy-shared/transport_local,naia-client/zstd_support,naia-server/zstd_support", "--keep-going", "--", "-D", "warnings"]
 
 [[leg]]
 checks = ["lint:native-check"]
@@ -1518,11 +1518,6 @@ mode = "scan-only"
 reason = "Documentation hosting marker."
 
 [[root]]
-path = ".tesaki/"
-mode = "scan-only"
-reason = "Scenario authoring configuration outside the public Cargo workspace."
-
-[[root]]
 path = "CHANGELOG.md"
 mode = "scan-only"
 reason = "Release notes, not a runtime or test input."
@@ -1750,3 +1745,63 @@ checks = [
     "test:naia-test-harness:integration_only_06_entity_scopes",
 ]
 budget_minutes = 60
+
+[[cargo_targets.uncovered_feature]]
+package = "naia-bevy-client"
+feature = "f3_diag"
+reason = "Diagnostic frame tracing; excluded by Usher160979 from required product-feature coverage."
+
+[[cargo_targets.uncovered_feature]]
+package = "naia-bevy-server"
+feature = "bench_instrumentation"
+reason = "Benchmark instrumentation; excluded by Usher160979 from required product-feature coverage."
+
+[[cargo_targets.uncovered_feature]]
+package = "naia-bevy-server"
+feature = "e2e_debug"
+reason = "End-to-end diagnostic tracing; excluded by Usher160979 from required product-feature coverage."
+
+[[cargo_targets.uncovered_feature]]
+package = "naia-bevy-server"
+feature = "f3_diag"
+reason = "Diagnostic frame tracing; excluded by Usher160979 from required product-feature coverage."
+
+[[cargo_targets.uncovered_feature]]
+package = "naia-bevy-server"
+feature = "pipeline_timing"
+reason = "Pipeline timing diagnostics; excluded by Usher160979 from required product-feature coverage."
+
+[[cargo_targets.uncovered_feature]]
+package = "naia-client"
+feature = "e2e_debug"
+reason = "End-to-end diagnostic tracing; excluded by Usher160979 from required product-feature coverage."
+
+[[cargo_targets.uncovered_feature]]
+package = "naia-client"
+feature = "f3_diag"
+reason = "Diagnostic frame tracing; excluded by Usher160979 from required product-feature coverage."
+
+[[cargo_targets.uncovered_feature]]
+package = "naia-server"
+feature = "e2e_debug"
+reason = "End-to-end diagnostic tracing; excluded by Usher160979 from required product-feature coverage."
+
+[[cargo_targets.uncovered_feature]]
+package = "naia-server"
+feature = "f3_diag"
+reason = "Diagnostic frame tracing; excluded by Usher160979 from required product-feature coverage."
+
+[[cargo_targets.uncovered_feature]]
+package = "naia-shared"
+feature = "e2e_debug"
+reason = "End-to-end diagnostic tracing; excluded by Usher160979 from required product-feature coverage."
+
+[[cargo_targets.uncovered_feature]]
+package = "naia-test-harness"
+feature = "e2e_debug"
+reason = "End-to-end diagnostic tracing; excluded by Usher160979 from required product-feature coverage."
+
+[[cargo_targets.uncovered_feature]]
+package = "naia-test-harness"
+feature = "test_utils"
+reason = "Test-only harness helpers; excluded by Usher160979 from required product-feature coverage."
