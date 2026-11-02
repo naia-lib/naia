@@ -235,7 +235,15 @@ mod tests {
             let last = fragments.len() - 1;
             let mut result = None;
             for (i, (index, fragment)) in fragments.into_iter().enumerate() {
-                let out = receiver.receive(kinds, &FakeEntityConverter, index as u16, fragment);
+                // Reverse arrival also crosses the u16 boundary: the first
+                // arrival must establish the same wrapped origin as fragment 0.
+                let origin = if reverse { u16::MAX - 1 } else { 0 };
+                let out = receiver.receive(
+                    kinds,
+                    &FakeEntityConverter,
+                    origin.wrapping_add(index as u16),
+                    fragment,
+                );
                 if i == last {
                     result = out;
                 }
