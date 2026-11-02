@@ -33,95 +33,6 @@ pub trait ReceiverArranger: Send + Sync {
     ) -> Vec<MessageContainer>;
 }
 
-#[cfg(test)]
-mod retransmit_tests {
-    use super::*;
-    use crate::{
-        messages::channels::{
-            receivers::{
-                ordered_reliable_receiver::OrderedReliableReceiver,
-                unordered_reliable_receiver::UnorderedReliableReceiver,
-            },
-            senders::message_fragmenter::MessageFragmenter,
-        },
-        world::test_support::TestGwm,
-        ComponentKinds, FakeEntityConverter, HostType, Protocol,
-    };
-    use naia_derive::MessageInternal;
-
-    #[derive(MessageInternal)]
-    struct Body {
-        value: String,
-    }
-
-    fn retransmit_behind_gap<A: ReceiverArranger>(
-        mut receiver: ReliableMessageReceiver<A>,
-        ordered: bool,
-    ) {
-        let mut protocol = Protocol::builder();
-        protocol.add_message::<Body>();
-        let protocol = protocol.build();
-        let kinds = &protocol.message_kinds;
-        let components = ComponentKinds::new();
-        let gwm = TestGwm::new(&components);
-        let mut world = LocalWorldManager::new(&None, HostType::Server, 0, &gwm);
-        let fragments = MessageFragmenter::new().fragment_message(
-            kinds,
-            &mut FakeEntityConverter,
-            MessageContainer::new(Box::new(Body {
-                value: "x".repeat(1000),
-            })),
-        );
-        assert_eq!(fragments.len(), 3);
-        // Keep index 0 missing, so the deduplication record retains 1..3.
-        // buffer_message drains the inner reliable receiver on every arrival.
-        for _ in 0..2 {
-            for (offset, fragment) in fragments.iter().enumerate() {
-                receiver.buffer_message(kinds, &mut world, offset as u16 + 1, fragment.clone());
-            }
-        }
-        assert_eq!(receiver.incoming_messages.len(), usize::from(!ordered));
-        receiver.buffer_message(
-            kinds,
-            &mut world,
-            0,
-            MessageContainer::new(Box::new(Body {
-                value: "gap".into(),
-            })),
-        );
-        assert_eq!(receiver.incoming_messages.len(), 2);
-        let bodies: Vec<_> = receiver
-            .incoming_messages
-            .into_iter()
-            .map(|message| message.to_boxed_any().downcast::<Body>().unwrap().value)
-            .collect();
-        assert_eq!(
-            bodies
-                .iter()
-                .filter(|value| **value == "x".repeat(1000))
-                .count(),
-            1
-        );
-        assert_eq!(
-            bodies
-                .iter()
-                .filter(|value| value.as_str() == "gap")
-                .count(),
-            1
-        );
-    }
-
-    #[test]
-    fn ordered_fragment_retransmits_behind_gap_deliver_once() {
-        retransmit_behind_gap(OrderedReliableReceiver::new(), true);
-    }
-
-    #[test]
-    fn unordered_fragment_retransmits_behind_gap_deliver_once() {
-        retransmit_behind_gap(UnorderedReliableReceiver::new(), false);
-    }
-}
-
 // Reliable Receiver
 pub struct ReliableMessageReceiver<A: ReceiverArranger> {
     reliable_receiver: ReliableReceiver<MessageContainer>,
@@ -327,5 +238,94 @@ impl<A: ReceiverArranger> MessageChannelReceiver for ReliableMessageReceiver<A> 
             std::mem::take(&mut self.incoming_requests),
             std::mem::take(&mut self.incoming_responses),
         )
+    }
+}
+
+#[cfg(test)]
+mod retransmit_tests {
+    use super::*;
+    use crate::{
+        messages::channels::{
+            receivers::{
+                ordered_reliable_receiver::OrderedReliableReceiver,
+                unordered_reliable_receiver::UnorderedReliableReceiver,
+            },
+            senders::message_fragmenter::MessageFragmenter,
+        },
+        world::test_support::TestGwm,
+        ComponentKinds, FakeEntityConverter, HostType, Protocol,
+    };
+    use naia_derive::MessageInternal;
+
+    #[derive(MessageInternal)]
+    struct Body {
+        value: String,
+    }
+
+    fn retransmit_behind_gap<A: ReceiverArranger>(
+        mut receiver: ReliableMessageReceiver<A>,
+        ordered: bool,
+    ) {
+        let mut protocol = Protocol::builder();
+        protocol.add_message::<Body>();
+        let protocol = protocol.build();
+        let kinds = &protocol.message_kinds;
+        let components = ComponentKinds::new();
+        let gwm = TestGwm::new(&components);
+        let mut world = LocalWorldManager::new(&None, HostType::Server, 0, &gwm);
+        let fragments = MessageFragmenter::new().fragment_message(
+            kinds,
+            &mut FakeEntityConverter,
+            MessageContainer::new(Box::new(Body {
+                value: "x".repeat(1000),
+            })),
+        );
+        assert_eq!(fragments.len(), 3);
+        // Keep index 0 missing, so the deduplication record retains 1..3.
+        // buffer_message drains the inner reliable receiver on every arrival.
+        for _ in 0..2 {
+            for (offset, fragment) in fragments.iter().enumerate() {
+                receiver.buffer_message(kinds, &mut world, offset as u16 + 1, fragment.clone());
+            }
+        }
+        assert_eq!(receiver.incoming_messages.len(), usize::from(!ordered));
+        receiver.buffer_message(
+            kinds,
+            &mut world,
+            0,
+            MessageContainer::new(Box::new(Body {
+                value: "gap".into(),
+            })),
+        );
+        assert_eq!(receiver.incoming_messages.len(), 2);
+        let bodies: Vec<_> = receiver
+            .incoming_messages
+            .into_iter()
+            .map(|message| message.to_boxed_any().downcast::<Body>().unwrap().value)
+            .collect();
+        assert_eq!(
+            bodies
+                .iter()
+                .filter(|value| **value == "x".repeat(1000))
+                .count(),
+            1
+        );
+        assert_eq!(
+            bodies
+                .iter()
+                .filter(|value| value.as_str() == "gap")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn ordered_fragment_retransmits_behind_gap_deliver_once() {
+        retransmit_behind_gap(OrderedReliableReceiver::new(), true);
+    }
+
+    #[test]
+    fn unordered_fragment_retransmits_behind_gap_deliver_once() {
+        retransmit_behind_gap(UnorderedReliableReceiver::new(), false);
     }
 }

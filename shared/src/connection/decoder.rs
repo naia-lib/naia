@@ -2,6 +2,7 @@ cfg_if! {
     if #[cfg(feature = "zstd_support")]
     {
         use zstd::bulk::Decompressor;
+        use parking_lot::Mutex;
 
         use super::compression_config::CompressionMode;
 
@@ -9,7 +10,8 @@ cfg_if! {
         pub struct Decoder {
             mode: CompressionMode,
             result: Vec<u8>,
-            decoder: Option<Decompressor<'static>>,
+            // Keep the Send-only zstd context inaccessible through shared refs.
+            decoder: Mutex<Option<Decompressor<'static>>>,
         }
 
         // Manual `Clone`: zstd's `Decompressor` is stateless across
@@ -40,7 +42,7 @@ cfg_if! {
 
                 Self {
                     mode: compression_mode,
-                    decoder,
+                    decoder: Mutex::new(decoder),
                     result: Vec::new(),
                 }
             }
@@ -62,7 +64,7 @@ cfg_if! {
                 };
 
                 if is_compressed {
-                    if let Some(decoder) = &mut self.decoder {
+                    if let Some(decoder) = self.decoder.get_mut() {
                         // [115662-2] common-02: corrupt compressed bytes fail
                         // the read instead of panicking on the expects.
                         let bound = Decompressor::<'static>::upper_bound(data)?;
@@ -117,6 +119,26 @@ mod corrupt_payload_tests {
     // [115662-2] GREEN: the flag byte says compressed but the body is no
     // zstd frame. Pre-fix this panicked (`upper bound decode error`
     // expect at :60); post-fix it decodes to `None`.
+    #[test]
+    fn compression_contexts_are_send_sync_and_round_trip_after_move() {
+        use crate::connection::encoder::Encoder;
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<Encoder>();
+        assert_send_sync::<Decoder>();
+        let encoder = Encoder::new(CompressionMode::Default(1));
+        let decoder = Decoder::new(CompressionMode::Default(1));
+        std::thread::spawn(move || {
+            let mut encoder = encoder;
+            let mut decoder = decoder;
+            let payload = vec![42; 1024];
+            let encoded = encoder.encode(&payload);
+            assert_eq!(encoded[0], 1);
+            assert_eq!(decoder.decode(encoded), Some(payload.as_slice()));
+        })
+        .join()
+        .unwrap();
+    }
+
     #[test]
     fn corrupt_compressed_payload_probe() {
         // common-02: corrupt inbound bytes decode to `None` (the io layer

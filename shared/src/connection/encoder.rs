@@ -4,6 +4,7 @@ cfg_if! {
         use std::fs;
 
         use log::info;
+        use parking_lot::Mutex;
 
         use zstd::{bulk::Compressor, dict::from_continuous};
 
@@ -13,7 +14,9 @@ cfg_if! {
         pub struct Encoder {
             mode: CompressionMode,
             result: Vec<u8>,
-            encoder: EncoderType,
+            // zstd contexts are Send but not Sync. They are never exposed via
+            // shared access; the mutex preserves that boundary for ECS resources.
+            encoder: Mutex<EncoderType>,
         }
 
         // Manual `Clone`: zstd's `Compressor` handle is not `Clone`, so a
@@ -47,13 +50,13 @@ cfg_if! {
                 Self {
                     mode: compression_mode,
                     result: Vec::new(),
-                    encoder,
+                    encoder: Mutex::new(encoder),
                 }
             }
 
             /// Encodes a packet body, including its compression flag.
             pub fn encode(&mut self, payload: &[u8]) -> &[u8] {
-                match &mut self.encoder {
+                match self.encoder.get_mut() {
                     EncoderType::DictionaryTrainer(trainer) => {
                         trainer.record_bytes(payload);
                         // Training mode: emit uncompressed with is_compressed=0 prefix

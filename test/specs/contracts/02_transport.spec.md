@@ -36,6 +36,18 @@ This spec does **not** own:
 
 ## Contracts
 
+### Compression context ownership
+
+Enabling optional packet compression MUST preserve the endpoint types' `Send`
+and `Sync` requirements, including Bevy resources. Codec contexts remain private
+and encoding/decoding requires exclusive mutable access; sharing an endpoint
+must not permit concurrent access to a native compression context. Moving a
+codec to another thread preserves packet round-trip behavior.
+
+**Test obligations:**
+- Compression encoders and decoders satisfy `Send + Sync`, and compressed
+  packets round-trip after their contexts move to another thread.
+
 ### [transport-01] — Naia assumes transport is unordered & unreliable
 
 **Obligations:**
