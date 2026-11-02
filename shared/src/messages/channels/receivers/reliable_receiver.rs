@@ -206,7 +206,45 @@ impl<M> ReliableReceiver<M> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ReliableReceiver, UpgradableMessage, MAX_RECEIVE_WINDOW};
+    use super::{BufferOutcome, ReliableReceiver, UpgradableMessage, MAX_RECEIVE_WINDOW};
+
+    #[test]
+    fn drained_message_duplicate_behind_a_gap_is_not_an_upgrade() {
+        let mut receiver = ReliableReceiver::<u32>::new();
+        assert_eq!(receiver.buffer_message(1, 42), BufferOutcome::Buffered);
+        assert_eq!(receiver.receive_messages(), vec![(1, 42)]);
+        assert_eq!(
+            receiver.buffer_message(1, 42),
+            BufferOutcome::IgnoredDuplicate
+        );
+        assert!(receiver.receive_messages().is_empty());
+        receiver.buffer_message(0, 7);
+        assert_eq!(receiver.receive_messages(), vec![(0, 7)]);
+    }
+
+    #[test]
+    fn drained_placeholder_upgrades_exactly_once_behind_a_gap() {
+        #[derive(Debug, PartialEq, Eq)]
+        struct Payload(Option<u32>);
+        impl UpgradableMessage for Payload {
+            fn is_placeholder(&self) -> bool {
+                self.0.is_none()
+            }
+        }
+        let mut receiver = ReliableReceiver::new();
+        receiver.buffer_message(1, Payload(None));
+        assert_eq!(receiver.receive_messages(), vec![(1, Payload(None))]);
+        assert_eq!(
+            receiver.buffer_message(1, Payload(Some(42))),
+            BufferOutcome::ReplacedUpgrade
+        );
+        assert_eq!(receiver.receive_messages(), vec![(1, Payload(Some(42)))]);
+        assert_eq!(
+            receiver.buffer_message(1, Payload(Some(42))),
+            BufferOutcome::IgnoredDuplicate
+        );
+        assert!(receiver.receive_messages().is_empty());
+    }
 
     /// Test integers are never placeholders.
     impl UpgradableMessage for u8 {
