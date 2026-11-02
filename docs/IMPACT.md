@@ -109,3 +109,13 @@ a resolved-graph change conservatively selects the whole suite.
 Before a `dev` landing, qualify the committed content and require
 `clerc plan-admin land-key --root . --commit HEAD -- cargo clippy --workspace --all-targets --keep-going -- -D warnings`.
 A native process success without valid content-key credit is UNKNOWN.
+
+## Required product-feature coverage
+
+Usher160979 (November 1, 2026) requires the existing strict workspace Clippy
+leg to enable the previously uncovered native transport, visibility, compression
+and metrics product features. Their dependency feature closure includes UDP's
+ureq/local_ipaddress and shared zstd. Diagnostic frame tracing, e2e diagnostics,
+benchmark instrumentation, pipeline timing and test-only harness helpers are
+explicitly named with individual reasons under `cargo_targets.uncovered_feature`.
+These exclusions do not waive any product feature or weaken Clippy warnings.
