@@ -1518,11 +1518,6 @@ mode = "scan-only"
 reason = "Documentation hosting marker."
 
 [[root]]
-path = ".tesaki/"
-mode = "scan-only"
-reason = "Scenario authoring configuration outside the public Cargo workspace."
-
-[[root]]
 path = "CHANGELOG.md"
 mode = "scan-only"
 reason = "Release notes, not a runtime or test input."
