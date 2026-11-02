@@ -1791,49 +1791,61 @@ checks = [
 budget_minutes = 60
 
 [[cargo_targets.uncovered_feature]]
-feature = "naia-bevy-client/f3_diag"
+package = "naia-bevy-client"
+feature = "f3_diag"
 reason = "Diagnostic frame tracing; excluded by Usher160979 from required product-feature coverage."
 
 [[cargo_targets.uncovered_feature]]
-feature = "naia-bevy-server/bench_instrumentation"
+package = "naia-bevy-server"
+feature = "bench_instrumentation"
 reason = "Benchmark instrumentation; excluded by Usher160979 from required product-feature coverage."
 
 [[cargo_targets.uncovered_feature]]
-feature = "naia-bevy-server/e2e_debug"
+package = "naia-bevy-server"
+feature = "e2e_debug"
 reason = "End-to-end diagnostic tracing; excluded by Usher160979 from required product-feature coverage."
 
 [[cargo_targets.uncovered_feature]]
-feature = "naia-bevy-server/f3_diag"
+package = "naia-bevy-server"
+feature = "f3_diag"
 reason = "Diagnostic frame tracing; excluded by Usher160979 from required product-feature coverage."
 
 [[cargo_targets.uncovered_feature]]
-feature = "naia-bevy-server/pipeline_timing"
+package = "naia-bevy-server"
+feature = "pipeline_timing"
 reason = "Pipeline timing diagnostics; excluded by Usher160979 from required product-feature coverage."
 
 [[cargo_targets.uncovered_feature]]
-feature = "naia-client/e2e_debug"
+package = "naia-client"
+feature = "e2e_debug"
 reason = "End-to-end diagnostic tracing; excluded by Usher160979 from required product-feature coverage."
 
 [[cargo_targets.uncovered_feature]]
-feature = "naia-client/f3_diag"
+package = "naia-client"
+feature = "f3_diag"
 reason = "Diagnostic frame tracing; excluded by Usher160979 from required product-feature coverage."
 
 [[cargo_targets.uncovered_feature]]
-feature = "naia-server/e2e_debug"
+package = "naia-server"
+feature = "e2e_debug"
 reason = "End-to-end diagnostic tracing; excluded by Usher160979 from required product-feature coverage."
 
 [[cargo_targets.uncovered_feature]]
-feature = "naia-server/f3_diag"
+package = "naia-server"
+feature = "f3_diag"
 reason = "Diagnostic frame tracing; excluded by Usher160979 from required product-feature coverage."
 
 [[cargo_targets.uncovered_feature]]
-feature = "naia-shared/e2e_debug"
+package = "naia-shared"
+feature = "e2e_debug"
 reason = "End-to-end diagnostic tracing; excluded by Usher160979 from required product-feature coverage."
 
 [[cargo_targets.uncovered_feature]]
-feature = "naia-test-harness/e2e_debug"
+package = "naia-test-harness"
+feature = "e2e_debug"
 reason = "End-to-end diagnostic tracing; excluded by Usher160979 from required product-feature coverage."
 
 [[cargo_targets.uncovered_feature]]
-feature = "naia-test-harness/test_utils"
+package = "naia-test-harness"
+feature = "test_utils"
 reason = "Test-only harness helpers; excluded by Usher160979 from required product-feature coverage."
