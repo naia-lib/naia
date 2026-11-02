@@ -9,7 +9,8 @@ use crate::{
 };
 
 /// One in-flight fragment sequence: the declared total, the message index of
-/// fragment 0 once it arrives, and the payloads received so far keyed by index.
+/// fragment 0 inferred from its reliable message index, and the payloads keyed
+/// by fragment index. The reliable start distinguishes reused fragment IDs.
 ///
 /// Payloads live in a map rather than a pre-sized `Vec` on purpose. `total` is
 /// read off the wire, so pre-sizing let a peer make the server allocate a slot
@@ -18,12 +19,12 @@ use crate::{
 /// Keyed storage costs only what actually arrived.
 struct FragmentEntry {
     total: u32,
-    first_message_index: Option<MessageIndex>,
+    first_message_index: MessageIndex,
     payloads: HashMap<u32, Box<[u8]>>,
 }
 
 pub struct FragmentReceiver {
-    map: HashMap<FragmentId, FragmentEntry>,
+    map: HashMap<(FragmentId, MessageIndex), FragmentEntry>,
 }
 
 impl FragmentReceiver {
@@ -69,14 +70,16 @@ impl FragmentReceiver {
             return None;
         }
 
-        let entry = self
-            .map
-            .entry(fragment_id)
-            .or_insert_with(|| FragmentEntry {
-                total: fragment_total,
-                first_message_index: None,
-                payloads: HashMap::new(),
-            });
+        // Fragment IDs wrap after 1024 groups. A missing fragment can keep an
+        // older group alive past that wrap, so the ID alone is not its identity.
+        // Senders allocate consecutive reliable indices for a whole group.
+        let first_message_index = message_index.wrapping_sub(fragment_index as u16);
+        let group = (fragment_id, first_message_index);
+        let entry = self.map.entry(group).or_insert_with(|| FragmentEntry {
+            total: fragment_total,
+            first_message_index,
+            payloads: HashMap::new(),
+        });
 
         // A later fragment disagreeing with the total the sequence was opened
         // with cannot be reassembled into anything coherent.
@@ -86,14 +89,6 @@ impl FragmentReceiver {
                 entry.total
             );
             return None;
-        }
-
-        if fragment_index == 0 {
-            if entry.first_message_index.is_some() {
-                warn!("Discarding repeated first fragment (id={fragment_id:?}).");
-                return None;
-            }
-            entry.first_message_index = Some(message_index);
         }
 
         // Counting insertions rather than arrivals: repeating one index used to
@@ -113,11 +108,8 @@ impl FragmentReceiver {
 
         // Complete. Every index is distinct and below `total`, so the sequence
         // covers 0..total exactly and reassembles in index order.
-        let entry = self.map.remove(&fragment_id).unwrap();
-        let Some(first_message_index) = entry.first_message_index else {
-            warn!("Discarding complete fragment sequence (id={fragment_id:?}) missing its first fragment.");
-            return None;
-        };
+        let entry = self.map.remove(&group).unwrap();
+        let first_message_index = entry.first_message_index;
         let mut payloads = entry.payloads;
         let mut concat_list: Vec<u8> = Vec::new();
         for index in 0..entry.total {
@@ -243,14 +235,23 @@ mod tests {
         // Later fragments from the new generation must not complete it.
         for (index, fragment) in new.iter().enumerate().skip(1) {
             assert!(receiver
-                .receive(kinds, &FakeEntityConverter, 4000 + index as u16, fragment.clone())
+                .receive(
+                    kinds,
+                    &FakeEntityConverter,
+                    4000 + index as u16,
+                    fragment.clone()
+                )
                 .is_none());
         }
         let (_, _, rebuilt) = receiver
             .receive(kinds, &FakeEntityConverter, 4000, new[0].clone())
             .expect("new generation reassembles independently");
         assert_eq!(
-            rebuilt.to_boxed_any().downcast::<StringMessage>().unwrap().inner,
+            rebuilt
+                .to_boxed_any()
+                .downcast::<StringMessage>()
+                .unwrap()
+                .inner,
             "b".repeat(1000)
         );
         let mut rebuilt_old = None;
@@ -259,7 +260,11 @@ mod tests {
         }
         let (_, _, rebuilt) = rebuilt_old.expect("old generation remains intact");
         assert_eq!(
-            rebuilt.to_boxed_any().downcast::<StringMessage>().unwrap().inner,
+            rebuilt
+                .to_boxed_any()
+                .downcast::<StringMessage>()
+                .unwrap()
+                .inner,
             "a".repeat(1000)
         );
     }
@@ -280,12 +285,13 @@ mod tests {
 
         for reverse in [false, true] {
             let mut fragmenter = MessageFragmenter::new();
-            let mut fragments = fragmenter.fragment_message(
+            let fragments = fragmenter.fragment_message(
                 kinds,
                 &mut FakeEntityConverter,
                 MessageContainer::new(Box::new(original.clone())),
             );
             assert!(fragments.len() > 1, "test payload must actually fragment");
+            let mut fragments: Vec<_> = fragments.into_iter().enumerate().collect();
             if reverse {
                 fragments.reverse();
             }
@@ -293,9 +299,9 @@ mod tests {
             let mut receiver = FragmentReceiver::new();
             let last = fragments.len() - 1;
             let mut result = None;
-            for (i, fragment) in fragments.into_iter().enumerate() {
-                let out = receiver.receive(kinds, &FakeEntityConverter, i as u16, fragment);
-                if i == last {
+            for (arrival, (index, fragment)) in fragments.into_iter().enumerate() {
+                let out = receiver.receive(kinds, &FakeEntityConverter, index as u16, fragment);
+                if arrival == last {
                     result = out;
                 }
             }

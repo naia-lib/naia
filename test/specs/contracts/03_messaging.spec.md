@@ -292,6 +292,11 @@ For UnorderedUnreliable and SequencedUnreliable:
 - **t1**: Reliable channels MAY fragment up to a hard bound.
 For UnorderedReliable / OrderedReliable / SequencedReliable:
 - Naia MAY fragment a message across multiple packets.
+- Reassembly MUST distinguish concurrent generations of a reused fragment ID by
+  their reliable start index, inferred using wrapping subtraction of fragment
+  index from reliable message index. An incomplete older generation MUST NOT
+  consume fragments from a newer generation or corrupt its payload; either
+  generation MUST still complete when its remaining fragments arrive.
 - Maximum fragments per message is a fixed bound:
 
   `MAX_RELIABLE_MESSAGE_FRAGMENTS = 2^16`
