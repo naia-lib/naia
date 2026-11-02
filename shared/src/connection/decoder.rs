@@ -5,6 +5,7 @@ cfg_if! {
 
         use super::compression_config::CompressionMode;
 
+        /// Decodes packet bodies using the configured compression mode.
         pub struct Decoder {
             mode: CompressionMode,
             result: Vec<u8>,
@@ -23,6 +24,7 @@ cfg_if! {
         }
 
         impl Decoder {
+            /// Creates a decoder with the configured compression mode.
             // Local-only: the constructor takes locally built config, never
             // wire bytes; a failing zstd handle is a local init error.
             pub fn new(compression_mode: CompressionMode) -> Self {
