@@ -43,10 +43,15 @@ and `Sync` requirements, including Bevy resources. Codec contexts remain private
 and encoding/decoding requires exclusive mutable access; sharing an endpoint
 must not permit concurrent access to a native compression context. Moving a
 codec to another thread preserves packet round-trip behavior.
+Valid compressed frames MUST decode without requiring experimental compression
+features. The decoded packet is bounded by `MTU_SIZE_BYTES`; frames expanding
+beyond that bound are dropped as oversize inbound packets.
 
 **Test obligations:**
 - Compression encoders and decoders satisfy `Send + Sync`, and compressed
   packets round-trip after their contexts move to another thread.
+- A valid compressed packet at the MTU boundary decodes, while a small frame
+  that expands beyond the MTU is dropped.
 
 ### [transport-01] — Naia assumes transport is unordered & unreliable
 

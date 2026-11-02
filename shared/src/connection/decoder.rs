@@ -65,10 +65,11 @@ cfg_if! {
 
                 if is_compressed {
                     if let Some(decoder) = self.decoder.get_mut() {
-                        // [115662-2] common-02: corrupt compressed bytes fail
-                        // the read instead of panicking on the expects.
-                        let bound = Decompressor::<'static>::upper_bound(data)?;
-                        self.result = decoder.decompress(data, bound).ok()?;
+                        // The decoded packet must fit the same MTU as an
+                        // uncompressed packet. zstd's optional upper_bound
+                        // implementation is unavailable without experimental
+                        // features and would reject every valid compressed frame.
+                        self.result = decoder.decompress(data, crate::MTU_SIZE_BYTES).ok()?;
                         return Some(&self.result);
                     }
                 }
@@ -130,13 +131,24 @@ mod corrupt_payload_tests {
         std::thread::spawn(move || {
             let mut encoder = encoder;
             let mut decoder = decoder;
-            let payload = vec![42; 1024];
+            let payload = vec![42; crate::MTU_SIZE_BYTES];
             let encoded = encoder.encode(&payload);
             assert_eq!(encoded[0], 1);
             assert_eq!(decoder.decode(encoded), Some(payload.as_slice()));
         })
         .join()
         .unwrap();
+    }
+
+    #[test]
+    fn compressed_frame_exceeding_packet_mtu_is_dropped() {
+        let payload = vec![42; crate::MTU_SIZE_BYTES + 1];
+        let compressed = zstd::bulk::compress(&payload, 1).unwrap();
+        let mut packet = vec![1];
+        packet.extend_from_slice(&compressed);
+        assert!(packet.len() < crate::MTU_SIZE_BYTES);
+        let mut decoder = Decoder::new(CompressionMode::Default(1));
+        assert!(decoder.decode(&packet).is_none());
     }
 
     #[test]
