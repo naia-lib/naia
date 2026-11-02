@@ -99,14 +99,11 @@ impl FragmentReceiver {
 
         // Counting insertions rather than arrivals: repeating one index used to
         // drive the count up to the total without the sequence being complete.
-        if entry
-            .payloads
-            .insert(fragment_index, fragment.to_payload())
-            .is_some()
-        {
+        if entry.payloads.contains_key(&fragment_index) {
             warn!("Discarding repeated fragment index {fragment_index} (id={fragment_id:?}).");
             return None;
         }
+        entry.payloads.insert(fragment_index, fragment.to_payload());
 
         if entry.payloads.len() as u32 != entry.total {
             return None;
