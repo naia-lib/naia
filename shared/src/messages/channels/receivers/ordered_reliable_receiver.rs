@@ -68,69 +68,32 @@ impl ReceiverArranger for OrderedArranger {
         message: MessageContainer,
     ) -> Vec<MessageContainer> {
         let mut output = Vec::new();
-        let mut current_index = 0;
+        let start = start_message_index.wrapping_sub(self.messages_received) as usize;
+        let span = end_message_index.wrapping_sub(start_message_index) as usize + 1;
 
-        // Put message where it needs to go in buffer
-        loop {
-            if current_index < self.buffer.len() {
-                let Some((old_message_index, old_message)) = self.buffer.get_mut(current_index)
-                else {
-                    panic!("Buffer should be instantiated to slot {start_message_index:?} !");
-                };
-                let old_message_index = *old_message_index;
-                if old_message_index == start_message_index {
-                    if old_message.is_not_received() {
-                        *old_message = MessageSlot::Received(message);
-
-                        let mut current_message_index = start_message_index;
-                        while current_message_index != end_message_index {
-                            current_index = current_index.wrapping_add(1);
-                            let Some((old_message_index, old_message)) =
-                                self.buffer.get_mut(current_index)
-                            else {
-                                panic!(
-                                    "Buffer should be instantiated to slot {old_message_index:?} !"
-                                );
-                            };
-                            let old_message_index = *old_message_index;
-                            current_message_index = old_message_index;
-                            if old_message.is_not_received() {
-                                *old_message = MessageSlot::PreviousFragment;
-                            } else {
-                                panic!(
-                                    "Buffer should not have received message in slot {old_message_index:?} !"
-                                );
-                            }
-                        }
-
-                        break;
-                    }
-                    panic!(
-                        "Buffer should not have received message in slot {old_message_index:?} !"
-                    );
-                }
-            } else {
-                let next_message_index = self.messages_received.wrapping_add(current_index as u16);
-
-                if next_message_index == start_message_index {
-                    self.buffer
-                        .push_back((next_message_index, MessageSlot::Received(message)));
-
-                    let mut next_message_index = next_message_index;
-                    while next_message_index != end_message_index {
-                        next_message_index = next_message_index.wrapping_add(1);
-                        self.buffer
-                            .push_back((next_message_index, MessageSlot::PreviousFragment));
-                    }
-
-                    break;
-                }
-                self.buffer
-                    .push_back((next_message_index, MessageSlot::NotReceived));
-                // keep filling up buffer
-            }
-
-            current_index += 1;
+        // Validate the entire range before writing any slot. Peer-controlled
+        // ranges can overlap an ordinary message or a prior fragment sequence.
+        if crate::sequence_less_than(start_message_index, self.messages_received)
+            || start + span > u16::MAX as usize + 1
+            || self
+                .buffer
+                .iter()
+                .skip(start)
+                .take(span)
+                .any(|(_, slot)| !slot.is_not_received())
+        {
+            log::warn!("Discarding stale or overlapping ordered reliable message range.");
+            return output;
+        }
+        while self.buffer.len() < start + span {
+            let index = self
+                .messages_received
+                .wrapping_add(self.buffer.len() as u16);
+            self.buffer.push_back((index, MessageSlot::NotReceived));
+        }
+        self.buffer[start].1 = MessageSlot::Received(message);
+        for offset in 1..span {
+            self.buffer[start + offset].1 = MessageSlot::PreviousFragment;
         }
 
         // Pop messages out in order
@@ -169,6 +132,22 @@ mod tests {
             FragmentIndex::zero(),
             Box::new([0u8; 4]),
         )))
+    }
+
+    #[test]
+    fn messaging_16c_t2_overlapping_range_is_dropped_atomically() {
+        let mut arranger = OrderedArranger::new();
+        assert!(arranger.process(7, 7, message()).is_empty());
+        assert!(arranger.process(5, 7, message()).is_empty());
+        assert!(arranger.process(7, 7, message()).is_empty());
+        let mut delivered = 0;
+        for index in 0..7 {
+            delivered += arranger.process(index, index, message()).len();
+        }
+        assert_eq!(delivered, 8, "rejected range must not occupy slots 5 or 6");
+        assert!(arranger.buffer.is_empty());
+        assert!(arranger.process(7, 7, message()).is_empty());
+        assert_eq!(arranger.process(8, 8, message()).len(), 1);
     }
 
     /// This arranger buffers a slot per index between the last message it
