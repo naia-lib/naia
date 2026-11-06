@@ -252,7 +252,7 @@ argv = ["cargo", "test", "-p", "naia-bevy-client", "--test", "client_marker_bevy
 
 [[leg]]
 checks = ["test:naia-bevy-client:naia_bevy_client"]
-argv = ["cargo", "test", "-p", "naia-bevy-client", "--lib", "--no-fail-fast"]
+argv = ["cargo", "test", "-p", "naia-bevy-client", "--lib", "--features", "f3_diag,interior_visibility,transport_udp", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-bevy-client-demo:naia_bevy_client_demo"]
@@ -268,7 +268,7 @@ argv = ["cargo", "test", "-p", "naia-bevy-derive", "--lib", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-bevy-metrics:naia_bevy_metrics"]
-argv = ["cargo", "test", "-p", "naia-bevy-metrics", "--lib", "--no-fail-fast"]
+argv = ["cargo", "test", "-p", "naia-bevy-metrics", "--lib", "--features", "client,server", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-bevy-server:apply_receive_output_with_sim_receiver"]
@@ -288,7 +288,7 @@ argv = ["cargo", "test", "-p", "naia-bevy-server", "--test", "cross_frame_enable
 
 [[leg]]
 checks = ["test:naia-bevy-server:naia_bevy_server"]
-argv = ["cargo", "test", "-p", "naia-bevy-server", "--lib", "--no-fail-fast"]
+argv = ["cargo", "test", "-p", "naia-bevy-server", "--lib", "--features", "bench_instrumentation,e2e_debug,f3_diag,interior_visibility,pipeline_timing,transport_udp", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-bevy-server:replicated_resources_bevy"]
@@ -408,7 +408,7 @@ argv = ["cargo", "test", "-p", "naia-bevy-shared", "--test", "facade_tier_parity
 
 [[leg]]
 checks = ["test:naia-bevy-shared:naia_bevy_shared"]
-argv = ["cargo", "test", "-p", "naia-bevy-shared", "--lib", "--no-fail-fast"]
+argv = ["cargo", "test", "-p", "naia-bevy-shared", "--lib", "--features", "address_validation,transport_local", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-ci-checks:check_no_escaping_path_deps"]
@@ -416,7 +416,7 @@ argv = ["cargo", "test", "-p", "naia-ci-checks", "--bin", "check_no_escaping_pat
 
 [[leg]]
 checks = ["test:naia-client:naia_client"]
-argv = ["cargo", "test", "-p", "naia-client", "--lib", "--no-fail-fast"]
+argv = ["cargo", "test", "-p", "naia-client", "--lib", "--features", "e2e_debug,f3_diag,transport_udp,zstd_support", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-client-socket:naia_client_socket"]
@@ -488,7 +488,7 @@ argv = ["cargo", "test", "-p", "naia-server", "--test", "close_releases_ports", 
 
 [[leg]]
 checks = ["test:naia-server:naia_server"]
-argv = ["cargo", "test", "-p", "naia-server", "--lib", "--features", "test_time,test_utils,transport_local", "--no-fail-fast"]
+argv = ["cargo", "test", "-p", "naia-server", "--lib", "--features", "test_time,test_utils,transport_local,e2e_debug,f3_diag,zstd_support", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-server:udp_close_releases_port"]
@@ -564,7 +564,7 @@ argv = ["cargo", "test", "-p", "naia-shared", "--test", "key_generator", "--no-f
 
 [[leg]]
 checks = ["test:naia-shared:naia_shared"]
-argv = ["cargo", "test", "-p", "naia-shared", "--lib", "--no-fail-fast"]
+argv = ["cargo", "test", "-p", "naia-shared", "--lib", "--features", "e2e_debug,zstd,zstd_support", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-shared:packet_type_wire_stability"]
@@ -656,7 +656,7 @@ argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "lagged_send_drops
 
 [[leg]]
 checks = ["test:naia-test-harness:naia_test_harness"]
-argv = ["cargo", "test", "-p", "naia-test-harness", "--lib", "--no-fail-fast"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--lib", "--features", "e2e_debug,test_utils", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-test-harness:parallel_send_matches_serial"]
@@ -1516,11 +1516,6 @@ reason = "Editor metadata; R0 remains mandatory."
 path = ".nojekyll"
 mode = "scan-only"
 reason = "Documentation hosting marker."
-
-[[root]]
-path = ".tesaki/"
-mode = "scan-only"
-reason = "Scenario authoring configuration outside the public Cargo workspace."
 
 [[root]]
 path = "CHANGELOG.md"
