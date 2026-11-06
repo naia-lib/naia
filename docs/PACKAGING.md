@@ -28,8 +28,10 @@ resolves by version for external consumers.
 | `bench/wins` (`naia-bench`) | `crucible_core`, path `../../../slag/crates/platform/crucible/core` | excluded, unpublished, non-member |
 
 `bench/wins` stays exactly as it is per Ziph 2026-11-06: no move and no
-deletion this card. Relocating naia's win-checks to their private owner is
-a what/why call with Trevor; if ruled, it becomes its own card with Brock.
+deletion this card, and no card for the move. It is naia's own win-checks
+(Win-2 to 5, halo capacity budgets), from Connor's 06-29 reorg: it is
+`publish = false` and not a workspace member, so it never ships and an
+outside build never touches it (Trevor 2026-11-06).
 
 ## Published-version map
 
@@ -40,9 +42,11 @@ a what/why call with Trevor; if ruled, it becomes its own card with Brock.
 
 ## Provider-release dependencies (explicit, not vendored)
 
-1. `namako_engine` publication — provider: namako (Nash). Recorded, not
-   executed: this card forbids release/publication. Publication becomes its
-   own card.
+1. `namako_engine` publication — provider: namako (Nash), triggered by
+   naia's release. Recorded, not executed: this card forbids
+   release/publication, and namako stays unpublished. Outsiders build the
+   `publish = false` consumers with a sibling clone, since namako is
+   public (Trevor 2026-11-06).
 2. `crucible_core` publication or relocation — provider: slag (Brock).
 
 Until those land, the four namako test/bench consumers and `bench/wins`
