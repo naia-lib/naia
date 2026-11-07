@@ -305,6 +305,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         let send = crate::server::SendState {
             send_user_connections: HashMap::new(),
             user_priorities: HashMap::new(),
+            // nydus-dm9: per-observer applied-cause evidence streams.
+            cause_streams: HashMap::new(),
             global_priority: GlobalPriorityState::new(),
             heartbeat_timer: naia_shared::Timer::new(heartbeat_interval),
             ping_timer: naia_shared::Timer::new(ping_interval),
@@ -3708,6 +3710,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         // Drop this user's entire per-user priority layer so entries never
         // leak across user sessions.
         self.send.state.user_priorities.remove(&user_key);
+        // nydus-dm9: drop the observer's evidence stream with it. A
+        // reconnect starts a fresh stream (and a fresh generation).
+        self.send.state.cause_streams.remove(&user_key);
 
         self.send.state.entity_scope_map.remove_user(user_key);
 

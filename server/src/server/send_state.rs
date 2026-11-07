@@ -27,11 +27,11 @@ use parking_lot::Mutex;
 use log::warn;
 
 use naia_shared::{
-    malformed_drop_warn, BigMapKey, BitWriter, Channel, ChannelKind, ComponentKind,
-    ConnectionRequestNonce, EntityAndGlobalEntityConverter, EntityAuthStatus, FrozenGlobalDirty,
-    GlobalDiffHandler, GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalEntitySpawner,
-    GlobalPriorityState, GlobalRequestId, GlobalWorldManagerType, HostType, Instant,
-    LocalEntityAndGlobalEntityConverter, LocalResponseId, Message, MessageContainer,
+    malformed_drop_warn, BigMapKey, BitWriter, CauseKind, CauseStream, Channel, ChannelKind,
+    ComponentKind, ConnectionRequestNonce, EntityAndGlobalEntityConverter, EntityAuthStatus,
+    FrozenGlobalDirty, GlobalDiffHandler, GlobalEntity, GlobalEntityIndex, GlobalEntityMap,
+    GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId, GlobalWorldManagerType, HostType,
+    Instant, LocalEntityAndGlobalEntityConverter, LocalResponseId, Message, MessageContainer,
     OutgoingPacket, OutgoingPriorityHook, OwnedBitReader, PacketType, Replicate, SendPlan,
     SendUpdateEvents, Serde, SnapshotMap, Tick, Timer, UpdateKinds, UserDiffHandler,
     UserPriorityState, WorldMutType, WorldRefType,
@@ -97,6 +97,14 @@ pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     /// Per-user priority layer. Entries evicted on scope exit; whole
     /// map entry dropped on disconnect (handled by the coordinator).
     pub user_priorities: HashMap<UserKey, UserPriorityState<E>>,
+
+    /// Per-observer applied-cause evidence (nydus-dm9). One stream per
+    /// [`UserKey`], fed at the serialization boundary in
+    /// `transmit_send_job`: what this server actually serialized to the
+    /// observer, per component, after the packet budget. Entries share the
+    /// observer's stream across scope changes; the whole entry is dropped
+    /// on disconnect alongside `user_priorities`.
+    pub cause_streams: HashMap<UserKey, CauseStream<GlobalEntity>>,
 
     /// Sender-wide priority layer (step 4-E.2e). Authoritative for the
     /// Iris send-path read. Kept in sync with `sim_handle.global_priority_mirror`
@@ -1232,6 +1240,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             Vec<OutgoingPacket>,
             SendConnection,
             UserPriorityState<E>,
+            Vec<(CauseKind, GlobalEntity, Option<ComponentKind>, Tick)>,
         )> = work
             .into_iter()
             .map(
@@ -1263,6 +1272,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                                 idx_to_world[idx.as_usize()].map(|we| (ge, idx, we, kinds))
                             })
                             .collect();
+
+                    // nydus-dm9: snapshot the scored per-component kinds
+                    // BEFORE the packet budget consumes them. `update_list`
+                    // below holds the un-transmitted remainder afterwards,
+                    // so before-minus-remainder is exactly the serialized
+                    // set. Entities filtered out above (no world mapping)
+                    // never reach the budget and stay out of evidence.
+                    let pre_send: Vec<(GlobalEntity, Vec<ComponentKind>)> = update_list
+                        .iter()
+                        .map(|(ge, _, _, kinds)| {
+                            (*ge, kinds.iter().map(|(ck, _, _)| *ck).collect())
+                        })
+                        .collect();
 
                     let (packets, _) = send_conn.build_all_packets(
                         channel_kinds,
@@ -1309,7 +1331,32 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         }
                     }
 
-                    (addr, packets, send_conn, user_prio)
+                    // nydus-dm9: server evidence at the serialization
+                    // boundary, in scored send order. Same-tick send order
+                    // is priority-commuted, not causal order; the stream
+                    // records each entry's position as its order_index.
+                    // Deferred entities are refusal markers, never
+                    // evidence: their diff masks were given back above, so
+                    // they re-freeze and re-transmit on a later tick.
+                    let mut evidence: Vec<(CauseKind, GlobalEntity, Option<ComponentKind>, Tick)> =
+                        Vec::new();
+                    for (global_entity, component_kinds) in &pre_send {
+                        let entry_kind = if remaining.contains(global_entity) {
+                            CauseKind::Deferred
+                        } else {
+                            CauseKind::Update
+                        };
+                        for component_kind in component_kinds {
+                            evidence.push((
+                                entry_kind,
+                                *global_entity,
+                                Some(*component_kind),
+                                current_tick,
+                            ));
+                        }
+                    }
+
+                    (addr, packets, send_conn, user_prio, evidence)
                 },
             )
             .collect();
@@ -1319,12 +1366,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             .fetch_add(_iris_p3b_t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
         // ── Serial flush + re-insert ──────────────────────────────────────────────
-        for (addr, packets, send_conn, user_prio) in results {
+        for (addr, packets, send_conn, user_prio, evidence) in results {
             let user_key = send_conn.user_key;
             #[cfg(feature = "f3_diag")]
             let packet_count = packets.len();
             self.send_user_connections.insert(addr, send_conn);
             self.user_priorities.insert(user_key, user_prio);
+            // nydus-dm9: fold this tick's serialization evidence into the
+            // observer's persistent stream. The stream assigns order_index
+            // in push order, which is the scored send order above.
+            let stream = self.cause_streams.entry(user_key).or_default();
+            for (entry_kind, global_entity, component_kind, tick) in evidence {
+                stream.push(entry_kind, global_entity, component_kind, tick);
+            }
             #[cfg(feature = "f3_diag")]
             eprintln!(
                 "[F3-DIAG naia/SendState] transmit_send_job emit user={:?} addr={:?} packets={}",
