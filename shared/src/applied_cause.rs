@@ -17,6 +17,19 @@
 //!   per stream). [`CauseStream::advance_generation`] emits an
 //!   [`CauseKind::Epoch`] marker; Cyberlith overlays its live generation at
 //!   match time. Nothing here is inferred: incomplete evidence stays absent.
+//!
+//! Delivery contract vs the proof deadline (Ada 180997): evidence is NOT on
+//! the wire — no protocol change, no bandwidth cost. The matcher pulls both
+//! streams in-process: the client drains per frame via `take_applied_causes`
+//! (coverage stays cumulative), the server reads `SendState::cause_streams`.
+//! Server entries are recorded at serialization under the send tick, which is
+//! the tick the client applies them under — first-send and deferred
+//! retransmit alike — so both sides attribute the cause to the same tick.
+//! Worst-case delay for tick T's evidence is the matcher's own poll period
+//! (same-tick availability) plus, for deferred causes, the retransmit lag;
+//! retransmit lag is unbounded in theory and is what Mercer's lapse count
+//! measures, from which the window is chosen. If wire delivery is ever
+//! required, that is a protocol-change follow-up, not a silent extension.
 
 use crate::{ComponentKind, Tick};
 
