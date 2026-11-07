@@ -75,6 +75,7 @@ pub fn malformed_drop_warn(_msg: String) {}
 #[cfg(feature = "test_time")]
 pub use naia_socket_shared::TestClock;
 
+mod applied_cause;
 mod backends;
 mod bigmap;
 mod connection;
@@ -123,6 +124,7 @@ cfg_if! {
     }
 }
 
+pub use applied_cause::{AppliedCause, CauseIdentity, CauseKind, CauseStream, Coverage};
 pub use backends::{Timer, Timestamp};
 pub use connection::{
     ack_manager::{AckManager, REDUNDANT_PACKET_ACKS_SIZE},
