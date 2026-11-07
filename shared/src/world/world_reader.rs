@@ -32,6 +32,11 @@ impl WorldReader {
         tick: Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
+        // Ada 181408 point 1: every parsed entity packet covers its tick,
+        // even one with no entity messages (a quiet tick). Client managers
+        // record it for the applied-cause frontier; server managers ignore
+        // it (their coverage comes from the send tick).
+        world_manager.note_observed_packet_tick(tick);
         // read entity updates
         Self::read_updates(world_manager, component_kinds, tick, reader)?;
 

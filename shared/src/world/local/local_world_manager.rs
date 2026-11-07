@@ -192,6 +192,14 @@ pub struct LocalWorldManager {
 
     // TODO: this is kind of specific to the updater, put it somewhere else?
     incoming_updates: Vec<(Tick, OwnedLocalEntity, PendingComponentUpdate)>,
+
+    /// Server ticks observed on parsed entity packets, including packets
+    /// that carried no entity messages (quiet ticks). Drained per frame by
+    /// the client into its applied-cause coverage; the server never reads
+    /// this (its coverage comes from the send tick), so on a server-side
+    /// manager this stays empty by construction (see
+    /// `note_observed_packet_tick`).
+    observed_packet_ticks: Vec<Tick>,
 }
 
 impl LocalWorldManager {
@@ -218,7 +226,25 @@ impl LocalWorldManager {
             incoming_components: Vec::new(),
             incoming_message_ticks: HashMap::new(),
             incoming_updates: Vec::new(),
+            observed_packet_ticks: Vec::new(),
         }
+    }
+
+    /// Record one parsed entity packet's server tick for coverage. Client
+    /// managers only: the server marks its own send ticks in
+    /// `transmit_send_job`, so recording here too would double-cover and
+    /// leak one entry per packet on a manager nobody drains.
+    pub(crate) fn note_observed_packet_tick(&mut self, tick: Tick) {
+        if self.host_type == HostType::Client {
+            self.observed_packet_ticks.push(tick);
+        }
+    }
+
+    /// Drain and return the observed packet ticks since the last drain, in
+    /// parse order. The client marks one coverage tick per entry, including
+    /// quiet ticks whose packets carried no entity messages.
+    pub(crate) fn take_observed_packet_ticks(&mut self) -> Vec<Tick> {
+        std::mem::take(&mut self.observed_packet_ticks)
     }
 
     pub(crate) fn entity_waitlist_queue<T>(

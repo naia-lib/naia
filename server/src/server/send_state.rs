@@ -1375,10 +1375,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             // nydus-dm9: fold this tick's serialization evidence into the
             // observer's persistent stream. The stream assigns order_index
             // in push order, which is the scored send order above.
+            // Ada 181408 point 1: every observer in per_user is touched
+            // every send tick, so mark the tick covered even when it
+            // serializes nothing — a quiet tick moves the frontier with
+            // no gap. A truly lost tick is one the client never marks,
+            // which stays a gap there.
             let stream = self.cause_streams.entry(user_key).or_default();
             for (entry_kind, global_entity, component_kind, tick) in evidence {
                 stream.push(entry_kind, global_entity, component_kind, tick);
             }
+            stream.mark_tick_covered(current_tick);
             #[cfg(feature = "f3_diag")]
             eprintln!(
                 "[F3-DIAG naia/SendState] transmit_send_job emit user={:?} addr={:?} packets={}",

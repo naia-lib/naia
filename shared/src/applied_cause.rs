@@ -186,7 +186,46 @@ impl<E> CauseStream<E> {
         &self.coverage
     }
 
+    /// Mark a tick as fully covered even when it carries no cause entry: a
+    /// quiet tick the sender serialized nothing for still advances the
+    /// frontier, because the tick itself was processed (sent on one side,
+    /// received on the other). A tick skipped over by a later mark is an
+    /// observed gap — a lost packet, not a quiet tick. A late mark for a
+    /// gapped tick heals the hole without moving the frontier.
+    pub fn mark_tick_covered(&mut self, tick: Tick) {
+        if let Some(pos) = self.coverage.gaps.iter().position(|&g| g == tick) {
+            self.coverage.gaps.remove(pos);
+            return;
+        }
+        match self.coverage.frontier {
+            None => {
+                self.coverage.frontier = Some(tick);
+            }
+            Some(frontier) => {
+                let distance = tick.wrapping_sub(frontier);
+                if distance == 0 {
+                    // Already the frontier: re-marking is a no-op.
+                } else if distance <= 32768 {
+                    // Forward: every skipped tick is an observed gap.
+                    let mut missing = frontier.wrapping_add(1);
+                    while missing != tick {
+                        self.coverage.gaps.push(missing);
+                        missing = missing.wrapping_add(1);
+                    }
+                    self.coverage.frontier = Some(tick);
+                }
+                // Else: an old or half-range-ambiguous tick with no entry to
+                // heal; it carries no new coverage information.
+            }
+        }
+    }
+
     fn note_tick(&mut self, tick: Tick) {
+        // Late evidence for a skipped tick fills the hole instead of leaving
+        // a gap: the tick was not missing, only late.
+        if let Some(pos) = self.coverage.gaps.iter().position(|&g| g == tick) {
+            self.coverage.gaps.remove(pos);
+        }
         match self.coverage.frontier {
             None => {
                 self.coverage.frontier = Some(tick);

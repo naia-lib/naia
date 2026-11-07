@@ -126,6 +126,13 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         self.applied.coverage()
     }
 
+    /// Mark one received packet's server tick as covered without journaling
+    /// an entry: quiet ticks advance the frontier with no gap, while a tick
+    /// whose packet never arrives is never marked and stays a gap.
+    pub(crate) fn mark_tick_covered(&mut self, tick: Tick) {
+        self.applied.mark_tick_covered(tick);
+    }
+
     /// Journal one applied cause, advancing the server-tick watermark.
     fn note_applied(
         &mut self,

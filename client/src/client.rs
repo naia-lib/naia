@@ -547,6 +547,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             &mut self.incoming_world_events,
         );
 
+        // Ada 181408 point 1: every received entity packet covers its tick,
+        // including quiet ticks whose packets carried no entity messages.
+        // A tick whose packet never arrives is never marked and stays a gap.
+        for tick in connection
+            .base
+            .send
+            .world_manager
+            .take_observed_packet_ticks()
+        {
+            self.incoming_world_events.mark_tick_covered(tick);
+        }
+
         self.process_entity_events(&mut world, entity_events);
     }
 

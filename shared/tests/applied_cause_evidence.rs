@@ -117,3 +117,48 @@ fn old_ticks_do_not_move_frontier_back() {
     assert_eq!(coverage.frontier, Some(8));
     assert!(coverage.gaps.is_empty());
 }
+
+#[test]
+fn quiet_tick_moves_frontier_without_gap() {
+    let mut stream = CauseStream::new();
+    stream.push(CauseKind::Update, 1, Some(kind()), 5);
+    // Ticks 6 and 7 serialized nothing for this observer: they are covered
+    // by the send/receive tick itself, so the frontier moves with no gap.
+    stream.mark_tick_covered(6);
+    stream.mark_tick_covered(7);
+    let coverage = stream.coverage();
+    assert_eq!(coverage.frontier, Some(7));
+    assert!(coverage.gaps.is_empty());
+    // A covered tick stays covered: re-marking is a no-op.
+    stream.mark_tick_covered(7);
+    assert_eq!(stream.coverage().frontier, Some(7));
+    assert!(stream.coverage().gaps.is_empty());
+}
+
+#[test]
+fn truly_lost_tick_stays_a_gap_until_seen() {
+    let mut stream = CauseStream::new();
+    stream.push(CauseKind::Update, 1, Some(kind()), 5);
+    // Tick 6 never arrived (a lost packet, not a quiet tick): marking 7
+    // records the hole instead of silently skipping it.
+    stream.mark_tick_covered(7);
+    assert_eq!(stream.coverage().frontier, Some(7));
+    assert_eq!(stream.coverage().gaps, vec![6]);
+    // Late arrival of the lost tick heals the hole without moving frontier.
+    stream.mark_tick_covered(6);
+    assert_eq!(stream.coverage().frontier, Some(7));
+    assert!(stream.coverage().gaps.is_empty());
+}
+
+#[test]
+fn late_evidence_heals_a_gap() {
+    let mut stream = CauseStream::new();
+    stream.push(CauseKind::Update, 1, Some(kind()), 5);
+    stream.push(CauseKind::Update, 1, Some(kind()), 7);
+    assert_eq!(stream.coverage().gaps, vec![6]);
+    // Evidence for the skipped tick arrives late: the hole fills instead of
+    // lingering as a gap, and the frontier stands where evidence led it.
+    stream.push(CauseKind::Update, 2, Some(kind()), 6);
+    assert!(stream.coverage().gaps.is_empty());
+    assert_eq!(stream.coverage().frontier, Some(7));
+}
