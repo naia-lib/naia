@@ -235,7 +235,7 @@ impl LocalWorldManager {
     /// `transmit_send_job`, so recording here too would double-cover and
     /// leak one entry per packet on a manager nobody drains.
     pub(crate) fn note_observed_packet_tick(&mut self, tick: Tick) {
-        if self.host_type == HostType::Client {
+        if self.em_read().host_type() == HostType::Client {
             self.observed_packet_ticks.push(tick);
         }
     }
@@ -2251,5 +2251,36 @@ impl LocalWorldManager {
     #[doc(hidden)]
     pub fn dirty_update_count(&self) -> usize {
         self.updater.dirty_candidates_len()
+    }
+}
+
+#[cfg(test)]
+mod observed_tick_gate_tests {
+    use super::*;
+    use crate::world::test_support::TestGwm;
+
+    fn manager(host_type: HostType) -> LocalWorldManager {
+        let kinds = ComponentKinds::new();
+        let gwm = TestGwm::new(&kinds);
+        LocalWorldManager::new(&None, host_type, 1, &gwm)
+    }
+
+    #[test]
+    fn client_manager_records_observed_packet_ticks() {
+        let mut manager = manager(HostType::Client);
+        manager.note_observed_packet_tick(5);
+        manager.note_observed_packet_tick(6);
+        assert_eq!(manager.take_observed_packet_ticks(), vec![5, 6]);
+        assert!(manager.take_observed_packet_ticks().is_empty());
+    }
+
+    #[test]
+    fn server_manager_ignores_observed_packet_ticks() {
+        // The server marks its own send ticks in transmit_send_job; recording
+        // parsed ticks here too would leak one entry per packet on a manager
+        // nobody drains.
+        let mut manager = manager(HostType::Server);
+        manager.note_observed_packet_tick(5);
+        assert!(manager.take_observed_packet_ticks().is_empty());
     }
 }
