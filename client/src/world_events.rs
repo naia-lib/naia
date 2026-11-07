@@ -3,9 +3,9 @@ use std::{
 };
 
 use naia_shared::{
-    handshake::RejectReason, Channel, ChannelKind, ComponentKind, DisconnectReason,
-    GlobalResponseId, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey,
-    Tick,
+    handshake::RejectReason, AppliedCause, CauseKind, CauseStream, Channel, ChannelKind,
+    ComponentKind, Coverage, DisconnectReason, GlobalResponseId, Message, MessageContainer,
+    MessageKind, Replicate, Request, ResponseSendKey, Tick,
 };
 
 use crate::NaiaClientError;
@@ -68,6 +68,15 @@ pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
     removes: RemovesMap<E>,
     updates: HashMap<ComponentKind, Vec<(Tick, E)>>,
     lifecycle: Vec<LifecycleOrder<E>>,
+    /// nydus-dm9: unified applied-cause journal across lifecycle, component
+    /// and scope kinds, in application order. Unlike the per-kind stores
+    /// above, this stream is NOT reset by `clear()`: the consumer drains
+    /// entries per frame via `take_applied_causes()` while coverage stays
+    /// cumulative.
+    applied: CauseStream<E>,
+    /// Highest server tick seen by a ticked push. Tickless scope pushes
+    /// journal against this watermark.
+    last_applied_tick: Option<Tick>,
     empty: bool,
 }
 
@@ -97,8 +106,45 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
             removes: HashMap::new(),
             updates: HashMap::new(),
             lifecycle: Vec::new(),
+            applied: CauseStream::new(),
+            last_applied_tick: None,
             empty: true,
         }
+    }
+
+    /// Drains and returns the unified applied-cause journal: every lifecycle,
+    /// component and scope cause applied since the last drain, in application
+    /// order. Coverage stays cumulative; query it with `applied_coverage()`.
+    pub fn take_applied_causes(&mut self) -> Vec<AppliedCause<E>> {
+        self.applied.take_entries()
+    }
+
+    /// Cumulative coverage of the applied-cause journal: frontier, gaps and
+    /// refusals across all drained and buffered entries.
+    #[must_use]
+    pub fn applied_coverage(&self) -> &Coverage {
+        self.applied.coverage()
+    }
+
+    /// Journal one applied cause, advancing the server-tick watermark.
+    fn note_applied(
+        &mut self,
+        kind: CauseKind,
+        entity: E,
+        component_kind: Option<ComponentKind>,
+        tick: Tick,
+    ) {
+        self.last_applied_tick = Some(tick);
+        self.applied.push(kind, entity, component_kind, tick);
+    }
+
+    /// Server tick for a tickless cause: the highest ticked cause applied so
+    /// far. Entity events ride server-ticked packets, so this is `Some` for
+    /// every genuine scope transition; the `0` fallback only keeps the
+    /// journal total on paths (like unit tests) that push scope events
+    /// without any ticked event first.
+    fn scope_tick(&self) -> Tick {
+        self.last_applied_tick.unwrap_or(0)
     }
 
     /// Returns `true` if no events were queued this frame.
@@ -276,6 +322,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
             entity: world_entity,
             component_kind: None,
         });
+        self.note_applied(CauseKind::Spawn, world_entity, None, tick);
         self.empty = false;
     }
 
@@ -287,16 +334,23 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
             entity: world_entity,
             component_kind: None,
         });
+        self.note_applied(CauseKind::Despawn, world_entity, None, tick);
         self.empty = false;
     }
 
     pub(crate) fn push_publish(&mut self, world_entity: E) {
         self.publishes.push(world_entity);
+        let tick = self.scope_tick();
+        self.applied
+            .push(CauseKind::ScopePublish, world_entity, None, tick);
         self.empty = false;
     }
 
     pub(crate) fn push_unpublish(&mut self, world_entity: E) {
         self.unpublishes.push(world_entity);
+        let tick = self.scope_tick();
+        self.applied
+            .push(CauseKind::ScopeUnpublish, world_entity, None, tick);
         self.empty = false;
     }
 
@@ -324,6 +378,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         self.inserts.entry(component_kind).or_default();
         let list = self.inserts.get_mut(&component_kind).unwrap();
         list.push((tick, world_entity));
+        self.note_applied(CauseKind::Insert, world_entity, Some(component_kind), tick);
         self.lifecycle.push(LifecycleOrder {
             tick,
             kind: LifecycleKind::Insert,
@@ -342,6 +397,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         self.updates.entry(component_kind).or_default();
         let list = self.updates.get_mut(&component_kind).unwrap();
         list.push((tick, world_entity));
+        self.note_applied(CauseKind::Update, world_entity, Some(component_kind), tick);
         self.empty = false;
     }
 
@@ -352,6 +408,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         component: Box<dyn Replicate>,
     ) {
         let component_kind: ComponentKind = component.kind();
+        self.note_applied(CauseKind::Remove, world_entity, Some(component_kind), tick);
         self.removes.entry(component_kind).or_default();
         let list = self.removes.get_mut(&component_kind).unwrap();
         list.push((tick, world_entity, component));

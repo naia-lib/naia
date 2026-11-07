@@ -159,6 +159,14 @@ impl<E> CauseStream<E> {
         &self.entries
     }
 
+    /// Drain and return all buffered entries, in application order. Coverage
+    /// stays cumulative: the frontier, gaps and refusals describe every
+    /// entry the stream has ever held, drained or not.
+    #[must_use]
+    pub fn take_entries(&mut self) -> Vec<AppliedCause<E>> {
+        std::mem::take(&mut self.entries)
+    }
+
     /// The stream's coverage: frontier, gaps, refusals.
     #[must_use]
     pub fn coverage(&self) -> &Coverage {
