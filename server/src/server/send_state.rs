@@ -1241,6 +1241,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             SendConnection,
             UserPriorityState<E>,
             Vec<(CauseKind, GlobalEntity, Option<ComponentKind>, Tick)>,
+            Tick,
         )> = work
             .into_iter()
             .map(
@@ -1356,7 +1357,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         }
                     }
 
-                    (addr, packets, send_conn, user_prio, evidence)
+                    (addr, packets, send_conn, user_prio, evidence, current_tick)
                 },
             )
             .collect();
@@ -1366,7 +1367,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             .fetch_add(_iris_p3b_t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
         // ── Serial flush + re-insert ──────────────────────────────────────────────
-        for (addr, packets, send_conn, user_prio, evidence) in results {
+        for (addr, packets, send_conn, user_prio, evidence, current_tick) in results {
             let user_key = send_conn.user_key;
             #[cfg(feature = "f3_diag")]
             let packet_count = packets.len();
@@ -1380,7 +1381,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             // serializes nothing — a quiet tick moves the frontier with
             // no gap. A truly lost tick is one the client never marks,
             // which stays a gap there.
-            let stream = self.cause_streams.entry(user_key).or_default();
+            let stream = self
+                .cause_streams
+                .entry(user_key)
+                .or_insert_with(CauseStream::new);
             for (entry_kind, global_entity, component_kind, tick) in evidence {
                 stream.push(entry_kind, global_entity, component_kind, tick);
             }

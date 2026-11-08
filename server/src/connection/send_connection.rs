@@ -890,7 +890,7 @@ mod quiet_data_tests {
 mod command_evidence_tests {
     use std::any::TypeId;
 
-    use naia_shared::{CauseKind, ComponentKind, EntityCommand, GlobalEntity};
+    use naia_shared::{BigMapKey, CauseKind, ComponentKind, EntityCommand, GlobalEntity};
 
     use super::command_evidence_kind;
 
