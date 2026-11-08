@@ -1200,6 +1200,24 @@ mod remote_world_manager_tests {
         );
     }
 
+    /// nydus-dm9 Fix3 RED (Ada 181408 point 3): a scope change arriving in
+    /// a packet of its own must carry the server's tick, not the client's
+    /// last-applied tick, or the two evidence streams can never agree.
+    #[test]
+    fn publish_arrives_stamped_with_its_packet_tick() {
+        let mut fixture = Fixture::new(HostType::Client);
+        let global_1 = fixture.spawn_with_ghost(remote(1));
+
+        // The scope change rides tick 9 alone: the stamp must be 9 even
+        // though the last applied entity tick is older.
+        let events = fixture.deliver(vec![(9, EntityMessage::Publish(0, remote(1)))]);
+        assert_eq!(events.len(), 1, "publish must raise exactly one event");
+        assert!(
+            matches!(&events[0], EntityEvent::Publish(9, entity) if *entity == global_1),
+            "publish must arrive stamped with tick 9",
+        );
+    }
+
     #[test]
     fn removing_a_component_raises_an_event_carrying_the_value_it_had() {
         let mut fixture = Fixture::new(HostType::Client);

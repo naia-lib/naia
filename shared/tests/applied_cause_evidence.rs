@@ -150,6 +150,34 @@ fn truly_lost_tick_stays_a_gap_until_seen() {
     assert!(stream.coverage().gaps.is_empty());
 }
 
+/// nydus-dm9 P1 follow-up (Ada 181559): a quiet stretch must arrive with
+/// frontier = last tick and no gaps on BOTH sides of the wire. The server
+/// marks its send tick covered per observer every send tick, even when it
+/// serializes nothing (`SendState::transmit_send_job`); the client marks
+/// every parsed packet tick observed and drains those marks into coverage
+/// (`Client::process_all_packets`), including packets that carried no
+/// entity messages. This test pins the protocol both streams follow, at
+/// the stream level: an update at 5, then quiet ticks 6 and 7.
+#[test]
+fn quiet_stretch_advances_both_stream_frontiers_without_gaps() {
+    // Server flavor: the send tick is marked covered per observer.
+    let mut server = CauseStream::new();
+    server.push(CauseKind::Update, 1, Some(kind()), 5);
+    server.mark_tick_covered(6);
+    server.mark_tick_covered(7);
+    assert_eq!(server.coverage().frontier, Some(7));
+    assert!(server.coverage().gaps.is_empty());
+
+    // Client flavor: the same marks arrive via the observed-packet drain.
+    let mut client = CauseStream::new();
+    client.push(CauseKind::Update, 1, Some(kind()), 5);
+    for tick in [6, 7] {
+        client.mark_tick_covered(tick);
+    }
+    assert_eq!(client.coverage().frontier, Some(7));
+    assert!(client.coverage().gaps.is_empty());
+}
+
 #[test]
 fn late_evidence_heals_a_gap() {
     let mut stream = CauseStream::new();

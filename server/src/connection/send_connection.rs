@@ -881,3 +881,72 @@ mod quiet_data_tests {
         );
     }
 }
+
+/// nydus-dm9 Fix2 (Ada 181408 point 2): the server must journal entity
+/// actions and scope-channel evidence at the serialization point, under
+/// the same identity the client records, or every lifecycle/scope event
+/// is a client entry with no server match.
+#[cfg(test)]
+mod command_evidence_tests {
+    use std::any::TypeId;
+
+    use naia_shared::{CauseKind, ComponentKind, EntityCommand, GlobalEntity};
+
+    use super::command_evidence_kind;
+
+    fn kind() -> ComponentKind {
+        ComponentKind::from(TypeId::of::<u32>())
+    }
+
+    fn e(index: u64) -> GlobalEntity {
+        GlobalEntity::from_u64(index)
+    }
+
+    /// One observer sees spawn, insert, update-protocol remove, despawn and
+    /// both scope transitions: the written commands must map to the same
+    /// kind sequence the client journals for the same wire messages.
+    #[test]
+    fn written_commands_map_to_matcher_kinds() {
+        let written = vec![
+            EntityCommand::Spawn(e(1)),
+            EntityCommand::InsertComponent(e(1), kind()),
+            EntityCommand::RemoveComponent(e(1), kind()),
+            EntityCommand::Despawn(e(1)),
+            EntityCommand::Publish(None, e(2)),
+            EntityCommand::Unpublish(None, e(2)),
+        ];
+        let kinds: Vec<CauseKind> = written
+            .iter()
+            .filter_map(command_evidence_kind)
+            .map(|(kind, _, _)| kind)
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                CauseKind::Spawn,
+                CauseKind::Insert,
+                CauseKind::Remove,
+                CauseKind::Despawn,
+                CauseKind::ScopePublish,
+                CauseKind::ScopeUnpublish,
+            ],
+        );
+    }
+
+    /// Delegation and authority traffic is not matcher evidence: neither
+    /// side journals it as an applied cause.
+    #[test]
+    fn authority_commands_are_not_evidence() {
+        let admin = vec![
+            EntityCommand::EnableDelegation(None, e(1)),
+            EntityCommand::DisableDelegation(None, e(1)),
+            EntityCommand::RequestAuthority(None, e(1)),
+            EntityCommand::ReleaseAuthority(None, e(1)),
+        ];
+        assert!(admin
+            .iter()
+            .filter_map(command_evidence_kind)
+            .next()
+            .is_none());
+    }
+}
