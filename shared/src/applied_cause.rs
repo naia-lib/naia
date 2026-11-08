@@ -9,12 +9,21 @@
 //! - Delivery is not application: only actually serialized / actually
 //!   applied causes are entries. Budget-deferred packets are explicit
 //!   [`CauseKind::Deferred`] refusal markers, never evidence.
-//! - Same-tick server send order is priority-commuted (the scored sort), so
-//!   each entry carries its `order_index` in the serialized/applied sequence.
-//! - Declared commutation (acceptance 8106884b): same-tick entries commute.
-//!   Their relative order is the sender's scored order, never causal order,
-//!   so matching compares the per-tick `(kind, identity, generation)`
-//!   multiset, never position. `order_index` only distinguishes repeated
+//! - Same-tick server send order is the scored sort, so each entry carries
+//!   its `order_index` in the serialized/applied sequence. Scored order is
+//!   causal only for commands on one entity (`CommandId` order); updates
+//!   commute across entities (see the declared ordering below).
+//! - Declared ordering (acceptance 8106884b, Ada seventh read): updates and
+//!   commands compare differently. Same-tick updates commute across entities
+//!   (the scorer's order is not causal): at most one per (entity, component)
+//!   per tick, asserted at the drains, and matching compares the per-tick
+//!   update multiset. Commands (lifecycle and scope) are causally ordered per
+//!   entity by `CommandId` -- Insert-then-Remove is not Remove-then-Insert --
+//!   so matching compares them as a sequence per entity per tick, commuting
+//!   across entities. Within a packet updates come before commands (the wire
+//!   layout), which orders an Update and a Remove of the same component in
+//!   one tick by kind. `order_index` is the serialized/applied position:
+//!   positional, never a causal claim; it only distinguishes repeated
 //!   same-identity entries (echoes are data, never collapsed). Cross-tick
 //!   order follows the tick, within the u16 wrap rule above.
 //! - Ticks are `u16` and wrap; forward movement is judged within half the
@@ -300,7 +309,134 @@ impl<E> CauseStream<E> {
     pub fn take_entries(&mut self) -> Vec<AppliedCause<E>> {
         std::mem::take(&mut self.entries).into_iter().collect()
     }
+}
 
+/// nydus-dm9 (Ada seventh read, rule 1): at most one `Update` per
+/// (entity, component) per tick. Debug-only: release pays nothing, and the
+/// push path stays scan-free (see `enforce_bound`). Callers assert at their
+/// drain -- the server fold per tick, the client drain per take -- so a
+/// producer that double-journals trips in every debug gate.
+pub fn assert_updates_unique_per_tick<E: PartialEq>(
+    entries: &[(CauseKind, E, Option<ComponentKind>, Tick)],
+) {
+    debug_assert!(
+        {
+            let mut unique = true;
+            for (i, candidate) in entries.iter().enumerate() {
+                if candidate.0 != CauseKind::Update {
+                    continue;
+                }
+                for seen in &entries[..i] {
+                    if seen.0 == CauseKind::Update
+                        && seen.1 == candidate.1
+                        && seen.2 == candidate.2
+                        && seen.3 == candidate.3
+                    {
+                        unique = false;
+                        break;
+                    }
+                }
+            }
+            unique
+        },
+        "duplicate Update for one entity/component in one tick",
+    );
+}
+
+#[cfg(test)]
+mod revision_tests {
+    use super::{assert_updates_unique_per_tick, CauseKind, ComponentKind};
+    use crate::{Property, Replicate};
+
+    #[derive(Replicate)]
+    struct Alpha {
+        value: Property<u8>,
+    }
+
+    #[derive(Replicate)]
+    struct Beta {
+        value: Property<u8>,
+    }
+
+    fn update(
+        entity: u32,
+        kind: ComponentKind,
+        tick: u16,
+    ) -> (CauseKind, u32, Option<ComponentKind>, u16) {
+        (CauseKind::Update, entity, Some(kind), tick)
+    }
+
+    #[test]
+    fn distinct_updates_pass() {
+        let alpha = ComponentKind::of::<Alpha>();
+        let beta = ComponentKind::of::<Beta>();
+        assert_updates_unique_per_tick(&[
+            update(1, alpha, 5),
+            update(2, alpha, 5),
+            update(1, beta, 5),
+            update(1, alpha, 6),
+        ]);
+    }
+
+    #[test]
+    #[should_panic(expected = "duplicate Update for one entity/component in one tick")]
+    fn duplicate_update_same_tick_panics() {
+        let alpha = ComponentKind::of::<Alpha>();
+        assert_updates_unique_per_tick(&[update(1, alpha, 5), update(1, alpha, 5)]);
+    }
+
+    #[test]
+    fn duplicate_inserts_are_echoes_not_updates() {
+        // Echoes are data, never collapsed: the uniqueness rule covers
+        // Updates only.
+        let alpha = ComponentKind::of::<Alpha>();
+        assert_updates_unique_per_tick(&[
+            (CauseKind::Insert, 1, Some(alpha), 5),
+            (CauseKind::Insert, 1, Some(alpha), 5),
+        ]);
+    }
+
+    #[test]
+    fn per_entity_command_order_is_significant() {
+        // Ada seventh read, rule 2: commands on one entity are causally
+        // ordered (Insert-then-Remove is not Remove-then-Insert), so the
+        // journal must preserve per-entity command order for the matcher
+        // to compare as a sequence. Same-kind multiset, different order:
+        // collapsing to a multiset would equate them.
+        use super::CauseStream;
+        let mut stream = CauseStream::new();
+        stream.push(CauseKind::Insert, 1u32, None, 5);
+        stream.push(CauseKind::Remove, 1u32, None, 5);
+        stream.push(CauseKind::Remove, 2u32, None, 5);
+        stream.push(CauseKind::Insert, 2u32, None, 5);
+        let drained = stream.take_entries();
+        let sequence = |entity: u32| {
+            drained
+                .iter()
+                .filter(|entry| entry.identity().entity == entity)
+                .map(|entry| entry.kind())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            sequence(1),
+            vec![CauseKind::Insert, CauseKind::Remove],
+            "entity 1 applied Insert then Remove",
+        );
+        assert_eq!(
+            sequence(2),
+            vec![CauseKind::Remove, CauseKind::Insert],
+            "entity 2 applied Remove then Insert",
+        );
+        assert_ne!(
+            sequence(1),
+            sequence(2),
+            "per-entity command order must not commute: Insert-then-Remove \
+             refuses to equal Remove-then-Insert",
+        );
+    }
+}
+
+impl<E> CauseStream<E> {
     /// The stream's coverage: frontier, gaps, lapse floor, refusals.
     #[must_use]
     pub fn coverage(&self) -> &Coverage {

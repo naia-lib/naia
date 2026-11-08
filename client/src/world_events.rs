@@ -3,9 +3,10 @@ use std::{
 };
 
 use naia_shared::{
-    handshake::RejectReason, AppliedCause, CauseKind, CauseStream, Channel, ChannelKind,
-    ComponentKind, Coverage, DisconnectReason, GlobalResponseId, Message, MessageContainer,
-    MessageKind, Replicate, Request, ResponseSendKey, Tick, DEFAULT_CAUSE_EVIDENCE_WINDOW,
+    assert_updates_unique_per_tick, handshake::RejectReason, AppliedCause, CauseKind, CauseStream,
+    Channel, ChannelKind, ComponentKind, Coverage, DisconnectReason, GlobalResponseId, Message,
+    MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick,
+    DEFAULT_CAUSE_EVIDENCE_WINDOW,
 };
 
 use crate::NaiaClientError;
@@ -128,7 +129,26 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     /// component and scope cause applied since the last drain, in application
     /// order. Coverage stays cumulative; query it with `applied_coverage()`.
     pub fn take_applied_causes(&mut self) -> Vec<AppliedCause<E>> {
-        self.applied.take_entries()
+        let drained = self.applied.take_entries();
+        // nydus-dm9 (Ada seventh read, rule 1): at most one Update per
+        // (entity, component) per tick. Debug-only: the projection
+        // allocates, so it compiles out of release entirely.
+        #[cfg(debug_assertions)]
+        assert_updates_unique_per_tick(
+            &drained
+                .iter()
+                .map(|entry| {
+                    let identity = entry.identity();
+                    (
+                        entry.kind(),
+                        identity.entity,
+                        identity.component_kind,
+                        identity.tick,
+                    )
+                })
+                .collect::<Vec<_>>(),
+        );
+        drained
     }
 
     /// Detach the game events, keeping the applied-cause journal live.

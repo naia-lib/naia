@@ -27,11 +27,12 @@ use parking_lot::Mutex;
 use log::warn;
 
 use naia_shared::{
-    malformed_drop_warn, BigMapKey, BitWriter, CauseKind, CauseStream, Channel, ChannelKind,
-    ComponentKind, ConnectionRequestNonce, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    FrozenGlobalDirty, GlobalDiffHandler, GlobalEntity, GlobalEntityIndex, GlobalEntityMap,
-    GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId, GlobalWorldManagerType, HostType,
-    Instant, LocalEntityAndGlobalEntityConverter, LocalResponseId, Message, MessageContainer,
+    assert_updates_unique_per_tick, malformed_drop_warn, BigMapKey, BitWriter, CauseKind,
+    CauseStream, Channel, ChannelKind, ComponentKind, ConnectionRequestNonce,
+    EntityAndGlobalEntityConverter, EntityAuthStatus, FrozenGlobalDirty, GlobalDiffHandler,
+    GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState,
+    GlobalRequestId, GlobalWorldManagerType, HostType, Instant,
+    LocalEntityAndGlobalEntityConverter, LocalResponseId, Message, MessageContainer,
     OutgoingPacket, OutgoingPriorityHook, OwnedBitReader, PacketType, Replicate, SendPlan,
     SendUpdateEvents, Serde, SnapshotMap, Tick, Timer, UpdateKinds, UserDiffHandler,
     UserPriorityState, WorldMutType, WorldRefType,
@@ -1337,8 +1338,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     }
 
                     // nydus-dm9: server evidence at the serialization
-                    // boundary, in scored send order. Same-tick send order
-                    // is priority-commuted, not causal order; the stream
+                    // boundary, in scored send order. Same-tick updates
+                    // commute across entities (scorer order is not causal);
+                    // commands keep per-entity CommandId order. The stream
                     // records each entry's position as its order_index.
                     // Deferred entities are refusal markers, never
                     // evidence: their diff masks were given back above, so
@@ -1365,6 +1367,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     // evidence, matching wire order (updates serialize
                     // before commands in every packet).
                     evidence.append(&mut command_evidence);
+                    // nydus-dm9 (Ada seventh read, rule 1): at most one
+                    // Update per (entity, component) per tick.
+                    assert_updates_unique_per_tick(&evidence);
 
                     (addr, packets, send_conn, user_prio, evidence, current_tick)
                 },

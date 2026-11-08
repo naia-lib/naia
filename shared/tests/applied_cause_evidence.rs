@@ -19,6 +19,16 @@ fn kinds(stream: &CauseStream<u32>) -> Vec<CauseKind> {
     stream.entries().iter().map(AppliedCause::kind).collect()
 }
 
+fn identities(stream: &CauseStream<u32>) -> Vec<String> {
+    let mut ids: Vec<String> = stream
+        .entries()
+        .iter()
+        .map(|entry| format!("{:?}:{:?}", entry.kind(), entry.identity()))
+        .collect();
+    ids.sort();
+    ids
+}
+
 #[test]
 fn deferred_packets_are_refusals_not_evidence() {
     let mut stream = CauseStream::new();
@@ -67,34 +77,58 @@ fn cross_kind_application_order_is_preserved() {
     );
 }
 
-/// The declared commutation (acceptance 8106884b): same-tick send order is
-/// the scorer's priority commute, never causal order, so matching compares
-/// the per-tick identity multiset, never position. The same set pushed in
-/// two orders must present the same identities with different positions: the
-/// stream must not canonicalize order, and `order_index` is positional only.
+/// The declared commutation, updates only (acceptance 8106884b, Ada seventh
+/// read): same-tick updates commute across entities -- the scorer's order is
+/// not causal -- so matching compares the per-tick update multiset, never
+/// position. Commands keep their per-entity sequence (see the next test).
 #[test]
-fn same_tick_entries_commute_matching_ignores_position() {
+fn same_tick_updates_commute_matching_ignores_position() {
     let mut first = CauseStream::new();
     first.push(CauseKind::Update, 1, Some(kind()), 5);
-    first.push(CauseKind::Insert, 2, Some(kind()), 5);
+    first.push(CauseKind::Update, 2, Some(kind()), 5);
     let mut second = CauseStream::new();
-    second.push(CauseKind::Insert, 2, Some(kind()), 5);
+    second.push(CauseKind::Update, 2, Some(kind()), 5);
     second.push(CauseKind::Update, 1, Some(kind()), 5);
 
-    fn identities(stream: &CauseStream<u32>) -> Vec<String> {
-        let mut ids: Vec<String> = stream
+    assert_eq!(identities(&first), identities(&second));
+
+    // ... while the two pushes genuinely landed in different positions: the
+    // stream does not canonicalize order, and `order_index` is positional.
+    // (`kinds()` alone cannot show this -- it discards position -- so compare
+    // the identity sequence in stream order.)
+    fn ordered_identities(stream: &CauseStream<u32>) -> Vec<String> {
+        stream
             .entries()
             .iter()
             .map(|entry| format!("{:?}:{:?}", entry.kind(), entry.identity()))
-            .collect();
-        ids.sort();
-        ids
+            .collect()
     }
-    assert_eq!(identities(&first), identities(&second));
+    assert_ne!(ordered_identities(&first), ordered_identities(&second));
+}
 
-    // ... while the two pushes genuinely landed in different positions, so a
-    // position-sensitive matcher would see the difference this rule forbids.
-    assert_ne!(kinds(&first), kinds(&second));
+/// Commands on one entity are causally ordered: naia sends them on the
+/// reliable command channel in `CommandId` order and the client applies them
+/// in that order, so Insert-then-Remove is not Remove-then-Insert. A matcher
+/// must compare commands as a sequence per entity per tick: the multiset is
+/// identical, so a position-blind comparison would wrongly accept the
+/// reorder. The stream must keep the two orders distinguishable. Refuse.
+#[test]
+fn insert_then_remove_is_not_remove_then_insert() {
+    let mut applied = CauseStream::new();
+    applied.push(CauseKind::Insert, 1, Some(kind()), 5);
+    applied.push(CauseKind::Remove, 1, Some(kind()), 5);
+    let mut reordered = CauseStream::new();
+    reordered.push(CauseKind::Remove, 1, Some(kind()), 5);
+    reordered.push(CauseKind::Insert, 1, Some(kind()), 5);
+
+    // Same multiset: a position-blind matcher would accept the reorder...
+    assert_eq!(identities(&applied), identities(&reordered));
+    // ...so the per-entity sequence must differ. Refuse.
+    assert_ne!(
+        kinds(&applied),
+        kinds(&reordered),
+        "Insert-then-Remove must stay distinguishable from Remove-then-Insert"
+    );
 }
 
 #[test]

@@ -125,7 +125,8 @@ cfg_if! {
 }
 
 pub use applied_cause::{
-    AppliedCause, CauseIdentity, CauseKind, CauseStream, Coverage, DEFAULT_CAUSE_EVIDENCE_WINDOW,
+    assert_updates_unique_per_tick, AppliedCause, CauseIdentity, CauseKind, CauseStream, Coverage,
+    DEFAULT_CAUSE_EVIDENCE_WINDOW,
 };
 pub use backends::{Timer, Timestamp};
 pub use connection::{
