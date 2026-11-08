@@ -87,6 +87,17 @@ struct F3DiagCtx<'a> {
     tick: u32,
 }
 
+/// One per-user send work item: address, packets, connection, priority
+/// state, evidence batch, and send tick.
+type SendWorkItem<E> = (
+    SocketAddr,
+    Vec<OutgoingPacket>,
+    SendConnection,
+    UserPriorityState<E>,
+    Vec<(CauseKind, GlobalEntity, Option<ComponentKind>, Tick)>,
+    Tick,
+);
+
 /// Send-thread-exclusive state lifted out of `InternalWorldServer` (step 4-E).
 pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     /// Per-address map of send-side connection halves. Each holds a clone
@@ -1235,14 +1246,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         // spin/coordination) AND was *slower* on send-stage wall than serial,
         // at a heavy-send upper bound (all in-scope entities/tick). Output is
         // order-identical (`parallel_send_matches_serial` is the oracle).
-        let results: Vec<(
-            SocketAddr,
-            Vec<OutgoingPacket>,
-            SendConnection,
-            UserPriorityState<E>,
-            Vec<(CauseKind, GlobalEntity, Option<ComponentKind>, Tick)>,
-            Tick,
-        )> = work
+        let results: Vec<SendWorkItem<E>> = work
             .into_iter()
             .map(
                 |(addr, mut update_events, mut send_conn, mut user_prio, rtt_millis)| {

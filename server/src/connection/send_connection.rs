@@ -969,7 +969,7 @@ mod command_evidence_tests {
     /// kind sequence the client journals for the same wire messages.
     #[test]
     fn written_commands_map_to_matcher_kinds() {
-        let written = vec![
+        let written = [
             EntityCommand::Spawn(e(1)),
             EntityCommand::InsertComponent(e(1), kind()),
             EntityCommand::RemoveComponent(e(1), kind()),
@@ -999,7 +999,7 @@ mod command_evidence_tests {
     /// side journals it as an applied cause.
     #[test]
     fn authority_commands_are_not_evidence() {
-        let admin = vec![
+        let admin = [
             EntityCommand::EnableDelegation(None, e(1)),
             EntityCommand::DisableDelegation(None, e(1)),
             EntityCommand::RequestAuthority(None, e(1)),
