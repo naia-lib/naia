@@ -10,7 +10,7 @@ use naia_shared::TestClock;
 use naia_shared::{
     handshake::{HandshakeHeader, RejectReason},
     malformed_drop_warn, AuthorityError, BitReader, BitWriter, CancelDisposition, Channel,
-    ChannelKind, ChannelMode, ComponentKind, ConnectionStats, DisconnectReason,
+    ChannelKind, ChannelMode, ComponentKind, ConnectionStats, Coverage, DisconnectReason,
     EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, EntityEvent,
     EntityPriorityMut, EntityPriorityRef, FakeEntityConverter, GameInstant, GlobalEntity,
     GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId,
@@ -571,7 +571,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ///
     /// [`Events`]: crate::Events
     pub fn take_world_events(&mut self) -> Events<E> {
-        std::mem::take(&mut self.incoming_world_events)
+        self.incoming_world_events.detach()
+    }
+
+    /// Cumulative coverage of the applied-cause journal: frontier, gaps and
+    /// refusals across every frame since connect. Survives
+    /// [`take_world_events`](Client::take_world_events): frames detach the
+    /// game events but leave the journal live, so the matcher can prove a
+    /// continuous applied range.
+    #[must_use]
+    pub fn applied_coverage(&self) -> Coverage {
+        self.incoming_world_events.applied_coverage().clone()
     }
 
     /// Advances the tick clocks and returns any tick-boundary events.

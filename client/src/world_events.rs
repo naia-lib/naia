@@ -115,6 +115,20 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         self.applied.take_entries()
     }
 
+    /// Detach the game events, keeping the applied-cause journal live.
+    /// nydus-dm9 Fix4: frames are delimited by take_world_events, so a
+    /// plain `mem::take` here would restart the frontier every frame and
+    /// the client could never prove a continuous range. The game events
+    /// move to the detached copy; the journal (entries and cumulative
+    /// coverage) stays on the live side, drained per frame via
+    /// `take_applied_causes`. Mirrors `clear()`, which already preserves
+    /// `applied`.
+    pub(crate) fn detach(&mut self) -> Self {
+        let mut detached = std::mem::take(self);
+        std::mem::swap(&mut detached.applied, &mut self.applied);
+        detached
+    }
+
     /// Cumulative coverage of the applied-cause journal: frontier, gaps and
     /// refusals across all drained and buffered entries.
     #[must_use]
@@ -831,6 +845,37 @@ mod tests {
                 (21, LifecycleKind::Despawn, 7),
             ],
         );
+    }
+
+    /// nydus-dm9 Fix4: detaching game events must not reset the
+    /// applied-cause journal. Frames are delimited by take_world_events;
+    /// the matcher drains entries per frame via take_applied_causes with
+    /// coverage cumulative across frames, and clear() already preserves
+    /// `applied` — detach must too, or every frame would restart the
+    /// frontier and the client could never prove a continuous range.
+    #[test]
+    fn detach_preserves_applied_journal_and_coverage() {
+        let mut events = Events::<u64>::new();
+        events.push_spawn(5, 7);
+        events.note_applied(CauseKind::Update, 7, Some(ComponentKind::of::<Probe>()), 5);
+        events.mark_tick_covered(6);
+
+        let mut detached = events.detach();
+
+        // Game events move to the detached window; the journal stays live,
+        // so the detached side carries no applied entries or coverage.
+        assert!(!detached.is_empty());
+        assert_eq!(detached.take_applied_causes().len(), 0);
+        assert_eq!(detached.applied_coverage().frontier, None);
+        // The live side keeps the entries and the cumulative coverage for
+        // the next frame — and coverage survives the entry drain. Two
+        // entries: push_spawn journals the Spawn cause as well as queuing
+        // the game event.
+        assert!(events.is_empty());
+        assert_eq!(events.applied_coverage().frontier, Some(6));
+        assert!(events.applied_coverage().gaps.is_empty());
+        assert_eq!(events.take_applied_causes().len(), 2);
+        assert_eq!(events.applied_coverage().frontier, Some(6));
     }
 
     /// Order holds across ticks too: a later tick's spawn sorts after an

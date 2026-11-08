@@ -23,7 +23,7 @@
 use std::{hash::Hash, net::SocketAddr, time::Duration};
 
 use naia_shared::{
-    AuthorityError, Channel, ComponentKind, ConnectionStats, DisconnectReason,
+    AuthorityError, Channel, ComponentKind, ConnectionStats, Coverage, DisconnectReason,
     EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity,
     Instant, Message, Protocol, ProtocolId, Replicate, ReplicatedComponent, Request,
     ResourceAlreadyExists, Response, ResponseReceiveKey, ResponseSendKey, SendPlan, Tick,
@@ -590,6 +590,17 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.data_emit_count(user_key),
             WorldServerImpl::Pipelined(ps) => ps.data_emit_count(user_key),
+        }
+    }
+
+    /// Cumulative transmit-evidence coverage for one observer, or `None`
+    /// when the user is unknown or has no stream yet. Same population as
+    /// the resident arm; see [`InternalWorldServer::transmit_coverage`].
+    #[must_use]
+    pub fn transmit_coverage(&self, user_key: &UserKey) -> Option<Coverage> {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.transmit_coverage(user_key),
+            WorldServerImpl::Pipelined(ps) => ps.transmit_coverage(user_key),
         }
     }
 

@@ -12,7 +12,7 @@ use log::{info, warn};
 
 use naia_shared::{
     malformed_drop_warn, AuthorityError, BigMapKey, Channel, ChannelKind, ComponentKind,
-    ConnectionStats, DisconnectReason, EntityAndGlobalEntityConverter, EntityAuthStatus,
+    ConnectionStats, Coverage, DisconnectReason, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, FrozenGlobalDirty,
     GlobalDirtyBitset, GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalPriorityState,
     GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant,
@@ -2635,6 +2635,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         let user = self.sim_handle.state.user_store.get(*user_key)?;
         let send_conn = self.send.state.send_user_connections.get(&user.address())?;
         Some(send_conn.shared.data_packets_built())
+    }
+
+    /// Cumulative transmit-evidence coverage for one observer: frontier,
+    /// gaps and refusals across every send tick since connect. `None` when
+    /// the user is unknown or has no stream yet (nothing transmitted).
+    /// nydus-dm9: the matcher's server-side read; pairs with the client's
+    /// `applied_coverage` to prove a tick was covered on both sides.
+    #[must_use]
+    pub fn transmit_coverage(&self, user_key: &UserKey) -> Option<Coverage> {
+        self.send
+            .state
+            .cause_streams
+            .get(user_key)
+            .map(|stream| stream.coverage().clone())
     }
 
     /// Whether the user's send-side connection has been materialized.

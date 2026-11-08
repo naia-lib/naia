@@ -68,7 +68,7 @@ pub mod shared {
 /// Bevy-specific serialization derive support (re-export of [`naia_shared::SerdeBevyServer`]).
 pub use naia_shared::SerdeBevyServer as SerdeBevy;
 pub use naia_shared::{
-    ConnectionStats, DisconnectReason, EntityPriorityMut, EntityPriorityRef, ProtocolId,
+    ConnectionStats, Coverage, DisconnectReason, EntityPriorityMut, EntityPriorityRef, ProtocolId,
 };
 
 mod connection;

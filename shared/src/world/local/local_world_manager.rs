@@ -243,7 +243,10 @@ impl LocalWorldManager {
     /// Drain and return the observed packet ticks since the last drain, in
     /// parse order. The client marks one coverage tick per entry, including
     /// quiet ticks whose packets carried no entity messages.
-    pub(crate) fn take_observed_packet_ticks(&mut self) -> Vec<Tick> {
+    /// nydus-dm9: `pub` (not `pub(crate)`) — the naia-client packet drain
+    /// is the intended caller; crate-private visibility broke the client
+    /// build from 974dcd6f on.
+    pub fn take_observed_packet_ticks(&mut self) -> Vec<Tick> {
         std::mem::take(&mut self.observed_packet_ticks)
     }
 

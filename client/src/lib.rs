@@ -85,7 +85,7 @@ pub mod shared {
 /// `naia-shared` directly.
 pub use naia_shared::handshake::RejectReason;
 pub use naia_shared::{
-    ConnectionStats, DisconnectReason, EntityPriorityMut, EntityPriorityRef, ProtocolId,
+    ConnectionStats, Coverage, DisconnectReason, EntityPriorityMut, EntityPriorityRef, ProtocolId,
 };
 
 mod client;

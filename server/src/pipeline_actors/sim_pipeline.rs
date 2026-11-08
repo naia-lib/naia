@@ -33,7 +33,7 @@ use std::{hash::Hash, net::SocketAddr, sync::Arc};
 
 use crossbeam_channel::Receiver;
 use naia_shared::{
-    AuthorityError, Channel, ChannelKind, ComponentKind, ConnectionStats,
+    AuthorityError, Channel, ChannelKind, ComponentKind, ConnectionStats, Coverage,
     EntityAndGlobalEntityConverter, EntityAuthStatus, EntityPriorityMut, EntityPriorityRef,
     GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalWorldManagerType, HostType,
     Message, MessageContainer, Protocol, ProtocolId, Replicate, ReplicatedComponent, Request,
@@ -1455,6 +1455,21 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         let send = send.as_ref()?;
         let send_conn = send.state.send_user_connections.get(&addr)?;
         Some(send_conn.shared.data_packets_built())
+    }
+
+    /// Cumulative transmit-evidence coverage for one observer.
+    ///
+    /// Reads the parked send handle; `None` when the user is unknown, the
+    /// handle is not parked, or the observer has no stream yet — never a
+    /// slot-precondition panic. Same population as the resident arm.
+    pub fn transmit_coverage(&self, user_key: &UserKey) -> Option<Coverage> {
+        self.coord().user_address(*user_key)?;
+        let send = self.send_slot.lock();
+        let send = send.as_ref()?;
+        send.state
+            .cause_streams
+            .get(user_key)
+            .map(|stream| stream.coverage().clone())
     }
 
     /// Whether the user's send-side connection has been materialized.

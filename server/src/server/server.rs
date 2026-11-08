@@ -20,7 +20,7 @@ use crate::{
     transport::Socket,
     transport::{PacketChannel, PacketSender},
     world::{entity_mut::EntityMut, entity_ref::EntityRef},
-    ConnectEvent, ConnectionStats, DisconnectEvent, EntityOwner, Events, MainEvents,
+    ConnectEvent, ConnectionStats, Coverage, DisconnectEvent, EntityOwner, Events, MainEvents,
     NaiaServerError, ReceiveOutput, ReplicationConfig, ResponseSendOutcome, RoomKey, RoomMut,
     RoomRef, ServerConfig, TickEvents, UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef,
 };
@@ -1213,6 +1213,17 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// pairs with the client's `data_rx_count` to bound the hub+wire hold.
     pub fn data_emit_count(&self, user_key: &UserKey) -> Option<u64> {
         self.world.data_emit_count(user_key)
+    }
+
+    /// Cumulative transmit-evidence coverage for one observer: frontier,
+    /// gaps and refusals across every send tick since connect, or `None`
+    /// when the user is unknown or has no stream yet. nydus-dm9: the
+    /// matcher's server-side read; pairs with the client's
+    /// `applied_coverage` to prove a tick was covered on both sides of
+    /// the wire.
+    #[must_use]
+    pub fn transmit_coverage(&self, user_key: &UserKey) -> Option<Coverage> {
+        self.world.transmit_coverage(user_key)
     }
 
     /// Whether the user's canonical send-side connection is materialized.
