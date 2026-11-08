@@ -1200,15 +1200,28 @@ mod remote_world_manager_tests {
         );
     }
 
-    /// nydus-dm9 Fix3 RED (Ada 181408 point 3): a scope change arriving in
-    /// a packet of its own must carry the server's tick, not the client's
-    /// last-applied tick, or the two evidence streams can never agree.
+    /// nydus-dm9 Fix3 RED (Ada 181408 point 3): a scope re-entry must
+    /// carry its own packet tick, not the message's sub-command id and
+    /// not the client's last-applied entity tick, or the two evidence
+    /// streams can never agree. The cycle goes through Unpublish first
+    /// because a client's remote channel starts `Published`: a bare
+    /// Publish for it is an illegal transition and the channel drops it,
+    /// the same way it discards a duplicate Spawn. Honest servers only
+    /// Publish after an Unpublish.
     #[test]
     fn publish_arrives_stamped_with_its_packet_tick() {
         let mut fixture = Fixture::new(HostType::Client);
         let global_1 = fixture.spawn_with_ghost(remote(1));
 
-        // The scope change rides tick 9 alone: the stamp must be 9 even
+        // Scope leave rides tick 5: the stamp must be 5.
+        let events = fixture.deliver(vec![(5, EntityMessage::Unpublish(0, remote(1)))]);
+        assert_eq!(events.len(), 1, "unpublish must raise exactly one event");
+        assert!(
+            matches!(&events[0], EntityEvent::Unpublish(5, entity) if *entity == global_1),
+            "unpublish must arrive stamped with tick 5",
+        );
+
+        // Scope re-entry rides tick 9 alone: the stamp must be 9 even
         // though the last applied entity tick is older.
         let events = fixture.deliver(vec![(9, EntityMessage::Publish(0, remote(1)))]);
         assert_eq!(events.len(), 1, "publish must raise exactly one event");
