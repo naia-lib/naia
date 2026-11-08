@@ -16,11 +16,11 @@ use std::{collections::VecDeque, hash::Hash, net::SocketAddr, sync::Arc};
 use log::warn;
 
 use naia_shared::{
-    BaseSendConnection, BitReader, BitWriter, ChannelKinds, ComponentKinds,
-    ConnectionVisibilityBitset, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent,
-    GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalWorldManagerType, MessageIndex,
-    MessageKinds, OutgoingPacket, PacketNotifiable, PacketType, Serde, SerdeErr, SnapshotMap,
-    StandardHeader, Tick, UpdateKinds, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
+    BaseSendConnection, BitReader, BitWriter, CauseKind, ChannelKinds, ComponentKind,
+    ComponentKinds, ConnectionVisibilityBitset, EntityAndGlobalEntityConverter, EntityCommand,
+    EntityEvent, GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalWorldManagerType,
+    MessageIndex, MessageKinds, OutgoingPacket, PacketNotifiable, PacketType, Serde, SerdeErr,
+    SnapshotMap, StandardHeader, Tick, UpdateKinds, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
     REDUNDANT_PACKET_ACKS_SIZE,
 };
 
@@ -88,6 +88,44 @@ pub struct SendConnection {
     /// Latest tick serialized into Data. Quiet links still need one Data
     /// boundary per tick so the client's delivered-state ceiling can advance.
     last_data_tick: Option<Tick>,
+}
+
+/// One applied-cause evidence entry for a written entity command: the matcher
+/// kind, the commanded entity, the component kind when the cause is
+/// component-scoped, and the packet tick that carried it.
+pub(crate) type CommandEvidence = (CauseKind, GlobalEntity, Option<ComponentKind>, Tick);
+
+/// nydus-dm9 Fix2: the applied-cause kind for one written entity command,
+/// under the same identity the client journals for the same wire message.
+/// Lifecycle commands and scope transitions are evidence; delegation and
+/// authority traffic is admin that neither side journals.
+/// `SpawnWithComponents` maps to `Spawn` here; the per-kind `Insert` entries
+/// its bundle expands to are added by the caller, mirroring the client's
+/// channel split (`remote_entity_channel` emits one synthetic `Spawn` plus
+/// one `InsertComponent` per kind, all at the bundle's tick).
+fn command_evidence_kind(
+    command: &EntityCommand,
+) -> Option<(CauseKind, GlobalEntity, Option<ComponentKind>)> {
+    match command {
+        EntityCommand::Spawn(entity) => Some((CauseKind::Spawn, *entity, None)),
+        EntityCommand::SpawnWithComponents(entity, _) => Some((CauseKind::Spawn, *entity, None)),
+        EntityCommand::InsertComponent(entity, kind) => {
+            Some((CauseKind::Insert, *entity, Some(*kind)))
+        }
+        EntityCommand::RemoveComponent(entity, kind) => {
+            Some((CauseKind::Remove, *entity, Some(*kind)))
+        }
+        EntityCommand::Despawn(entity) => Some((CauseKind::Despawn, *entity, None)),
+        EntityCommand::Publish(_, entity) => Some((CauseKind::ScopePublish, *entity, None)),
+        EntityCommand::Unpublish(_, entity) => Some((CauseKind::ScopeUnpublish, *entity, None)),
+        EntityCommand::EnableDelegation(..)
+        | EntityCommand::DisableDelegation(..)
+        | EntityCommand::SetAuthority(..)
+        | EntityCommand::RequestAuthority(..)
+        | EntityCommand::ReleaseAuthority(..)
+        | EntityCommand::EnableDelegationResponse(..)
+        | EntityCommand::MigrateResponse(..) => None,
+    }
 }
 
 impl SendConnection {
@@ -377,7 +415,10 @@ impl SendConnection {
 
             #[cfg(feature = "bench_instrumentation")]
             let t_write = std::time::Instant::now();
-            let writer = self.write_packet(
+            // The immediate send path has no transmit job to fold command
+            // evidence into, so its evidence is dropped: the transmit job in
+            // `send_state` is the journaling path.
+            let (writer, _) = self.write_packet(
                 channel_kinds,
                 message_kinds,
                 component_kinds,
@@ -443,7 +484,7 @@ impl SendConnection {
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
         snapshot_map: &SnapshotMap,
-    ) -> BitWriter {
+    ) -> (BitWriter, Vec<CommandEvidence>) {
         let next_packet_index = self.base.next_packet_index();
 
         let mut writer = BitWriter::new();
@@ -476,6 +517,7 @@ impl SendConnection {
             .expect("GlobalDiffHandler lock poisoned");
         #[cfg(feature = "bench_instrumentation")]
         let t_base_write = std::time::Instant::now();
+        let mut written_commands = Vec::new();
         self.base.write_packet(
             channel_kinds,
             message_kinds,
@@ -492,12 +534,29 @@ impl SendConnection {
             update_list,
             Some(&*diff_handler_guard),
             Some(snapshot_map),
+            Some(&mut written_commands),
         );
         #[cfg(feature = "bench_instrumentation")]
         bench_send_counters::NS_WRITE_UPDATES.fetch_add(
             t_base_write.elapsed().as_nanos() as u64,
             std::sync::atomic::Ordering::Relaxed,
         );
+
+        // nydus-dm9 Fix2: journal every command this packet consumed, stamped
+        // with the packet's own tick — the same tick the client reads off the
+        // wire and journals under. A bundle expands to its Spawn plus one
+        // Insert per kind, in that order, mirroring the client's split.
+        let mut command_evidence = Vec::new();
+        for command in &written_commands {
+            if let Some((kind, entity, component_kind)) = command_evidence_kind(command) {
+                command_evidence.push((kind, entity, component_kind, tick));
+            }
+            if let EntityCommand::SpawnWithComponents(entity, kinds) = command {
+                for kind in kinds {
+                    command_evidence.push((CauseKind::Insert, *entity, Some(*kind), tick));
+                }
+            }
+        }
 
         #[cfg(feature = "e2e_debug")]
         {
@@ -518,7 +577,7 @@ impl SendConnection {
             }
         }
 
-        writer
+        (writer, command_evidence)
     }
 
     /// IO-free variant of `send_packets`. Builds all outgoing packets for this
@@ -560,7 +619,7 @@ impl SendConnection {
         rtt_millis: f32,
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
         snapshot_map: &SnapshotMap,
-    ) -> (Vec<OutgoingPacket>, bool) {
+    ) -> (Vec<OutgoingPacket>, bool, Vec<CommandEvidence>) {
         self.base.collect_messages(now, rtt_millis);
         let mut host_world_events = self
             .base
@@ -569,12 +628,13 @@ impl SendConnection {
         self.base.accumulate_bandwidth(now);
 
         let mut packets = Vec::new();
+        let mut command_evidence = Vec::new();
         // Set by `build_one_packet` when it refuses on bandwidth rather than on an
         // empty queue. Both refusals return `None`, so without this the caller cannot
         // tell a bandwidth wall from a supply wall — see `send_pass_walls`.
         let mut refused_on_bandwidth = false;
         while packets.len() < MAX_PACKETS_PER_SEND_PASS {
-            let Some(pkt) = self.build_one_packet(
+            let Some((pkt, mut packet_evidence)) = self.build_one_packet(
                 &mut refused_on_bandwidth,
                 channel_kinds,
                 message_kinds,
@@ -591,6 +651,7 @@ impl SendConnection {
                 break;
             };
             packets.push(pkt);
+            command_evidence.append(&mut packet_evidence);
         }
 
         // D6 L1 EMIT leg (Gerry 92237 / Usher 92247): every packet built
@@ -615,7 +676,7 @@ impl SendConnection {
         if any_built {
             self.base.mark_sent();
         }
-        (packets, any_built)
+        (packets, any_built, command_evidence)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -633,7 +694,7 @@ impl SendConnection {
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
         snapshot_map: &SnapshotMap,
-    ) -> Option<OutgoingPacket> {
+    ) -> Option<(OutgoingPacket, Vec<CommandEvidence>)> {
         let has_messages = self.base.message_manager.has_outgoing_messages();
         let has_events = !host_world_events.is_empty() || !update_list.is_empty();
         let needs_ack_only = self.base.take_should_send_empty_ack();
@@ -648,7 +709,8 @@ impl SendConnection {
             false.ser(&mut writer);
             false.ser(&mut writer);
             self.last_data_tick = Some(time_manager.current_tick());
-            return Some(writer.to_packet());
+            // Ack-only packets consume no commands: no evidence.
+            return Some((writer.to_packet(), Vec::new()));
         }
 
         // Heartbeats update the clock estimate, but only Data advances the
@@ -663,7 +725,7 @@ impl SendConnection {
                 *refused_on_bandwidth = true;
                 return None;
             }
-            let writer = self.write_packet(
+            let (writer, command_evidence) = self.write_packet(
                 channel_kinds,
                 message_kinds,
                 component_kinds,
@@ -680,7 +742,7 @@ impl SendConnection {
             self.base.spend_bandwidth(
                 u32::try_from(packet.slice().len()).expect("packet length fits in u32"),
             );
-            return Some(packet);
+            return Some((packet, command_evidence));
         }
 
         None

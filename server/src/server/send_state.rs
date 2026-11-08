@@ -1287,7 +1287,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         })
                         .collect();
 
-                    let (packets, _) = send_conn.build_all_packets(
+                    let (packets, _, mut command_evidence) = send_conn.build_all_packets(
                         channel_kinds,
                         message_kinds,
                         component_kinds,
@@ -1356,6 +1356,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                             ));
                         }
                     }
+
+                    // nydus-dm9 Fix2: command evidence follows the update
+                    // evidence, matching wire order (updates serialize
+                    // before commands in every packet).
+                    evidence.append(&mut command_evidence);
 
                     (addr, packets, send_conn, user_prio, evidence, current_tick)
                 },

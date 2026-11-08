@@ -423,6 +423,9 @@ impl Connection {
             update_list,
             None,
             None,
+            // Client-side commands (authority requests, delegation acks)
+            // are not applied-cause evidence: neither side journals them.
+            None,
         );
 
         writer

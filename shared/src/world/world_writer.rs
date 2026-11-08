@@ -255,6 +255,7 @@ impl WorldWriter {
         world_events: &mut VecDeque<(CommandId, EntityCommand)>,
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
         snapshot_map: Option<&SnapshotMap>,
+        written_commands: Option<&mut Vec<EntityCommand>>,
     ) {
         // write entity updates
         Self::write_updates(
@@ -283,6 +284,7 @@ impl WorldWriter {
             world_manager,
             has_written,
             world_events,
+            written_commands,
         );
     }
 
@@ -298,6 +300,7 @@ impl WorldWriter {
         world_manager: &mut LocalWorldManager,
         has_written: &mut bool,
         next_send_commands: &mut VecDeque<(CommandId, EntityCommand)>,
+        written_commands: Option<&mut Vec<EntityCommand>>,
     ) {
         let mut last_counted_id: Option<MessageIndex> = None;
         let mut last_written_id: Option<MessageIndex> = None;
@@ -359,7 +362,17 @@ impl WorldWriter {
                 next_send_commands,
             );
 
-            // pop command we've written
+            // pop command we've written, journaling the queued command for
+            // the server's applied-cause stream (nydus-dm9 Fix2). This is the
+            // post-budget set: only commands that fit the packet are popped.
+            // A command that degraded to a wire Noop (superseded spawn, torn
+            // down target) still journals its queued form here; the Noop
+            // record in `sent_command_packets` is the disambiguator.
+            if let Some(out) = written_commands.as_mut() {
+                if let Some((_, command)) = next_send_commands.front() {
+                    out.push(command.clone());
+                }
+            }
             next_send_commands.pop_front();
         }
 
@@ -2807,6 +2820,7 @@ mod delegated_send_guard_tests {
             &mut local_world_manager,
             &mut has_written,
             &mut next_send_commands,
+            None,
         );
 
         (next_send_commands.len(), has_written, writer.bits_written())
@@ -2994,6 +3008,7 @@ mod delegated_send_guard_tests {
             &mut has_written,
             &mut world_events,
             &mut update_list,
+            None,
             None,
         );
 
