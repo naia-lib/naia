@@ -255,6 +255,29 @@ fn trim_runs_on_the_tick_mark_not_on_push() {
     assert_eq!(stream.coverage().refusals, 0);
 }
 
+/// Ada sixth read (184725): `push` refuses evidence for a tick below the
+/// floor. The tick already lapsed when the floor passed it; accepting the
+/// late entry would leave it both lapsed and present. The floor already
+/// names the lapse, so the push records nothing — and a late [`CauseKind::Deferred`]
+/// is refused the same way, never counted.
+#[test]
+fn late_evidence_below_the_floor_is_refused() {
+    let mut stream = CauseStream::new();
+    stream.set_bound(Some(16));
+    for tick in 0..=20u16 {
+        stream.push(CauseKind::Update, 1, Some(kind()), tick);
+        stream.mark_tick_covered(tick);
+    }
+    assert_eq!(stream.coverage().lapsed_before, Some(4));
+    let before = stream.entries().len();
+    stream.push(CauseKind::Update, 1, Some(kind()), 2);
+    stream.push(CauseKind::Deferred, 8, Some(kind()), 1);
+    assert_eq!(stream.entries().len(), before);
+    assert_eq!(stream.coverage().lapsed_before, Some(4));
+    assert_eq!(stream.coverage().refusals, 0);
+    assert!(stream.coverage().gaps.is_empty());
+}
+
 /// Ada fifth read (184597): refusals are reserved for explicit [`CauseKind::Deferred`]
 /// markers. Bound eviction names the lapse through the floor instead.
 #[test]

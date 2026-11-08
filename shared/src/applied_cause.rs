@@ -199,6 +199,13 @@ impl<E> CauseStream<E> {
     }
 
     /// Record one cause. Returns its position in the stream.
+    ///
+    /// Evidence for a tick below [`Coverage::lapsed_before`] is refused: the
+    /// tick already lapsed when the floor passed it, and accepting the late
+    /// entry would leave it both lapsed and present. The floor already names
+    /// the lapse, so the push records nothing (it still consumes an order
+    /// slot, keeping positions unique). This holds for every kind, including
+    /// [`CauseKind::Deferred`]: lateness is not a deferral.
     pub fn push(
         &mut self,
         kind: CauseKind,
@@ -208,6 +215,11 @@ impl<E> CauseStream<E> {
     ) -> usize {
         let order_index = self.next_order;
         self.next_order += 1;
+        if let Some(floor) = self.coverage.lapsed_before {
+            if tick != floor && floor.wrapping_sub(tick) <= 32768 {
+                return order_index;
+            }
+        }
         if kind == CauseKind::Deferred {
             self.coverage.refusals += 1;
         } else if kind != CauseKind::Epoch {
