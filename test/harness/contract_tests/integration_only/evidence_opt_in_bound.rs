@@ -7,7 +7,7 @@
 //!   empty drain.
 //! - On: over a long run with per-tick entries, both journals stay bounded
 //!   (retained entries and gaps within the window behind the frontier), the
-//!   lapse is declared as refusals, and both sides drain through public
+//!   lapse is named by the floor, and both sides drain through public
 //!   calls (`take_transmit_causes` / `take_applied_causes`) leaving empty
 //!   second drains while the frontier keeps advancing.
 
@@ -27,7 +27,7 @@ use naia_test_harness::{protocol, Auth, Position};
 use parking_lot::Mutex;
 
 /// Default evidence window both configs share: history older than this many
-/// ticks behind the frontier is evicted, declared as a refusal lapse.
+/// ticks behind the frontier is evicted, naming the lapse floor.
 const WINDOW: u16 = 16;
 
 struct Link {
@@ -231,8 +231,8 @@ fn evidence_on_stays_bounded_and_drains(mode: ServerMode) {
         "no server gap may be older than the window"
     );
     assert!(
-        server_cov.refusals >= 1,
-        "evicted history must be declared as refusals, never silent"
+        server_cov.lapsed_before.is_some(),
+        "evicted history must name the lapse floor, never stay silent"
     );
     assert!(
         link.server
@@ -266,8 +266,8 @@ fn evidence_on_stays_bounded_and_drains(mode: ServerMode) {
         "no client gap may be older than the window"
     );
     assert!(
-        client_cov.refusals >= 1,
-        "evicted history must be declared as refusals, never silent"
+        client_cov.lapsed_before.is_some(),
+        "evicted history must name the lapse floor, never stay silent"
     );
     assert!(
         link.client.take_applied_causes().is_empty(),

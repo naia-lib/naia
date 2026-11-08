@@ -192,19 +192,22 @@ fn late_evidence_heals_a_gap() {
 }
 
 #[test]
-fn bound_evicts_old_history_and_declares_lapse() {
+fn bound_evicts_old_history_and_names_the_lapse() {
     let mut stream = CauseStream::new();
     stream.set_bound(Some(16));
     for tick in 0..=20u16 {
         stream.push(CauseKind::Update, 1, Some(kind()), tick);
+        stream.mark_tick_covered(tick);
     }
     let coverage = stream.coverage();
     // The frontier keeps advancing: the bound cuts history, never the edge.
     assert_eq!(coverage.frontier, Some(20));
     // Ticks 0..=3 lapsed: exactly the window behind the frontier is retained.
     assert_eq!(stream.entries().len(), 17);
-    // The lapse is declared as refusals, never silent.
-    assert!(coverage.refusals >= 1);
+    // The lapse is named per tick by the floor, never by refusal count, so
+    // a quiet link under the bound still reads zero refusals.
+    assert_eq!(coverage.refusals, 0);
+    assert_eq!(coverage.lapsed_before, Some(4));
     // No retained entry or gap is older than the window.
     assert!(stream
         .entries()
@@ -214,17 +217,60 @@ fn bound_evicts_old_history_and_declares_lapse() {
 }
 
 #[test]
-fn bound_clamps_long_gap_runs_and_declares_lapse() {
+fn bound_clamps_long_gap_runs_and_folds_them_into_the_floor() {
     let mut stream = CauseStream::new();
     stream.set_bound(Some(16));
     stream.push(CauseKind::Update, 1, Some(kind()), 0);
     stream.push(CauseKind::Update, 1, Some(kind()), 40);
+    stream.mark_tick_covered(40);
     let coverage = stream.coverage();
     assert_eq!(coverage.frontier, Some(40));
     // Only the frontier tick's evidence is retained; the gap run is clamped
-    // to the window and the evicted history is declared, never silent.
+    // to the window and the aged-out gaps fold into the lapse floor.
     assert_eq!(stream.entries().len(), 1);
     assert!(coverage.gaps.len() <= 16);
     assert!(coverage.gaps.iter().all(|&g| 40u16.wrapping_sub(g) <= 16));
-    assert!(coverage.refusals >= 1);
+    assert_eq!(coverage.refusals, 0);
+    assert_eq!(coverage.lapsed_before, Some(24));
+}
+
+/// Ada fifth read (184597): the trim runs once per tick on the mark, never
+/// per push, so a busy observer's tick of updates costs one trim, not one
+/// scan per update. Pushes alone never evict.
+#[test]
+fn trim_runs_on_the_tick_mark_not_on_push() {
+    let mut stream = CauseStream::new();
+    stream.set_bound(Some(16));
+    for tick in 0..=20u16 {
+        stream.push(CauseKind::Update, 1, Some(kind()), tick);
+    }
+    // No mark yet: pushes never trim, so all 21 entries are still held and
+    // no lapse is named.
+    assert_eq!(stream.entries().len(), 21);
+    assert_eq!(stream.coverage().lapsed_before, None);
+    stream.mark_tick_covered(20);
+    // One mark trims once: exactly the window behind the frontier is kept.
+    assert_eq!(stream.entries().len(), 17);
+    assert_eq!(stream.coverage().lapsed_before, Some(4));
+    assert_eq!(stream.coverage().refusals, 0);
+}
+
+/// Ada fifth read (184597): refusals are reserved for explicit [`CauseKind::Deferred`]
+/// markers. Bound eviction names the lapse through the floor instead.
+#[test]
+fn refusals_are_reserved_for_deferred_markers() {
+    let mut stream = CauseStream::new();
+    stream.set_bound(Some(16));
+    stream.push(CauseKind::Deferred, 8, Some(kind()), 5);
+    assert_eq!(stream.coverage().refusals, 1);
+    assert_eq!(stream.coverage().lapsed_before, None);
+    for tick in 6..=30u16 {
+        stream.push(CauseKind::Update, 1, Some(kind()), tick);
+        stream.mark_tick_covered(tick);
+    }
+    // Eviction moved the floor; the refusal count still holds only the one
+    // deferred marker.
+    assert_eq!(stream.coverage().frontier, Some(30));
+    assert_eq!(stream.coverage().refusals, 1);
+    assert_eq!(stream.coverage().lapsed_before, Some(14));
 }

@@ -31,15 +31,19 @@
 //! measures, from which the window is chosen. If wire delivery is ever
 //! required, that is a protocol-change follow-up, not a silent extension.
 //!
-//! Opt-in contract (Ada fourth read 184483, card nydus-dm9): the
-//! journals are OFF by default on both sides — one switch in the server and
-//! client configs, no push, no mark and no allocation when off. When on, each
-//! stream is bounded to [`DEFAULT_CAUSE_EVIDENCE_WINDOW`] ticks behind its
-//! frontier: older entries and gaps are evicted, each eviction declared as one
-//! refusal (see `Coverage.refusals`), so a late reader gets "lapsed", never a
-//! false gap. Both sides drain entries through public calls while coverage
-//! stays cumulative: the client via `take_applied_causes`, the server via its
+//! Opt-in contract (Ada fourth read 184483, card nydus-dm9; lapse floor and
+//! once-per-tick trim per Ada fifth read 184597): the journals are OFF by
+//! default on both sides — one switch in the server and client configs, no
+//! push, no mark and no allocation when off. When on, each stream is bounded
+//! to [`DEFAULT_CAUSE_EVIDENCE_WINDOW`] ticks behind its frontier: older
+//! entries and gaps are evicted and the lapse floor raised (see
+//! `Coverage.lapsed_before`), so a late reader gets "lapsed", never a false
+//! gap. Refusals stay reserved for explicit [`CauseKind::Deferred`] markers.
+//! Both sides drain entries through public calls while coverage stays
+//! cumulative: the client via `take_applied_causes`, the server via its
 //! per-observer transmit drain.
+
+use std::collections::VecDeque;
 
 use crate::{ComponentKind, Tick};
 
@@ -110,33 +114,59 @@ impl<E> AppliedCause<E> {
 }
 
 /// Default evidence retention window in ticks: history older than this many
-/// ticks behind the frontier is evicted, declared as a refusal lapse. The
+/// ticks behind the frontier is evicted, naming the lapse through
+/// [`Coverage::lapsed_before`]. The
 /// Diax matcher window (16 ticks by default) is the natural bound.
 pub const DEFAULT_CAUSE_EVIDENCE_WINDOW: u16 = 16;
 
+/// Raise the lapse floor to `cutoff`, monotonically in tick-forward order:
+/// the floor only moves forward, never back. Ticks are `u16` and wrap, so
+/// forward movement is judged within half the range, matching the frontier
+/// logic in `mark_tick_covered` and `note_tick`.
+fn raise_lapse_floor(floor: &mut Option<Tick>, cutoff: Tick) {
+    match *floor {
+        None => *floor = Some(cutoff),
+        Some(prev) => {
+            if prev != cutoff && cutoff.wrapping_sub(prev) <= 32768 {
+                *floor = Some(cutoff);
+            }
+        }
+    }
+}
+
 /// Coverage of one evidence stream: how far it is complete, where it has
-/// holes, and how much it explicitly refused.
+/// holes, which ticks have lapsed out of the retained window, and how much
+/// it explicitly refused.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct Coverage {
     /// Highest tick fully evidenced, contiguous from the stream's first tick.
     pub frontier: Option<Tick>,
     /// Ticks skipped over by later evidence (observed missing).
     pub gaps: Vec<Tick>,
-    /// Count of explicit refusals: [`CauseKind::Deferred`] markers plus one
-    /// per bound enforcement that evicted history (the lapse declaration).
+    /// Lapse floor: every tick `T` with `T < lapsed_before` has lapsed out of
+    /// the retained window behind the frontier. The matcher asks per tick, so
+    /// a bare count cannot answer it; one bounded field can. A gap that ages
+    /// out of the window folds into this floor instead of vanishing. Raised
+    /// to `frontier - window` whenever the bound evicts anything.
+    pub lapsed_before: Option<Tick>,
+    /// Count of explicit refusals: [`CauseKind::Deferred`] markers only.
+    /// Bound eviction never touches this count; it raises `lapsed_before`.
     pub refusals: u64,
 }
 
 /// One ordered applied-cause evidence stream with coverage.
 #[derive(Clone, Debug, Default)]
 pub struct CauseStream<E> {
-    entries: Vec<AppliedCause<E>>,
+    /// Application-order entries, tick-ordered on the append path. The trim
+    /// pops from the front once per tick, so this is a deque, not a vec.
+    entries: VecDeque<AppliedCause<E>>,
     coverage: Coverage,
     generation: u64,
     next_order: usize,
     /// Retention bound in ticks behind the frontier, or `None` for unbounded.
     /// Owners set it when evidence is enabled so memory stays flat over a
-    /// long run; enforcement runs inside `push` and `mark_tick_covered`.
+    /// long run; enforcement runs once per tick inside `mark_tick_covered`,
+    /// never inside `push`.
     bound: Option<u16>,
 }
 
@@ -148,7 +178,7 @@ impl<E> CauseStream<E> {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            entries: Vec::new(),
+            entries: VecDeque::new(),
             coverage: Coverage::default(),
             generation: 0,
             next_order: 0,
@@ -157,7 +187,7 @@ impl<E> CauseStream<E> {
     }
 
     /// Set the retention bound in ticks behind the frontier (`None` lifts
-    /// it). Eviction is declared, never silent: see `Coverage.refusals`.
+    /// it). Eviction is declared, never silent: see `Coverage.lapsed_before`.
     pub fn set_bound(&mut self, bound: Option<u16>) {
         self.bound = bound;
     }
@@ -183,7 +213,7 @@ impl<E> CauseStream<E> {
         } else if kind != CauseKind::Epoch {
             self.note_tick(tick);
         }
-        self.entries.push(AppliedCause {
+        self.entries.push_back(AppliedCause {
             kind,
             identity: CauseIdentity {
                 entity,
@@ -193,14 +223,22 @@ impl<E> CauseStream<E> {
             order_index,
             generation: self.generation,
         });
-        self.enforce_bound();
         order_index
     }
 
-    /// Evict history older than the bound behind the frontier. One refusal
-    /// is declared per enforcement that drops anything — entries or gaps —
-    /// so a matcher reading later gets "lapsed", never a false gap. The
-    /// frontier itself is never cut: the bound trims history, not the edge.
+    /// Evict history older than the bound behind the frontier, once per tick.
+    /// Evicted ticks are named by raising [`Coverage::lapsed_before`] to
+    /// `frontier - window`, so a matcher asking about tick `T` gets a
+    /// per-tick answer (`T < lapsed_before` means lapsed). A gap that ages
+    /// out folds into the floor instead of vanishing. The refusal count is
+    /// untouched: it holds [`CauseKind::Deferred`] markers only. The frontier
+    /// itself is never cut: the bound trims history, not the edge.
+    ///
+    /// Entries arrive in tick order on the append path, so the trim pops from
+    /// the front; a late-heal entry for an older tick rides at the back and is
+    /// evicted when it reaches the front. This runs in `mark_tick_covered`
+    /// (once per tick), never in `push`: a busy observer's tick of updates
+    /// costs one trim, not one scan per update.
     fn enforce_bound(&mut self) {
         let window = match self.bound {
             Some(window) => window,
@@ -210,33 +248,42 @@ impl<E> CauseStream<E> {
             Some(frontier) => frontier,
             None => return,
         };
-        let before_entries = self.entries.len();
-        self.entries
-            .retain(|entry| frontier.wrapping_sub(entry.identity.tick) <= window);
+        let cutoff = frontier.wrapping_sub(window);
+        let mut evicted = false;
+        while let Some(front) = self.entries.front() {
+            if frontier.wrapping_sub(front.identity.tick) <= window {
+                break;
+            }
+            self.entries.pop_front();
+            evicted = true;
+        }
         let before_gaps = self.coverage.gaps.len();
         self.coverage
             .gaps
             .retain(|&gap| frontier.wrapping_sub(gap) <= window);
-        if self.entries.len() != before_entries || self.coverage.gaps.len() != before_gaps {
-            self.coverage.refusals += 1;
+        if self.coverage.gaps.len() != before_gaps {
+            evicted = true;
+        }
+        if evicted {
+            raise_lapse_floor(&mut self.coverage.lapsed_before, cutoff);
         }
     }
 
     /// All entries in application order.
     #[must_use]
-    pub fn entries(&self) -> &[AppliedCause<E>] {
+    pub fn entries(&self) -> &VecDeque<AppliedCause<E>> {
         &self.entries
     }
 
     /// Drain and return all buffered entries, in application order. Coverage
-    /// stays cumulative: the frontier, gaps and refusals describe every
-    /// entry the stream has ever held, drained or not.
+    /// stays cumulative: the frontier, gaps, lapse floor and refusals describe
+    /// every entry the stream has ever held, drained or not.
     #[must_use]
     pub fn take_entries(&mut self) -> Vec<AppliedCause<E>> {
-        std::mem::take(&mut self.entries)
+        std::mem::take(&mut self.entries).into_iter().collect()
     }
 
-    /// The stream's coverage: frontier, gaps, refusals.
+    /// The stream's coverage: frontier, gaps, lapse floor, refusals.
     #[must_use]
     pub fn coverage(&self) -> &Coverage {
         &self.coverage
