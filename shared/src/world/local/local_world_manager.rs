@@ -728,6 +728,28 @@ impl LocalWorldManager {
         }
     }
 
+    /// nydus-dm9: whether the wire form recorded for this command in this
+    /// packet is a `Noop`. A command that degraded on the wire (superseded
+    /// spawn, torn-down target) offered nothing, so the evidence journal must
+    /// not record its queued form. A missing record -- a pass that never
+    /// wrote -- answers false, keeping the queued form: every record that
+    /// exists here was written moments ago by this same packet's pass.
+    pub(crate) fn command_written_as_noop(
+        &self,
+        packet_index: PacketIndex,
+        command_id: CommandId,
+    ) -> bool {
+        let Some((_, sent_actions_list)) =
+            self.sent_command_packets.get_scan_from_back(packet_index)
+        else {
+            return false;
+        };
+        sent_actions_list
+            .iter()
+            .find(|(id, _)| *id == command_id)
+            .is_some_and(|(_, message)| matches!(message, EntityMessage::Noop))
+    }
+
     pub(crate) fn record_command_written(
         &mut self,
         packet_index: PacketIndex,

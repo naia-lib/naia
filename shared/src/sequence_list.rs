@@ -38,6 +38,32 @@ impl<T> SequenceList<T> {
         }
     }
 
+    pub fn get_scan_from_back(&self, id: u16) -> Option<&T> {
+        let mut index = self.list.len();
+
+        loop {
+            if index == 0 {
+                // made it all the way through
+                return None;
+            }
+
+            index -= 1;
+
+            {
+                let (old_id, _) = self.list.get(index).unwrap();
+                if *old_id == id {
+                    break;
+                }
+                if sequence_less_than(*old_id, id) {
+                    return None;
+                }
+            }
+        }
+
+        let (_, item) = self.list.get(index).unwrap();
+        Some(item)
+    }
+
     pub fn get_mut_scan_from_back(&mut self, id: u16) -> Option<&mut T> {
         let mut index = self.list.len();
 

@@ -362,15 +362,17 @@ impl WorldWriter {
                 next_send_commands,
             );
 
-            // pop command we've written, journaling the queued command for
+            // pop command we've written, journaling the written wire form for
             // the server's applied-cause stream (nydus-dm9 Fix2). This is the
             // post-budget set: only commands that fit the packet are popped.
             // A command that degraded to a wire Noop (superseded spawn, torn
-            // down target) still journals its queued form here; the Noop
-            // record in `sent_command_packets` is the disambiguator.
+            // down target) offered nothing, so it journals nothing: the Noop
+            // record in `sent_command_packets` is the join key.
             if let Some(out) = written_commands.as_mut() {
-                if let Some((_, command)) = next_send_commands.front() {
-                    out.push(command.clone());
+                if let Some((command_id, command)) = next_send_commands.front() {
+                    if !world_manager.command_written_as_noop(packet_index, *command_id) {
+                        out.push(command.clone());
+                    }
                 }
             }
             next_send_commands.pop_front();
@@ -2900,6 +2902,64 @@ mod delegated_send_guard_tests {
                 EntityCommand::SpawnWithComponents(e, vec![ComponentKind::of::<Ghost>()])
             }),
             EntityMessageType::Noop,
+        );
+    }
+
+    /// nydus-dm9: the journal records the written wire form, not the queued
+    /// intent. A coalesced spawn for an untracked entity degrades to a wire
+    /// `Noop` -- it offered nothing, so the evidence journal must stay empty.
+    /// Journaling the queued `SpawnWithComponents` would invent server
+    /// evidence for an event the client never sees.
+    #[test]
+    fn a_noop_degraded_spawn_leaves_no_evidence_in_the_journal() {
+        let mut kinds = ComponentKinds::new();
+        kinds.add_component::<Ghost>();
+
+        let (mutator, accessor) = EntityAuthChannel::new_channel(HostType::Server);
+        mutator.set_auth_status(EntityAuthStatus::Granted);
+        let gwm = AuthGwm {
+            auth: accessor,
+            global_dirty: Arc::new(GlobalDirtyBitset::new(64, kinds.kind_count() as usize)),
+        };
+
+        let mut local_world_manager = LocalWorldManager::new(&None, HostType::Server, 0, &gwm);
+        let global_entity = GlobalEntity::from_u64(1);
+        // Deliberately NOT host-tracked: the Despawn-superseded-Spawn race,
+        // so the command degrades to a wire Noop.
+        let converter = OneEntityConverter { global_entity };
+        let world = LiveWorld {
+            ghost: Ghost::new_complete(7),
+        };
+        let mut next_send_commands: VecDeque<(CommandId, EntityCommand)> = VecDeque::from(vec![(
+            CommandId::from(0u16),
+            EntityCommand::SpawnWithComponents(global_entity, vec![ComponentKind::of::<Ghost>()]),
+        )]);
+
+        let mut writer = BitWriter::new();
+        let mut has_written = false;
+        let mut written_commands = Vec::new();
+
+        WorldWriter::write_commands(
+            &kinds,
+            &Instant::now(),
+            &mut writer,
+            0,
+            &world,
+            &converter,
+            &gwm,
+            &mut local_world_manager,
+            &mut has_written,
+            &mut next_send_commands,
+            Some(&mut written_commands),
+        );
+
+        assert!(
+            has_written,
+            "the degraded command still occupies its wire slot as a Noop"
+        );
+        assert!(
+            written_commands.is_empty(),
+            "a wire Noop offered nothing, so the journal must stay empty; got {written_commands:?}"
         );
     }
 
