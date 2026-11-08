@@ -140,6 +140,11 @@ path = "contract_tests/integration_only/quiet_evidence_both_frontiers.rs"
 required-features = ["deterministic"]
 
 [[test]]
+name = "command_resend_identity"
+path = "contract_tests/integration_only/command_resend_identity.rs"
+required-features = ["deterministic"]
+
+[[test]]
 name = "quiet_request_response_after_idle"
 path = "contract_tests/integration_only/quiet_request_response_after_idle.rs"
 required-features = ["deterministic"]
