@@ -30,6 +30,16 @@
 //! retransmit lag is unbounded in theory and is what Mercer's lapse count
 //! measures, from which the window is chosen. If wire delivery is ever
 //! required, that is a protocol-change follow-up, not a silent extension.
+//!
+//! Opt-in contract (Ada fourth read 184483, card nydus-dm9): the
+//! journals are OFF by default on both sides — one switch in the server and
+//! client configs, no push, no mark and no allocation when off. When on, each
+//! stream is bounded to [`DEFAULT_CAUSE_EVIDENCE_WINDOW`] ticks behind its
+//! frontier: older entries and gaps are evicted, each eviction declared as one
+//! refusal (see `Coverage.refusals`), so a late reader gets "lapsed", never a
+//! false gap. Both sides drain entries through public calls while coverage
+//! stays cumulative: the client via `take_applied_causes`, the server via its
+//! per-observer transmit drain.
 
 use crate::{ComponentKind, Tick};
 
@@ -99,6 +109,11 @@ impl<E> AppliedCause<E> {
     }
 }
 
+/// Default evidence retention window in ticks: history older than this many
+/// ticks behind the frontier is evicted, declared as a refusal lapse. The
+/// Diax matcher window (16 ticks by default) is the natural bound.
+pub const DEFAULT_CAUSE_EVIDENCE_WINDOW: u16 = 16;
+
 /// Coverage of one evidence stream: how far it is complete, where it has
 /// holes, and how much it explicitly refused.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
@@ -107,7 +122,8 @@ pub struct Coverage {
     pub frontier: Option<Tick>,
     /// Ticks skipped over by later evidence (observed missing).
     pub gaps: Vec<Tick>,
-    /// Count of explicit refusal markers ([`CauseKind::Deferred`]).
+    /// Count of explicit refusals: [`CauseKind::Deferred`] markers plus one
+    /// per bound enforcement that evicted history (the lapse declaration).
     pub refusals: u64,
 }
 
@@ -118,10 +134,17 @@ pub struct CauseStream<E> {
     coverage: Coverage,
     generation: u64,
     next_order: usize,
+    /// Retention bound in ticks behind the frontier, or `None` for unbounded.
+    /// Owners set it when evidence is enabled so memory stays flat over a
+    /// long run; enforcement runs inside `push` and `mark_tick_covered`.
+    bound: Option<u16>,
 }
 
 impl<E> CauseStream<E> {
-    /// A new empty stream at generation 0.
+    /// A new empty stream at generation 0, unbounded until the owner sets a
+    /// bound. Recording itself is always on at this level: the on/off switch
+    /// lives with the owners (server/client configs), which gate every push
+    /// and mark before they reach the stream.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -129,7 +152,14 @@ impl<E> CauseStream<E> {
             coverage: Coverage::default(),
             generation: 0,
             next_order: 0,
+            bound: None,
         }
+    }
+
+    /// Set the retention bound in ticks behind the frontier (`None` lifts
+    /// it). Eviction is declared, never silent: see `Coverage.refusals`.
+    pub fn set_bound(&mut self, bound: Option<u16>) {
+        self.bound = bound;
     }
 
     /// The journal's current generation.
@@ -163,7 +193,33 @@ impl<E> CauseStream<E> {
             order_index,
             generation: self.generation,
         });
+        self.enforce_bound();
         order_index
+    }
+
+    /// Evict history older than the bound behind the frontier. One refusal
+    /// is declared per enforcement that drops anything — entries or gaps —
+    /// so a matcher reading later gets "lapsed", never a false gap. The
+    /// frontier itself is never cut: the bound trims history, not the edge.
+    fn enforce_bound(&mut self) {
+        let window = match self.bound {
+            Some(window) => window,
+            None => return,
+        };
+        let frontier = match self.coverage.frontier {
+            Some(frontier) => frontier,
+            None => return,
+        };
+        let before_entries = self.entries.len();
+        self.entries
+            .retain(|entry| frontier.wrapping_sub(entry.identity.tick) <= window);
+        let before_gaps = self.coverage.gaps.len();
+        self.coverage
+            .gaps
+            .retain(|&gap| frontier.wrapping_sub(gap) <= window);
+        if self.entries.len() != before_entries || self.coverage.gaps.len() != before_gaps {
+            self.coverage.refusals += 1;
+        }
     }
 
     /// All entries in application order.
@@ -218,6 +274,7 @@ impl<E> CauseStream<E> {
                 // heal; it carries no new coverage information.
             }
         }
+        self.enforce_bound();
     }
 
     fn note_tick(&mut self, tick: Tick) {

@@ -1,6 +1,6 @@
 use std::{default::Default, time::Duration};
 
-use naia_shared::ConnectionConfig;
+use naia_shared::{ConnectionConfig, DEFAULT_CAUSE_EVIDENCE_WINDOW};
 
 use crate::connection::ping_config::PingConfig;
 
@@ -43,6 +43,14 @@ pub struct ServerConfig {
     /// dropped by the per-`receive()` sweep, so issued-but-never-identified
     /// tokens cannot grow server memory without bound. Default: 1 hour.
     pub identity_token_ttl: Duration,
+    /// nydus-dm9 evidence opt-in (Ada 184483): record per-observer
+    /// applied-cause evidence for the causal-proof matcher. Default off:
+    /// no push, no mark and no allocation — no stream is ever created.
+    pub cause_evidence: bool,
+    /// Retention window in ticks behind the transmit frontier while
+    /// `cause_evidence` is on. Older history is evicted, each eviction
+    /// declared as one refusal lapse. Default: 16 (the Diax matcher window).
+    pub cause_evidence_window: u16,
 }
 
 impl Default for ServerConfig {
@@ -55,6 +63,8 @@ impl Default for ServerConfig {
             max_pending_auth_users: 1_024,
             max_replicated_entities: 65_536,
             identity_token_ttl: Duration::from_secs(3600),
+            cause_evidence: false,
+            cause_evidence_window: DEFAULT_CAUSE_EVIDENCE_WINDOW,
         }
     }
 }

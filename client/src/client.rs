@@ -9,8 +9,8 @@ use naia_shared::TestClock;
 
 use naia_shared::{
     handshake::{HandshakeHeader, RejectReason},
-    malformed_drop_warn, AuthorityError, BitReader, BitWriter, CancelDisposition, Channel,
-    ChannelKind, ChannelMode, ComponentKind, ConnectionStats, Coverage, DisconnectReason,
+    malformed_drop_warn, AppliedCause, AuthorityError, BitReader, BitWriter, CancelDisposition,
+    Channel, ChannelKind, ChannelMode, ComponentKind, ConnectionStats, Coverage, DisconnectReason,
     EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, EntityEvent,
     EntityPriorityMut, EntityPriorityRef, FakeEntityConverter, GameInstant, GlobalEntity,
     GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId,
@@ -235,6 +235,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         let mut global_world_manager = GlobalWorldManager::new();
         global_world_manager.init_protocol_kind_count(protocol.component_kinds.kind_count());
 
+        // nydus-dm9 evidence opt-in (Ada 184483): the journal is dark unless
+        // the config enables it.
+        let mut incoming_world_events = Events::new();
+        incoming_world_events.set_evidence(
+            client_config.cause_evidence,
+            client_config.cause_evidence_window,
+        );
+
         Self {
             // Config
             client_config: client_config.clone(),
@@ -263,7 +271,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             // Events
             #[cfg(feature = "test_time")]
             shared_clock: TestClock::shareable_handle(),
-            incoming_world_events: Events::new(),
+            incoming_world_events,
             // Fail-closed delegation error slot (card 27945). Without the
             // `entity_delegation` feature, delegation wire commands are
             // recorded here instead of applied; `None` in ON builds.
@@ -582,6 +590,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     #[must_use]
     pub fn applied_coverage(&self) -> Coverage {
         self.incoming_world_events.applied_coverage().clone()
+    }
+
+    /// Drain and return the applied-cause journal: every lifecycle,
+    /// component and scope cause applied since the last drain, in
+    /// application order. Coverage stays cumulative; query it with
+    /// [`applied_coverage`](Client::applied_coverage). Empty whenever
+    /// evidence is off. Ada 184483: the matcher's client-side drain.
+    pub fn take_applied_causes(&mut self) -> Vec<AppliedCause<E>> {
+        self.incoming_world_events.take_applied_causes()
     }
 
     /// Advances the tick clocks and returns any tick-boundary events.

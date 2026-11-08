@@ -33,7 +33,7 @@ use std::{hash::Hash, net::SocketAddr, sync::Arc};
 
 use crossbeam_channel::Receiver;
 use naia_shared::{
-    AuthorityError, Channel, ChannelKind, ComponentKind, ConnectionStats, Coverage,
+    AppliedCause, AuthorityError, Channel, ChannelKind, ComponentKind, ConnectionStats, Coverage,
     EntityAndGlobalEntityConverter, EntityAuthStatus, EntityPriorityMut, EntityPriorityRef,
     GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalWorldManagerType, HostType,
     Message, MessageContainer, Protocol, ProtocolId, Replicate, ReplicatedComponent, Request,
@@ -1470,6 +1470,24 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .cause_streams
             .get(user_key)
             .map(|stream| stream.coverage().clone())
+    }
+
+    /// Drain one observer's transmit-evidence entries, in send order.
+    /// Coverage stays cumulative; query it with `transmit_coverage`. Reads
+    /// the parked send handle; `None` when the user is unknown, the handle
+    /// is not parked, or the observer has no stream yet — never a
+    /// slot-precondition panic. Same population as the resident arm.
+    pub fn take_transmit_causes(
+        &mut self,
+        user_key: &UserKey,
+    ) -> Option<Vec<AppliedCause<GlobalEntity>>> {
+        self.coord().user_address(*user_key)?;
+        let mut send = self.send_slot.lock();
+        let send = send.as_mut()?;
+        send.state
+            .cause_streams
+            .get_mut(user_key)
+            .map(|stream| stream.take_entries())
     }
 
     /// Whether the user's send-side connection has been materialized.

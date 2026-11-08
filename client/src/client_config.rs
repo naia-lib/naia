@@ -1,6 +1,6 @@
 use std::{default::Default, time::Duration};
 
-use naia_shared::ConnectionConfig;
+use naia_shared::{ConnectionConfig, DEFAULT_CAUSE_EVIDENCE_WINDOW};
 
 use crate::JitterBufferType;
 
@@ -21,6 +21,14 @@ pub struct ClientConfig {
     pub handshake_pings: u8,
     /// Configuration for jitter buffer behavior
     pub jitter_buffer: JitterBufferType,
+    /// nydus-dm9 evidence opt-in (Ada 184483): record applied-cause evidence
+    /// for the causal-proof matcher. Default off: no push, no mark and no
+    /// allocation — the journal stays dark.
+    pub cause_evidence: bool,
+    /// Retention window in ticks behind the applied frontier while
+    /// `cause_evidence` is on. Older history is evicted, each eviction
+    /// declared as one refusal lapse. Default: 16 (the Diax matcher window).
+    pub cause_evidence_window: u16,
 }
 
 impl Default for ClientConfig {
@@ -42,6 +50,8 @@ impl Default for ClientConfig {
             ping_interval: Duration::from_secs(1),
             handshake_pings: 10,
             jitter_buffer,
+            cause_evidence: false,
+            cause_evidence_window: DEFAULT_CAUSE_EVIDENCE_WINDOW,
         }
     }
 }

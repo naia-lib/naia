@@ -23,9 +23,9 @@
 use std::{hash::Hash, net::SocketAddr, time::Duration};
 
 use naia_shared::{
-    AuthorityError, Channel, ComponentKind, ConnectionStats, Coverage, DisconnectReason,
-    EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity,
-    Instant, Message, Protocol, ProtocolId, Replicate, ReplicatedComponent, Request,
+    AppliedCause, AuthorityError, Channel, ComponentKind, ConnectionStats, Coverage,
+    DisconnectReason, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError,
+    GlobalEntity, Instant, Message, Protocol, ProtocolId, Replicate, ReplicatedComponent, Request,
     ResourceAlreadyExists, Response, ResponseReceiveKey, ResponseSendKey, SendPlan, Tick,
     WorldMutType, WorldRefType,
 };
@@ -601,6 +601,19 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.transmit_coverage(user_key),
             WorldServerImpl::Pipelined(ps) => ps.transmit_coverage(user_key),
+        }
+    }
+
+    /// Drain one observer's transmit-evidence entries, or `None` when the
+    /// user is unknown or has no stream yet. Same population as the resident
+    /// arm; see [`InternalWorldServer::take_transmit_causes`].
+    pub fn take_transmit_causes(
+        &mut self,
+        user_key: &UserKey,
+    ) -> Option<Vec<AppliedCause<GlobalEntity>>> {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.take_transmit_causes(user_key),
+            WorldServerImpl::Pipelined(ps) => ps.take_transmit_causes(user_key),
         }
     }
 

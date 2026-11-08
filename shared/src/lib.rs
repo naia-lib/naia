@@ -124,7 +124,9 @@ cfg_if! {
     }
 }
 
-pub use applied_cause::{AppliedCause, CauseIdentity, CauseKind, CauseStream, Coverage};
+pub use applied_cause::{
+    AppliedCause, CauseIdentity, CauseKind, CauseStream, Coverage, DEFAULT_CAUSE_EVIDENCE_WINDOW,
+};
 pub use backends::{Timer, Timestamp};
 pub use connection::{
     ack_manager::{AckManager, REDUNDANT_PACKET_ACKS_SIZE},

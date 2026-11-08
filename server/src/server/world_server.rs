@@ -11,12 +11,12 @@ use std::{
 use log::{info, warn};
 
 use naia_shared::{
-    malformed_drop_warn, AuthorityError, BigMapKey, Channel, ChannelKind, ComponentKind,
-    ConnectionStats, Coverage, DisconnectReason, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, FrozenGlobalDirty,
-    GlobalDirtyBitset, GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalPriorityState,
-    GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant,
-    LocalEntityAndGlobalEntityConverter, Message, MessageContainer, Protocol, Replicate,
+    malformed_drop_warn, AppliedCause, AuthorityError, BigMapKey, Channel, ChannelKind,
+    ComponentKind, ConnectionStats, Coverage, DisconnectReason, EntityAndGlobalEntityConverter,
+    EntityAuthStatus, EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef,
+    FrozenGlobalDirty, GlobalDirtyBitset, GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner,
+    GlobalPriorityState, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType,
+    Instant, LocalEntityAndGlobalEntityConverter, Message, MessageContainer, Protocol, Replicate,
     ReplicatedComponent, Request, ResourceAlreadyExists, ResourceRegistry, Response,
     ResponseReceiveKey, ResponseSendKey, SendPlan, SharedGlobalWorldManager, Tick, WorldMutType,
     WorldRefType,
@@ -2649,6 +2649,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .cause_streams
             .get(user_key)
             .map(|stream| stream.coverage().clone())
+    }
+
+    /// Drain and return one observer's transmit-evidence entries, in send
+    /// order. Coverage stays cumulative; query it with `transmit_coverage`.
+    /// `None` when the user is unknown or has no stream yet (notably whenever
+    /// evidence is off). Ada 184483: the matcher's server-side drain.
+    pub fn take_transmit_causes(
+        &mut self,
+        user_key: &UserKey,
+    ) -> Option<Vec<AppliedCause<GlobalEntity>>> {
+        self.send
+            .state
+            .cause_streams
+            .get_mut(user_key)
+            .map(|stream| stream.take_entries())
     }
 
     /// Whether the user's send-side connection has been materialized.

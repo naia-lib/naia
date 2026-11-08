@@ -1,11 +1,11 @@
 use std::{collections::HashMap, hash::Hash, net::SocketAddr, panic, time::Duration};
 
 use naia_shared::{
-    AuthorityError, BitWriter, Channel, ComponentKind, EntityAndGlobalEntityConverter,
-    EntityAuthStatus, EntityDoesNotExistError, EntityPriorityMut, EntityPriorityRef,
-    FakeEntityConverter, GlobalEntity, Instant, Message, MessageContainer, Protocol, ProtocolId,
-    Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey,
-    SocketConfig, Tick, WorldMutType, WorldRefType,
+    AppliedCause, AuthorityError, BitWriter, Channel, ComponentKind,
+    EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, EntityPriorityMut,
+    EntityPriorityRef, FakeEntityConverter, GlobalEntity, Instant, Message, MessageContainer,
+    Protocol, ProtocolId, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey,
+    ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::Historian;
@@ -1224,6 +1224,19 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     #[must_use]
     pub fn transmit_coverage(&self, user_key: &UserKey) -> Option<Coverage> {
         self.world.transmit_coverage(user_key)
+    }
+
+    /// Drain and return one observer's transmit-evidence entries, in send
+    /// order. Coverage stays cumulative; query it with `transmit_coverage`.
+    /// Returns `None` when the user is unknown or has no stream yet (notably
+    /// whenever evidence is off) — never a slot-precondition panic. Ada
+    /// 184483: the matcher's server-side drain, mirroring the client's
+    /// `take_applied_causes`.
+    pub fn take_transmit_causes(
+        &mut self,
+        user_key: &UserKey,
+    ) -> Option<Vec<AppliedCause<GlobalEntity>>> {
+        self.world.take_transmit_causes(user_key)
     }
 
     /// Whether the user's canonical send-side connection is materialized.

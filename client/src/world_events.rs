@@ -5,7 +5,7 @@ use std::{
 use naia_shared::{
     handshake::RejectReason, AppliedCause, CauseKind, CauseStream, Channel, ChannelKind,
     ComponentKind, Coverage, DisconnectReason, GlobalResponseId, Message, MessageContainer,
-    MessageKind, Replicate, Request, ResponseSendKey, Tick,
+    MessageKind, Replicate, Request, ResponseSendKey, Tick, DEFAULT_CAUSE_EVIDENCE_WINDOW,
 };
 
 use crate::NaiaClientError;
@@ -74,6 +74,12 @@ pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
     /// entries per frame via `take_applied_causes()` while coverage stays
     /// cumulative.
     applied: CauseStream<E>,
+    /// nydus-dm9 evidence opt-in (Ada 184483): recording is OFF unless the
+    /// client config enables it. When off, `note_applied` and
+    /// `mark_tick_covered` are no-ops — no push, no mark, no allocation.
+    evidence_enabled: bool,
+    /// Retention window in ticks behind the applied frontier while enabled.
+    evidence_window: u16,
     empty: bool,
 }
 
@@ -104,8 +110,18 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
             updates: HashMap::new(),
             lifecycle: Vec::new(),
             applied: CauseStream::new(),
+            evidence_enabled: false,
+            evidence_window: DEFAULT_CAUSE_EVIDENCE_WINDOW,
             empty: true,
         }
+    }
+
+    /// Set the evidence opt-in from the client config. Call once at
+    /// construction; the bound rides the stream from the first write.
+    pub(crate) fn set_evidence(&mut self, enabled: bool, window: u16) {
+        self.evidence_enabled = enabled;
+        self.evidence_window = window;
+        self.applied.set_bound(enabled.then_some(window));
     }
 
     /// Drains and returns the unified applied-cause journal: every lifecycle,
@@ -124,8 +140,18 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     /// `take_applied_causes`. Mirrors `clear()`, which already preserves
     /// `applied`.
     pub(crate) fn detach(&mut self) -> Self {
+        let enabled = self.evidence_enabled;
+        let window = self.evidence_window;
         let mut detached = std::mem::take(self);
         std::mem::swap(&mut detached.applied, &mut self.applied);
+        // `take` resets the opt-in to default-off: restore it on both sides
+        // so a live-enabled journal survives every frame boundary.
+        detached.evidence_enabled = enabled;
+        detached.evidence_window = window;
+        detached.applied.set_bound(enabled.then_some(window));
+        self.evidence_enabled = enabled;
+        self.evidence_window = window;
+        self.applied.set_bound(enabled.then_some(window));
         detached
     }
 
@@ -138,13 +164,18 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
 
     /// Mark one received packet's server tick as covered without journaling
     /// an entry: quiet ticks advance the frontier with no gap, while a tick
-    /// whose packet never arrives is never marked and stays a gap.
+    /// whose packet never arrives is never marked and stays a gap. No-op
+    /// while evidence is off: the frontier stays `None`.
     pub(crate) fn mark_tick_covered(&mut self, tick: Tick) {
+        if !self.evidence_enabled {
+            return;
+        }
         self.applied.mark_tick_covered(tick);
     }
 
     /// Journal one applied cause. Every cause is server-ticked: entity
     /// events ride server-ticked packets, so the caller always has a tick.
+    /// No-op while evidence is off: nothing is pushed, nothing allocated.
     fn note_applied(
         &mut self,
         kind: CauseKind,
@@ -152,6 +183,9 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         component_kind: Option<ComponentKind>,
         tick: Tick,
     ) {
+        if !self.evidence_enabled {
+            return;
+        }
         self.applied.push(kind, entity, component_kind, tick);
     }
 
@@ -856,6 +890,9 @@ mod tests {
     #[test]
     fn detach_preserves_applied_journal_and_coverage() {
         let mut events = Events::<u64>::new();
+        // Ada 184483: the journal is opt-in — enable it like Client::new
+        // would from an opted-in config.
+        events.set_evidence(true, DEFAULT_CAUSE_EVIDENCE_WINDOW);
         events.push_spawn(5, 7);
         events.note_applied(CauseKind::Update, 7, Some(ComponentKind::of::<Probe>()), 5);
         events.mark_tick_covered(6);

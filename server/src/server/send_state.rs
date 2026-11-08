@@ -1386,14 +1386,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             // serializes nothing — a quiet tick moves the frontier with
             // no gap. A truly lost tick is one the client never marks,
             // which stays a gap there.
-            let stream = self
-                .cause_streams
-                .entry(user_key)
-                .or_insert_with(CauseStream::new);
-            for (entry_kind, global_entity, component_kind, tick) in evidence {
-                stream.push(entry_kind, global_entity, component_kind, tick);
+            // Ada 184483: opt-in, default off. No stream is created when
+            // off — no push, no mark, no allocation.
+            if self.shared.server_config.cause_evidence {
+                let window = self.shared.server_config.cause_evidence_window;
+                let stream = self
+                    .cause_streams
+                    .entry(user_key)
+                    .or_insert_with(CauseStream::new);
+                stream.set_bound(Some(window));
+                for (entry_kind, global_entity, component_kind, tick) in evidence {
+                    stream.push(entry_kind, global_entity, component_kind, tick);
+                }
+                stream.mark_tick_covered(current_tick);
             }
-            stream.mark_tick_covered(current_tick);
             #[cfg(feature = "f3_diag")]
             eprintln!(
                 "[F3-DIAG naia/SendState] transmit_send_job emit user={:?} addr={:?} packets={}",
