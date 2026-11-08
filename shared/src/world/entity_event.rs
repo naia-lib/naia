@@ -4,11 +4,12 @@ use crate::{
 
 /// ECS-level event produced by the replication system when the remote world state changes.
 ///
-/// Existence events (`Spawn`, `Despawn`, `InsertComponent`, `RemoveComponent`)
-/// carry the server tick that authored them, in first position like
-/// `UpdateComponent`, so a receive window holding several ticks' worth of
-/// events can be replayed in exact order. They are never coalesced: two
-/// ticks' inserts for one entity arrive as two events.
+/// Existence and scope events (`Spawn`, `Despawn`, `InsertComponent`,
+/// `RemoveComponent`, `Publish`, `Unpublish`) carry the server tick that
+/// authored them, in first position like `UpdateComponent`, so a receive
+/// window holding several ticks' worth of events can be replayed in exact
+/// order. They are never coalesced: two ticks' inserts for one entity
+/// arrive as two events.
 pub enum EntityEvent {
     /// A new entity was spawned by the remote at the given tick.
     Spawn(Tick, GlobalEntity),
@@ -21,10 +22,10 @@ pub enum EntityEvent {
     /// A component on an entity was updated at the given tick.
     UpdateComponent(Tick, GlobalEntity, ComponentKind),
 
-    /// Entity was published (made visible to other users).
-    Publish(GlobalEntity),
-    /// Entity publication was retracted.
-    Unpublish(GlobalEntity),
+    /// Entity was published (made visible to other users) at the given tick.
+    Publish(Tick, GlobalEntity),
+    /// Entity publication was retracted at the given tick.
+    Unpublish(Tick, GlobalEntity),
     /// Authority delegation was enabled for an entity.
     EnableDelegation(GlobalEntity),
     /// Authority delegation was disabled for an entity.
@@ -51,8 +52,8 @@ impl EntityEvent {
             Self::Despawn(_, _) => Some(EntityMessageType::Despawn),
             Self::InsertComponent(_, _, _) => Some(EntityMessageType::InsertComponent),
             Self::RemoveComponent(_, _, _) => Some(EntityMessageType::RemoveComponent),
-            Self::Publish(_) => Some(EntityMessageType::Publish),
-            Self::Unpublish(_) => Some(EntityMessageType::Unpublish),
+            Self::Publish(_, _) => Some(EntityMessageType::Publish),
+            Self::Unpublish(_, _) => Some(EntityMessageType::Unpublish),
             Self::EnableDelegation(_) => Some(EntityMessageType::EnableDelegation),
             Self::EnableDelegationResponse(_) => Some(EntityMessageType::EnableDelegationResponse),
             Self::DisableDelegation(_) => Some(EntityMessageType::DisableDelegation),
@@ -73,8 +74,8 @@ impl EntityEvent {
             Self::InsertComponent(_, entity, _) => *entity,
             Self::RemoveComponent(_, entity, _) => *entity,
             Self::UpdateComponent(_, entity, _) => *entity,
-            Self::Publish(entity) => *entity,
-            Self::Unpublish(entity) => *entity,
+            Self::Publish(_, entity) => *entity,
+            Self::Unpublish(_, entity) => *entity,
             Self::EnableDelegation(entity) => *entity,
             Self::EnableDelegationResponse(entity) => *entity,
             Self::DisableDelegation(entity) => *entity,
@@ -145,12 +146,12 @@ mod entity_event_tests {
                 5,
             ),
             (
-                EntityEvent::Publish(entity(6)),
+                EntityEvent::Publish(16, entity(6)),
                 Some(EntityMessageType::Publish),
                 6,
             ),
             (
-                EntityEvent::Unpublish(entity(7)),
+                EntityEvent::Unpublish(17, entity(7)),
                 Some(EntityMessageType::Unpublish),
                 7,
             ),

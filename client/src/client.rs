@@ -3288,7 +3288,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             .remove_component_record(&global_entity, &component_kind);
                     }
                 }
-                EntityEvent::Publish(global_entity) => {
+                EntityEvent::Publish(tick, global_entity) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(global_entity)
@@ -3306,9 +3306,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         continue;
                     }
                     self.publish_entity(&global_entity, false);
-                    self.incoming_world_events.push_publish(world_entity);
+                    self.incoming_world_events.push_publish(tick, world_entity);
                 }
-                EntityEvent::Unpublish(global_entity) => {
+                EntityEvent::Unpublish(tick, global_entity) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(global_entity)
@@ -3326,7 +3326,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         continue;
                     }
                     self.unpublish_entity(&global_entity, false);
-                    self.incoming_world_events.push_unpublish(world_entity);
+                    self.incoming_world_events
+                        .push_unpublish(tick, world_entity);
                 }
                 #[cfg(feature = "entity_delegation")]
                 EntityEvent::EnableDelegation(global_entity) => {

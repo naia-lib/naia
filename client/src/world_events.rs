@@ -74,9 +74,6 @@ pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
     /// entries per frame via `take_applied_causes()` while coverage stays
     /// cumulative.
     applied: CauseStream<E>,
-    /// Highest server tick seen by a ticked push. Tickless scope pushes
-    /// journal against this watermark.
-    last_applied_tick: Option<Tick>,
     empty: bool,
 }
 
@@ -107,7 +104,6 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
             updates: HashMap::new(),
             lifecycle: Vec::new(),
             applied: CauseStream::new(),
-            last_applied_tick: None,
             empty: true,
         }
     }
@@ -133,7 +129,8 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         self.applied.mark_tick_covered(tick);
     }
 
-    /// Journal one applied cause, advancing the server-tick watermark.
+    /// Journal one applied cause. Every cause is server-ticked: entity
+    /// events ride server-ticked packets, so the caller always has a tick.
     fn note_applied(
         &mut self,
         kind: CauseKind,
@@ -141,17 +138,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         component_kind: Option<ComponentKind>,
         tick: Tick,
     ) {
-        self.last_applied_tick = Some(tick);
         self.applied.push(kind, entity, component_kind, tick);
-    }
-
-    /// Server tick for a tickless cause: the highest ticked cause applied so
-    /// far. Entity events ride server-ticked packets, so this is `Some` for
-    /// every genuine scope transition; the `0` fallback only keeps the
-    /// journal total on paths (like unit tests) that push scope events
-    /// without any ticked event first.
-    fn scope_tick(&self) -> Tick {
-        self.last_applied_tick.unwrap_or(0)
     }
 
     /// Returns `true` if no events were queued this frame.
@@ -345,19 +332,15 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_publish(&mut self, world_entity: E) {
+    pub(crate) fn push_publish(&mut self, tick: Tick, world_entity: E) {
         self.publishes.push(world_entity);
-        let tick = self.scope_tick();
-        self.applied
-            .push(CauseKind::ScopePublish, world_entity, None, tick);
+        self.note_applied(CauseKind::ScopePublish, world_entity, None, tick);
         self.empty = false;
     }
 
-    pub(crate) fn push_unpublish(&mut self, world_entity: E) {
+    pub(crate) fn push_unpublish(&mut self, tick: Tick, world_entity: E) {
         self.unpublishes.push(world_entity);
-        let tick = self.scope_tick();
-        self.applied
-            .push(CauseKind::ScopeUnpublish, world_entity, None, tick);
+        self.note_applied(CauseKind::ScopeUnpublish, world_entity, None, tick);
         self.empty = false;
     }
 

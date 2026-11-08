@@ -4219,7 +4219,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         // The reason for deferring these events is that they depend on the operations to the world above
         for response_event in deferred_events {
             match response_event {
-                EntityEvent::Publish(global_entity) => {
+                EntityEvent::Publish(_, global_entity) => {
                     let world_entity = self
                         .shared
                         .global_entity_map
@@ -4240,7 +4240,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                     // NOTE: Client-owned entities do NOT get auto-granted authority.
                     // Authority/SetAuthority only applies to delegated (server-owned) entities.
                 }
-                EntityEvent::Unpublish(global_entity) => {
+                EntityEvent::Unpublish(_, global_entity) => {
                     let world_entity = self
                         .shared
                         .global_entity_map

@@ -4,7 +4,7 @@ use crate::{
     malformed_drop_warn, messages::channels::receivers::reliable_receiver::UpgradableMessage,
     world::component::component_kinds::ComponentKind,
     world::host::host_world_manager::SubCommandId, EntityAuthStatus, EntityEvent,
-    EntityMessageType, HostEntity, LocalEntityMap, RemoteEntity,
+    EntityMessageType, HostEntity, LocalEntityMap, RemoteEntity, Tick,
 };
 
 /// Per-entity ordered wire message carrying a single entity lifecycle or authority event.
@@ -245,8 +245,12 @@ impl EntityMessage<RemoteEntity> {
     /// # Panics
     ///
     /// Panics when the invalid state is reached: `EnableDelegationResponse` should not be sent by remote.
+    ///
+    /// `tick` is the packet tick that carried this message: scope
+    /// transitions (`Publish`/`Unpublish`) are stamped with it so the
+    /// receiver journals the author's tick, not its own watermark.
     #[must_use]
-    pub fn to_event(self, local_entity_map: &LocalEntityMap) -> Option<EntityEvent> {
+    pub fn to_event(self, local_entity_map: &LocalEntityMap, tick: Tick) -> Option<EntityEvent> {
         let remote_entity = self.entity().unwrap();
         let global_entity = if let Some(ge) =
             local_entity_map.global_entity_from_remote(remote_entity)
@@ -261,8 +265,8 @@ impl EntityMessage<RemoteEntity> {
             return None;
         };
         Some(match self {
-            EntityMessage::Publish(_, _) => EntityEvent::Publish(global_entity),
-            EntityMessage::Unpublish(_, _) => EntityEvent::Unpublish(global_entity),
+            EntityMessage::Publish(_, _) => EntityEvent::Publish(tick, global_entity),
+            EntityMessage::Unpublish(_, _) => EntityEvent::Unpublish(tick, global_entity),
             EntityMessage::EnableDelegation(_, _) => EntityEvent::EnableDelegation(global_entity),
             EntityMessage::EnableDelegationResponse(_, _) => {
                 // common-02 + [transport-04]: only the host sends this
@@ -302,11 +306,15 @@ impl EntityMessage<RemoteEntity> {
 impl EntityMessage<HostEntity> {
     /// Converts this host-entity message into an `EntityEvent`, or `None` if the entity is not found in the map.
     ///
+    /// `tick` is the packet tick that carried this message: scope
+    /// transitions (`Publish`/`Unpublish`) are stamped with it so the
+    /// receiver journals the author's tick, not its own watermark.
+    ///
     /// # Panics
     ///
     /// Panics when the invalid state is reached: Handled elsewhere.
     #[must_use]
-    pub fn to_event(self, local_entity_map: &LocalEntityMap) -> Option<EntityEvent> {
+    pub fn to_event(self, local_entity_map: &LocalEntityMap, tick: Tick) -> Option<EntityEvent> {
         let host_entity = self.entity().unwrap();
         let global_entity = if let Some(ge) = local_entity_map.global_entity_from_host(host_entity)
         {
@@ -320,8 +328,8 @@ impl EntityMessage<HostEntity> {
             return None;
         };
         Some(match self {
-            EntityMessage::Publish(_, _) => EntityEvent::Publish(global_entity),
-            EntityMessage::Unpublish(_, _) => EntityEvent::Unpublish(global_entity),
+            EntityMessage::Publish(_, _) => EntityEvent::Publish(tick, global_entity),
+            EntityMessage::Unpublish(_, _) => EntityEvent::Unpublish(tick, global_entity),
             EntityMessage::EnableDelegation(_, _) => EntityEvent::EnableDelegation(global_entity),
             EntityMessage::EnableDelegationResponse(_, _) => {
                 EntityEvent::EnableDelegationResponse(global_entity)
@@ -359,7 +367,9 @@ mod to_event_tests {
         let mut map = LocalEntityMap::new(HostType::Server);
         let global = GlobalEntity::from_u64(7);
         map.insert_with_remote_entity(global, RemoteEntity::new(7));
-        assert!(matches!(publish(7).to_event(&map), Some(EntityEvent::Publish(g)) if g == global));
+        assert!(
+            matches!(publish(7).to_event(&map, 9), Some(EntityEvent::Publish(9, g)) if g == global)
+        );
     }
 
     #[test]
@@ -367,7 +377,7 @@ mod to_event_tests {
         // Follow-up to LV-03a/LV-08a: churn removed the mapping after the
         // message was queued. Must fail closed, never abort the worker.
         let map = LocalEntityMap::new(HostType::Server);
-        assert!(publish(4).to_event(&map).is_none());
+        assert!(publish(4).to_event(&map, 9).is_none());
     }
 
     // ---- [115662-4] RED: a remote EnableDelegationResponse names a real
@@ -382,7 +392,7 @@ mod to_event_tests {
         map.insert_with_remote_entity(global, RemoteEntity::new(7));
         let forbidden = EntityMessage::EnableDelegationResponse(0, RemoteEntity::new(7));
         assert!(
-            forbidden.to_event(&map).is_none(),
+            forbidden.to_event(&map, 9).is_none(),
             "a remote EnableDelegationResponse must be dropped, never panic",
         );
     }
@@ -400,7 +410,7 @@ mod to_event_tests {
         let forbidden =
             EntityMessage::MigrateResponse(0, RemoteEntity::new(7), RemoteEntity::new(9));
         assert!(
-            forbidden.to_event(&map).is_none(),
+            forbidden.to_event(&map, 9).is_none(),
             "a remote-flavored MigrateResponse must be dropped, never panic",
         );
     }

@@ -507,7 +507,7 @@ impl HostWorldManager {
                 // 2. EntityMessage::RequestAuthority
                 // 3. EntityMessage::ReleaseAuthority
                 msg => {
-                    if let Some(event) = msg.to_event(local_entity_map) {
+                    if let Some(event) = msg.to_event(local_entity_map, tick) {
                         self.incoming_events.push(event);
                     }
                 }

@@ -496,7 +496,7 @@ impl RemoteWorldManager {
                 }
                 msg => {
                     // let msg_type = msg.get_type();
-                    if let Some(event) = msg.to_event(local_entity_map) {
+                    if let Some(event) = msg.to_event(local_entity_map, tick) {
                         self.incoming_events.push(event);
                     }
                 }
