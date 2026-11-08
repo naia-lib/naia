@@ -309,6 +309,89 @@ impl<E> CauseStream<E> {
     pub fn take_entries(&mut self) -> Vec<AppliedCause<E>> {
         std::mem::take(&mut self.entries).into_iter().collect()
     }
+
+    /// The stream's coverage: frontier, gaps, lapse floor, refusals.
+    #[must_use]
+    pub fn coverage(&self) -> &Coverage {
+        &self.coverage
+    }
+
+    /// Mark a tick as fully covered even when it carries no cause entry: a
+    /// quiet tick the sender serialized nothing for still advances the
+    /// frontier, because the tick itself was processed (sent on one side,
+    /// received on the other). A tick skipped over by a later mark is an
+    /// observed gap — a lost packet, not a quiet tick. A late mark for a
+    /// gapped tick heals the hole without moving the frontier.
+    pub fn mark_tick_covered(&mut self, tick: Tick) {
+        if let Some(pos) = self.coverage.gaps.iter().position(|&g| g == tick) {
+            self.coverage.gaps.remove(pos);
+            return;
+        }
+        match self.coverage.frontier {
+            None => {
+                self.coverage.frontier = Some(tick);
+            }
+            Some(frontier) => {
+                let distance = tick.wrapping_sub(frontier);
+                if distance == 0 {
+                    // Already the frontier: re-marking is a no-op.
+                } else if distance <= 32768 {
+                    // Forward: every skipped tick is an observed gap.
+                    let mut missing = frontier.wrapping_add(1);
+                    while missing != tick {
+                        self.coverage.gaps.push(missing);
+                        missing = missing.wrapping_add(1);
+                    }
+                    self.coverage.frontier = Some(tick);
+                }
+                // Else: an old or half-range-ambiguous tick with no entry to
+                // heal; it carries no new coverage information.
+            }
+        }
+        self.enforce_bound();
+    }
+
+    fn note_tick(&mut self, tick: Tick) {
+        // Late evidence for a skipped tick fills the hole instead of leaving
+        // a gap: the tick was not missing, only late.
+        if let Some(pos) = self.coverage.gaps.iter().position(|&g| g == tick) {
+            self.coverage.gaps.remove(pos);
+        }
+        match self.coverage.frontier {
+            None => {
+                self.coverage.frontier = Some(tick);
+            }
+            Some(frontier) => {
+                let distance = tick.wrapping_sub(frontier);
+                if distance == 0 {
+                    // Same tick: another cause (or an equal echo) in the
+                    // same evidenced tick. The frontier does not move.
+                } else if distance <= 32768 {
+                    // Forward: every skipped tick is an observed gap.
+                    let mut missing = frontier.wrapping_add(1);
+                    while missing != tick {
+                        self.coverage.gaps.push(missing);
+                        missing = missing.wrapping_add(1);
+                    }
+                    self.coverage.frontier = Some(tick);
+                }
+                // Else: an old or half-range-ambiguous tick. It is still
+                // recorded as an entry, but it never moves the frontier.
+            }
+        }
+    }
+}
+
+impl<E: Default> CauseStream<E> {
+    /// Open a new world-lifetime generation, emitting an [`CauseKind::Epoch`]
+    /// marker so entries before and after stay distinguishable. The marker
+    /// carries a default placeholder entity: it is a stream boundary, not a
+    /// cause on any entity.
+    pub fn advance_generation(&mut self) {
+        self.generation += 1;
+        let tick = self.coverage.frontier.unwrap_or(0);
+        self.push(CauseKind::Epoch, E::default(), None, tick);
+    }
 }
 
 /// nydus-dm9 (Ada seventh read, rule 1): at most one `Update` per
@@ -433,90 +516,5 @@ mod revision_tests {
             "per-entity command order must not commute: Insert-then-Remove \
              refuses to equal Remove-then-Insert",
         );
-    }
-}
-
-impl<E> CauseStream<E> {
-    /// The stream's coverage: frontier, gaps, lapse floor, refusals.
-    #[must_use]
-    pub fn coverage(&self) -> &Coverage {
-        &self.coverage
-    }
-
-    /// Mark a tick as fully covered even when it carries no cause entry: a
-    /// quiet tick the sender serialized nothing for still advances the
-    /// frontier, because the tick itself was processed (sent on one side,
-    /// received on the other). A tick skipped over by a later mark is an
-    /// observed gap — a lost packet, not a quiet tick. A late mark for a
-    /// gapped tick heals the hole without moving the frontier.
-    pub fn mark_tick_covered(&mut self, tick: Tick) {
-        if let Some(pos) = self.coverage.gaps.iter().position(|&g| g == tick) {
-            self.coverage.gaps.remove(pos);
-            return;
-        }
-        match self.coverage.frontier {
-            None => {
-                self.coverage.frontier = Some(tick);
-            }
-            Some(frontier) => {
-                let distance = tick.wrapping_sub(frontier);
-                if distance == 0 {
-                    // Already the frontier: re-marking is a no-op.
-                } else if distance <= 32768 {
-                    // Forward: every skipped tick is an observed gap.
-                    let mut missing = frontier.wrapping_add(1);
-                    while missing != tick {
-                        self.coverage.gaps.push(missing);
-                        missing = missing.wrapping_add(1);
-                    }
-                    self.coverage.frontier = Some(tick);
-                }
-                // Else: an old or half-range-ambiguous tick with no entry to
-                // heal; it carries no new coverage information.
-            }
-        }
-        self.enforce_bound();
-    }
-
-    fn note_tick(&mut self, tick: Tick) {
-        // Late evidence for a skipped tick fills the hole instead of leaving
-        // a gap: the tick was not missing, only late.
-        if let Some(pos) = self.coverage.gaps.iter().position(|&g| g == tick) {
-            self.coverage.gaps.remove(pos);
-        }
-        match self.coverage.frontier {
-            None => {
-                self.coverage.frontier = Some(tick);
-            }
-            Some(frontier) => {
-                let distance = tick.wrapping_sub(frontier);
-                if distance == 0 {
-                    // Same tick: another cause (or an equal echo) in the
-                    // same evidenced tick. The frontier does not move.
-                } else if distance <= 32768 {
-                    // Forward: every skipped tick is an observed gap.
-                    let mut missing = frontier.wrapping_add(1);
-                    while missing != tick {
-                        self.coverage.gaps.push(missing);
-                        missing = missing.wrapping_add(1);
-                    }
-                    self.coverage.frontier = Some(tick);
-                }
-                // Else: an old or half-range-ambiguous tick. It is still
-                // recorded as an entry, but it never moves the frontier.
-            }
-        }
-    }
-}
-
-impl<E: Default> CauseStream<E> {
-    /// Open a new world-lifetime generation, emitting an [`CauseKind::Epoch`]
-    /// marker so entries before and after stay distinguishable. The marker
-    /// carries a default placeholder entity: it is a stream boundary, not a
-    /// cause on any entity.
-    pub fn advance_generation(&mut self) {
-        self.generation += 1;
-        let tick = self.coverage.frontier.unwrap_or(0);
-        self.push(CauseKind::Epoch, E::default(), None, tick);
     }
 }
