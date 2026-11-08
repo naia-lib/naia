@@ -214,13 +214,13 @@ impl AuthChannel {
 
     pub(crate) fn receiver_drain_messages_into(
         &mut self,
-        outgoing_messages: &mut Vec<(Tick, EntityMessage<()>)>,
+        outgoing_messages: &mut Vec<(MessageIndex, Tick, EntityMessage<()>)>,
     ) {
         let mut drained = Vec::new();
         self.receiver.drain_messages_into(&mut drained);
-        for (tick, msg) in drained {
+        for (id, tick, msg) in drained {
             if self.receiver_validate(&msg) {
-                outgoing_messages.push((tick, msg));
+                outgoing_messages.push((id, tick, msg));
             }
         }
     }

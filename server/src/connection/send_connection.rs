@@ -14,12 +14,12 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr, sync::Arc};
 
 use naia_shared::{
-    BaseSendConnection, BitReader, BitWriter, CauseKind, ChannelKinds, ComponentKind,
+    BaseSendConnection, BitReader, BitWriter, CauseKind, ChannelKinds, CommandId, ComponentKind,
     ComponentKinds, ConnectionVisibilityBitset, EntityAndGlobalEntityConverter, EntityCommand,
-    EntityEvent, GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalWorldManagerType,
-    MessageIndex, MessageKinds, OutgoingPacket, PacketNotifiable, PacketType, Serde, SerdeErr,
-    SnapshotMap, StandardHeader, Tick, UpdateKinds, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
-    REDUNDANT_PACKET_ACKS_SIZE,
+    EntityEvent, EvidenceEntry, GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner,
+    GlobalWorldManagerType, MessageIndex, MessageKinds, OutgoingPacket, PacketNotifiable,
+    PacketType, Serde, SerdeErr, SnapshotMap, StandardHeader, Tick, UpdateKinds, WorldMutType,
+    WorldRefType, MTU_SIZE_BYTES, REDUNDANT_PACKET_ACKS_SIZE,
 };
 
 /// Cap on packets built in one send pass, matched to what a single remote header
@@ -85,12 +85,74 @@ pub struct SendConnection {
     /// Latest tick serialized into Data. Quiet links still need one Data
     /// boundary per tick so the client's delivered-state ceiling can advance.
     last_data_tick: Option<Tick>,
+    /// Last CommandId journaled as command evidence for this observer (Ada
+    /// eighth read: first-write-only journaling). Reliable ids move forward
+    /// per observer, so anything at or behind the mark is a resend, not a
+    /// new cause. One connection carries one reliable command index space.
+    last_journaled_command_id: Option<CommandId>,
 }
 
 /// One applied-cause evidence entry for a written entity command: the matcher
 /// kind, the commanded entity, the component kind when the cause is
 /// component-scoped, and the packet tick that carried it.
-pub(crate) type CommandEvidence = (CauseKind, GlobalEntity, Option<ComponentKind>, Tick);
+pub(crate) type CommandEvidence = EvidenceEntry<GlobalEntity>;
+
+/// Fold written wire commands into command evidence (nydus-dm9 Fix2 + Ada
+/// eighth read). Each written command journals one entry under its own wire
+/// id; a SpawnWithComponents bundle expands to its Spawn plus one Insert
+/// per kind, all under the bundle's id — mirroring the client's split.
+fn fold_command_evidence(
+    last_journaled: &mut Option<CommandId>,
+    written: &[(CommandId, EntityCommand)],
+    tick: Tick,
+    out: &mut Vec<CommandEvidence>,
+) {
+    for (command_id, command) in written {
+        // Ada eighth read: first write wins. A resend after a late ack
+        // carries the same wire id and journals nothing new; the whole
+        // command — including a bundle's synthetic Inserts — is skipped.
+        if !journal_first_write(last_journaled, *command_id) {
+            continue;
+        }
+        if let Some((kind, entity, component_kind)) = command_evidence_kind(command) {
+            out.push((kind, entity, component_kind, tick, Some(*command_id)));
+        }
+        if let EntityCommand::SpawnWithComponents(entity, kinds) = command {
+            for kind in kinds {
+                out.push((
+                    CauseKind::Insert,
+                    *entity,
+                    Some(*kind),
+                    tick,
+                    Some(*command_id),
+                ));
+            }
+        }
+    }
+}
+
+/// Ada eighth read (resend identity): the server journals a command on its
+/// first write only. Returns true when `id` is newer than the observer's
+/// last journaled mark (u16 wrap aware) and advances the mark; a resend of
+/// an already-journaled id, or a stale id from behind the mark, returns
+/// false without moving it.
+pub(crate) fn journal_first_write(last: &mut Option<CommandId>, id: CommandId) -> bool {
+    match *last {
+        None => {
+            *last = Some(id);
+            true
+        }
+        Some(mark) => {
+            let ahead = id.wrapping_sub(mark);
+            if ahead == 0 || ahead >= 32768 {
+                false
+            } else {
+                *last = Some(id);
+                true
+            }
+        }
+    }
+}
 
 /// nydus-dm9 Fix2: the applied-cause kind for one written entity command,
 /// under the same identity the client journals for the same wire message.
@@ -144,6 +206,7 @@ impl SendConnection {
             visibility: ConnectionVisibilityBitset::new(max_replicated_entities + 1),
             shared,
             last_data_tick: None,
+            last_journaled_command_id: None,
         }
     }
 
@@ -248,13 +311,21 @@ impl SendConnection {
 
         // Receive World Events
         if client_authoritative_entities {
-            self.base.world_manager.take_incoming_events(
-                global_entity_map,
-                global_world_manager,
-                component_kinds,
-                world,
-                now,
-            )
+            // Server game events never feed the applied-cause journal: the
+            // wire ids stay with the remote manager's own return, and only
+            // the events flow on.
+            self.base
+                .world_manager
+                .take_incoming_events(
+                    global_entity_map,
+                    global_world_manager,
+                    component_kinds,
+                    world,
+                    now,
+                )
+                .into_iter()
+                .map(|(_, event)| event)
+                .collect()
         } else {
             Vec::new()
         }
@@ -332,21 +403,18 @@ impl SendConnection {
             std::sync::atomic::Ordering::Relaxed,
         );
 
-        // nydus-dm9 Fix2: journal every command this packet consumed, stamped
-        // with the packet's own tick — the same tick the client reads off the
-        // wire and journals under. A bundle expands to its Spawn plus one
-        // Insert per kind, in that order, mirroring the client's split.
+        // nydus-dm9 Fix2 + Ada eighth read: journal every command this
+        // packet consumed, stamped with the packet's own tick — the same
+        // tick the client reads off the wire and journals under — and with
+        // the command's own wire id. First write wins: a resend after a
+        // late ack carries the same id and journals nothing new.
         let mut command_evidence = Vec::new();
-        for command in &written_commands {
-            if let Some((kind, entity, component_kind)) = command_evidence_kind(command) {
-                command_evidence.push((kind, entity, component_kind, tick));
-            }
-            if let EntityCommand::SpawnWithComponents(entity, kinds) = command {
-                for kind in kinds {
-                    command_evidence.push((CauseKind::Insert, *entity, Some(*kind), tick));
-                }
-            }
-        }
+        fold_command_evidence(
+            &mut self.last_journaled_command_id,
+            &written_commands,
+            tick,
+            &mut command_evidence,
+        );
 
         #[cfg(feature = "e2e_debug")]
         {
@@ -744,7 +812,9 @@ mod quiet_data_tests {
 mod command_evidence_tests {
     use std::any::TypeId;
 
-    use naia_shared::{BigMapKey, CauseKind, ComponentKind, EntityCommand, GlobalEntity};
+    use naia_shared::{
+        BigMapKey, CauseKind, CommandId, ComponentKind, EntityCommand, GlobalEntity,
+    };
 
     use super::command_evidence_kind;
 
@@ -802,5 +872,89 @@ mod command_evidence_tests {
             .filter_map(command_evidence_kind)
             .next()
             .is_none());
+    }
+
+    /// Ada eighth read, test (a) at the fold level: the same command id
+    /// written in two packets — a resend after a late ack — journals one
+    /// entry, keeping the first-write tick and the command's own id.
+    #[test]
+    fn fold_journals_a_resent_command_once() {
+        use super::fold_command_evidence;
+        let mut last: Option<CommandId> = None;
+        let mut out = Vec::new();
+        let written = [(11u16, EntityCommand::Spawn(e(1)))];
+        fold_command_evidence(&mut last, &written, 5, &mut out);
+        fold_command_evidence(&mut last, &written, 9, &mut out);
+        assert_eq!(
+            out.len(),
+            1,
+            "a resend after a late ack is the same cause, not a new entry: {out:?}",
+        );
+        assert_eq!(out[0].3, 5, "the entry keeps the first-write tick");
+        assert_eq!(
+            out[0].4,
+            Some(11),
+            "the entry carries the command's wire id"
+        );
+    }
+
+    /// Ada eighth read (resend identity): the server journals a command on
+    /// its first write only. A resend after a late ack carries the same
+    /// wire id, so it must not journal a second entry.
+    #[test]
+    fn resend_after_late_ack_journals_once() {
+        use super::journal_first_write;
+        let mut last: Option<CommandId> = None;
+        assert!(
+            journal_first_write(&mut last, 11),
+            "first write of id 11 journals",
+        );
+        assert_eq!(last, Some(11));
+        assert!(
+            !journal_first_write(&mut last, 11),
+            "resend of id 11 after a late ack skips: same id, same cause",
+        );
+        assert_eq!(last, Some(11), "a skipped resend moves the mark nowhere");
+        assert!(
+            journal_first_write(&mut last, 12),
+            "the next new id journals and advances the mark",
+        );
+        assert_eq!(last, Some(12));
+    }
+
+    /// A stale resend from before the last journaled id is not a new cause
+    /// either: ids only move forward per observer (u16 wrap aware).
+    #[test]
+    fn stale_resend_behind_the_mark_skips() {
+        use super::journal_first_write;
+        let mut last: Option<CommandId> = None;
+        assert!(journal_first_write(&mut last, 12));
+        assert!(
+            !journal_first_write(&mut last, 11),
+            "id 11 behind the mark is an old cause, not a new one",
+        );
+    }
+
+    /// The mark walks across the u16 wrap: 65535 then 0 is forward, and the
+    /// pre-wrap ids never journal again.
+    #[test]
+    fn wrap_around_is_forward() {
+        use super::journal_first_write;
+        let mut last: Option<CommandId> = None;
+        assert!(journal_first_write(&mut last, 65534));
+        assert!(journal_first_write(&mut last, 65535));
+        assert!(
+            journal_first_write(&mut last, 0),
+            "u16 wrap is forward, not behind",
+        );
+        assert_eq!(last, Some(0));
+        assert!(
+            !journal_first_write(&mut last, 65535),
+            "the pre-wrap id is now stale",
+        );
+        assert!(
+            !journal_first_write(&mut last, 65534),
+            "older pre-wrap ids stay stale",
+        );
     }
 }

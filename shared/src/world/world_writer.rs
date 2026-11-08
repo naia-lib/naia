@@ -255,7 +255,7 @@ impl WorldWriter {
         world_events: &mut VecDeque<(CommandId, EntityCommand)>,
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
         snapshot_map: Option<&SnapshotMap>,
-        written_commands: Option<&mut Vec<EntityCommand>>,
+        written_commands: Option<&mut Vec<(CommandId, EntityCommand)>>,
     ) {
         // write entity updates
         Self::write_updates(
@@ -300,7 +300,7 @@ impl WorldWriter {
         world_manager: &mut LocalWorldManager,
         has_written: &mut bool,
         next_send_commands: &mut VecDeque<(CommandId, EntityCommand)>,
-        mut written_commands: Option<&mut Vec<EntityCommand>>,
+        mut written_commands: Option<&mut Vec<(CommandId, EntityCommand)>>,
     ) {
         let mut last_counted_id: Option<MessageIndex> = None;
         let mut last_written_id: Option<MessageIndex> = None;
@@ -371,7 +371,7 @@ impl WorldWriter {
             if let Some(out) = written_commands.as_mut() {
                 if let Some((command_id, command)) = next_send_commands.front() {
                     if !world_manager.command_written_as_noop(packet_index, *command_id) {
-                        out.push(command.clone());
+                        out.push((*command_id, command.clone()));
                     }
                 }
             }

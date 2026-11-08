@@ -230,7 +230,7 @@ fn the_migration_release_delivers_messages_that_raced_the_migration() {
     assert!(
         after
             .iter()
-            .any(|msg| matches!(msg.1, EntityMessage::ReleaseAuthority(_, _))),
+            .any(|msg| matches!(msg.2, EntityMessage::ReleaseAuthority(_, _))),
         "the message that raced the migration was never released: {after:?}",
     );
 }
@@ -259,7 +259,7 @@ fn a_coalesced_spawn_spawns_an_unspawned_channel() {
     assert!(
         events
             .iter()
-            .any(|msg| matches!(msg.1, EntityMessage::Spawn(_))),
+            .any(|msg| matches!(msg.2, EntityMessage::Spawn(_))),
         "the coalesced spawn never spawned the channel: {events:?}",
     );
     assert!(
@@ -295,7 +295,7 @@ fn a_repeated_coalesced_spawn_is_not_applied_twice() {
     assert!(
         !second
             .iter()
-            .any(|msg| matches!(msg.1, EntityMessage::Spawn(_))),
+            .any(|msg| matches!(msg.2, EntityMessage::Spawn(_))),
         "an already-spawned channel spawned a second time: {second:?}",
     );
 }

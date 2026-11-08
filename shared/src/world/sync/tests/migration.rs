@@ -567,7 +567,7 @@ fn a_configured_channel_expects_the_subcommand_id_after_migrate_response() {
     assert!(
         events
             .iter()
-            .any(|msg| matches!(msg.1, EntityMessage::ReleaseAuthority(_, _))),
+            .any(|msg| matches!(msg.2, EntityMessage::ReleaseAuthority(_, _))),
         "the auth message after the migration was never delivered, so the \
          receiver was still waiting on subcommand 0: {events:?}",
     );
@@ -596,7 +596,7 @@ fn spawn_discards_auth_messages_buffered_from_a_previous_lifetime() {
     assert!(
         !events
             .iter()
-            .any(|msg| matches!(msg.1, EntityMessage::ReleaseAuthority(_, _))),
+            .any(|msg| matches!(msg.2, EntityMessage::ReleaseAuthority(_, _))),
         "a pre-spawn authority command survived the spawn barrier: {events:?}",
     );
 }

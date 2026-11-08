@@ -83,7 +83,8 @@ impl Fixture {
             self.manager
                 .take_incoming_events(&mut spawner, &self.gwm, &kinds, world, &now);
         self.kinds = kinds;
-        events
+        // These tests assert event content, never the wire id.
+        events.into_iter().map(|(_, event)| event).collect()
     }
 }
 

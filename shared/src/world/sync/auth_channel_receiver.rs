@@ -58,7 +58,7 @@ use crate::{
 pub(crate) struct AuthChannelReceiver {
     next_subcommand_id: SubCommandId,
     buffered_messages: OrderedIds<(Tick, EntityMessage<()>)>,
-    incoming_messages: Vec<(Tick, EntityMessage<()>)>,
+    incoming_messages: Vec<(MessageIndex, Tick, EntityMessage<()>)>,
 }
 
 impl AuthChannelReceiver {
@@ -77,7 +77,7 @@ impl AuthChannelReceiver {
 
     pub(crate) fn drain_messages_into(
         &mut self,
-        outgoing_messages: &mut Vec<(Tick, EntityMessage<()>)>,
+        outgoing_messages: &mut Vec<(MessageIndex, Tick, EntityMessage<()>)>,
     ) {
         // Drain the auth channel and append the messages to the outgoing events
         outgoing_messages.append(&mut self.incoming_messages);
@@ -119,9 +119,9 @@ impl AuthChannelReceiver {
             // Move to the next expected subcommand ID
             self.next_subcommand_id = self.next_subcommand_id.wrapping_add(1);
 
-            let (_, (tick, msg)) = self.buffered_messages.pop_front().unwrap();
+            let (id, (tick, msg)) = self.buffered_messages.pop_front().unwrap();
 
-            self.incoming_messages.push((tick, msg));
+            self.incoming_messages.push((id, tick, msg));
         }
     }
 

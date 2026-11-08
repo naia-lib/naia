@@ -38,7 +38,7 @@ impl AssertList {
 
         for (i, assert_msg) in self.asserts.iter().enumerate() {
             assert_eq!(
-                assert_msg, &out[i].1,
+                assert_msg, &out[i].2,
                 "At index {}, output message: {:?} not equal to expected message: {:?}",
                 i, out[i], assert_msg
             );

@@ -1101,7 +1101,7 @@ impl LocalWorldManager {
         component_kinds: &ComponentKinds,
         world: &mut W,
         now: &Instant,
-    ) -> Vec<EntityEvent> {
+    ) -> Vec<(Option<MessageIndex>, EntityEvent)> {
         let incoming_messages = self.receiver.receive_messages();
         let mut incoming_host_messages = Vec::new();
         let mut incoming_remote_messages = Vec::new();
@@ -1197,7 +1197,7 @@ impl LocalWorldManager {
                 }
             })
             .collect();
-        let mut remote_events = self.remote.take_incoming_events(
+        let remote_events = self.remote.take_incoming_events(
             spawner,
             global_world_manager,
             &mut self
@@ -1212,8 +1212,13 @@ impl LocalWorldManager {
             incoming_remote_messages,
         );
 
-        let mut incoming_events = host_events;
-        incoming_events.append(&mut remote_events);
+        // Host-sourced events never rode the reliable command channel, so
+        // they carry no wire id; remote events keep the id the sequencer
+        // delivered them with (Ada eighth read: the client journals each
+        // applied command under its CommandId).
+        let mut incoming_events: Vec<(Option<MessageIndex>, EntityEvent)> =
+            host_events.into_iter().map(|event| (None, event)).collect();
+        incoming_events.extend(remote_events);
 
         incoming_events
     }

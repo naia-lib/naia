@@ -39,7 +39,7 @@ use naia_shared::{
 };
 
 use crate::{
-    connection::{io::SendIo, RecvConnection, SendConnection},
+    connection::{io::SendIo, send_connection::CommandEvidence, RecvConnection, SendConnection},
     room::RoomKey,
     server::{
         coord_state::CoordinatorState,
@@ -95,7 +95,7 @@ type SendWorkItem<E> = (
     Vec<OutgoingPacket>,
     SendConnection,
     UserPriorityState<E>,
-    Vec<(CauseKind, GlobalEntity, Option<ComponentKind>, Tick)>,
+    Vec<CommandEvidence>,
     Tick,
 );
 
@@ -1345,8 +1345,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     // Deferred entities are refusal markers, never
                     // evidence: their diff masks were given back above, so
                     // they re-freeze and re-transmit on a later tick.
-                    let mut evidence: Vec<(CauseKind, GlobalEntity, Option<ComponentKind>, Tick)> =
-                        Vec::new();
+                    let mut evidence: Vec<CommandEvidence> = Vec::new();
                     for (global_entity, component_kinds) in &pre_send {
                         let entry_kind = if remaining.contains(global_entity) {
                             CauseKind::Deferred
@@ -1354,11 +1353,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                             CauseKind::Update
                         };
                         for component_kind in component_kinds {
+                            // Updates carry no wire command id: the sync
+                            // channels that produce them have no reliable
+                            // index, so they journal under `None`.
                             evidence.push((
                                 entry_kind,
                                 *global_entity,
                                 Some(*component_kind),
                                 current_tick,
+                                None,
                             ));
                         }
                     }
@@ -1404,8 +1407,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     .entry(user_key)
                     .or_insert_with(CauseStream::new);
                 stream.set_bound(Some(window));
-                for (entry_kind, global_entity, component_kind, tick) in evidence {
-                    stream.push(entry_kind, global_entity, component_kind, tick);
+                for (entry_kind, global_entity, component_kind, tick, command_id) in evidence {
+                    stream.push(entry_kind, global_entity, component_kind, tick, command_id);
                 }
                 stream.mark_tick_covered(current_tick);
             }

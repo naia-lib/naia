@@ -4,8 +4,8 @@ use std::{
 
 use naia_shared::{
     assert_updates_unique_per_tick, handshake::RejectReason, AppliedCause, CauseKind, CauseStream,
-    Channel, ChannelKind, ComponentKind, Coverage, DisconnectReason, GlobalResponseId, Message,
-    MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick,
+    Channel, ChannelKind, CommandId, ComponentKind, Coverage, DisconnectReason, GlobalResponseId,
+    Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick,
     DEFAULT_CAUSE_EVIDENCE_WINDOW,
 };
 
@@ -144,6 +144,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
                         identity.entity,
                         identity.component_kind,
                         identity.tick,
+                        identity.command_id,
                     )
                 })
                 .collect::<Vec<_>>(),
@@ -202,11 +203,13 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         entity: E,
         component_kind: Option<ComponentKind>,
         tick: Tick,
+        command_id: Option<CommandId>,
     ) {
         if !self.evidence_enabled {
             return;
         }
-        self.applied.push(kind, entity, component_kind, tick);
+        self.applied
+            .push(kind, entity, component_kind, tick, command_id);
     }
 
     /// Returns `true` if no events were queued this frame.
@@ -376,7 +379,12 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_spawn(&mut self, tick: Tick, world_entity: E) {
+    pub(crate) fn push_spawn(
+        &mut self,
+        tick: Tick,
+        world_entity: E,
+        command_id: Option<CommandId>,
+    ) {
         self.spawns.push((tick, world_entity));
         self.lifecycle.push(LifecycleOrder {
             tick,
@@ -384,11 +392,16 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
             entity: world_entity,
             component_kind: None,
         });
-        self.note_applied(CauseKind::Spawn, world_entity, None, tick);
+        self.note_applied(CauseKind::Spawn, world_entity, None, tick, command_id);
         self.empty = false;
     }
 
-    pub(crate) fn push_despawn(&mut self, tick: Tick, world_entity: E) {
+    pub(crate) fn push_despawn(
+        &mut self,
+        tick: Tick,
+        world_entity: E,
+        command_id: Option<CommandId>,
+    ) {
         self.despawns.push((tick, world_entity));
         self.lifecycle.push(LifecycleOrder {
             tick,
@@ -396,19 +409,41 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
             entity: world_entity,
             component_kind: None,
         });
-        self.note_applied(CauseKind::Despawn, world_entity, None, tick);
+        self.note_applied(CauseKind::Despawn, world_entity, None, tick, command_id);
         self.empty = false;
     }
 
-    pub(crate) fn push_publish(&mut self, tick: Tick, world_entity: E) {
+    pub(crate) fn push_publish(
+        &mut self,
+        tick: Tick,
+        world_entity: E,
+        command_id: Option<CommandId>,
+    ) {
         self.publishes.push(world_entity);
-        self.note_applied(CauseKind::ScopePublish, world_entity, None, tick);
+        self.note_applied(
+            CauseKind::ScopePublish,
+            world_entity,
+            None,
+            tick,
+            command_id,
+        );
         self.empty = false;
     }
 
-    pub(crate) fn push_unpublish(&mut self, tick: Tick, world_entity: E) {
+    pub(crate) fn push_unpublish(
+        &mut self,
+        tick: Tick,
+        world_entity: E,
+        command_id: Option<CommandId>,
+    ) {
         self.unpublishes.push(world_entity);
-        self.note_applied(CauseKind::ScopeUnpublish, world_entity, None, tick);
+        self.note_applied(
+            CauseKind::ScopeUnpublish,
+            world_entity,
+            None,
+            tick,
+            command_id,
+        );
         self.empty = false;
     }
 
@@ -432,11 +467,18 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         tick: Tick,
         world_entity: E,
         component_kind: ComponentKind,
+        command_id: Option<CommandId>,
     ) {
         self.inserts.entry(component_kind).or_default();
         let list = self.inserts.get_mut(&component_kind).unwrap();
         list.push((tick, world_entity));
-        self.note_applied(CauseKind::Insert, world_entity, Some(component_kind), tick);
+        self.note_applied(
+            CauseKind::Insert,
+            world_entity,
+            Some(component_kind),
+            tick,
+            command_id,
+        );
         self.lifecycle.push(LifecycleOrder {
             tick,
             kind: LifecycleKind::Insert,
@@ -451,11 +493,18 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         tick: Tick,
         world_entity: E,
         component_kind: ComponentKind,
+        command_id: Option<CommandId>,
     ) {
         self.updates.entry(component_kind).or_default();
         let list = self.updates.get_mut(&component_kind).unwrap();
         list.push((tick, world_entity));
-        self.note_applied(CauseKind::Update, world_entity, Some(component_kind), tick);
+        self.note_applied(
+            CauseKind::Update,
+            world_entity,
+            Some(component_kind),
+            tick,
+            command_id,
+        );
         self.empty = false;
     }
 
@@ -464,9 +513,16 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         tick: Tick,
         world_entity: E,
         component: Box<dyn Replicate>,
+        command_id: Option<CommandId>,
     ) {
         let component_kind: ComponentKind = component.kind();
-        self.note_applied(CauseKind::Remove, world_entity, Some(component_kind), tick);
+        self.note_applied(
+            CauseKind::Remove,
+            world_entity,
+            Some(component_kind),
+            tick,
+            command_id,
+        );
         self.removes.entry(component_kind).or_default();
         let list = self.removes.get_mut(&component_kind).unwrap();
         list.push((tick, world_entity, component));
@@ -880,10 +936,10 @@ mod tests {
     #[test]
     fn lifecycle_stream_preserves_cross_kind_order_within_one_tick() {
         let mut events = Events::<u64>::new();
-        events.push_spawn(20, 7);
-        events.push_insert(20, 7, ComponentKind::of::<Probe>());
-        events.push_remove(20, 7, Probe::boxed(9));
-        events.push_despawn(21, 7);
+        events.push_spawn(20, 7, None);
+        events.push_insert(20, 7, ComponentKind::of::<Probe>(), Some(11));
+        events.push_remove(20, 7, Probe::boxed(9), Some(12));
+        events.push_despawn(21, 7, None);
 
         let stream = events.take_lifecycle();
 
@@ -913,8 +969,14 @@ mod tests {
         // Ada 184483: the journal is opt-in — enable it like Client::new
         // would from an opted-in config.
         events.set_evidence(true, DEFAULT_CAUSE_EVIDENCE_WINDOW);
-        events.push_spawn(5, 7);
-        events.note_applied(CauseKind::Update, 7, Some(ComponentKind::of::<Probe>()), 5);
+        events.push_spawn(5, 7, Some(4));
+        events.note_applied(
+            CauseKind::Update,
+            7,
+            Some(ComponentKind::of::<Probe>()),
+            5,
+            None,
+        );
         events.mark_tick_covered(6);
 
         let mut detached = events.detach();
@@ -940,9 +1002,9 @@ mod tests {
     #[test]
     fn lifecycle_stream_preserves_order_across_ticks() {
         let mut events = Events::<u64>::new();
-        events.push_spawn(20, 7);
-        events.push_despawn(21, 7);
-        events.push_spawn(22, 8);
+        events.push_spawn(20, 7, None);
+        events.push_despawn(21, 7, None);
+        events.push_spawn(22, 8, None);
 
         let stream = events.take_lifecycle();
 

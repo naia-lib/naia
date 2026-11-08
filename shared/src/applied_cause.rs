@@ -19,7 +19,7 @@
 //!   per tick, asserted at the drains, and matching compares the per-tick
 //!   update multiset. Commands (lifecycle and scope) are causally ordered per
 //!   entity by `CommandId` -- Insert-then-Remove is not Remove-then-Insert --
-//!   so matching compares them as a sequence per entity per tick, commuting
+//!   so matching compares commands by (entity, kind, `CommandId`), commuting
 //!   across entities. Within a packet updates come before commands (the wire
 //!   layout), which orders an Update and a Remove of the same component in
 //!   one tick by kind. `order_index` is the serialized/applied position:
@@ -60,7 +60,7 @@
 
 use std::collections::VecDeque;
 
-use crate::{ComponentKind, Tick};
+use crate::{CommandId, ComponentKind, Tick};
 
 /// What kind of cause an evidence entry records.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -86,8 +86,17 @@ pub enum CauseKind {
     Epoch,
 }
 
+/// One evidence row in transfer shape: the matcher compares the server's
+/// journal against the client's drain, so both sides project to this one
+/// tuple. Updates carry `None`: the sync channels that produce them have no
+/// reliable index. Commands carry their wire id under `Some`.
+pub type EvidenceEntry<E> = (CauseKind, E, Option<ComponentKind>, Tick, Option<CommandId>);
+
 /// The identity one evidence entry is keyed by: entity, component (when the
-/// cause is component-scoped), and the effective tick of the cause.
+/// cause is component-scoped), the tick window it rode in on, and -- for
+/// commands -- the reliable wire id. (Ada eighth read: commands match by
+/// (entity, kind, `CommandId`); the tick is the window bucket, never the
+/// command identity. Updates carry no wire id.)
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct CauseIdentity<E> {
     /// The entity handle in the stream owner's space (server global entity
@@ -95,8 +104,12 @@ pub struct CauseIdentity<E> {
     pub entity: E,
     /// The component kind, for component-scoped causes.
     pub component_kind: Option<ComponentKind>,
-    /// The effective tick of the cause.
+    /// The effective tick of the cause: the application window for updates,
+    /// the first-write (or applied) tick for commands.
     pub tick: Tick,
+    /// The reliable wire id, for commands only. Updates are identified by
+    /// (entity, component, tick) and carry `None`.
+    pub command_id: Option<CommandId>,
 }
 
 /// One applied-cause evidence entry.
@@ -227,6 +240,7 @@ impl<E> CauseStream<E> {
         entity: E,
         component_kind: Option<ComponentKind>,
         tick: Tick,
+        command_id: Option<CommandId>,
     ) -> usize {
         let order_index = self.next_order;
         self.next_order += 1;
@@ -246,6 +260,7 @@ impl<E> CauseStream<E> {
                 entity,
                 component_kind,
                 tick,
+                command_id,
             },
             order_index,
             generation: self.generation,
@@ -390,7 +405,7 @@ impl<E: Default> CauseStream<E> {
     pub fn advance_generation(&mut self) {
         self.generation += 1;
         let tick = self.coverage.frontier.unwrap_or(0);
-        self.push(CauseKind::Epoch, E::default(), None, tick);
+        self.push(CauseKind::Epoch, E::default(), None, tick, None);
     }
 }
 
@@ -399,9 +414,7 @@ impl<E: Default> CauseStream<E> {
 /// push path stays scan-free (see `enforce_bound`). Callers assert at their
 /// drain -- the server fold per tick, the client drain per take -- so a
 /// producer that double-journals trips in every debug gate.
-pub fn assert_updates_unique_per_tick<E: PartialEq>(
-    entries: &[(CauseKind, E, Option<ComponentKind>, Tick)],
-) {
+pub fn assert_updates_unique_per_tick<E: PartialEq>(entries: &[EvidenceEntry<E>]) {
     debug_assert!(
         {
             let mut unique = true;
@@ -428,7 +441,7 @@ pub fn assert_updates_unique_per_tick<E: PartialEq>(
 
 #[cfg(test)]
 mod revision_tests {
-    use super::{assert_updates_unique_per_tick, CauseKind, ComponentKind};
+    use super::{assert_updates_unique_per_tick, CauseKind, ComponentKind, EvidenceEntry};
     use crate::{Property, Replicate};
 
     #[derive(Replicate)]
@@ -441,12 +454,8 @@ mod revision_tests {
         value: Property<u8>,
     }
 
-    fn update(
-        entity: u32,
-        kind: ComponentKind,
-        tick: u16,
-    ) -> (CauseKind, u32, Option<ComponentKind>, u16) {
-        (CauseKind::Update, entity, Some(kind), tick)
+    fn update(entity: u32, kind: ComponentKind, tick: u16) -> EvidenceEntry<u32> {
+        (CauseKind::Update, entity, Some(kind), tick, None)
     }
 
     #[test]
@@ -474,8 +483,8 @@ mod revision_tests {
         // Updates only.
         let alpha = ComponentKind::of::<Alpha>();
         assert_updates_unique_per_tick(&[
-            (CauseKind::Insert, 1, Some(alpha), 5),
-            (CauseKind::Insert, 1, Some(alpha), 5),
+            (CauseKind::Insert, 1, Some(alpha), 5, None),
+            (CauseKind::Insert, 1, Some(alpha), 5, None),
         ]);
     }
 
@@ -488,10 +497,10 @@ mod revision_tests {
         // collapsing to a multiset would equate them.
         use super::CauseStream;
         let mut stream = CauseStream::new();
-        stream.push(CauseKind::Insert, 1u32, None, 5);
-        stream.push(CauseKind::Remove, 1u32, None, 5);
-        stream.push(CauseKind::Remove, 2u32, None, 5);
-        stream.push(CauseKind::Insert, 2u32, None, 5);
+        stream.push(CauseKind::Insert, 1u32, None, 5, Some(11));
+        stream.push(CauseKind::Remove, 1u32, None, 5, Some(12));
+        stream.push(CauseKind::Remove, 2u32, None, 5, Some(12));
+        stream.push(CauseKind::Insert, 2u32, None, 5, Some(11));
         let drained = stream.take_entries();
         let sequence = |entity: u32| {
             drained
@@ -515,6 +524,51 @@ mod revision_tests {
             sequence(2),
             "per-entity command order must not commute: Insert-then-Remove \
              refuses to equal Remove-then-Insert",
+        );
+    }
+
+    #[test]
+    fn commands_carry_their_wire_id() {
+        // Ada eighth read (resend identity): a command entry is keyed by
+        // its reliable wire id, not by the tick it rode in on. Same
+        // (entity, kind), different CommandIds: two distinct causes.
+        use super::CauseStream;
+        let alpha = ComponentKind::of::<Alpha>();
+        let mut stream = CauseStream::new();
+        stream.push(CauseKind::Insert, 1u32, Some(alpha), 5, Some(11));
+        stream.push(CauseKind::Insert, 1u32, Some(alpha), 6, Some(11));
+        let drained = stream.take_entries();
+        assert_eq!(drained.len(), 2, "first write and resend both journal");
+        assert_eq!(
+            drained[0].identity().command_id,
+            Some(11),
+            "first write keeps the wire id it rode in on",
+        );
+        assert_eq!(
+            drained[1].identity().command_id,
+            Some(11),
+            "resend keeps the SAME wire id, never a new one",
+        );
+        assert_ne!(
+            drained[0].identity().tick,
+            drained[1].identity().tick,
+            "tick is the window bucket, not the identity",
+        );
+    }
+
+    #[test]
+    fn updates_carry_no_wire_id() {
+        // Updates are identified by (entity, component, tick): no CommandId.
+        use super::CauseStream;
+        let alpha = ComponentKind::of::<Alpha>();
+        let mut stream = CauseStream::new();
+        stream.push(CauseKind::Update, 1u32, Some(alpha), 5, None);
+        let drained = stream.take_entries();
+        assert_eq!(drained.len(), 1);
+        assert_eq!(
+            drained[0].identity().command_id,
+            None,
+            "updates carry no wire id",
         );
     }
 }

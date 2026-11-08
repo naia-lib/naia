@@ -355,7 +355,7 @@ impl HostWorldManager {
                 .map(|(id, msg)| (id, 0, msg))
                 .collect();
 
-        for (_, message) in EntityMessageReceiver::remote_take_incoming_messages(
+        for (_, _, message) in EntityMessageReceiver::remote_take_incoming_messages(
             &mut self.delivered_engine,
             filtered_messages,
         ) {

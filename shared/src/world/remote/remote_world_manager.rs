@@ -44,7 +44,7 @@ pub struct RemoteWorldManager {
     authed_entities_opt: Option<HashSet<RemoteEntity>>,
 
     // incoming messages
-    incoming_events: Vec<EntityEvent>,
+    incoming_events: Vec<(Option<MessageIndex>, EntityEvent)>,
     waitlist: RemoteWorldWaitlist,
     // outgoing messages
 }
@@ -54,6 +54,7 @@ pub struct RemoteWorldManager {
 /// argument-count limit as the pipeline evolves.
 struct InsertParams<'w, 'c, E, W> {
     tick: Tick,
+    command_id: MessageIndex,
     world: &'w mut W,
     converter: &'c dyn LocalEntityAndGlobalEntityConverter,
     entity: RemoteEntity,
@@ -269,7 +270,7 @@ impl RemoteWorldManager {
         incoming_components: &mut Vec<(Tick, OwnedLocalEntity, ComponentKind, Box<dyn Replicate>)>,
         incoming_updates: Vec<(Tick, OwnedLocalEntity, PendingComponentUpdate)>,
         incoming_messages: Vec<(MessageIndex, Tick, EntityMessage<RemoteEntity>)>,
-    ) -> Vec<EntityEvent> {
+    ) -> Vec<(Option<MessageIndex>, EntityEvent)> {
         let incoming_messages = EntityMessageReceiver::remote_take_incoming_messages(
             &mut self.remote_engine,
             incoming_messages,
@@ -305,7 +306,7 @@ impl RemoteWorldManager {
         world: &mut W,
         now: &Instant,
         incoming_components: &mut Vec<(Tick, OwnedLocalEntity, ComponentKind, Box<dyn Replicate>)>,
-        incoming_messages: Vec<(Tick, EntityMessage<RemoteEntity>)>,
+        incoming_messages: Vec<(MessageIndex, Tick, EntityMessage<RemoteEntity>)>,
     ) {
         self.process_ready_messages(
             spawner,
@@ -333,10 +334,12 @@ impl RemoteWorldManager {
         local_entity_map: &mut LocalEntityMap,
         world: &mut W,
         incoming_components: &mut Vec<(Tick, OwnedLocalEntity, ComponentKind, Box<dyn Replicate>)>,
-        incoming_messages: Vec<(Tick, EntityMessage<RemoteEntity>)>,
+        incoming_messages: Vec<(MessageIndex, Tick, EntityMessage<RemoteEntity>)>,
     ) {
-        // execute the action and emit an event
-        for (tick, message) in incoming_messages {
+        // execute the action and emit an event. Every message arm tags its
+        // event with the wire id it rode in on (Ada eighth read: both sides
+        // carry the CommandId; updates have no wire id and tag None).
+        for (id, tick, message) in incoming_messages {
             // info!("Processing EntityMessage: {:?}", message);
             match message {
                 EntityMessage::Spawn(remote_entity) => {
@@ -351,7 +354,7 @@ impl RemoteWorldManager {
                     }
 
                     self.incoming_events
-                        .push(EntityEvent::Spawn(tick, global_entity));
+                        .push((Some(id), EntityEvent::Spawn(tick, global_entity)));
                 }
                 EntityMessage::Despawn(remote_entity) => {
                     // On the client (authed_entities_opt is Some): read the mapping before
@@ -390,6 +393,7 @@ impl RemoteWorldManager {
                     {
                         for component_kind in component_kinds {
                             self.process_remove(
+                                Some(id),
                                 tick,
                                 world,
                                 local_entity_map,
@@ -410,7 +414,7 @@ impl RemoteWorldManager {
                     world.despawn_entity(&world_entity);
 
                     self.incoming_events
-                        .push(EntityEvent::Despawn(tick, global_entity));
+                        .push((Some(id), EntityEvent::Despawn(tick, global_entity)));
                 }
                 EntityMessage::InsertComponent(remote_entity, component_kind) => {
                     let local_entity = remote_entity.copy_to_owned();
@@ -444,6 +448,7 @@ impl RemoteWorldManager {
 
                         self.process_insert(InsertParams {
                             tick,
+                            command_id: id,
                             world,
                             converter: local_entity_map,
                             entity: remote_entity,
@@ -471,6 +476,7 @@ impl RemoteWorldManager {
                         .unwrap();
                     let world_entity = spawner.global_entity_to_entity(*global_entity).unwrap();
                     self.process_remove(
+                        Some(id),
                         tick,
                         world,
                         local_entity_map,
@@ -492,12 +498,12 @@ impl RemoteWorldManager {
                         continue;
                     };
                     self.incoming_events
-                        .push(EntityEvent::SetAuthority(*global_entity, auth_status));
+                        .push((None, EntityEvent::SetAuthority(*global_entity, auth_status)));
                 }
                 msg => {
                     // let msg_type = msg.get_type();
                     if let Some(event) = msg.to_event(local_entity_map, tick) {
-                        self.incoming_events.push(event);
+                        self.incoming_events.push((Some(id), event));
                     }
                 }
             }
@@ -513,6 +519,7 @@ impl RemoteWorldManager {
     ) {
         let InsertParams {
             tick,
+            command_id,
             world,
             converter,
             entity,
@@ -524,6 +531,7 @@ impl RemoteWorldManager {
             self.waitlist.waitlist_queue_entity(
                 &self.remote_engine,
                 entity,
+                command_id,
                 tick,
                 component,
                 component_kind,
@@ -532,6 +540,7 @@ impl RemoteWorldManager {
         } else {
             self.finish_insert(InsertParams {
                 tick,
+                command_id,
                 world,
                 converter,
                 entity,
@@ -550,6 +559,7 @@ impl RemoteWorldManager {
     ) {
         let InsertParams {
             tick,
+            command_id,
             world,
             converter,
             entity,
@@ -567,15 +577,18 @@ impl RemoteWorldManager {
 
         let global_entity = converter.remote_entity_to_global_entity(entity).unwrap();
 
-        self.incoming_events.push(EntityEvent::InsertComponent(
-            tick,
-            global_entity,
-            component_kind,
+        self.incoming_events.push((
+            Some(command_id),
+            EntityEvent::InsertComponent(tick, global_entity, component_kind),
         ));
     }
 
+    /// Same per-message apply context as `process_insert`; same reason for
+    /// the allow.
+    #[allow(clippy::too_many_arguments)]
     fn process_remove<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
+        command_id: Option<MessageIndex>,
         tick: Tick,
         world: &mut W,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -590,10 +603,9 @@ impl RemoteWorldManager {
         if let Some(component) = world.remove_component_of_kind(world_entity, component_kind) {
             // Send out event
             if let Ok(global_entity) = converter.remote_entity_to_global_entity(entity) {
-                self.incoming_events.push(EntityEvent::RemoveComponent(
-                    tick,
-                    global_entity,
-                    component,
+                self.incoming_events.push((
+                    command_id,
+                    EntityEvent::RemoveComponent(tick, global_entity, component),
                 ));
             }
         }
@@ -606,7 +618,7 @@ impl RemoteWorldManager {
         world: &mut W,
         now: &Instant,
     ) {
-        for (tick, entity, component_kind, component) in
+        for (command_id, tick, entity, component_kind, component) in
             self.waitlist.entities_to_insert(now, local_converter)
         {
             // The target entity may have despawned while the component sat
@@ -622,6 +634,7 @@ impl RemoteWorldManager {
             };
             self.finish_insert(InsertParams {
                 tick,
+                command_id,
                 world,
                 converter: local_converter,
                 entity,
@@ -672,10 +685,9 @@ impl RemoteWorldManager {
             let global_entity = local_converter
                 .owned_entity_to_global_entity(local_entity)
                 .unwrap();
-            self.incoming_events.push(EntityEvent::UpdateComponent(
-                tick,
-                global_entity,
-                component_kind,
+            self.incoming_events.push((
+                None,
+                EntityEvent::UpdateComponent(tick, global_entity, component_kind),
             ));
         }
     }
@@ -694,10 +706,9 @@ impl RemoteWorldManager {
             let global_entity = local_converter
                 .remote_entity_to_global_entity(remote_entity)
                 .unwrap();
-            self.incoming_events.push(EntityEvent::UpdateComponent(
-                tick,
-                global_entity,
-                component_kind,
+            self.incoming_events.push((
+                None,
+                EntityEvent::UpdateComponent(tick, global_entity, component_kind),
             ));
         }
     }
@@ -721,10 +732,9 @@ impl RemoteWorldManager {
             let global_entity = local_converter
                 .remote_entity_to_global_entity(remote_entity)
                 .unwrap();
-            self.incoming_events.push(EntityEvent::UpdateComponent(
-                tick,
-                global_entity,
-                component_kind,
+            self.incoming_events.push((
+                None,
+                EntityEvent::UpdateComponent(tick, global_entity, component_kind),
             ));
         }
     }
@@ -865,11 +875,13 @@ mod remote_world_manager_tests {
             }
         }
 
-        /// Feeds tick-tagged `messages` through the manager and returns the events raised.
+        /// Feeds tick-tagged `messages` through the manager and returns the
+        /// (wire id, event) pairs raised. The manager tags every
+        /// message-sourced event with the `CommandId` it rode in on.
         fn deliver(
             &mut self,
             messages: Vec<(Tick, EntityMessage<RemoteEntity>)>,
-        ) -> Vec<EntityEvent> {
+        ) -> Vec<(Option<MessageIndex>, EntityEvent)> {
             self.deliver_with(messages, &mut Vec::new())
         }
 
@@ -882,7 +894,7 @@ mod remote_world_manager_tests {
                 ComponentKind,
                 Box<dyn Replicate>,
             )>,
-        ) -> Vec<EntityEvent> {
+        ) -> Vec<(Option<MessageIndex>, EntityEvent)> {
             let indexed = messages
                 .into_iter()
                 .map(|(tick, message)| {
@@ -912,14 +924,22 @@ mod remote_world_manager_tests {
         fn deliver_direct(
             &mut self,
             messages: Vec<(Tick, EntityMessage<RemoteEntity>)>,
-        ) -> Vec<EntityEvent> {
+        ) -> Vec<(Option<MessageIndex>, EntityEvent)> {
+            let indexed = messages
+                .into_iter()
+                .map(|(tick, message)| {
+                    let index = self.next_index;
+                    self.next_index += 1;
+                    (index, tick, message)
+                })
+                .collect();
             self.manager.process_ready_messages(
                 &mut self.spawner,
                 &self.gwm,
                 &mut self.map,
                 &mut self.world,
                 &mut Vec::new(),
-                messages,
+                indexed,
             );
             std::mem::take(&mut self.manager.incoming_events)
         }
@@ -928,7 +948,7 @@ mod remote_world_manager_tests {
         fn deliver_updates(
             &mut self,
             updates: Vec<(Tick, OwnedLocalEntity, PendingComponentUpdate)>,
-        ) -> Vec<EntityEvent> {
+        ) -> Vec<(Option<MessageIndex>, EntityEvent)> {
             self.manager.take_incoming_events(
                 &mut self.spawner,
                 &self.gwm,
@@ -971,10 +991,12 @@ mod remote_world_manager_tests {
 
     /// `EntityEvent` carries a boxed component and so is neither `Debug` nor
     /// `PartialEq`. Its type and subject are what the tests are about.
-    fn summarize(events: &[EntityEvent]) -> Vec<(Option<EntityMessageType>, GlobalEntity)> {
+    fn summarize(
+        events: &[(Option<MessageIndex>, EntityEvent)],
+    ) -> Vec<(Option<EntityMessageType>, GlobalEntity)> {
         events
             .iter()
-            .map(|event| (event.to_type(), event.entity()))
+            .map(|(_, event)| (event.to_type(), event.entity()))
             .collect()
     }
 
@@ -1135,7 +1157,7 @@ mod remote_world_manager_tests {
             .global_entity_from_remote(remote(1))
             .expect("entity 1 must be mapped after its spawn");
         assert!(
-            matches!(&setup[0], EntityEvent::Spawn(5, entity) if *entity == global_1),
+            matches!(&setup[0].1, EntityEvent::Spawn(5, entity) if *entity == global_1),
             "setup spawn must already carry its tick",
         );
         fixture.gwm.declare_kinds(global_1, vec![ghost()]);
@@ -1157,17 +1179,17 @@ mod remote_world_manager_tests {
             .expect("entity 2 must be mapped after its spawn");
         assert_eq!(events.len(), 3, "no existence event may be dropped");
         assert!(
-            matches!(&events[0], EntityEvent::InsertComponent(10, entity, kind)
+            matches!(&events[0].1, EntityEvent::InsertComponent(10, entity, kind)
                 if *entity == global_1 && *kind == ghost()),
             "insert must arrive first, stamped with tick 10",
         );
         assert!(
-            matches!(&events[1], EntityEvent::RemoveComponent(11, entity, _)
+            matches!(&events[1].1, EntityEvent::RemoveComponent(11, entity, _)
                 if *entity == global_1),
             "remove must arrive second, stamped with tick 11",
         );
         assert!(
-            matches!(&events[2], EntityEvent::Spawn(12, entity) if *entity == global_2),
+            matches!(&events[2].1, EntityEvent::Spawn(12, entity) if *entity == global_2),
             "spawn must arrive third, stamped with tick 12",
         );
     }
@@ -1187,15 +1209,15 @@ mod remote_world_manager_tests {
         assert_eq!(events.len(), 2, "spawn and despawn must both survive");
         // The despawn cleans the entity map in the same window, so the
         // Spawn event itself — not the map — is what names the entity.
-        let global_3 = events[0].entity();
+        let global_3 = events[0].1.entity();
         assert!(
-            matches!(&events[0], EntityEvent::Spawn(20, entity) if *entity == global_3),
+            matches!(&events[0].1, EntityEvent::Spawn(20, entity) if *entity == global_3),
             "spawn must arrive first, stamped with tick 20",
         );
         // Entity 3 holds no components, so its despawn raises no
         // RemoveComponent events — only the despawn itself, stamped 21.
         assert!(
-            matches!(&events[1], EntityEvent::Despawn(21, entity) if *entity == global_3),
+            matches!(&events[1].1, EntityEvent::Despawn(21, entity) if *entity == global_3),
             "despawn must arrive second, stamped with tick 21",
         );
     }
@@ -1217,7 +1239,7 @@ mod remote_world_manager_tests {
         let events = fixture.deliver(vec![(5, EntityMessage::Unpublish(0, remote(1)))]);
         assert_eq!(events.len(), 1, "unpublish must raise exactly one event");
         assert!(
-            matches!(&events[0], EntityEvent::Unpublish(5, entity) if *entity == global_1),
+            matches!(&events[0].1, EntityEvent::Unpublish(5, entity) if *entity == global_1),
             "unpublish must arrive stamped with tick 5",
         );
 
@@ -1228,7 +1250,7 @@ mod remote_world_manager_tests {
         let events = fixture.deliver(vec![(9, EntityMessage::Publish(1, remote(1)))]);
         assert_eq!(events.len(), 1, "publish must raise exactly one event");
         assert!(
-            matches!(&events[0], EntityEvent::Publish(9, entity) if *entity == global_1),
+            matches!(&events[0].1, EntityEvent::Publish(9, entity) if *entity == global_1),
             "publish must arrive stamped with tick 9",
         );
     }
@@ -1247,7 +1269,7 @@ mod remote_world_manager_tests {
             summarize(&events),
             vec![(Some(EntityMessageType::RemoveComponent), global)],
         );
-        let EntityEvent::RemoveComponent(_, _, component) = &events[0] else {
+        let (_, EntityEvent::RemoveComponent(_, _, component)) = &events[0] else {
             panic!("expected a RemoveComponent event");
         };
         assert_eq!(component.kind(), ghost());

@@ -142,8 +142,14 @@ impl HostEntityChannel {
 
                     self.auth_channel
                         .receiver_receive_message(None, id, tick, msg);
+                    // The host (client-to-server) channel never feeds the
+                    // applied-cause journal: drop the wire ids the shared
+                    // auth drain carries for the remote path.
+                    let mut auth_drained = Vec::new();
                     self.auth_channel
-                        .receiver_drain_messages_into(&mut self.incoming_messages);
+                        .receiver_drain_messages_into(&mut auth_drained);
+                    self.incoming_messages
+                        .extend(auth_drained.into_iter().map(|(_, tick, msg)| (tick, msg)));
                 }
                 EntityMessageType::Noop => {
                     // Drop it

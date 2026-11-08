@@ -180,7 +180,7 @@ impl Connection {
         world: &mut W,
         now: &Instant,
         incoming_events: &mut Events<E>,
-    ) -> Vec<EntityEvent> {
+    ) -> Vec<(Option<MessageIndex>, EntityEvent)> {
         // Receive Message Events. Scope the entity-map read guard (held by the
         // converter) so it drops before any &mut world_manager access below.
         let messages = {

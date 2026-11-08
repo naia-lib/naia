@@ -317,7 +317,7 @@ impl BaseSendConnection {
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
         global_diff_handler: Option<&GlobalDiffHandler>,
         snapshot_map: Option<&SnapshotMap>,
-        written_commands: Option<&mut Vec<EntityCommand>>,
+        written_commands: Option<&mut Vec<(CommandId, EntityCommand)>>,
     ) {
         // write messages
         self.write_messages(
@@ -505,7 +505,7 @@ impl BaseConnection {
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
         global_diff_handler: Option<&GlobalDiffHandler>,
         snapshot_map: Option<&SnapshotMap>,
-        written_commands: Option<&mut Vec<EntityCommand>>,
+        written_commands: Option<&mut Vec<(CommandId, EntityCommand)>>,
     ) {
         self.send.write_packet(
             channel_kinds,

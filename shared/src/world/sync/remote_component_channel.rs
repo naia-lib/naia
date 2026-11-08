@@ -49,7 +49,7 @@ pub(crate) struct RemoteComponentChannel {
     /// Each entry also carries the parse tick of its message, so the eventual
     /// existence event keeps its authored tick across channel delay.
     buffered_messages: OrderedIds<(Tick, bool)>,
-    incoming_messages: VecDeque<(Tick, EntityMessageType)>,
+    incoming_messages: VecDeque<(MessageIndex, Tick, EntityMessageType)>,
 }
 
 impl RemoteComponentChannel {
@@ -65,12 +65,12 @@ impl RemoteComponentChannel {
     pub(crate) fn drain_messages_into(
         &mut self,
         component_kind: ComponentKind,
-        outgoing_messages: &mut Vec<(Tick, EntityMessage<()>)>,
+        outgoing_messages: &mut Vec<(MessageIndex, Tick, EntityMessage<()>)>,
     ) {
         // Drain the component channel and append the messages to the outgoing events
         let mut received_messages = Vec::new();
-        for (tick, msg_type) in std::mem::take(&mut self.incoming_messages) {
-            received_messages.push((tick, msg_type.with_component_kind(component_kind)));
+        for (id, tick, msg_type) in std::mem::take(&mut self.incoming_messages) {
+            received_messages.push((id, tick, msg_type.with_component_kind(component_kind)));
         }
         outgoing_messages.append(&mut received_messages);
     }
@@ -127,13 +127,13 @@ impl RemoteComponentChannel {
                 self.set_inserted(false, id);
             }
 
-            let (_, (tick, insert)) = self.buffered_messages.pop_front().unwrap();
+            let (id, (tick, insert)) = self.buffered_messages.pop_front().unwrap();
             if insert {
                 self.incoming_messages
-                    .push_back((tick, EntityMessageType::InsertComponent));
+                    .push_back((id, tick, EntityMessageType::InsertComponent));
             } else {
                 self.incoming_messages
-                    .push_back((tick, EntityMessageType::RemoveComponent));
+                    .push_back((id, tick, EntityMessageType::RemoveComponent));
             }
         }
     }
@@ -152,10 +152,10 @@ impl RemoteComponentChannel {
         while let Some((id, (tick, insert))) = self.buffered_messages.pop_front() {
             if insert {
                 self.incoming_messages
-                    .push_back((tick, EntityMessageType::InsertComponent));
+                    .push_back((id, tick, EntityMessageType::InsertComponent));
             } else {
                 self.incoming_messages
-                    .push_back((tick, EntityMessageType::RemoveComponent));
+                    .push_back((id, tick, EntityMessageType::RemoveComponent));
             }
             // Update the inserted state to reflect the final operation
             self.inserted = insert;
@@ -196,7 +196,7 @@ mod tests {
         channel
             .incoming_messages
             .iter()
-            .map(|(_, msg_type)| *msg_type)
+            .map(|(_, _, msg_type)| *msg_type)
             .collect()
     }
 

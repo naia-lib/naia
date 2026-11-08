@@ -110,7 +110,7 @@ pub struct RemoteEntityChannel {
     auth_channel: AuthChannel,
 
     buffered_messages: OrderedIds<(Tick, EntityMessage<()>)>,
-    incoming_messages: Vec<(Tick, EntityMessage<()>)>,
+    incoming_messages: Vec<(MessageIndex, Tick, EntityMessage<()>)>,
     outgoing_commands: Vec<EntityCommand>,
 }
 
@@ -192,12 +192,12 @@ impl RemoteEntityChannel {
     pub(crate) fn drain_incoming_messages_into<E: Copy + Hash + Eq>(
         &mut self,
         entity: E,
-        outgoing_events: &mut Vec<(Tick, EntityMessage<E>)>,
+        outgoing_events: &mut Vec<(MessageIndex, Tick, EntityMessage<E>)>,
     ) {
         // Drain the entity channel and append the messages to the outgoing events
         let mut received_messages = Vec::new();
-        for (tick, rmsg) in std::mem::take(&mut self.incoming_messages) {
-            received_messages.push((tick, rmsg.with_entity(entity)));
+        for (id, tick, rmsg) in std::mem::take(&mut self.incoming_messages) {
+            received_messages.push((id, tick, rmsg.with_entity(entity)));
         }
         outgoing_events.append(&mut received_messages);
     }
@@ -279,14 +279,16 @@ impl RemoteEntityChannel {
                     self.buffered_messages.pop_front_until_and_excluding(id);
 
                     // Pop the SpawnWithComponents message itself
-                    let (_, (tick, msg)) = self.buffered_messages.pop_front().unwrap();
+                    let (bundle_id, (tick, msg)) = self.buffered_messages.pop_front().unwrap();
                     let kinds = match msg {
                         EntityMessage::SpawnWithComponents((), kinds) => kinds,
                         _ => unreachable!(),
                     };
 
                     // Emit synthetic Spawn event, stamped with the bundle's own tick
-                    self.incoming_messages.push((tick, EntityMessage::Spawn(())));
+                    // and wire id (Ada eighth read: the bundle is one command).
+                    self.incoming_messages
+                        .push((bundle_id, tick, EntityMessage::Spawn(())));
 
                     // Process any pre-buffered component channels (out-of-order arrivals)
                     for (component_kind, component_channel) in &mut self.component_channels {
@@ -301,7 +303,11 @@ impl RemoteEntityChannel {
                             .entry(*kind)
                             .or_insert_with(RemoteComponentChannel::new);
                         component_channel.set_inserted(true, id);
-                        self.incoming_messages.push((tick, EntityMessage::InsertComponent((), *kind)));
+                        self.incoming_messages.push((
+                            bundle_id,
+                            tick,
+                            EntityMessage::InsertComponent((), *kind),
+                        ));
                     }
 
                     // Drain auth channel
@@ -361,8 +367,8 @@ impl RemoteEntityChannel {
     }
 
     fn pop_front_into_outgoing(&mut self) {
-        let (_, (tick, msg)) = self.buffered_messages.pop_front().unwrap();
-        self.incoming_messages.push((tick, msg));
+        let (id, (tick, msg)) = self.buffered_messages.pop_front().unwrap();
+        self.incoming_messages.push((id, tick, msg));
     }
 
     #[allow(dead_code)] // used in migration unit tests
@@ -415,8 +421,8 @@ impl RemoteEntityChannel {
 
     pub(crate) fn force_drain_all_buffers(&mut self) {
         // Force-drain entity-level buffered messages
-        while let Some((_, (tick, msg))) = self.buffered_messages.pop_front() {
-            self.incoming_messages.push((tick, msg));
+        while let Some((id, (tick, msg))) = self.buffered_messages.pop_front() {
+            self.incoming_messages.push((id, tick, msg));
         }
 
         // Force-drain all component channels
@@ -473,7 +479,7 @@ impl RemoteEntityChannel {
     }
 
     #[allow(dead_code)] // used in bulletproof migration unit tests
-    pub(crate) fn take_incoming_events(&mut self) -> Vec<(Tick, EntityMessage<()>)> {
+    pub(crate) fn take_incoming_events(&mut self) -> Vec<(MessageIndex, Tick, EntityMessage<()>)> {
         std::mem::take(&mut self.incoming_messages)
     }
 }

@@ -26,7 +26,7 @@ impl EntityMessageReceiver {
     pub fn remote_take_incoming_messages<E: Copy + Hash + Eq + Debug>(
         remote_engine: &mut RemoteEngine<E>,
         incoming_messages: Vec<(MessageIndex, Tick, EntityMessage<E>)>,
-    ) -> Vec<(Tick, EntityMessage<E>)> {
+    ) -> Vec<(MessageIndex, Tick, EntityMessage<E>)> {
         for (message_index, tick, message) in incoming_messages {
             remote_engine.receive_message(message_index, tick, message);
         }

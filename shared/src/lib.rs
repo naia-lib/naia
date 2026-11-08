@@ -126,7 +126,7 @@ cfg_if! {
 
 pub use applied_cause::{
     assert_updates_unique_per_tick, AppliedCause, CauseIdentity, CauseKind, CauseStream, Coverage,
-    DEFAULT_CAUSE_EVIDENCE_WINDOW,
+    EvidenceEntry, DEFAULT_CAUSE_EVIDENCE_WINDOW,
 };
 pub use backends::{Timer, Timestamp};
 pub use connection::{
@@ -238,7 +238,7 @@ pub use world::entity_command::EntityCommand;
 pub use world::entity_event::EntityEvent;
 pub use world::entity_index::LocalEntityIndex;
 pub use world::host::host_entity_generator::HostEntityGenerator;
-pub use world::host::host_world_manager::SubCommandId;
+pub use world::host::host_world_manager::{CommandId, SubCommandId};
 pub use world::local::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity};
 pub use world::local::local_entity_map::LocalEntityMap;
 #[cfg(feature = "bench_instrumentation")]

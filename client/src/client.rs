@@ -15,7 +15,7 @@ use naia_shared::{
     EntityPriorityMut, EntityPriorityRef, FakeEntityConverter, GameInstant, GlobalEntity,
     GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId,
     GlobalWorldManagerType, HostType, Instant, LocalEntityAndGlobalEntityConverter, Message,
-    MessageContainer, OwnedLocalEntity, PacketType, Protocol, ProtocolId, Replicate,
+    MessageContainer, MessageIndex, OwnedLocalEntity, PacketType, Protocol, ProtocolId, Replicate,
     ReplicatedComponent, Request, RequestPoll, Response, ResponseReceiveKey, ResponseSendKey,
     Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, Tick, Timer, UserPriorityState,
     WorldMutType, WorldRefType, PROTOCOL_MISMATCH_STATUS,
@@ -3067,6 +3067,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             remote_entities,
             teardown_tick,
         );
+        // Teardown events are synthesized locally: no wire id.
+        let entity_events = entity_events
+            .into_iter()
+            .map(|event| (None, event))
+            .collect();
         self.process_entity_events(world, entity_events);
     }
 
@@ -3176,9 +3181,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     fn process_entity_events<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
-        entity_events: Vec<EntityEvent>,
+        entity_events: Vec<(Option<MessageIndex>, EntityEvent)>,
     ) {
-        for response_event in entity_events {
+        // Ada eighth read: every message-sourced event carries the wire id
+        // it rode in on; the applied-cause journal records the command under
+        // that id, so a resend applied from a later packet still matches the
+        // server's first write by id. Host-synthesized events carry None.
+        for (command_id, response_event) in entity_events {
             // info!(
             //     "Client.process_entity_events(), handling response_event: {:?}",
             //     response_event.log()
@@ -3189,7 +3198,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .global_entity_map
                         .global_entity_to_entity(global_entity)
                         .unwrap();
-                    self.incoming_world_events.push_spawn(tick, world_entity);
+                    self.incoming_world_events
+                        .push_spawn(tick, world_entity, command_id);
                     self.global_world_manager
                         .remote_spawn_entity(&global_entity);
                     let Some(connection) = self.server_connection.as_mut() else {
@@ -3216,7 +3226,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     // a resource entity, clear the registry record so
                     // future has_resource::<R>() calls return false.
                     self.resource_registry.remove_by_entity(global_entity);
-                    self.incoming_world_events.push_despawn(tick, world_entity);
+                    self.incoming_world_events
+                        .push_despawn(tick, world_entity, command_id);
                     if self
                         .global_world_manager
                         .entity_is_delegated(&global_entity)
@@ -3258,8 +3269,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         let type_id: std::any::TypeId = component_kind.into();
                         let _ = self.resource_registry.insert_raw(type_id, global_entity);
                     }
-                    self.incoming_world_events
-                        .push_insert(tick, world_entity, component_kind);
+                    self.incoming_world_events.push_insert(
+                        tick,
+                        world_entity,
+                        component_kind,
+                        command_id,
+                    );
 
                     if !self
                         .global_world_manager
@@ -3303,8 +3318,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .global_entity_map
                         .global_entity_to_entity(global_entity)
                         .unwrap();
-                    self.incoming_world_events
-                        .push_remove(tick, world_entity, component_box);
+                    self.incoming_world_events.push_remove(
+                        tick,
+                        world_entity,
+                        component_box,
+                        command_id,
+                    );
                     if self
                         .global_world_manager
                         .entity_is_delegated(&global_entity)
@@ -3333,7 +3352,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         continue;
                     }
                     self.publish_entity(&global_entity, false);
-                    self.incoming_world_events.push_publish(tick, world_entity);
+                    self.incoming_world_events
+                        .push_publish(tick, world_entity, command_id);
                 }
                 EntityEvent::Unpublish(tick, global_entity) => {
                     let world_entity = self
@@ -3354,7 +3374,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     }
                     self.unpublish_entity(&global_entity, false);
                     self.incoming_world_events
-                        .push_unpublish(tick, world_entity);
+                        .push_unpublish(tick, world_entity, command_id);
                 }
                 #[cfg(feature = "entity_delegation")]
                 EntityEvent::EnableDelegation(global_entity) => {
@@ -3637,8 +3657,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .global_entity_map
                         .global_entity_to_entity(global_entity)
                         .unwrap();
-                    self.incoming_world_events
-                        .push_update(tick, world_entity, component_kind);
+                    self.incoming_world_events.push_update(
+                        tick,
+                        world_entity,
+                        component_kind,
+                        command_id,
+                    );
                 }
             }
         }
@@ -5525,7 +5549,7 @@ mod forbidden_entity_event_tests {
         let global_entity = GlobalEntity::from_u64(1);
         client.process_entity_events(
             &mut StubWorld,
-            vec![EntityEvent::EnableDelegationResponse(global_entity)],
+            vec![(None, EntityEvent::EnableDelegationResponse(global_entity))],
         );
     }
 
@@ -5538,7 +5562,7 @@ mod forbidden_entity_event_tests {
         let global_entity = GlobalEntity::from_u64(1);
         client.process_entity_events(
             &mut StubWorld,
-            vec![EntityEvent::RequestAuthority(global_entity)],
+            vec![(None, EntityEvent::RequestAuthority(global_entity))],
         );
     }
 
@@ -5551,7 +5575,7 @@ mod forbidden_entity_event_tests {
         let global_entity = GlobalEntity::from_u64(1);
         client.process_entity_events(
             &mut StubWorld,
-            vec![EntityEvent::ReleaseAuthority(global_entity)],
+            vec![(None, EntityEvent::ReleaseAuthority(global_entity))],
         );
     }
 }

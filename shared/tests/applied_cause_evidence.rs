@@ -32,8 +32,8 @@ fn identities(stream: &CauseStream<u32>) -> Vec<String> {
 #[test]
 fn deferred_packets_are_refusals_not_evidence() {
     let mut stream = CauseStream::new();
-    stream.push(CauseKind::Update, 7, Some(kind()), 5);
-    stream.push(CauseKind::Deferred, 8, Some(kind()), 5);
+    stream.push(CauseKind::Update, 7, Some(kind()), 5, None);
+    stream.push(CauseKind::Deferred, 8, Some(kind()), 5, None);
     // The deferred entry is recorded so the matcher can tell "not sent" from
     // "missing", but it is refusal coverage: the frontier does not advance
     // past evidenced ticks on its account.
@@ -46,9 +46,9 @@ fn deferred_packets_are_refusals_not_evidence() {
 #[test]
 fn missing_tick_is_a_gap_not_silent() {
     let mut stream = CauseStream::new();
-    stream.push(CauseKind::Update, 1, Some(kind()), 1);
-    stream.push(CauseKind::Update, 1, Some(kind()), 2);
-    stream.push(CauseKind::Update, 1, Some(kind()), 4);
+    stream.push(CauseKind::Update, 1, Some(kind()), 1, None);
+    stream.push(CauseKind::Update, 1, Some(kind()), 2, None);
+    stream.push(CauseKind::Update, 1, Some(kind()), 4, None);
     let coverage = stream.coverage();
     assert_eq!(coverage.frontier, Some(4));
     assert_eq!(coverage.gaps, vec![3]);
@@ -57,9 +57,9 @@ fn missing_tick_is_a_gap_not_silent() {
 #[test]
 fn cross_kind_application_order_is_preserved() {
     let mut stream = CauseStream::new();
-    stream.push(CauseKind::Update, 1, Some(kind()), 5);
-    stream.push(CauseKind::Insert, 2, Some(kind()), 5);
-    stream.push(CauseKind::ScopePublish, 3, None, 5);
+    stream.push(CauseKind::Update, 1, Some(kind()), 5, None);
+    stream.push(CauseKind::Insert, 2, Some(kind()), 5, Some(11));
+    stream.push(CauseKind::ScopePublish, 3, None, 5, Some(21));
     // Same tick, three kinds: the stream keeps application order so a
     // reordered cause is detectable by position, not by kind grouping.
     let entries = stream.entries();
@@ -84,11 +84,11 @@ fn cross_kind_application_order_is_preserved() {
 #[test]
 fn same_tick_updates_commute_matching_ignores_position() {
     let mut first = CauseStream::new();
-    first.push(CauseKind::Update, 1, Some(kind()), 5);
-    first.push(CauseKind::Update, 2, Some(kind()), 5);
+    first.push(CauseKind::Update, 1, Some(kind()), 5, None);
+    first.push(CauseKind::Update, 2, Some(kind()), 5, None);
     let mut second = CauseStream::new();
-    second.push(CauseKind::Update, 2, Some(kind()), 5);
-    second.push(CauseKind::Update, 1, Some(kind()), 5);
+    second.push(CauseKind::Update, 2, Some(kind()), 5, None);
+    second.push(CauseKind::Update, 1, Some(kind()), 5, None);
 
     assert_eq!(identities(&first), identities(&second));
 
@@ -115,11 +115,11 @@ fn same_tick_updates_commute_matching_ignores_position() {
 #[test]
 fn insert_then_remove_is_not_remove_then_insert() {
     let mut applied = CauseStream::new();
-    applied.push(CauseKind::Insert, 1, Some(kind()), 5);
-    applied.push(CauseKind::Remove, 1, Some(kind()), 5);
+    applied.push(CauseKind::Insert, 1, Some(kind()), 5, Some(11));
+    applied.push(CauseKind::Remove, 1, Some(kind()), 5, Some(12));
     let mut reordered = CauseStream::new();
-    reordered.push(CauseKind::Remove, 1, Some(kind()), 5);
-    reordered.push(CauseKind::Insert, 1, Some(kind()), 5);
+    reordered.push(CauseKind::Remove, 1, Some(kind()), 5, Some(12));
+    reordered.push(CauseKind::Insert, 1, Some(kind()), 5, Some(11));
 
     // Same multiset: a position-blind matcher would accept the reorder...
     assert_eq!(identities(&applied), identities(&reordered));
@@ -134,8 +134,8 @@ fn insert_then_remove_is_not_remove_then_insert() {
 #[test]
 fn equal_echoes_are_both_recorded() {
     let mut stream = CauseStream::new();
-    stream.push(CauseKind::Update, 1, Some(kind()), 5);
-    stream.push(CauseKind::Update, 1, Some(kind()), 5);
+    stream.push(CauseKind::Update, 1, Some(kind()), 5, None);
+    stream.push(CauseKind::Update, 1, Some(kind()), 5, None);
     // Same identity, same tick, same position in kind grouping: still two
     // entries. An echo is data, not a duplicate to collapse.
     let entries = stream.entries();
@@ -148,9 +148,9 @@ fn equal_echoes_are_both_recorded() {
 #[test]
 fn insert_remove_are_distinct_from_update() {
     let mut stream = CauseStream::new();
-    stream.push(CauseKind::Update, 1, Some(kind()), 5);
-    stream.push(CauseKind::Insert, 1, Some(kind()), 5);
-    stream.push(CauseKind::Remove, 1, Some(kind()), 5);
+    stream.push(CauseKind::Update, 1, Some(kind()), 5, None);
+    stream.push(CauseKind::Insert, 1, Some(kind()), 5, Some(11));
+    stream.push(CauseKind::Remove, 1, Some(kind()), 5, Some(12));
     assert_eq!(
         kinds(&stream),
         vec![CauseKind::Update, CauseKind::Insert, CauseKind::Remove]
@@ -160,9 +160,9 @@ fn insert_remove_are_distinct_from_update() {
 #[test]
 fn epoch_change_distinguishes_entries() {
     let mut stream = CauseStream::new();
-    stream.push(CauseKind::Update, 1, Some(kind()), 5);
+    stream.push(CauseKind::Update, 1, Some(kind()), 5, None);
     stream.advance_generation();
-    stream.push(CauseKind::Update, 1, Some(kind()), 5);
+    stream.push(CauseKind::Update, 1, Some(kind()), 5, None);
     let entries = stream.entries();
     assert_eq!(entries.len(), 3);
     assert_eq!(entries[0].generation, 0);
@@ -174,9 +174,9 @@ fn epoch_change_distinguishes_entries() {
 #[test]
 fn old_ticks_do_not_move_frontier_back() {
     let mut stream = CauseStream::new();
-    stream.push(CauseKind::Update, 1, Some(kind()), 8);
-    stream.push(CauseKind::Update, 1, Some(kind()), 8);
-    stream.push(CauseKind::Update, 1, Some(kind()), 6);
+    stream.push(CauseKind::Update, 1, Some(kind()), 8, None);
+    stream.push(CauseKind::Update, 1, Some(kind()), 8, None);
+    stream.push(CauseKind::Update, 1, Some(kind()), 6, None);
     let coverage = stream.coverage();
     assert_eq!(coverage.frontier, Some(8));
     assert!(coverage.gaps.is_empty());
@@ -185,7 +185,7 @@ fn old_ticks_do_not_move_frontier_back() {
 #[test]
 fn quiet_tick_moves_frontier_without_gap() {
     let mut stream = CauseStream::new();
-    stream.push(CauseKind::Update, 1, Some(kind()), 5);
+    stream.push(CauseKind::Update, 1, Some(kind()), 5, None);
     // Ticks 6 and 7 serialized nothing for this observer: they are covered
     // by the send/receive tick itself, so the frontier moves with no gap.
     stream.mark_tick_covered(6);
@@ -202,7 +202,7 @@ fn quiet_tick_moves_frontier_without_gap() {
 #[test]
 fn truly_lost_tick_stays_a_gap_until_seen() {
     let mut stream = CauseStream::new();
-    stream.push(CauseKind::Update, 1, Some(kind()), 5);
+    stream.push(CauseKind::Update, 1, Some(kind()), 5, None);
     // Tick 6 never arrived (a lost packet, not a quiet tick): marking 7
     // records the hole instead of silently skipping it.
     stream.mark_tick_covered(7);
@@ -226,7 +226,7 @@ fn truly_lost_tick_stays_a_gap_until_seen() {
 fn quiet_stretch_advances_both_stream_frontiers_without_gaps() {
     // Server flavor: the send tick is marked covered per observer.
     let mut server = CauseStream::new();
-    server.push(CauseKind::Update, 1, Some(kind()), 5);
+    server.push(CauseKind::Update, 1, Some(kind()), 5, None);
     server.mark_tick_covered(6);
     server.mark_tick_covered(7);
     assert_eq!(server.coverage().frontier, Some(7));
@@ -234,7 +234,7 @@ fn quiet_stretch_advances_both_stream_frontiers_without_gaps() {
 
     // Client flavor: the same marks arrive via the observed-packet drain.
     let mut client = CauseStream::new();
-    client.push(CauseKind::Update, 1, Some(kind()), 5);
+    client.push(CauseKind::Update, 1, Some(kind()), 5, None);
     for tick in [6, 7] {
         client.mark_tick_covered(tick);
     }
@@ -245,12 +245,12 @@ fn quiet_stretch_advances_both_stream_frontiers_without_gaps() {
 #[test]
 fn late_evidence_heals_a_gap() {
     let mut stream = CauseStream::new();
-    stream.push(CauseKind::Update, 1, Some(kind()), 5);
-    stream.push(CauseKind::Update, 1, Some(kind()), 7);
+    stream.push(CauseKind::Update, 1, Some(kind()), 5, None);
+    stream.push(CauseKind::Update, 1, Some(kind()), 7, None);
     assert_eq!(stream.coverage().gaps, vec![6]);
     // Evidence for the skipped tick arrives late: the hole fills instead of
     // lingering as a gap, and the frontier stands where evidence led it.
-    stream.push(CauseKind::Update, 2, Some(kind()), 6);
+    stream.push(CauseKind::Update, 2, Some(kind()), 6, None);
     assert!(stream.coverage().gaps.is_empty());
     assert_eq!(stream.coverage().frontier, Some(7));
 }
@@ -260,7 +260,7 @@ fn bound_evicts_old_history_and_names_the_lapse() {
     let mut stream = CauseStream::new();
     stream.set_bound(Some(16));
     for tick in 0..=20u16 {
-        stream.push(CauseKind::Update, 1, Some(kind()), tick);
+        stream.push(CauseKind::Update, 1, Some(kind()), tick, None);
         stream.mark_tick_covered(tick);
     }
     let coverage = stream.coverage();
@@ -284,8 +284,8 @@ fn bound_evicts_old_history_and_names_the_lapse() {
 fn bound_clamps_long_gap_runs_and_folds_them_into_the_floor() {
     let mut stream = CauseStream::new();
     stream.set_bound(Some(16));
-    stream.push(CauseKind::Update, 1, Some(kind()), 0);
-    stream.push(CauseKind::Update, 1, Some(kind()), 40);
+    stream.push(CauseKind::Update, 1, Some(kind()), 0, None);
+    stream.push(CauseKind::Update, 1, Some(kind()), 40, None);
     stream.mark_tick_covered(40);
     let coverage = stream.coverage();
     assert_eq!(coverage.frontier, Some(40));
@@ -306,7 +306,7 @@ fn trim_runs_on_the_tick_mark_not_on_push() {
     let mut stream = CauseStream::new();
     stream.set_bound(Some(16));
     for tick in 0..=20u16 {
-        stream.push(CauseKind::Update, 1, Some(kind()), tick);
+        stream.push(CauseKind::Update, 1, Some(kind()), tick, None);
     }
     // No mark yet: pushes never trim, so all 21 entries are still held and
     // no lapse is named.
@@ -329,13 +329,13 @@ fn late_evidence_below_the_floor_is_refused() {
     let mut stream = CauseStream::new();
     stream.set_bound(Some(16));
     for tick in 0..=20u16 {
-        stream.push(CauseKind::Update, 1, Some(kind()), tick);
+        stream.push(CauseKind::Update, 1, Some(kind()), tick, None);
         stream.mark_tick_covered(tick);
     }
     assert_eq!(stream.coverage().lapsed_before, Some(4));
     let before = stream.entries().len();
-    stream.push(CauseKind::Update, 1, Some(kind()), 2);
-    stream.push(CauseKind::Deferred, 8, Some(kind()), 1);
+    stream.push(CauseKind::Update, 1, Some(kind()), 2, None);
+    stream.push(CauseKind::Deferred, 8, Some(kind()), 1, None);
     assert_eq!(stream.entries().len(), before);
     assert_eq!(stream.coverage().lapsed_before, Some(4));
     assert_eq!(stream.coverage().refusals, 0);
@@ -348,11 +348,11 @@ fn late_evidence_below_the_floor_is_refused() {
 fn refusals_are_reserved_for_deferred_markers() {
     let mut stream = CauseStream::new();
     stream.set_bound(Some(16));
-    stream.push(CauseKind::Deferred, 8, Some(kind()), 5);
+    stream.push(CauseKind::Deferred, 8, Some(kind()), 5, None);
     assert_eq!(stream.coverage().refusals, 1);
     assert_eq!(stream.coverage().lapsed_before, None);
     for tick in 6..=30u16 {
-        stream.push(CauseKind::Update, 1, Some(kind()), tick);
+        stream.push(CauseKind::Update, 1, Some(kind()), tick, None);
         stream.mark_tick_covered(tick);
     }
     // Eviction moved the floor; the refusal count still holds only the one

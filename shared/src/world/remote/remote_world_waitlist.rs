@@ -13,13 +13,23 @@ use crate::{
         remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistHandle, WaitlistStore},
     },
     ComponentFieldUpdate, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter,
-    LocalEntityAndGlobalEntityConverter, OwnedLocalEntity, PendingComponentUpdate, RemoteEntity,
-    Replicate, Tick, WorldMutType,
+    LocalEntityAndGlobalEntityConverter, MessageIndex, OwnedLocalEntity, PendingComponentUpdate,
+    RemoteEntity, Replicate, Tick, WorldMutType,
 };
+
+/// One insert leaving the waitlist: the wire id and tick it rode in on, the
+/// entity, its kind, and the component payload.
+type WaitlistedInsert = (
+    MessageIndex,
+    Tick,
+    RemoteEntity,
+    ComponentKind,
+    Box<dyn Replicate>,
+);
 
 pub struct RemoteWorldWaitlist {
     entity_waitlist: RemoteEntityWaitlist,
-    insert_waitlist_store: WaitlistStore<(Tick, RemoteEntity, Box<dyn Replicate>)>,
+    insert_waitlist_store: WaitlistStore<(MessageIndex, Tick, RemoteEntity, Box<dyn Replicate>)>,
     insert_waitlist_map: HashMap<(RemoteEntity, ComponentKind), WaitlistHandle>,
     update_waitlist_store: WaitlistStore<(Tick, RemoteEntity, ComponentKind, ComponentFieldUpdate)>,
     update_waitlist_map: HashMap<(RemoteEntity, ComponentKind), HashMap<u8, WaitlistHandle>>,
@@ -56,10 +66,14 @@ impl RemoteWorldWaitlist {
         &mut self.entity_waitlist
     }
 
+    /// Eight params mirror the waitlist enqueue context 1:1; bundling them
+    /// would churn the insert path's call sites for style alone.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn waitlist_queue_entity(
         &mut self,
         in_scope_entities: &dyn InScopeEntities<RemoteEntity>,
         entity: RemoteEntity,
+        command_id: MessageIndex,
         tick: Tick,
         component: Box<dyn Replicate>,
         component_kind: ComponentKind,
@@ -69,7 +83,7 @@ impl RemoteWorldWaitlist {
             in_scope_entities,
             entity_set,
             &mut self.insert_waitlist_store,
-            (tick, entity, component),
+            (command_id, tick, entity, component),
         );
 
         self.insert_waitlist_map
@@ -80,13 +94,13 @@ impl RemoteWorldWaitlist {
         &mut self,
         now: &Instant,
         local_converter: &dyn LocalEntityAndGlobalEntityConverter,
-    ) -> Vec<(Tick, RemoteEntity, ComponentKind, Box<dyn Replicate>)> {
+    ) -> Vec<WaitlistedInsert> {
         let mut output = Vec::new();
         if let Some(list) = self
             .entity_waitlist
             .collect_ready_items(now, &mut self.insert_waitlist_store)
         {
-            for (tick, global_entity, mut component) in list {
+            for (command_id, tick, global_entity, mut component) in list {
                 let component_kind = component.kind();
 
                 // let name = component.name();
@@ -107,7 +121,7 @@ impl RemoteWorldWaitlist {
                     }
                 }
 
-                output.push((tick, global_entity, component_kind, component));
+                output.push((command_id, tick, global_entity, component_kind, component));
             }
         }
 
@@ -622,6 +636,7 @@ mod remote_world_waitlist_tests {
         waitlist.waitlist_queue_entity(
             &scope,
             target,
+            7,
             1,
             crate::world::test_world::remote_component(&kinds(), &Ghost::new_complete(5)),
             ghost(),
@@ -640,9 +655,10 @@ mod remote_world_waitlist_tests {
 
         let released = waitlist.entities_to_insert(&Instant::now(), &map);
         assert_eq!(released.len(), 1, "the spawn must release it");
-        assert_eq!(released[0].0, 1, "the tick must survive the waitlist");
-        assert_eq!(released[0].1, target, "released against its own entity");
-        assert_eq!(released[0].2, ghost());
+        assert_eq!(released[0].0, 7, "the wire id must survive the waitlist");
+        assert_eq!(released[0].1, 1, "the tick must survive the waitlist");
+        assert_eq!(released[0].2, target, "released against its own entity");
+        assert_eq!(released[0].3, ghost());
 
         assert!(
             waitlist
@@ -667,6 +683,7 @@ mod remote_world_waitlist_tests {
         waitlist.waitlist_queue_entity(
             &scope,
             target,
+            7,
             1,
             crate::world::test_world::remote_component(&kinds(), &Ghost::new_complete(5)),
             ghost(),
@@ -905,6 +922,7 @@ mod remote_world_waitlist_tests {
         waitlist.waitlist_queue_entity(
             &scope,
             target,
+            7,
             1,
             crate::world::test_world::remote_component(&kinds(), &Ghost::new_complete(5)),
             ghost(),

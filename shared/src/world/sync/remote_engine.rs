@@ -46,7 +46,7 @@ pub struct RemoteEngine<E: Copy + Hash + Eq + Debug> {
     pub config: EngineConfig,
     entity_channels: HashMap<E, RemoteEntityChannel>,
 
-    incoming_events: Vec<(Tick, EntityMessage<E>)>,
+    incoming_events: Vec<(MessageIndex, Tick, EntityMessage<E>)>,
     outgoing_commands: Vec<EntityCommand>,
 }
 
@@ -64,7 +64,7 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
     /// Atomically swaps out `outgoing_events`, giving the caller a Vec that
     /// *is already topologically ordered across entities*; apply each event
     /// in sequence and discard.
-    pub(crate) fn take_incoming_events(&mut self) -> Vec<(Tick, EntityMessage<E>)> {
+    pub(crate) fn take_incoming_events(&mut self) -> Vec<(MessageIndex, Tick, EntityMessage<E>)> {
         std::mem::take(&mut self.incoming_events)
     }
 

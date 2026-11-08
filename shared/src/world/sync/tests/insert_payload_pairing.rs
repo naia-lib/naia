@@ -93,7 +93,7 @@ impl PairingDriver {
     fn drain_and_check(&mut self, probe: &str) {
         println!("pairing probe running: {probe}");
         let out = self.engine.take_incoming_events();
-        for (tick, message) in &out {
+        for (_, tick, message) in &out {
             if let EntityMessage::InsertComponent(entity, kind) = message {
                 let key = (*tick, entity.value(), *kind);
                 let position = self.payloads.iter().position(|entry| *entry == key);
