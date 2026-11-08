@@ -138,6 +138,7 @@ checks = [
     "test:naia-test-harness:pipeline_recv_send_independent",
     "test:naia-test-harness:pipelined_admission",
     "test:naia-test-harness:preapply_messages",
+    "test:naia-test-harness:quiet_evidence_both_frontiers",
     "test:naia-test-harness:quiet_request_response_after_idle",
     "test:naia-test-harness:quiet_tick_progress",
     "test:naia-test-harness:replicated_resources",
@@ -685,6 +686,10 @@ argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "quiet_request_res
 [[leg]]
 checks = ["test:naia-test-harness:quiet_tick_progress"]
 argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "quiet_tick_progress", "--features", "deterministic", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:quiet_evidence_both_frontiers"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "quiet_evidence_both_frontiers", "--features", "deterministic", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-test-harness:replicated_resources"]
@@ -1418,6 +1423,10 @@ to = "test:naia-test-harness:quiet_tick_progress"
 
 [[edge]]
 from = "test/harness/"
+to = "test:naia-test-harness:quiet_evidence_both_frontiers"
+
+[[edge]]
+from = "test/harness/"
 to = "test:naia-test-harness:replicated_resources"
 
 [[edge]]
@@ -1720,6 +1729,7 @@ checks = [
     "test:naia-test-harness:pipelined_admission",
     "test:naia-test-harness:pipeline_recv_send_independent",
     "test:naia-test-harness:preapply_messages",
+    "test:naia-test-harness:quiet_evidence_both_frontiers",
     "test:naia-test-harness:quiet_request_response_after_idle",
     "test:naia-test-harness:quiet_tick_progress",
     "test:naia-test-harness:replicated_resources",
