@@ -13,8 +13,6 @@
 
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr, sync::Arc};
 
-use log::warn;
-
 use naia_shared::{
     BaseSendConnection, BitReader, BitWriter, CauseKind, ChannelKinds, ComponentKind,
     ComponentKinds, ConnectionVisibilityBitset, EntityAndGlobalEntityConverter, EntityCommand,
@@ -55,7 +53,6 @@ pub mod send_pass_walls {
 #[cfg(feature = "bench_instrumentation")]
 use crate::connection::connection::bench_send_counters;
 use crate::{
-    connection::io::SendIo,
     events::WorldEvents,
     request::{GlobalRequestManager, GlobalResponseManager},
     server::connection_shared::ConnectionShared,
@@ -263,213 +260,6 @@ impl SendConnection {
         }
     }
 
-    /// Outgoing data path. `rtt_millis` is supplied by the caller (reads
-    /// from the matching `RecvConnection.ping_manager.rtt_average` while
-    /// the connection is still on the same thread; in pipeline mode the
-    /// recv path publishes RTT into `ConnectionShared` for the send
-    /// thread to read).
-    #[allow(clippy::too_many_arguments)]
-    pub fn send_packets<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
-        &mut self,
-        channel_kinds: &ChannelKinds,
-        message_kinds: &MessageKinds,
-        component_kinds: &ComponentKinds,
-        now: &naia_shared::Instant,
-        io: &mut SendIo,
-        world: &W,
-        converter: &dyn EntityAndGlobalEntityConverter<E>,
-        global_world_manager: &GlobalWorldManager,
-        time_manager: &TimeManager,
-        rtt_millis: f32,
-        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
-        snapshot_map: &SnapshotMap,
-    ) {
-        #[cfg(feature = "bench_instrumentation")]
-        let t = std::time::Instant::now();
-        self.base.collect_messages(now, rtt_millis);
-        #[cfg(feature = "bench_instrumentation")]
-        bench_send_counters::NS_COLLECT_MESSAGES.fetch_add(
-            t.elapsed().as_nanos() as u64,
-            std::sync::atomic::Ordering::Relaxed,
-        );
-
-        // Collect outgoing entity commands only. Update events are pre-built by the
-        // three-phase Iris loop in InternalWorldServer::send_all_packets and passed in directly.
-        #[cfg(feature = "bench_instrumentation")]
-        let t = std::time::Instant::now();
-        let mut host_world_events = self
-            .base
-            .world_manager
-            .take_outgoing_commands(now, rtt_millis);
-        #[cfg(feature = "bench_instrumentation")]
-        bench_send_counters::NS_TAKE_OUTGOING_EVENTS.fetch_add(
-            t.elapsed().as_nanos() as u64,
-            std::sync::atomic::Ordering::Relaxed,
-        );
-        #[cfg(feature = "e2e_debug")]
-        {
-            use crate::server::world_server::{
-                SERVER_OUTGOING_CMDS_DRAINED_TOTAL, SERVER_WORLD_MSGS_DRAINED,
-            };
-            let total_drained = host_world_events.len();
-            if total_drained > 0 {
-                SERVER_OUTGOING_CMDS_DRAINED_TOTAL.fetch_add(total_drained, Ordering::Relaxed);
-                SERVER_WORLD_MSGS_DRAINED.fetch_add(total_drained, Ordering::Relaxed);
-            }
-        }
-
-        self.base.accumulate_bandwidth(now);
-
-        #[cfg(feature = "bench_instrumentation")]
-        let t = std::time::Instant::now();
-        let mut any_sent = false;
-        loop {
-            if self.send_packet(
-                channel_kinds,
-                message_kinds,
-                component_kinds,
-                now,
-                io,
-                world,
-                converter,
-                global_world_manager,
-                time_manager,
-                &mut host_world_events,
-                update_list,
-                snapshot_map,
-            ) {
-                any_sent = true;
-            } else {
-                break;
-            }
-        }
-        if any_sent {
-            self.base.mark_sent();
-        }
-        #[cfg(feature = "bench_instrumentation")]
-        bench_send_counters::NS_SEND_PACKET_LOOP.fetch_add(
-            t.elapsed().as_nanos() as u64,
-            std::sync::atomic::Ordering::Relaxed,
-        );
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn send_packet<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
-        &mut self,
-        channel_kinds: &ChannelKinds,
-        message_kinds: &MessageKinds,
-        component_kinds: &ComponentKinds,
-        now: &naia_shared::Instant,
-        io: &mut SendIo,
-        world: &W,
-        entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
-        global_world_manager: &GlobalWorldManager,
-        time_manager: &TimeManager,
-        host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
-        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
-        snapshot_map: &SnapshotMap,
-    ) -> bool {
-        let has_messages = self.base.message_manager.has_outgoing_messages();
-        let has_events = !host_world_events.is_empty() || !update_list.is_empty();
-
-        let needs_ack_only = self.base.take_should_send_empty_ack();
-
-        if needs_ack_only && !has_messages && !has_events {
-            let mut writer = BitWriter::new();
-            writer.reserve_bits(3);
-
-            let _header = self.write_header(PacketType::Data, &mut writer);
-
-            let tick = time_manager.current_tick();
-            tick.ser(&mut writer);
-            time_manager.current_tick_instant().ser(&mut writer);
-
-            false.ser(&mut writer);
-            false.ser(&mut writer);
-            false.ser(&mut writer);
-            self.last_data_tick = Some(tick);
-
-            let addr = self.address;
-            self.shared.note_outbound_packet();
-            if io.send_packet(&addr, &writer.to_packet()).is_err() {
-                warn!("Server Error: Cannot send ACK-only packet to {}", addr);
-            } else {
-                #[cfg(feature = "e2e_debug")]
-                {
-                    SERVER_TX_FRAMES.fetch_add(1, Ordering::Relaxed);
-                }
-            }
-
-            return false;
-        }
-
-        let needs_tick_boundary = self.last_data_tick != Some(time_manager.current_tick());
-        if has_events || has_messages || needs_tick_boundary {
-            if !self
-                .base
-                .can_spend_bandwidth(u32::try_from(MTU_SIZE_BYTES).expect("MTU size fits in u32"))
-            {
-                self.base.record_bandwidth_deferred();
-                return false;
-            }
-
-            #[cfg(feature = "bench_instrumentation")]
-            let t_write = std::time::Instant::now();
-            // The immediate send path has no transmit job to fold command
-            // evidence into, so its evidence is dropped: the transmit job in
-            // `send_state` is the journaling path.
-            let (writer, _) = self.write_packet(
-                channel_kinds,
-                message_kinds,
-                component_kinds,
-                now,
-                world,
-                entity_converter,
-                global_world_manager,
-                time_manager,
-                host_world_events,
-                update_list,
-                snapshot_map,
-            );
-            #[cfg(feature = "bench_instrumentation")]
-            bench_send_counters::NS_WRITE_PACKET.fetch_add(
-                t_write.elapsed().as_nanos() as u64,
-                std::sync::atomic::Ordering::Relaxed,
-            );
-
-            let packet = writer.to_packet();
-            let packet_bytes =
-                u32::try_from(packet.slice().len()).expect("packet length fits in u32");
-            #[cfg(feature = "bench_instrumentation")]
-            let t_io = std::time::Instant::now();
-            let addr = self.address;
-            self.shared.note_outbound_packet();
-            if io.send_packet(&addr, &packet).is_err() {
-                warn!("Server Error: Cannot send data packet to {}", addr);
-            } else {
-                self.base.spend_bandwidth(packet_bytes);
-                #[cfg(feature = "bench_instrumentation")]
-                bench_send_counters::N_PACKETS_SENT
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                #[cfg(feature = "e2e_debug")]
-                {
-                    SERVER_TX_FRAMES.fetch_add(1, Ordering::Relaxed);
-                    use crate::server::world_server::SERVER_WORLD_PKTS_SENT;
-                    SERVER_WORLD_PKTS_SENT.fetch_add(1, Ordering::Relaxed);
-                }
-            }
-            #[cfg(feature = "bench_instrumentation")]
-            bench_send_counters::NS_IO_SEND.fetch_add(
-                t_io.elapsed().as_nanos() as u64,
-                std::sync::atomic::Ordering::Relaxed,
-            );
-
-            return true;
-        }
-
-        false
-    }
-
     #[allow(clippy::too_many_arguments)]
     fn write_packet<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
@@ -580,9 +370,11 @@ impl SendConnection {
         (writer, command_evidence)
     }
 
-    /// IO-free variant of `send_packets`. Builds all outgoing packets for this
-    /// connection without sending them. Returns `(packets, any_built)`.
-    /// `rtt_millis` is supplied by the caller (see `send_packets`).
+    /// IO-free variant of the transmit path. Builds all outgoing packets for
+    /// this connection without sending them. Returns `(packets, any_built)`.
+    /// This is the sole server send path: every server packet is built here,
+    /// so command evidence is always journaled (see `transmit_send_job`).
+    /// `rtt_millis` is supplied by the caller (see `transmit_send_job`).
     ///
     /// # Why the packet count is bounded per pass
     ///
