@@ -11,6 +11,12 @@
 //!   [`CauseKind::Deferred`] refusal markers, never evidence.
 //! - Same-tick server send order is priority-commuted (the scored sort), so
 //!   each entry carries its `order_index` in the serialized/applied sequence.
+//! - Declared commutation (acceptance 8106884b): same-tick entries commute.
+//!   Their relative order is the sender's scored order, never causal order,
+//!   so matching compares the per-tick `(kind, identity, generation)`
+//!   multiset, never position. `order_index` only distinguishes repeated
+//!   same-identity entries (echoes are data, never collapsed). Cross-tick
+//!   order follows the tick, within the u16 wrap rule above.
 //! - Ticks are `u16` and wrap; forward movement is judged within half the
 //!   range. Old or ambiguous ticks never move the frontier back.
 //! - `generation` is journal-owned, starting at 0 (one known world lifetime

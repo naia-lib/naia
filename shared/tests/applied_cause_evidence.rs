@@ -67,6 +67,36 @@ fn cross_kind_application_order_is_preserved() {
     );
 }
 
+/// The declared commutation (acceptance 8106884b): same-tick send order is
+/// the scorer's priority commute, never causal order, so matching compares
+/// the per-tick identity multiset, never position. The same set pushed in
+/// two orders must present the same identities with different positions: the
+/// stream must not canonicalize order, and `order_index` is positional only.
+#[test]
+fn same_tick_entries_commute_matching_ignores_position() {
+    let mut first = CauseStream::new();
+    first.push(CauseKind::Update, 1, Some(kind()), 5);
+    first.push(CauseKind::Insert, 2, Some(kind()), 5);
+    let mut second = CauseStream::new();
+    second.push(CauseKind::Insert, 2, Some(kind()), 5);
+    second.push(CauseKind::Update, 1, Some(kind()), 5);
+
+    fn identities(stream: &CauseStream<u32>) -> Vec<String> {
+        let mut ids: Vec<String> = stream
+            .entries()
+            .iter()
+            .map(|entry| format!("{:?}:{:?}", entry.kind(), entry.identity()))
+            .collect();
+        ids.sort();
+        ids
+    }
+    assert_eq!(identities(&first), identities(&second));
+
+    // ... while the two pushes genuinely landed in different positions, so a
+    // position-sensitive matcher would see the difference this rule forbids.
+    assert_ne!(kinds(&first), kinds(&second));
+}
+
 #[test]
 fn equal_echoes_are_both_recorded() {
     let mut stream = CauseStream::new();
