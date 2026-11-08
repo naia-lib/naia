@@ -130,6 +130,11 @@ path = "contract_tests/integration_only/quiet_tick_progress.rs"
 required-features = ["deterministic"]
 
 [[test]]
+name = "evidence_opt_in_bound"
+path = "contract_tests/integration_only/evidence_opt_in_bound.rs"
+required-features = ["deterministic"]
+
+[[test]]
 name = "quiet_evidence_both_frontiers"
 path = "contract_tests/integration_only/quiet_evidence_both_frontiers.rs"
 required-features = ["deterministic"]

@@ -190,3 +190,41 @@ fn late_evidence_heals_a_gap() {
     assert!(stream.coverage().gaps.is_empty());
     assert_eq!(stream.coverage().frontier, Some(7));
 }
+
+#[test]
+fn bound_evicts_old_history_and_declares_lapse() {
+    let mut stream = CauseStream::new();
+    stream.set_bound(Some(16));
+    for tick in 0..=20u16 {
+        stream.push(CauseKind::Update, 1, Some(kind()), tick);
+    }
+    let coverage = stream.coverage();
+    // The frontier keeps advancing: the bound cuts history, never the edge.
+    assert_eq!(coverage.frontier, Some(20));
+    // Ticks 0..=3 lapsed: exactly the window behind the frontier is retained.
+    assert_eq!(stream.entries().len(), 17);
+    // The lapse is declared as refusals, never silent.
+    assert!(coverage.refusals >= 1);
+    // No retained entry or gap is older than the window.
+    assert!(stream
+        .entries()
+        .iter()
+        .all(|e| 20u16.wrapping_sub(e.identity().tick) <= 16));
+    assert!(coverage.gaps.iter().all(|&g| 20u16.wrapping_sub(g) <= 16));
+}
+
+#[test]
+fn bound_clamps_long_gap_runs_and_declares_lapse() {
+    let mut stream = CauseStream::new();
+    stream.set_bound(Some(16));
+    stream.push(CauseKind::Update, 1, Some(kind()), 0);
+    stream.push(CauseKind::Update, 1, Some(kind()), 40);
+    let coverage = stream.coverage();
+    assert_eq!(coverage.frontier, Some(40));
+    // Only the frontier tick's evidence is retained; the gap run is clamped
+    // to the window and the evicted history is declared, never silent.
+    assert_eq!(stream.entries().len(), 1);
+    assert!(coverage.gaps.len() <= 16);
+    assert!(coverage.gaps.iter().all(|&g| 40u16.wrapping_sub(g) <= 16));
+    assert!(coverage.refusals >= 1);
+}

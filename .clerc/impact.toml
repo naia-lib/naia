@@ -120,6 +120,7 @@ checks = [
     "test:naia-socket-shared:naia_socket_shared",
     "test:naia-spec-tool:naia-spec-tool",
     "test:naia-test-harness:12_reconnect_cancel",
+    "test:naia-test-harness:evidence_opt_in_bound",
     "test:naia-test-harness:g8_real_ack_byte_identity",
     "test:naia-test-harness:g9pre_resident_pipelined_byte_identity",
     "test:naia-test-harness:integration_only_00_common",
@@ -602,6 +603,10 @@ argv = ["cargo", "test", "-p", "naia-socket-shared", "--lib", "--no-fail-fast"]
 [[leg]]
 checks = ["test:naia-spec-tool:naia-spec-tool"]
 argv = ["cargo", "test", "-p", "naia-spec-tool", "--bin", "naia-spec-tool", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:evidence_opt_in_bound"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "evidence_opt_in_bound", "--features", "deterministic", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-test-harness:12_reconnect_cancel"]
@@ -1343,6 +1348,10 @@ to = "test:naia-test-harness:12_reconnect_cancel"
 
 [[edge]]
 from = "test/harness/"
+to = "test:naia-test-harness:evidence_opt_in_bound"
+
+[[edge]]
+from = "test/harness/"
 to = "test:naia-test-harness:g8_real_ack_byte_identity"
 
 [[edge]]
@@ -1713,6 +1722,7 @@ checks = [
     "test:naia-socket-shared:naia_socket_shared",
     "test:naia-spec-tool:naia-spec-tool",
     "test:naia-test-harness:12_reconnect_cancel",
+    "test:naia-test-harness:evidence_opt_in_bound",
     "test:naia-test-harness:g8_real_ack_byte_identity",
     "test:naia-test-harness:g9pre_resident_pipelined_byte_identity",
     "test:naia-test-harness:integration_only_00_common",
