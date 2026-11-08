@@ -1222,8 +1222,10 @@ mod remote_world_manager_tests {
         );
 
         // Scope re-entry rides tick 9 alone: the stamp must be 9 even
-        // though the last applied entity tick is older.
-        let events = fixture.deliver(vec![(9, EntityMessage::Publish(0, remote(1)))]);
+        // though the last applied entity tick is older. Sub-command id 1:
+        // the auth receiver sequences sub-commands per entity, so a
+        // second sub-id 0 would park behind the Unpublish above.
+        let events = fixture.deliver(vec![(9, EntityMessage::Publish(1, remote(1)))]);
         assert_eq!(events.len(), 1, "publish must raise exactly one event");
         assert!(
             matches!(&events[0], EntityEvent::Publish(9, entity) if *entity == global_1),
