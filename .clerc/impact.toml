@@ -199,7 +199,7 @@ argv = ["cargo", "check", "--workspace", "--all-targets", "--keep-going"]
 checks = ["lint:public-paths"]
 required_argv = [
   ["cargo", "build", "-p", "naia-ci-checks", "--bin", "check_no_escaping_path_deps"],
-  ["target/debug/check_no_escaping_path_deps", "--root", "."],
+  ["cargo", "run", "-p", "naia-ci-checks", "--bin", "check_no_escaping_path_deps", "--", "--root", "."],
 ]
 credit_scope = "tree"
 
