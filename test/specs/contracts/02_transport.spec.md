@@ -132,6 +132,11 @@ The following was deliberately removed from this repo and MUST NOT be reintroduc
   sibling path deps must never reach naia `dev`/`main`. Demonstrated by the
   native `lint:public-paths` gate-leg on `21d82b98`
   (`socket/client/Cargo.toml:39 escapes repo`, R0 stops the climb).
+  Leg expression (Ziph 187664): explicit build-then-exec in
+  `.clerc/impact.toml` — the single-`cargo run` form retained a vacuous
+  exit-0 receipt under the shim's intended run→build normalization
+  (Wesley 187651), fencing resubmit on a drifted binding; the check
+  itself is unchanged.
 - **Interim:** Kepler 2026-10-29 (pending Connor's final ruling) supersedes
   only the 7zv "no re-vendor" clause: the sibling pin `15f7f85` is consumed
   as the byte-exact vendor copy again, with zero local deltas. RESOLVED by
