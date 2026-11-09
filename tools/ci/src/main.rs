@@ -7,6 +7,7 @@
 //! for those consumers.
 //!
 //! Usage: cargo run -p naia-ci-checks --bin check_no_escaping_path_deps [-- --root DIR]
+//! Run from the repo root; without --root the working directory is the root.
 //! Exit 0 when clean, 1 listing every escaping dep otherwise; a manifest that
 //! cannot be read or parsed also exits 1, with the reason on stderr.
 //! Std only. Pattern-based, not a TOML parser: manifests are machine-written
@@ -41,13 +42,23 @@ struct Report {
 }
 
 fn run(args: Vec<String>) -> Result<Report, String> {
+    let cwd =
+        env::current_dir().map_err(|error| format!("cannot read working directory: {error}"))?;
+    run_at(args, &cwd)
+}
+
+fn run_at(args: Vec<String>, cwd: &Path) -> Result<Report, String> {
     let root = match args.iter().position(|arg| arg == "--root") {
         Some(index) => PathBuf::from(
             args.get(index + 1)
                 .ok_or("--root needs a directory argument")?,
         ),
-        // tools/ci -> the repo root.
-        None => Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+        // The repo root is the caller's working directory: every
+        // invocation context (dev shell, release process, gate leg,
+        // executor) runs the check from the tree it means to check.
+        // CARGO_MANIFEST_DIR is compile-time and wrong in any
+        // materialized/warm target (Ziph 187782).
+        None => cwd.to_path_buf(),
     };
     let root = resolve(&root);
     check(&root)
@@ -383,6 +394,32 @@ mod tests {
     #[test]
     fn root_flag_needs_a_value() {
         assert!(run(vec!["--root".to_string()]).is_err());
+    }
+
+    #[test]
+    fn default_root_is_the_calling_directory() {
+        let s = Scratch::new();
+        s.write("Cargo.toml", ROOT);
+        s.write("a/Cargo.toml", "[dependencies]\nb = { path = \"../b\" }\n");
+        s.write("b/Cargo.toml", "[dependencies]\n");
+        assert!(run_at(vec![], &s.0).unwrap().clean);
+        let empty = Scratch::new();
+        assert!(run_at(vec![], &empty.0).is_err());
+    }
+
+    #[test]
+    fn explicit_root_overrides_the_calling_directory() {
+        let cwd = Scratch::new();
+        let s = Scratch::new();
+        s.write("Cargo.toml", ROOT);
+        s.write("a/Cargo.toml", "[dependencies]\n");
+        s.write("b/Cargo.toml", "[dependencies]\n");
+        let report = run_at(
+            vec!["--root".to_string(), s.0.to_str().unwrap().to_string()],
+            &cwd.0,
+        )
+        .unwrap();
+        assert!(report.clean);
     }
 
     #[test]
