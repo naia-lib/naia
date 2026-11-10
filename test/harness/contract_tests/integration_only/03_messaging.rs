@@ -282,7 +282,7 @@ fn messaging_16_reliable_fragmentation_allowed() {
 }
 
 /// Reliable channels fragment large REQUEST and RESPONSE payloads end-to-end
-/// Contract: [messaging-16]
+/// Contract: [messaging-16b]
 ///
 /// Given a `RequestResponseChannel` (UnorderedReliable); when a client sends a
 /// request whose serialised body exceeds the MTU (~430 bytes) and the server
@@ -570,17 +570,16 @@ fn messaging_19_entity_property_ttl() {
             server.send_message::<ReliableChannel, _>(&client_a_key, &cmd);
         })
     });
-    scenario.until(200.ticks()).spec_expect(
-        "messaging-19.t2: control message for in-scope entity is delivered",
-        |ctx| {
-            let msgs = ctx.client(client_a_key, |client| {
-                client
-                    .read_message::<ReliableChannel, EntityCommandMessage>()
-                    .collect::<Vec<_>>()
-            });
-            (!msgs.is_empty()).then_some(())
-        },
-    );
+    // Control leg, untagged: no spec row names live delivery of a fresh
+    // in-scope command (spec gap, see card).
+    scenario.until(200.ticks()).expect(|ctx| {
+        let msgs = ctx.client(client_a_key, |client| {
+            client
+                .read_message::<ReliableChannel, EntityCommandMessage>()
+                .collect::<Vec<_>>()
+        });
+        (!msgs.is_empty()).then_some(())
+    });
 }
 
 /// EntityProperty message buffering enforces capacity caps
@@ -882,7 +881,7 @@ fn matched_protocol_id_enables_successful_messaging() {
 }
 
 /// Request timeouts are surfaced and cleaned up
-/// Contract: [messaging-05]
+/// Contract: [messaging-23]
 ///
 /// Given client sends request R; when server never replies and timeout elapses;
 /// then client surfaces a timeout result for R, releases tracking, and does not leak resources.
@@ -949,7 +948,7 @@ fn request_timeouts_are_surfaced_and_cleaned_up() {
 }
 
 /// Requests fail cleanly on disconnect mid-flight
-/// Contract: [messaging-05]
+/// Contract: [messaging-24]
 ///
 /// Given in-flight request R from client; when connection drops before response;
 /// then both sides eventually mark R failed/cancelled, do not leak state, and ignore any late response for R after reconnect.
@@ -1084,7 +1083,8 @@ fn unordered_unreliable_channel_shows_best_effort_semantics() {
 }
 
 /// Multi-type mapping across messages, components, and channels
-/// Contract: [messaging-07], [messaging-08], [messaging-09]
+/// Contract: none — correct type-on-correct-channel routing with no
+/// cross-channel contamination names no spec row (spec gap, see card).
 ///
 /// Given protocol with multiple message types on multiple channels and multiple component types;
 /// when server/client exchange mixed messages and entity updates;
@@ -1261,7 +1261,7 @@ fn sequenced_unreliable_channel_discards_late_outdated_updates() {
 }
 
 /// SequencedUnreliable discards updates that arrive late
-/// Contract: [messaging-11]
+/// Contract: [messaging-07]
 ///
 /// Given a SequencedUnreliable channel; when an older update is held on the
 /// wire (512ms-virtual conditioner hold) so a newer update overtakes it; then
@@ -1360,7 +1360,7 @@ fn sequenced_unreliable_channel_discards_late_update() {
 }
 
 /// Client-to-server request yields exactly one response
-/// Contract: [messaging-08]
+/// Contract: [messaging-22]
 ///
 /// Given typed request/response; when client sends request R with ID and server processes it;
 /// then client eventually observes exactly one matching response for that ID, even under packet duplication.
@@ -1393,7 +1393,7 @@ fn client_to_server_request_yields_exactly_one_response() {
 
     // Server receives request and sends response
     let response_id = scenario.expect_msg(
-        "messaging-08.pre: server receives request reliably",
+        "messaging-22.pre: server receives request reliably",
         |ctx| {
             ctx.server(|server| {
                 for (client_key, response_id, request) in
@@ -1417,7 +1417,7 @@ fn client_to_server_request_yields_exactly_one_response() {
 
     // Wait for client to receive the response (must use expect to wait for network propagation)
     scenario.expect_msg(
-        "messaging-08.t1: client observes exactly one response",
+        "messaging-22.t1: client observes exactly one matching response",
         |ctx| {
             ctx.client(client_a_key, |c| {
                 // Check if response is available - expect will retry until it is
@@ -1439,7 +1439,7 @@ fn client_to_server_request_yields_exactly_one_response() {
 }
 
 /// Concurrent requests from multiple clients stay isolated per client
-/// Contract: [messaging-08]
+/// Contract: [messaging-21], [messaging-22]
 ///
 /// Given multiple clients issuing overlapping request IDs (e.g., each uses 0,1,2); when server handles all and responds;
 /// then each client only sees responses to its own requests and no response is misrouted to another client.
@@ -1564,7 +1564,7 @@ fn concurrent_requests_from_multiple_clients_stay_isolated_per_client() {
 }
 
 /// Many concurrent requests from a single client remain distinct
-/// Contract: [messaging-08]
+/// Contract: [messaging-22]
 ///
 /// Given one client issuing many concurrent requests; when server processes them in arbitrary order and replies out-of-order;
 /// then client gets exactly one response per request and correctly matches responses to original requests without collisions.
@@ -1657,7 +1657,7 @@ fn many_concurrent_requests_from_a_single_client_remain_distinct() {
 }
 
 /// Reliable point-to-point request/response
-/// Contract: [messaging-08]
+/// Contract: [messaging-22]
 ///
 /// Given A connected and server listening for request type; when A sends a reliable request and server replies reliably only to A;
 /// then A sees exactly one response after its request, no other client sees it, and from A's perspective response comes after its request.
@@ -1834,7 +1834,7 @@ fn reliable_server_to_clients_broadcast_respects_rooms() {
 }
 
 /// Response completion order is well-defined and documented
-/// Contract: [messaging-08]
+/// Contract: [messaging-22]
 ///
 /// Given multiple requests from one client completed in a different order than they were sent; when client observes responses;
 /// then they arrive in the order promised by the contract (e.g., completion order), and the test forces a send-order/completion-order mismatch to verify behavior.
@@ -1933,7 +1933,7 @@ fn response_completion_order_is_well_defined_and_documented() {
 }
 
 /// Server-to-client request yields exactly one response
-/// Contract: [messaging-08]
+/// Contract: [messaging-22]
 ///
 /// Given server sending requests to client; when server sends request Q and client replies;
 /// then server observes exactly one matching response for Q with no duplicates even if packets duplicate.
@@ -2055,7 +2055,7 @@ fn unordered_reliable_channel_delivers_all_messages_but_in_arbitrary_order() {
 }
 
 /// Ordered reliable channel ignores duplicated packets
-/// Contract: [messaging-09], [messaging-17]
+/// Contract: [messaging-09]
 ///
 /// Given ordered reliable channel; when transport duplicates packets for A,B;
 /// then client still surfaces exactly one A and one B in order with no duplicates.
@@ -2311,7 +2311,8 @@ fn serialization_failures_are_surfaced_without_poisoning_the_connection() {
 }
 
 /// Channel separation for different message types
-/// Contract: [messaging-12], [messaging-13], [messaging-14]
+/// Contract: none — per-channel API separation with no cross-contamination
+/// names no spec row (spec gap, see card).
 ///
 /// Given messages bound to ChannelA vs ChannelB; when server sends A1,A2 on A and B1,B2 on B;
 /// then client observes A1,A2 only through ChannelA API and B1,B2 only through ChannelB API.
@@ -2347,30 +2348,34 @@ fn channel_separation_for_different_message_types() {
     });
 
     // Verify client receives messages on correct channels only
-    scenario.expect_msg("messaging-12.t1: channel separation maintained", |ctx| {
-        let reliable_messages: Vec<u32> = ctx.client(client_a_key, |c| {
-            c.read_message::<ReliableChannel, TestMessage>()
-                .map(|m| m.value)
-                .collect()
-        });
-        let ordered_messages: Vec<u32> = ctx.client(client_a_key, |c| {
-            c.read_message::<OrderedChannel, TestMessage>()
-                .map(|m| m.value)
-                .collect()
-        });
+    scenario.expect_msg(
+        "channel separation maintained (untagged: no spec row, see card)",
+        |ctx| {
+            let reliable_messages: Vec<u32> = ctx.client(client_a_key, |c| {
+                c.read_message::<ReliableChannel, TestMessage>()
+                    .map(|m| m.value)
+                    .collect()
+            });
+            let ordered_messages: Vec<u32> = ctx.client(client_a_key, |c| {
+                c.read_message::<OrderedChannel, TestMessage>()
+                    .map(|m| m.value)
+                    .collect()
+            });
 
-        // ReliableChannel should have 1, 2
-        let reliable_correct = reliable_messages.contains(&1) && reliable_messages.contains(&2);
-        // OrderedChannel should have 10, 20
-        let ordered_correct = ordered_messages.contains(&10) && ordered_messages.contains(&20);
+            // ReliableChannel should have 1, 2
+            let reliable_correct = reliable_messages.contains(&1) && reliable_messages.contains(&2);
+            // OrderedChannel should have 10, 20
+            let ordered_correct = ordered_messages.contains(&10) && ordered_messages.contains(&20);
 
-        // No cross-contamination
-        let no_1_in_ordered = !ordered_messages.contains(&1) && !ordered_messages.contains(&2);
-        let no_10_in_reliable =
-            !reliable_messages.contains(&10) && !reliable_messages.contains(&20);
+            // No cross-contamination
+            let no_1_in_ordered = !ordered_messages.contains(&1) && !ordered_messages.contains(&2);
+            let no_10_in_reliable =
+                !reliable_messages.contains(&10) && !reliable_messages.contains(&20);
 
-        (reliable_correct && ordered_correct && no_1_in_ordered && no_10_in_reliable).then_some(())
-    });
+            (reliable_correct && ordered_correct && no_1_in_ordered && no_10_in_reliable)
+                .then_some(())
+        },
+    );
 }
 
 /// Tick-buffered channel groups messages by tick
@@ -2636,11 +2641,8 @@ fn tick_buffered_channel_discards_too_far_ahead_ticks() {
         0,
         "messaging-15-a.t1: far-ahead message dropped silently"
     );
-
-    scenario.spec_expect(
-        "messaging-15-a: tick-buffer discard boundaries enforced without panic",
-        |_ctx| Some(()),
-    );
+    // (No trailing leg: the t1/t2/t3 pins above are the proof; a
+    // vacuous always-true expect would claim a tag without pinning it.)
 }
 
 // ============================================================================
