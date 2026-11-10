@@ -368,10 +368,21 @@ impl WorldWriter {
             // A command that degraded to a wire Noop (superseded spawn, torn
             // down target) offered nothing, so it journals nothing: the Noop
             // record in `sent_command_packets` is the join key.
+            // nydus-cae: likewise, a Remove whose insert netted to a wire
+            // Noop in the same window journals nothing — the peer never held
+            // the component, and the client journals a removal only when it
+            // actually removes. Wire bytes and the send record are untouched.
             if let Some(out) = written_commands.as_mut() {
                 if let Some((command_id, command)) = next_send_commands.front() {
                     if !world_manager.command_written_as_noop(packet_index, *command_id) {
-                        out.push((*command_id, command.clone()));
+                        let netted_remove = matches!(
+                            command,
+                            EntityCommand::RemoveComponent(g, k)
+                                if world_manager.take_netted_insert(*g, *k)
+                        );
+                        if !netted_remove {
+                            out.push((*command_id, command.clone()));
+                        }
                     }
                 }
             }
@@ -660,6 +671,12 @@ impl WorldWriter {
                             command_id,
                             EntityMessage::Noop,
                         );
+                        if insert_netted {
+                            // nydus-cae: the paired RemoveComponent, written
+                            // behind this Noop, is journal-skipped (the peer
+                            // never held the component).
+                            world_manager.note_netted_insert(*global_entity, *component_kind);
+                        }
                     }
                 } else {
                     EntityMessageType::InsertComponent.ser(writer);
@@ -692,6 +709,10 @@ impl WorldWriter {
                             command_id,
                             EntityMessage::InsertComponent(local_entity, *component_kind),
                         );
+                        // nydus-cae: a real insert means the peer now holds
+                        // the component — drop any stale netted marker so a
+                        // later genuine remove still journals.
+                        world_manager.take_netted_insert(*global_entity, *component_kind);
                     }
                 }
             }

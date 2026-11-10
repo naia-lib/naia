@@ -38,8 +38,10 @@ impl Link {
         let hub = LocalTransportHub::new("127.0.0.1:54502".parse().unwrap());
         // Ada 184483: evidence is opt-in — this link asserts journals, so it
         // enables them on both sides.
-        let mut server_config = ServerConfig::default();
-        server_config.cause_evidence = true;
+        let server_config = ServerConfig {
+            cause_evidence: true,
+            ..ServerConfig::default()
+        };
         let mut server = Server::new(mode, &server_config, protocol());
         server.listen(ServerSocket::new(LocalServerSocket::new(hub.clone()), None));
         let (address, auth_tx, auth_rx, data_tx, data_rx) = hub.register_client();
@@ -56,12 +58,12 @@ impl Link {
             Arc::new(Mutex::new(None)),
             Arc::new(Mutex::new(None)),
         );
-        let mut client_config = ClientConfig {
+        let client_config = ClientConfig {
             send_handshake_interval: Duration::ZERO,
             jitter_buffer: JitterBufferType::Bypass,
+            cause_evidence: true,
             ..ClientConfig::default()
         };
-        client_config.cause_evidence = true;
         let mut client = Client::new(client_config, protocol());
         client.auth(Auth::new("quiet-link", "test"));
         client.connect(ClientSocket::new(socket, None));

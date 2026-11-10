@@ -180,6 +180,16 @@ pub struct LocalWorldManager {
     /// Replication is frozen for these entities until re-entry.
     paused_entities: HashSet<GlobalEntity>,
 
+    /// nydus-cae: (entity, kind) pairs whose insert degraded to a wire Noop
+    /// because a same-window remove netted it (collapse-to-final), and whose
+    /// paired RemoveComponent has not been written yet. The paired remove has
+    /// no client counterpart — the client journals a removal only when it
+    /// actually removes — so the evidence journal skips it (consuming the
+    /// entry); wire bytes and the send record are untouched. A real insert
+    /// write clears any stale entry: the peer then holds the component, so a
+    /// later remove is genuine and must journal.
+    netted_inserts: HashSet<(GlobalEntity, ComponentKind)>,
+
     // TODO: this is kind of specific to the receiver, put it somewhere else?
     // A Vec, not a map: one receive window can hold several ticks' inserts
     // for one entity+component, and every one must survive with its own tick.
@@ -222,6 +232,7 @@ impl LocalWorldManager {
             retransmit: RetransmitLedger::new(),
 
             paused_entities: HashSet::new(),
+            netted_inserts: HashSet::new(),
 
             incoming_components: Vec::new(),
             incoming_message_ticks: HashMap::new(),
@@ -748,6 +759,29 @@ impl LocalWorldManager {
             .iter()
             .find(|(id, _)| *id == command_id)
             .is_some_and(|(_, message)| matches!(message, EntityMessage::Noop))
+    }
+
+    /// nydus-cae: remember that this pair's insert degraded to a wire Noop
+    /// because a same-window remove netted it. The paired remove, when
+    /// written, is journal-skipped (consuming this entry).
+    pub(crate) fn note_netted_insert(
+        &mut self,
+        global_entity: GlobalEntity,
+        component_kind: ComponentKind,
+    ) {
+        self.netted_inserts.insert((global_entity, component_kind));
+    }
+
+    /// Consume a pending netted-insert marker, reporting whether one existed.
+    /// The evidence journal calls this for a Remove write (a hit means skip);
+    /// a real insert write calls this too, discarding the answer, so a stale
+    /// marker can never suppress a genuine later remove.
+    pub(crate) fn take_netted_insert(
+        &mut self,
+        global_entity: GlobalEntity,
+        component_kind: ComponentKind,
+    ) -> bool {
+        self.netted_inserts.remove(&(global_entity, component_kind))
     }
 
     pub(crate) fn record_command_written(

@@ -28,6 +28,13 @@
 //!   order follows the tick, within the u16 wrap rule above.
 //! - Ticks are `u16` and wrap; forward movement is judged within half the
 //!   range. Old or ambiguous ticks never move the frontier back.
+//! - Netted same-window pairs (nydus-cae): an insert that degrades to a wire
+//!   Noop because a same-window remove netted it (collapse-to-final) is not
+//!   journaled, and neither is the paired Remove — the peer never held the
+//!   component, and the client journals a removal only when it actually
+//!   removes, so journaling the Remove would manufacture a mismatch. Wire
+//!   bytes and the send record are untouched; a later real insert clears the
+//!   marker, so a genuine remove still journals.
 //! - `generation` is journal-owned, starting at 0 (one known world lifetime
 //!   per stream). [`CauseStream::advance_generation`] emits an
 //!   [`CauseKind::Epoch`] marker; Cyberlith overlays its live generation at

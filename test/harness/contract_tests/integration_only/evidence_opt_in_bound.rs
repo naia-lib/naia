@@ -22,8 +22,8 @@ use naia_server::{
     transport::local::{LocalServerSocket, LocalTransportHub, Socket as ServerSocket},
     AuthEvent, ReplicationConfig, RoomKey, Server, ServerConfig, ServerMode, UserKey,
 };
-use naia_shared::{Instant, TestClock, WorldRefType};
-use naia_test_harness::{protocol, Auth, Position};
+use naia_shared::{AppliedCause, Instant, TestClock, WorldRefType};
+use naia_test_harness::{protocol, Auth, Position, Velocity};
 use parking_lot::Mutex;
 
 /// Default evidence window both configs share: history older than this many
@@ -42,9 +42,11 @@ impl Link {
     fn new(mode: ServerMode, evidence: bool) -> Self {
         TestClock::init(0);
         let hub = LocalTransportHub::new("127.0.0.1:54503".parse().unwrap());
-        let mut server_config = ServerConfig::default();
-        server_config.cause_evidence = evidence;
-        server_config.cause_evidence_window = WINDOW;
+        let server_config = ServerConfig {
+            cause_evidence: evidence,
+            cause_evidence_window: WINDOW,
+            ..ServerConfig::default()
+        };
         let mut server = Server::new(mode, &server_config, protocol());
         server.listen(ServerSocket::new(LocalServerSocket::new(hub.clone()), None));
         let (address, auth_tx, auth_rx, data_tx, data_rx) = hub.register_client();
@@ -61,13 +63,13 @@ impl Link {
             Arc::new(Mutex::new(None)),
             Arc::new(Mutex::new(None)),
         );
-        let mut client_config = ClientConfig {
+        let client_config = ClientConfig {
             send_handshake_interval: Duration::ZERO,
             jitter_buffer: JitterBufferType::Bypass,
+            cause_evidence: evidence,
+            cause_evidence_window: WINDOW,
             ..ClientConfig::default()
         };
-        client_config.cause_evidence = evidence;
-        client_config.cause_evidence_window = WINDOW;
         let mut client = Client::new(client_config, protocol());
         client.auth(Auth::new("evidence-link", "test"));
         client.connect(ClientSocket::new(socket, None));
@@ -283,4 +285,84 @@ fn evidence_on_stays_bounded_and_drains_resident() {
 #[test]
 fn evidence_on_stays_bounded_and_drains_pipelined() {
     evidence_on_stays_bounded_and_drains(ServerMode::Pipelined);
+}
+
+/// nydus-cae: a same-window insert+remove must journal identically on both
+/// sides. The insert nets to a wire Noop (collapse-to-final), so the server
+/// journal must not hold a Remove the client never applies: the client only
+/// journals removals it actually performs.
+fn same_window_insert_remove_journals_agree(mode: ServerMode) {
+    let mut link = Link::new(mode, true);
+    let _room = link.seed_replication();
+    let user = link.user.unwrap();
+    // Clear the seed baseline from both journals: only the insert/remove
+    // window below may contribute entries.
+    let _ = link
+        .server
+        .take_transmit_causes(&user)
+        .expect("evidence on must drain server-side");
+    let _ = link.client.take_applied_causes();
+
+    // Same-tick insert + remove: both ops land before the next send, so
+    // replication for that tick nets to nothing for Velocity.
+    let entity = link
+        .server_world
+        .proxy()
+        .entities()
+        .pop()
+        .expect("one seeded entity");
+
+    // The netted window: insert + remove within one tick. Waits stay far
+    // under the evidence window (16) so entries cannot lapse before drain.
+    link.server
+        .entity_mut(link.server_world.proxy_mut(), &entity)
+        .insert_component(Velocity::new(7.0, 8.0));
+    let _ = link
+        .server
+        .entity_mut(link.server_world.proxy_mut(), &entity)
+        .remove_component::<Velocity>();
+
+    for _ in 0..5 {
+        link.step(true);
+    }
+
+    // One entity ever exists, so every entry in the window is its own:
+    // compare (kind, component, wire id) multisets across the two journals.
+    fn project<E: Copy>(entries: &[AppliedCause<E>]) -> Vec<String> {
+        let mut projected: Vec<String> = entries
+            .iter()
+            .map(|entry| {
+                let identity = entry.identity();
+                format!(
+                    "{:?} {:?} {:?}",
+                    entry.kind(),
+                    identity.component_kind,
+                    identity.command_id
+                )
+            })
+            .collect();
+        projected.sort();
+        projected
+    }
+    let server_entries = project(
+        &link
+            .server
+            .take_transmit_causes(&user)
+            .expect("evidence on must drain server-side"),
+    );
+    let client_entries = project(&link.client.take_applied_causes());
+    assert_eq!(
+        server_entries, client_entries,
+        "server and client journals disagree after a same-window insert+remove: server {server_entries:?} vs client {client_entries:?}",
+    );
+}
+
+#[test]
+fn same_window_insert_remove_journals_agree_resident() {
+    same_window_insert_remove_journals_agree(ServerMode::Resident);
+}
+
+#[test]
+fn same_window_insert_remove_journals_agree_pipelined() {
+    same_window_insert_remove_journals_agree(ServerMode::Pipelined);
 }
