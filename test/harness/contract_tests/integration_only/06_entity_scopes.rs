@@ -11,13 +11,15 @@ use std::time::Duration;
 
 use naia_client::{ClientConfig, JitterBufferType, Publicity as ClientReplicationConfig};
 use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
-use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response, Tick};
+use naia_shared::{
+    AuthorityError, ComponentKind, EntityAuthStatus, Protocol, Request, Response, Tick,
+};
 
 use naia_test_harness::test_protocol::ImmutableSeed;
 use naia_test_harness::{
     protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
     ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent, ClientKey, ClientRejectEvent,
-    ClientSpawnEntityEvent, EntityKey, ExpectCtx, ImmutableLabel, Position, Scenario,
+    ClientSpawnEntityEvent, EntityKey, ExpectCtx, ExpectResult, ImmutableLabel, Position, Scenario,
     ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent, ToTicks, Velocity,
 };
 
@@ -1016,7 +1018,8 @@ fn scope_leave_and_re_enter_semantics() {
 ///
 /// Row 10 pins presence on inclusion; the final-value assertion exceeds it.
 /// Exclusion of transient intermediate states (entity-replication-08) is not
-/// pinned by this poll-until-final shape — listed as a hollow leg under nydus-fuc.
+/// pinned by this poll-until-final shape — it is proven instead by the
+/// `same_tick_*` collapse tests below in this file.
 ///
 /// Given E existed and changed while A was out of scope; when A's scope changes so that E becomes in-scope;
 /// then A first sees E as a coherent snapshot of its current state, without replaying older intermediate diffs.
@@ -1909,10 +1912,11 @@ fn pipelined_a_room_join_spawns_entities_in_the_same_order_on_every_fresh_server
 
 /// Replication preserves component-set parity
 ///
-/// Spec gap: exact component-set parity is uncontracted, and this test does
-/// NOT prove [entity-replication-08] (collapse to final per tick) — a steady
-/// 20-tick window cannot exclude transient intermediates. Both are hollow
-/// legs, listed under nydus-fuc; row 08 stays unproven by this file.
+/// Contract: [entity-replication-14]. Exact-set parity over the closed test
+/// protocol (these four are all the components the protocol registers).
+/// This test does NOT prove [entity-replication-08] (collapse to final per
+/// tick) — a steady 20-tick window cannot exclude transient intermediates;
+/// row 08 is proven instead by the `same_tick_*` collapse tests below.
 ///
 /// Given a server entity carrying exactly {Position, Velocity} in scope; when
 /// it replicates; then the client holds exactly that set: both members
@@ -2010,5 +2014,238 @@ fn replication_preserves_component_set_parity() {
     assert!(
         violations.is_empty(),
         "component-set parity broke mid-window: {violations:?}",
+    );
+}
+
+// ============================================================================
+// Collapse to final state per tick (no intermediate transitions)
+// ============================================================================
+// Contract: [entity-replication-08]. The two tests below are the proof the
+// row's TODO calls for: every client sample is recorded per tick, so a
+// transient intermediate would be caught rather than polled past (the gap
+// the fuc pass documented on `entering_scope_mid_lifetime_yields_consistent_snapshot`
+// and `replication_preserves_component_set_parity`).
+// ============================================================================
+
+/// Reads the client's current Position for `entity`, if visible.
+fn client_position(
+    scenario: &mut Scenario,
+    client: ClientKey,
+    entity: EntityKey,
+) -> Option<(f32, f32)> {
+    let mut out = None;
+    scenario.expect_once(|ctx| {
+        let v = ctx.client(client, |c| {
+            c.entity(&entity)
+                .as_ref()
+                .and_then(|e| e.component::<Position>())
+                .map(|pos| (*pos.x, *pos.y))
+        });
+        out = v;
+        ExpectResult::Passed(())
+    });
+    out
+}
+
+/// Same-tick updates collapse to the final value (no intermediate transitions)
+/// Contract: [entity-replication-08]
+///
+/// Given E replicated with Position(1, 2); when the server writes Position
+/// three times within a single tick ((10,10), (20,20), (30,30)); then the
+/// client observes (30,30), and never observes (10,10) or (20,20) at any
+/// per-tick sample over a 40-tick window.
+#[test]
+fn same_tick_updates_collapse_to_final_value() {
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    let entity = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let e = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.enter_room(&room_key);
+                })
+                .0;
+            server.user_scope_mut(&client_a_key).unwrap().include(&e);
+            e
+        })
+    });
+
+    // Baseline: the client sees (1, 2) before the collapse window opens.
+    scenario.spec_expect(
+        "entity-replication-08.t1: baseline Position replicates before the collapse window",
+        move |ctx| {
+            ctx.client(client_a_key, |c| {
+                c.entity(&entity)
+                    .as_ref()
+                    .and_then(|e| e.component::<Position>())
+                    .map(|pos| (*pos.x - 1.0).abs() < 0.001 && (*pos.y - 2.0).abs() < 0.001)
+                    .unwrap_or(false)
+            })
+            .then_some(())
+        },
+    );
+
+    // Three writes within ONE tick: a single mutate runs its closure before
+    // one server tick, so replication for that tick must carry only the final
+    // value.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.insert_component_on::<Position>(&entity, Position::new(10.0, 10.0));
+            server.insert_component_on::<Position>(&entity, Position::new(20.0, 20.0));
+            server.insert_component_on::<Position>(&entity, Position::new(30.0, 30.0));
+        });
+    });
+
+    // Record every per-tick sample; a transient intermediate would be caught.
+    let mut seen: Vec<(f32, f32)> = Vec::new();
+    for _ in 0..40 {
+        if let Some(v) = client_position(&mut scenario, client_a_key, entity) {
+            seen.push(v);
+        }
+    }
+
+    assert!(
+        seen.iter()
+            .any(|(x, y)| (*x - 30.0).abs() < 0.001 && (*y - 30.0).abs() < 0.001),
+        "final value (30, 30) never reached the client; sampled: {seen:?}",
+    );
+    let intermediates: Vec<(f32, f32)> = seen
+        .into_iter()
+        .filter(|(x, _)| (*x - 10.0).abs() < 0.001 || (*x - 20.0).abs() < 0.001)
+        .collect();
+    assert!(
+        intermediates.is_empty(),
+        "client observed intermediate states within one tick: {intermediates:?}",
+    );
+}
+
+/// Same-tick insert+remove never surfaces the component
+/// Contract: [entity-replication-08]
+///
+/// Given E replicated carrying Position only; when the server inserts
+/// Velocity and removes it again within a single tick; then the client never
+/// holds Velocity at any per-tick sample, fires no insert event for E, and
+/// keeps replicating Position undisturbed.
+#[test]
+fn same_tick_insert_remove_never_surfaces_component() {
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    let entity = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let e = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.enter_room(&room_key);
+                })
+                .0;
+            server.user_scope_mut(&client_a_key).unwrap().include(&e);
+            e
+        })
+    });
+
+    // Baseline: the client sees E with Position and without Velocity.
+    scenario.spec_expect(
+        "entity-replication-08.t1: baseline entity replicates before the insert/remove window",
+        move |ctx| {
+            ctx.client(client_a_key, |c| {
+                c.entity(&entity)
+                    .as_ref()
+                    .map(|e| e.has_component::<Position>() && !e.has_component::<Velocity>())
+                    .unwrap_or(false)
+            })
+            .then_some(())
+        },
+    );
+
+    // Insert + remove within ONE tick: a single mutate runs its closure
+    // before one server tick, so replication for that tick must net to
+    // nothing for Velocity.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.insert_component_on::<Velocity>(&entity, Velocity::new(7.0, 8.0));
+            server.remove_component_from::<Velocity>(&entity);
+        });
+    });
+
+    // Sample state every tick, and drain Velocity inserts every tick: a
+    // same-message insert+remove pair applied in order would still trip the
+    // drain probe even though state sampling only ever sees the end state.
+    // Draining keeps the probe window-scoped — the spawn-time Position insert
+    // is a different kind and never trips it.
+    let velocity_kind = ComponentKind::of::<Velocity>();
+    let mut velocity_sightings = 0;
+    let mut velocity_inserts = 0;
+    for _ in 0..40 {
+        let sighted = scenario.expect_once(|ctx| {
+            let seen_state = ctx.client(client_a_key, |c| {
+                c.entity(&entity)
+                    .as_ref()
+                    .map(|e| e.has_component::<Velocity>())
+                    .unwrap_or(false)
+            });
+            let velocity_inserted = ctx.client(client_a_key, |c| {
+                c.take_inserts_for_component(&velocity_kind)
+                    .contains(&entity)
+            });
+            ExpectResult::Passed((seen_state, velocity_inserted))
+        });
+        match sighted {
+            ExpectResult::Passed((true, _)) => velocity_sightings += 1,
+            ExpectResult::Passed((_, true)) => velocity_inserts += 1,
+            _ => {}
+        }
+    }
+
+    assert_eq!(
+        velocity_sightings, 0,
+        "client held a component inserted+removed within one tick",
+    );
+    assert_eq!(
+        velocity_inserts, 0,
+        "client fired an insert event for a component netted out within one tick",
+    );
+
+    // Non-vacuous: Position replication is undisturbed after the window.
+    scenario.spec_expect(
+        "entity-replication-08.t1: Position still replicates after the insert/remove window",
+        move |ctx| {
+            ctx.client(client_a_key, |c| {
+                c.entity(&entity)
+                    .as_ref()
+                    .and_then(|e| e.component::<Position>())
+                    .map(|pos| (*pos.x - 1.0).abs() < 0.001 && (*pos.y - 2.0).abs() < 0.001)
+                    .unwrap_or(false)
+            })
+            .then_some(())
+        },
     );
 }

@@ -151,6 +151,16 @@ impl<'a> ClientExpectCtx<'a> {
         self.events.has::<V>()
     }
 
+    /// Drain this tick's insert events for one component kind. Draining (not
+    /// peeking) keeps the probe window-scoped: an insert drained in an
+    /// earlier tick never trips a later window.
+    pub fn take_inserts_for_component(
+        &mut self,
+        component_kind: &naia_shared::ComponentKind,
+    ) -> Vec<EntityKey> {
+        self.events.take_inserts_for_component(component_kind)
+    }
+
     /// Check if any component insert event was received for the given entity this tick or earlier
     pub fn has_insert_event_for_entity(&self, entity_key: &EntityKey) -> bool {
         self.events.has_insert_for_entity(entity_key)

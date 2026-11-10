@@ -254,7 +254,17 @@ Additional design constraint (to avoid conflicts by construction):
 
 **Obligations:**
 - **t1**: Drained acks finalize before the same-tick send plan.
-Acks drained from the wire during the send step only record receipt; recording alone MUST NOT leave deliverability gated for the plan built later in the same tick. Before the server builds a tick's send plan, every ack drained so far in that tick MUST be finalized into the delivery state, so the plan observes the deliveries those acks confirm. An ack that arrives after the receive step but before the send plan is built MUST unblock dependent replication (e.g. a component update gated on its entity's delivered spawn) in that same tick, not one tick later.
+Acks drained from the wire during the send step only record receipt; recording alone MUST NOT leave deliverability gated for the plan built later in that tick. Before the server builds a tick's send plan, every ack drained so far in that tick MUST be finalized into the delivery state, so the plan observes the deliveries those acks confirm. An ack that arrives after the receive step but before the send plan is built MUST unblock dependent replication (e.g. a component update gated on its entity's delivered spawn) in that same tick, not one tick later.
+
+---
+
+### [entity-replication-14] — Component-set parity (no ghost or dropped members)
+
+**Obligations:**
+- **t1**: Component-set parity.
+Given a server entity carrying exactly a set of replicated components in scope; when it replicates; then the client holds exactly that set: every server-side member is present on the client, and no other component kind registered in the protocol appears — no dropped members, no late-appearing ghosts.
+
+Parity is relative to the protocol's registered component kinds: the row constrains the replicated set against what the protocol can carry, not against unregistered kinds.
 
 ---
 
@@ -269,12 +279,13 @@ For each contract above, Naia MUST eventually have at least one E2E test proving
 - entity-replication-05 — TODO: late/out-of-lifetime actions ignored
 - entity-replication-06 — Covered by: `shared/src/world/local/tests/inbound_and_remote.rs` (`an_update_for_an_unmapped_entity_is_buffered_until_materialized`, `a_buffered_update_for_an_unknown_entity_never_applies_to_another_entity`)
 - entity-replication-07 — TODO: local-only overwritten by server replication
-- entity-replication-08 — TODO: collapse to final per tick; no intermediate states
+- entity-replication-08 — Covered by: `test/harness/contract_tests/integration_only/06_entity_scopes.rs` (`same_tick_updates_collapse_to_final_value`, `same_tick_insert_remove_never_surfaces_component`)
 - entity-replication-09 — TODO: duplicates idempotent
 - entity-replication-10 — TODO: LocalEntity reuse cannot corrupt new lifetime
 - entity-replication-11 — TODO: GlobalEntity rollover fail-fast (unit-level)
 - entity-replication-12 — TODO: server-wins convergence for replicated state
 - entity-replication-13 — Covered by: `test/harness/contract_tests/integration_only/send_gate_finalizes_drained_acks.rs` (`drained_ack_is_finalized_before_same_tick_plan`)
+- entity-replication-14 — Covered by: `test/harness/contract_tests/integration_only/06_entity_scopes.rs` (`replication_preserves_component_set_parity`)
 
 ---
 

@@ -601,8 +601,23 @@ impl WorldWriter {
                 // needed-set under-supply that would silently drop the insert.
                 let insert_present = insert_has_global
                     && world.has_component_of_kind(&world_entity, *component_kind);
+                // Collapse to final (entity-replication-08): an insert netted
+                // by a same-window remove is the third legitimate Noop. The
+                // remover drops the global component record synchronously
+                // with queueing the RemoveComponent, so a still-tracked
+                // entity whose record no longer carries the kind was netted
+                // before send — not under-supplied. The paired RemoveComponent
+                // still goes out behind this Noop, but it is a silent no-op
+                // on a peer that never held the component (`process_remove`
+                // only fires on actual removal), so the client observes
+                // nothing either way.
+                let insert_netted = !insert_present
+                    && insert_has_global
+                    && global_world_manager
+                        .component_kinds(*global_entity)
+                        .is_none_or(|kinds| !kinds.contains(component_kind));
                 debug_assert!(
-                    !insert_has_global || insert_present,
+                    !insert_has_global || insert_present || insert_netted,
                     "InsertComponent: entity {global_entity:?} is host-tracked but component {component_kind:?} \
                      is missing from the snapshot world — needed-set under-supply \
                      (would silently drop the insert)",
@@ -623,8 +638,9 @@ impl WorldWriter {
                     );
                     // Same terminal-loss warn as SpawnWithComponents: only the
                     // under-supply case is loud; the `!has_global` despawn race
-                    // is a legitimate quiet Noop.
-                    if is_writing && insert_has_global {
+                    // and the `insert_netted` same-window collapse are
+                    // legitimate quiet Noops.
+                    if is_writing && insert_has_global && !insert_netted {
                         log::warn!(
                             "InsertComponent for {:?} ({:?}) degraded to a TERMINAL \
                              Noop: component missing from the snapshot world \
@@ -2724,8 +2740,11 @@ mod delegated_send_guard_tests {
     /// component for an entity this peer does not know about.
     ///
     /// Note the asymmetry this test encodes: the *other* way to reach `Noop` --
-    /// host-tracked but component missing -- is a needed-set under-supply that
-    /// trips a `debug_assert!` on purpose, so it is not a reachable branch in a
+    /// host-tracked but component missing -- splits in two. A same-window
+    /// remove netting the insert (global record no longer carries the kind)
+    /// is a legitimate quiet `Noop` per entity-replication-08; only a record
+    /// that still claims the kind trips the under-supply `debug_assert!` on
+    /// purpose, so that genuine-under-supply branch is not reachable in a
     /// debug build and cannot be asserted on here.
     ///
     /// Both directions are needed: `cargo-mutants` showed that flipping
