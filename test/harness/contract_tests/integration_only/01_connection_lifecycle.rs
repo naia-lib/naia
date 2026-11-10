@@ -138,15 +138,13 @@ fn basic_connect_disconnect_lifecycle() {
     // Need mutate before assert_connected (which ends with expect)
     scenario.mutate(|_ctx| {});
 
-    // Verify B remains connected and user count is correct (each client has independent session/token)
-    scenario.spec_expect(
-        "connection-10.t1: each client maintains independent identity token and session",
-        |ctx| {
-            server_and_client_connected(ctx, client_b_key)?;
-            let user_count = ctx.server(|s| s.users_count());
-            (user_count == 1).then_some(())
-        },
-    );
+    // Verify B remains connected and user count is correct (each client has independent session/token).
+    // Untagged: no spec row covers post-disconnect session independence (spec gap, see card).
+    scenario.expect(|ctx| {
+        server_and_client_connected(ctx, client_b_key)?;
+        let user_count = ctx.server(|s| s.users_count());
+        (user_count == 1).then_some(())
+    });
 
     // [connection-23]: entity_a is owned by A — the server MUST despawn
     // client-owned entities when their owner disconnects. Bounded wait:
@@ -171,7 +169,7 @@ fn basic_connect_disconnect_lifecycle() {
 }
 
 /// Invalid credentials are rejected
-/// Contract: [connection-02], [connection-09], [connection-11]
+/// Contract: [connection-02], [connection-09], [connection-18]
 ///
 /// Given `require_auth = true` and an auth handler rejecting bad credentials;
 /// when A connects with invalid auth; then server emits an auth event but no connect event,
@@ -254,7 +252,7 @@ fn invalid_credentials_rejected() {
     );
 
     scenario.spec_expect(
-        "connection-11.t1: invalid credentials explicitly rejected",
+        "connection-18.t1: denied credentials draw an explicit reject before session establishment",
         |ctx| {
             let is_rejected = ctx.client(client_a_key, |c| c.is_rejected());
             is_rejected.then_some(())
@@ -263,7 +261,7 @@ fn invalid_credentials_rejected() {
 }
 
 /// Disconnect during auth is handled cleanly
-/// Contract: [connection-09]
+/// Contract: [connection-16]
 ///
 /// Given `require_auth = true`; when A starts connecting and aborts the
 /// handshake mid-auth via `cancel_connect()`, and the server then issues a
@@ -348,7 +346,7 @@ fn disconnect_during_auth_handled_cleanly() {
     }
 
     scenario.spec_expect(
-        "connection-09.t1: mid-handshake abort leaves no connect event",
+        "connection-16.t1: aborted handshake plus late accept draws no server ConnectEvent",
         |ctx| {
             let client_down = !ctx.client(client_a_key, |c| c.connection_status().is_connected());
             (client_down && !stray_connect).then_some(())
@@ -373,7 +371,7 @@ fn disconnect_during_auth_handled_cleanly() {
 }
 
 /// Connect event ordering is stable
-/// Contract: [connection-03], [connection-04]
+/// Contract: [connection-24], [connection-04]
 ///
 /// Given a server; when A connects then B connects;
 /// then exactly two connect events appear in order [A, B] with no duplicates.
@@ -503,9 +501,9 @@ fn connect_event_ordering_stable() {
         client_key
     };
 
-    // Verify order is [A, B] and no duplicates - proves both connection-03 and connection-04
+    // Verify order is [A, B] and no duplicates - proves connection-24 (server order) and connection-04
     scenario.spec_expect(
-        "connection-03.t1: connect events only after handshake finalized",
+        "connection-24.t1: server observes connect events in order [A, B], exactly once",
         |ctx| {
             let a_connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
             let b_connected = ctx.client(client_b_key, |c| c.connection_status().is_connected());
@@ -649,7 +647,7 @@ fn no_connect_event_before_handshake_finalizes() {
 }
 
 /// Multiple concurrent auth requests serialize
-/// Contract: [connection-10]
+/// Contract: [connection-08]
 ///
 /// Given `require_auth = true`; when A and B start connecting back-to-back
 /// with no pump between (both handshakes in flight in the same tick); then
@@ -725,7 +723,7 @@ fn concurrent_auth_requests_serialize() {
     });
 
     scenario.spec_expect(
-        "connection-10.t2: overlapping handshakes land as distinct connected users",
+        "connection-08.t1: overlapping handshakes draw exactly one auth event per client and land as distinct users",
         |ctx| {
             server_and_client_connected(ctx, client_a_key)?;
             server_and_client_connected(ctx, client_b_key)?;
@@ -802,13 +800,12 @@ fn disconnect_idempotent_and_clean() {
         (a_removed && b_connected).then_some(())
     });
 
-    scenario.spec_expect(
-        "connection-06.t1: disconnected user fully removed from server",
-        |ctx| {
-            let a_removed = !ctx.server(|s| s.user_exists(&client_a_key));
-            (a_removed).then_some(())
-        },
-    );
+    // A fully removed. Untagged: no spec row covers user-record removal
+    // (spec gap, see card).
+    scenario.expect(|ctx| {
+        let a_removed = !ctx.server(|s| s.user_exists(&client_a_key));
+        (a_removed).then_some(())
+    });
 }
 
 /// Successful auth with `require_auth = true`
@@ -972,7 +969,7 @@ fn successful_auth_with_require_auth() {
 }
 
 /// Auth disabled connects without auth event
-/// Contract: [connection-12]
+/// Contract: [connection-04]
 ///
 /// Given `require_auth = false`; when A connects; the server auto-accepts without emitting
 /// ServerAuthEvent, the game code never needs to call accept_connection(), and A becomes a
@@ -1026,13 +1023,13 @@ fn auth_disabled_connects_without_auth_event() {
     });
 
     scenario.spec_expect(
-        "connection-12.t1: connection succeeds without ServerAuthEvent when require_auth = false",
+        "connection-04.t1: connection succeeds without pre-auth when require_auth = false",
         |ctx| server_and_client_connected(ctx, client_a_key),
     );
 }
 
 /// No replication before auth decision
-/// Contract: [connection-13], [connection-14]
+/// Contract: [connection-17]
 ///
 /// Given `require_auth = true` and existing in-scope entities;
 /// when A connects and auth is delayed; then until auth is accepted, A is not treated as connected
@@ -1115,30 +1112,29 @@ fn no_replication_before_auth_decision() {
         });
     });
 
-    // Verify no replication before auth (connection-13) and client connected after auth (connection-14)
+    // Verify no replication before ConnectEvent, with post-accept replication as the control.
     scenario.spec_expect(
-        "connection-13.t1: no replication before auth decision",
+        "connection-17.t1: no replication before ConnectEvent; replication flows after accept",
         |ctx| {
             server_and_client_connected(ctx, client_a_key)?;
             let has_entity_after = ctx.client(client_a_key, |c| c.has_entity(&existing_entity));
-            // Prove: no entity before auth AND has entity after auth (13)
+            // Prove: no entity before auth AND has entity after auth (17)
             (no_entity_before_auth && has_entity_after).then_some(())
         },
     );
 
-    scenario.spec_expect(
-        "connection-14.t1: client not treated as connected until auth accepted",
-        |ctx| {
-            server_and_client_connected(ctx, client_a_key)?;
-            let is_connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
-            // Prove: client is connected (14)
-            (is_connected).then_some(())
-        },
-    );
+    // Control: client connected after accept. Untagged: no spec row names
+    // this direction (spec gap, see card).
+    scenario.expect(|ctx| {
+        server_and_client_connected(ctx, client_a_key)?;
+        let is_connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
+        (is_connected).then_some(())
+    });
 }
 
 /// No mid-session re-auth or identity swap
-/// Contract: [connection-15], [connection-16]
+/// Contract: none — no spec row covers mid-session identity stability
+/// (spec gap, see card).
 ///
 /// Given A authenticated and connected; when A sends additional auth payload mid-session
 /// trying to change identity; then identity does not change, the attempt is ignored or rejected
@@ -1264,67 +1260,60 @@ fn no_mid_session_reauth() {
     });
 
     // Verify client key hasn't changed. Fail shut: if the initial key was
-    // never captured, neither row below may silently pass.
+    // never captured, neither continuity leg below may silently pass.
     let initial_key = initial_client_key
-        .expect("must capture the initial client key before asserting rows 15/16");
+        .expect("must capture the initial client key before asserting session continuity");
     {
-        scenario.spec_expect(
-            "connection-15.t1: identity does not change mid-session",
-            |ctx| {
-                ctx.server(|server| {
-                    if let Some(user) = server.user(&client_a_key) {
-                        let current_key_opt: Option<ClientKey> = user.key();
-                        if let Some(current_client_key) = current_key_opt {
-                            if current_client_key == initial_key {
-                                Some(())
-                            } else {
-                                None
-                            }
+        // Untagged: no spec row covers mid-session identity stability (spec gap, see card).
+        scenario.expect(|ctx| {
+            ctx.server(|server| {
+                if let Some(user) = server.user(&client_a_key) {
+                    let current_key_opt: Option<ClientKey> = user.key();
+                    if let Some(current_client_key) = current_key_opt {
+                        if current_client_key == initial_key {
+                            Some(())
                         } else {
                             None
                         }
                     } else {
                         None
                     }
-                })
-            },
-        );
+                } else {
+                    None
+                }
+            })
+        });
 
         // (NASH 2026-10-24: this leg asserted `Some(())` unconditionally —
         // vacuous. It now asserts the same session-continuity property for
         // real: the user key is still the initial one AND the client never
         // dropped, so no swap could have hidden behind a reconnect.)
-        scenario.spec_expect(
-            "connection-16.t1: no silent identity swap during session",
-            |ctx| {
-                let still_connected =
-                    ctx.client(client_a_key, |c| c.connection_status().is_connected());
-                ctx.server(|server| {
-                    if let Some(user) = server.user(&client_a_key) {
-                        let current_key_opt: Option<ClientKey> = user.key();
-                        if let Some(current_client_key) = current_key_opt {
-                            if current_client_key == initial_key && still_connected {
-                                Some(())
-                            } else {
-                                None
-                            }
+        // Untagged: no spec row covers mid-session identity stability (spec gap, see card).
+        scenario.expect(|ctx| {
+            let still_connected =
+                ctx.client(client_a_key, |c| c.connection_status().is_connected());
+            ctx.server(|server| {
+                if let Some(user) = server.user(&client_a_key) {
+                    let current_key_opt: Option<ClientKey> = user.key();
+                    if let Some(current_client_key) = current_key_opt {
+                        if current_client_key == initial_key && still_connected {
+                            Some(())
                         } else {
                             None
                         }
                     } else {
                         None
                     }
-                })
-            },
-        );
+                } else {
+                    None
+                }
+            })
+        });
     }
 }
 
 /// Server explicit reject produces RejectEvent, not ConnectEvent
-/// Contract: [connection-17]
-/// (NASH 2026-10-24: dropped a stale [connection-18] tag here — that row is
-/// heartbeat-timeout disconnect, proven by
-/// `client_disconnects_due_to_heartbeat_timeout`, not by this reject test.)
+/// Contract: [connection-19], [connection-22]
 ///
 /// Given a connected client A; when client B connects and the server calls reject_connection();
 /// then a reject event is emitted to B, no connect event is emitted, and B remains disconnected.
@@ -1442,7 +1431,7 @@ fn server_reject_connection_produces_reject_event() {
     // Verify B is rejected and not connected (reject event emitted, not connect event)
     scenario.mutate(|_ctx| {});
     scenario.spec_expect(
-        "connection-17.t1: capacity reject produces reject event not connect event",
+        "connection-19.t1: capacity reject produces RejectEvent, never ConnectEvent",
         |ctx| {
             let not_connected = !ctx.client(client_b_key, |c| c.connection_status().is_connected());
             let is_rejected = ctx.client(client_b_key, |c| c.is_rejected());
@@ -1450,9 +1439,9 @@ fn server_reject_connection_produces_reject_event() {
         },
     );
 
-    // A remains connected (capacity reject only affects B)
+    // A remains connected (capacity reject only affects B); B's status stays non-connected
     scenario.spec_expect(
-        "connection-18.t1: client remains disconnected after capacity reject",
+        "connection-20.t1: rejected client holds a non-connected status, no special rejected state",
         |ctx| {
             let a_still_connected =
                 ctx.client(client_a_key, |c| c.connection_status().is_connected());
@@ -1589,7 +1578,7 @@ fn server_disconnect_user_carries_a_reason_message() {
 }
 
 /// Client disconnects due to heartbeat/timeout
-/// Contract: [connection-19], [connection-20]
+/// Contract: [connection-22], [connection-28]
 ///
 /// Given configured heartbeat/timeout; when traffic stops longer than timeout;
 /// then both sides eventually emit a timeout disconnect event and all entities for that connection are cleaned up.
@@ -1645,21 +1634,24 @@ fn client_disconnects_due_to_heartbeat_timeout() {
     let mut client_disconnect_received = false;
     let mut server_disconnect_received = false;
 
-    scenario.expect(|ctx| {
-        ctx.client(client_a_key, |client| {
-            if client.read_event::<ClientDisconnectEvent>().is_some() {
-                client_disconnect_received = true;
-            }
-        });
-        ctx.server(|server| {
-            while let Some(disconnected_key) = server.read_event::<ServerDisconnectEvent>() {
-                if disconnected_key == client_a_key {
-                    server_disconnect_received = true;
+    scenario.spec_expect(
+        "connection-22.t1: timeout drop of a connected session emits disconnect on both sides",
+        |ctx| {
+            ctx.client(client_a_key, |client| {
+                if client.read_event::<ClientDisconnectEvent>().is_some() {
+                    client_disconnect_received = true;
                 }
-            }
-        });
-        (client_disconnect_received && server_disconnect_received).then_some(())
-    });
+            });
+            ctx.server(|server| {
+                while let Some(disconnected_key) = server.read_event::<ServerDisconnectEvent>() {
+                    if disconnected_key == client_a_key {
+                        server_disconnect_received = true;
+                    }
+                }
+            });
+            (client_disconnect_received && server_disconnect_received).then_some(())
+        },
+    );
 
     assert!(
         client_disconnect_received,
@@ -1670,17 +1662,15 @@ fn client_disconnects_due_to_heartbeat_timeout() {
         "Server should receive disconnect event"
     );
 
-    // Verify user is cleaned up (server-spawned entities persist; only the user + their scope are removed)
+    // Verify user is cleaned up (server-spawned entities persist; only the user + their scope are removed).
+    // Untagged: no spec row covers user-record removal (spec gap, see card).
     scenario.mutate(|_ctx| {});
-    scenario.spec_expect(
-        "connection-19.t1: timeout disconnect emits event and removes user",
-        |ctx| {
-            let user_exists = ctx.server(|s| s.user_exists(&client_a_key));
-            (!user_exists).then_some(())
-        },
-    );
+    scenario.expect(|ctx| {
+        let user_exists = ctx.server(|s| s.user_exists(&client_a_key));
+        (!user_exists).then_some(())
+    });
 
-    // [connection-20] Fresh session after timeout: the same client rejoins
+    // [connection-28] Fresh session after timeout: the same client rejoins
     // and the new session carries state with none of the old session's
     // standing. Every assert below is presence- or transition-gated: the
     // user was gone (proven above) and the client was disconnected, so a
@@ -1735,11 +1725,15 @@ fn client_disconnects_due_to_heartbeat_timeout() {
                 .add_user(&client_a_key);
         });
     });
-    scenario.expect(|ctx| {
-        let client_connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
-        let user_exists = ctx.server(|s| s.user_exists(&client_a_key));
-        (client_connected && user_exists).then_some(())
-    });
+    scenario.spec_expect(
+        "connection-28.t1: rejoin after timeout opens a fresh session — connected, user re-registered",
+        |ctx| {
+            let client_connected =
+                ctx.client(client_a_key, |c| c.connection_status().is_connected());
+            let user_exists = ctx.server(|s| s.user_exists(&client_a_key));
+            (client_connected && user_exists).then_some(())
+        },
+    );
 
     // The entity re-replicates onto the new session (presence: the fresh
     // session carries state; no ghost of the old session is required or
@@ -1781,17 +1775,20 @@ fn silent_server_surfaces_single_auth_timeout() {
     // time; accumulate across ticks and stop at the first AuthTimeout.
     let mut auth_timeouts = 0usize;
     let mut other_disconnects = 0usize;
-    scenario.expect(|ctx| {
-        ctx.client(client_key, |client| {
-            for (reason, _) in client.read_events::<ClientDisconnectEvent>() {
-                match reason {
-                    DisconnectReason::AuthTimeout => auth_timeouts += 1,
-                    _ => other_disconnects += 1,
+    scenario.spec_expect(
+        "connection-21.t2: silent server yields exactly one AuthTimeout, no other disconnect",
+        |ctx| {
+            ctx.client(client_key, |client| {
+                for (reason, _) in client.read_events::<ClientDisconnectEvent>() {
+                    match reason {
+                        DisconnectReason::AuthTimeout => auth_timeouts += 1,
+                        _ => other_disconnects += 1,
+                    }
                 }
-            }
-        });
-        (auth_timeouts == 1).then_some(())
-    });
+            });
+            (auth_timeouts == 1).then_some(())
+        },
+    );
 
     assert_eq!(
         auth_timeouts, 1,
@@ -1837,16 +1834,16 @@ fn silent_server_surfaces_single_auth_timeout() {
 }
 
 /// Protocol or handshake mismatch fails before connection
-/// Contract: [connection-21], [connection-22]
+/// Contract: [connection-31], [connection-19]
 ///
 /// Given a server on the base protocol; when a client built on a
 /// wire-different protocol (one extra channel, so a different
 /// protocol_id) tries to connect; then the client is rejected with
-/// `RejectReason::ProtocolMismatch`, and — [connection-21.t1] — the
+/// `RejectReason::ProtocolMismatch`, and — [connection-19.t1] — the
 /// rejected client observes no `ClientDisconnectEvent` (it never
 /// connected, and mismatch is not give-up), and — [connection-22.t1] —
 /// the server emits no `ServerDisconnectEvent` for the never-connected
-/// key. A matching client connects as the control leg.
+/// key. A matching client connects as the control leg ([connection-31.t2]).
 #[test]
 fn protocol_handshake_mismatch_fails() {
     let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
@@ -1877,26 +1874,29 @@ fn protocol_handshake_mismatch_fails() {
     // ConnectEvent may fire for it on either side.
     let mut mismatch_rejected = false;
     let mut stray_connect = false;
-    scenario.expect(|ctx| {
-        ctx.client(mismatch_key, |client| {
-            for (_address, reason, _message) in client.read_events::<ClientRejectEvent>() {
-                if reason == RejectReason::ProtocolMismatch {
-                    mismatch_rejected = true;
+    scenario.spec_expect(
+        "connection-31.t1: mismatched protocol_id draws ProtocolMismatch, no ConnectEvent either side",
+        |ctx| {
+            ctx.client(mismatch_key, |client| {
+                for (_address, reason, _message) in client.read_events::<ClientRejectEvent>() {
+                    if reason == RejectReason::ProtocolMismatch {
+                        mismatch_rejected = true;
+                    }
                 }
-            }
-            if client.read_event::<ClientConnectEvent>().is_some() {
-                stray_connect = true;
-            }
-        });
-        ctx.server(|server| {
-            while let Some(key) = server.read_event::<ServerConnectEvent>() {
-                if key == mismatch_key {
+                if client.read_event::<ClientConnectEvent>().is_some() {
                     stray_connect = true;
                 }
-            }
-        });
-        mismatch_rejected.then_some(())
-    });
+            });
+            ctx.server(|server| {
+                while let Some(key) = server.read_event::<ServerConnectEvent>() {
+                    if key == mismatch_key {
+                        stray_connect = true;
+                    }
+                }
+            });
+            mismatch_rejected.then_some(())
+        },
+    );
     assert!(
         mismatch_rejected,
         "differing-protocol client must be rejected with ProtocolMismatch"
@@ -1906,7 +1906,7 @@ fn protocol_handshake_mismatch_fails() {
         "no ConnectEvent may fire on either side for a mismatched protocol"
     );
 
-    // [connection-21.t1]: the rejected attempt must observe no
+    // [connection-19.t1]: the rejected attempt must observe no
     // DisconnectEvent either — pump ticks draining the mismatched
     // client's disconnect queue and fail shut on any firing (it never
     // connected, and mismatch is not the give-up exception).
@@ -1943,7 +1943,7 @@ fn protocol_handshake_mismatch_fails() {
 
     // Control leg holds: the matching client is (still) connected.
     scenario.spec_expect(
-        "connection-21.t1: mismatched client rejected with no DisconnectEvent without prior ConnectEvent",
+        "connection-31.t2: matched protocol_id allows connection to proceed",
         |ctx| {
             ctx.client(client_a_key, |c| c.connection_status().is_connected())
                 .then_some(())
@@ -1952,14 +1952,14 @@ fn protocol_handshake_mismatch_fails() {
 }
 
 /// Malformed or tampered identity token is rejected cleanly
-/// Contract: [connection-23], [connection-24]
+/// Contract: [connection-11], [connection-27]
 ///
 /// (NASH 2026-10-24: the previous version of this test was doubly hollow —
 /// it tampered the harness-side token mirror BEFORE the server had minted
 /// any token, so the `if let Some` never fired and nothing was tampered;
 /// then it asserted `connected || rejected`, which passes on a plain
 /// successful connect. Both legs are rewritten below over the proven
-/// pre-seed mechanism from the [connection-25] replay leg.)
+/// pre-seed mechanism from the [connection-11]/[connection-13] replay leg.)
 ///
 /// A connects and receives token T_A, then disconnects (T_A is consumed).
 /// B starts its handshake; in the same mutate that accepts B, B's auth
@@ -1976,7 +1976,7 @@ fn malformed_identity_token_rejected() {
 
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
-    // A connects and receives token T_A (mirror of the connection-25 leg).
+    // A connects and receives token T_A (mirror of the connection-13 replay leg).
     let client_a_key = client_connect(
         &mut scenario,
         &room_key,
@@ -2047,7 +2047,7 @@ fn malformed_identity_token_rejected() {
     let mut reject_event_received = false;
     let mut connect_event_received = false;
     scenario.spec_expect(
-        "connection-23.t1: tampered token produces explicit reject, never connects",
+        "connection-11.t1: tampered token draws an explicit reject, never connects",
         |ctx| {
             ctx.client(client_b_key, |client| {
                 if client.read_event::<ClientRejectEvent>().is_some() {
@@ -2069,7 +2069,7 @@ fn malformed_identity_token_rejected() {
         "B must not connect with a tampered token"
     );
 
-    // [connection-24]/[connection-27]: the failure must be clean — pump
+    // [connection-27]: the failure must be clean — pump
     // ticks and assert no half-state (no user, no session, no connect
     // event for B) and no DisconnectEvent for the rejected attempt.
     let mut half_state = false;
@@ -2101,7 +2101,7 @@ fn malformed_identity_token_rejected() {
         scenario.mutate(|_| {});
     }
     scenario.spec_expect(
-        "connection-24.t1: failed handshake leaves no user, no session, no connect event",
+        "connection-27.t1: rejected attempt observes RejectEvent only — no user, no session, no ConnectEvent, no DisconnectEvent",
         |ctx| {
             let no_user = !ctx.server(|s| s.user_exists(&client_b_key));
             let down = !ctx.client(client_b_key, |c| c.connection_status().is_connected());
@@ -2123,7 +2123,7 @@ fn malformed_identity_token_rejected() {
 }
 
 /// Expired or reused identity token is explicitly rejected
-/// Contract: [connection-25], [connection-26]
+/// Contract: [connection-11], [connection-20]
 ///
 /// A connects and acquires token T_A. A disconnects — T_A is removed from all server maps.
 /// B then pre-seeds its auth channel with T_A (simulating replay). When B's ClientIdentifyRequest
@@ -2211,7 +2211,7 @@ fn expired_or_reused_token_obeys_semantics() {
     let mut reject_address: Option<Option<std::net::SocketAddr>> = None;
 
     scenario.spec_expect(
-        "connection-25.t1: reused token produces explicit RejectEvent",
+        "connection-11.t1: replayed consumed token draws an explicit reject, never connects",
         |ctx| {
             ctx.client(client_b_key, |client| {
                 if let Some((address, _reason, _message)) = client.read_event::<ClientRejectEvent>()
@@ -2245,7 +2245,7 @@ fn expired_or_reused_token_obeys_semantics() {
 
     scenario.mutate(|_| {});
     scenario.spec_expect(
-        "connection-26.t1: consumed token not silently accepted as fresh session",
+        "connection-20.t1: rejected client holds a non-connected status after the replayed-token reject",
         |ctx| {
             let not_connected = !ctx.client(client_b_key, |c| c.connection_status().is_connected());
             not_connected.then_some(())
@@ -2254,7 +2254,8 @@ fn expired_or_reused_token_obeys_semantics() {
 }
 
 /// Identity token issued by server is observable on client after connection
-/// Contract: [connection-27]
+/// Contract: none — no spec row covers client-side token observability
+/// (spec gap, see card).
 ///
 /// During the handshake, accept_connection() generates a token on the server, sends it to the
 /// client via the auth channel, and the client stores it (ClientAuthIo writes to its Arc<Mutex>).
@@ -2279,15 +2280,13 @@ fn valid_identity_token_roundtrips() {
 
     // After a successful connection, the client must have the server-issued token.
     // ClientAuthIo::receive() writes it to the shared Arc<Mutex> when the auth response arrives.
-    scenario.spec_expect(
-        "connection-27.t1: server-issued identity token is observable on client after connect",
-        |ctx| {
-            ctx.client(client_a_key, |c| {
-                let token = c.identity_token()?;
-                (!token.is_empty()).then_some(())
-            })
-        },
-    );
+    // Untagged: no spec row covers client-side token observability (spec gap, see card).
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |c| {
+            let token = c.identity_token()?;
+            (!token.is_empty()).then_some(())
+        })
+    });
 }
 
 // ============================================================================
@@ -2421,7 +2420,7 @@ fn reconnect_is_fresh_session() {
 // ============================================================================
 
 /// Same protocol crate produces same protocol_id
-/// Contract: [connection-29]
+/// Contract: [connection-29.t3]
 ///
 /// Given identical protocol definitions;
 /// when protocol is built; then protocol_id is deterministic.
@@ -2458,7 +2457,7 @@ fn same_protocol_produces_same_id() {
 
     // Both should be connected (same protocol definition produces same deterministic protocol_id)
     scenario.spec_expect(
-        "connection-29.t1: same protocol definition produces same deterministic protocol_id",
+        "connection-29.t3: same protocol crate produces the same protocol_id across builds",
         |ctx| {
             let a_connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
             let b_connected = ctx.client(client_b_key, |c| c.connection_status().is_connected());
@@ -2472,11 +2471,12 @@ fn same_protocol_produces_same_id() {
 // ============================================================================
 
 /// protocol_id is encoded as 16 bytes little-endian
-/// Contract: [connection-30]
+/// Contract: [connection-31.t2] (matched connection smoke; the 30.t1 wire
+/// proof lives at R1 in `shared::protocol_id` — a connect success cannot
+/// prove an encoding, so this test no longer carries the 30.t1 tag)
 ///
-/// Given protocol identity exchange during handshake;
-/// when protocol_id is sent on wire; then it uses u128 little-endian encoding.
-/// Note: Wire encoding is verified by successful connections with matching protocols.
+/// Given client and server with matching protocol;
+/// when handshake occurs; then connection proceeds successfully.
 #[test]
 fn protocol_id_wire_encoding_allows_connection() {
     let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
@@ -2496,7 +2496,7 @@ fn protocol_id_wire_encoding_allows_connection() {
     );
 
     scenario.spec_expect(
-        "connection-30.t1: protocol_id uses u128 little-endian wire encoding",
+        "connection-31.t2: matched protocol_id allows connection to proceed",
         |ctx| {
             ctx.client(client_a_key, |c| c.connection_status().is_connected())
                 .then_some(())
@@ -2532,7 +2532,7 @@ fn matched_protocol_id_allows_connection() {
 
     // Connection proceeds (matched protocol_id during handshake allows connection)
     scenario.spec_expect(
-        "connection-31.t1: matched protocol_id allows connection to proceed",
+        "connection-31.t2: matched protocol_id allows connection to proceed",
         |ctx| {
             let connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
             connected.then_some(())
@@ -2619,26 +2619,29 @@ fn no_partial_protocol_compatibility() {
     // ConnectEvent may fire for it on either side.
     let mut mismatch_rejected = false;
     let mut stray_connect = false;
-    scenario.expect(|ctx| {
-        ctx.client(mismatch_key, |client| {
-            for (_address, reason, _message) in client.read_events::<ClientRejectEvent>() {
-                if reason == RejectReason::ProtocolMismatch {
-                    mismatch_rejected = true;
+    scenario.spec_expect(
+        "connection-33.t1: breaking protocol change draws ProtocolMismatch, no ConnectEvent either side",
+        |ctx| {
+            ctx.client(mismatch_key, |client| {
+                for (_address, reason, _message) in client.read_events::<ClientRejectEvent>() {
+                    if reason == RejectReason::ProtocolMismatch {
+                        mismatch_rejected = true;
+                    }
                 }
-            }
-            if client.read_event::<ClientConnectEvent>().is_some() {
-                stray_connect = true;
-            }
-        });
-        ctx.server(|server| {
-            while let Some(key) = server.read_event::<ServerConnectEvent>() {
-                if key == mismatch_key {
+                if client.read_event::<ClientConnectEvent>().is_some() {
                     stray_connect = true;
                 }
-            }
-        });
-        mismatch_rejected.then_some(())
-    });
+            });
+            ctx.server(|server| {
+                while let Some(key) = server.read_event::<ServerConnectEvent>() {
+                    if key == mismatch_key {
+                        stray_connect = true;
+                    }
+                }
+            });
+            mismatch_rejected.then_some(())
+        },
+    );
     assert!(
         mismatch_rejected,
         "differing-protocol client must be rejected with ProtocolMismatch"
@@ -2650,7 +2653,7 @@ fn no_partial_protocol_compatibility() {
 
     // Control leg holds: the matching client is (still) connected.
     scenario.spec_expect(
-        "connection-33.t1: matching protocol connects, mismatched protocol is rejected with ProtocolMismatch",
+        "connection-31.t2: matched protocol_id allows connection to proceed",
         |ctx| {
             ctx.client(client_a_key, |c| c.connection_status().is_connected())
                 .then_some(())
@@ -2688,16 +2691,19 @@ fn give_up_then_redial_recovers_on_same_client() {
     );
 
     let mut auth_timeouts = 0usize;
-    scenario.expect(|ctx| {
-        ctx.client(client_key, |client| {
-            for (reason, _) in client.read_events::<ClientDisconnectEvent>() {
-                if reason == DisconnectReason::AuthTimeout {
-                    auth_timeouts += 1;
+    scenario.spec_expect(
+        "connection-21.t2: silent server yields exactly one AuthTimeout give-up",
+        |ctx| {
+            ctx.client(client_key, |client| {
+                for (reason, _) in client.read_events::<ClientDisconnectEvent>() {
+                    if reason == DisconnectReason::AuthTimeout {
+                        auth_timeouts += 1;
+                    }
                 }
-            }
-        });
-        (auth_timeouts == 1).then_some(())
-    });
+            });
+            (auth_timeouts == 1).then_some(())
+        },
+    );
     assert_eq!(
         auth_timeouts, 1,
         "phase 1 must end in exactly one AuthTimeout"
