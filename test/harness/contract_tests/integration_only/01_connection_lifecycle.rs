@@ -1752,49 +1752,115 @@ fn silent_server_surfaces_single_auth_timeout() {
 /// Protocol or handshake mismatch fails before connection
 /// Contract: [connection-21], [connection-22]
 ///
-/// Given server expecting a specific handshake/protocol; when client connects with incompatible
-/// handshake or version; then handshake fails, an error/reject is surfaced, no connect event or
-/// gameplay state is created, and client sees a clear error.
+/// Given a server on the base protocol; when a client built on a
+/// wire-different protocol (one extra channel, so a different
+/// protocol_id) tries to connect; then the client is rejected with
+/// `RejectReason::ProtocolMismatch`, and — [connection-21.t1] — the
+/// rejected client observes no `ClientDisconnectEvent` (it never
+/// connected, and mismatch is not give-up), and — [connection-22.t1] —
+/// the server emits no `ServerDisconnectEvent` for the never-connected
+/// key. A matching client connects as the control leg.
 #[test]
 fn protocol_handshake_mismatch_fails() {
-    // This test requires creating incompatible protocols
-    // For now, we'll test with a basic protocol mismatch scenario
-    // Note: Actual protocol versioning may require more setup
-
     let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
-    let test_protocol = protocol();
 
-    scenario.server_start(ServerConfig::default(), test_protocol.clone());
-
-    // Create a client with potentially mismatched protocol
-    // In a real scenario, this would be a different protocol version
-    // For this test, we'll verify that handshake errors are handled
-
+    scenario.server_start(ServerConfig::default(), protocol());
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
-    // Normal connection should work
+    // Control leg: exact match still connects.
     let client_a_key = client_connect(
         &mut scenario,
         &room_key,
         "Client A",
-        Auth::new("client_a", "password"),
-        ClientConfig::default(),
-        test_protocol,
+        Auth::new("client_a", "pass"),
+        test_client_config(),
+        protocol(),
+    );
+    scenario.mutate(|_ctx| {});
+
+    // Mismatched client: same messages, one extra channel.
+    let mismatch_key = scenario.client_start(
+        "Mismatch Client",
+        Auth::new("mismatch", "pass"),
+        test_client_config(),
+        protocol_with_sequenced_unreliable(),
     );
 
-    // Verify connection succeeded (matching protocol allows connection)
+    // The mismatched client must draw a ProtocolMismatch reject — and no
+    // ConnectEvent may fire for it on either side.
+    let mut mismatch_rejected = false;
+    let mut stray_connect = false;
+    scenario.expect(|ctx| {
+        ctx.client(mismatch_key, |client| {
+            for (_address, reason, _message) in client.read_events::<ClientRejectEvent>() {
+                if reason == RejectReason::ProtocolMismatch {
+                    mismatch_rejected = true;
+                }
+            }
+            if client.read_event::<ClientConnectEvent>().is_some() {
+                stray_connect = true;
+            }
+        });
+        ctx.server(|server| {
+            while let Some(key) = server.read_event::<ServerConnectEvent>() {
+                if key == mismatch_key {
+                    stray_connect = true;
+                }
+            }
+        });
+        mismatch_rejected.then_some(())
+    });
+    assert!(
+        mismatch_rejected,
+        "differing-protocol client must be rejected with ProtocolMismatch"
+    );
+    assert!(
+        !stray_connect,
+        "no ConnectEvent may fire on either side for a mismatched protocol"
+    );
+
+    // [connection-21.t1]: the rejected attempt must observe no
+    // DisconnectEvent either — pump ticks draining the mismatched
+    // client's disconnect queue and fail shut on any firing (it never
+    // connected, and mismatch is not the give-up exception).
+    // [connection-22.t1]: the server side must also stay silent — no
+    // ServerDisconnectEvent for a key that never connected.
+    let mut stray_disconnect = false;
+    let mut stray_server_disconnect = false;
+    for _ in 0..20 {
+        scenario.expect(|ctx| {
+            ctx.client(mismatch_key, |client| {
+                if client.read_event::<ClientDisconnectEvent>().is_some() {
+                    stray_disconnect = true;
+                }
+            });
+            ctx.server(|server| {
+                while let Some(key) = server.read_event::<ServerDisconnectEvent>() {
+                    if key == mismatch_key {
+                        stray_server_disconnect = true;
+                    }
+                }
+            });
+            Some(())
+        });
+        scenario.mutate(|_| {});
+    }
+    assert!(
+        !stray_disconnect,
+        "rejected client must observe no DisconnectEvent for the rejected attempt"
+    );
+    assert!(
+        !stray_server_disconnect,
+        "server must emit no DisconnectEvent for a key that never connected"
+    );
+
+    // Control leg holds: the matching client is (still) connected.
     scenario.spec_expect(
-        "connection-21.t1: handshake fails before connection on protocol mismatch",
+        "connection-21.t1: mismatched client rejected with no DisconnectEvent without prior ConnectEvent",
         |ctx| {
-            ctx.client(client_a_key, |c| {
-                c.connection_status().is_connected().then_some(())
-            })
+            ctx.client(client_a_key, |c| c.connection_status().is_connected())
+                .then_some(())
         },
-    );
-
-    scenario.spec_expect(
-        "connection-22.t1: protocol mismatch surfaces clear error to client",
-        |_ctx| Some(()),
     );
 }
 
