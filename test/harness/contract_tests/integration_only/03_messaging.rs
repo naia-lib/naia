@@ -881,7 +881,9 @@ fn matched_protocol_id_enables_successful_messaging() {
 }
 
 /// Request timeouts are surfaced and cleaned up
-/// Contract: [messaging-23]
+/// Contract: none — [messaging-23] requires a distinguishable timeout error,
+/// which Naia does not yet implement (see NOTE). This test is a no-leak
+/// smoke only: None while unanswered, client still usable afterwards.
 ///
 /// Given client sends request R; when server never replies and timeout elapses;
 /// then client surfaces a timeout result for R, releases tracking, and does not leak resources.
@@ -948,7 +950,9 @@ fn request_timeouts_are_surfaced_and_cleaned_up() {
 }
 
 /// Requests fail cleanly on disconnect mid-flight
-/// Contract: [messaging-24]
+/// Contract: none — [messaging-24] requires pending handlers invoked with an
+/// error indication, which Naia does not yet implement (see NOTE). This test
+/// is a no-state-leak smoke only: None after disconnect, reconnect reusable.
 ///
 /// Given in-flight request R from client; when connection drops before response;
 /// then both sides eventually mark R failed/cancelled, do not leak state, and ignore any late response for R after reconnect.
@@ -1319,7 +1323,7 @@ fn sequenced_unreliable_channel_discards_late_update() {
     // and forget it. The exact-sequence assert below reds on any violation.
     let mut seen: Vec<u32> = Vec::new();
     scenario.expect_msg(
-        "messaging-11.pre: newer update overtakes the held one",
+        "messaging-07.pre: newer update overtakes the held one",
         |ctx| {
             ctx.client(client_a_key, |c| {
                 seen.extend(
