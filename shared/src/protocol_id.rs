@@ -179,6 +179,27 @@ mod protocol_id_tests {
     }
 
     #[test]
+    fn the_wire_form_is_the_value_little_endian() {
+        // [connection-30.t1]: the spec names u128 little-endian, so the
+        // pin goes through the u128 value, not the stored bytes — big-endian
+        // must fail this test.
+        for value in [
+            0u128,
+            1,
+            0xdead_beef,
+            0x0102030405060708090a0b0c0d0e0f10,
+            u128::MAX,
+        ] {
+            let id = ProtocolId::new(value);
+            let mut writer = BitWriter::new();
+            id.ser(&mut writer);
+            let bytes = writer.to_bytes();
+
+            assert_eq!(&bytes[..16], &value.to_le_bytes()[..]);
+        }
+    }
+
+    #[test]
     fn an_id_survives_the_handshake_wire_round_trip() {
         // The handshake compares this value across the connection, so what
         // is read back must be exactly what was written.
