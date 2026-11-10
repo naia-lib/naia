@@ -371,7 +371,11 @@ fn disconnect_during_auth_handled_cleanly() {
 }
 
 /// Connect event ordering is stable
-/// Contract: [connection-24], [connection-04]
+/// Contract: none — multi-client connect ordering is uncontracted (spec gap).
+/// Row 24 pins the single-connection Auth→Connect→Disconnect sequence; this
+/// test connects A then B sequentially and observes [A, B] without covering
+/// the Disconnect tail. Row 04 needs require_auth = false; the default here
+/// is true.
 ///
 /// Given a server; when A connects then B connects;
 /// then exactly two connect events appear in order [A, B] with no duplicates.
@@ -501,37 +505,21 @@ fn connect_event_ordering_stable() {
         client_key
     };
 
-    // Verify order is [A, B] and no duplicates - proves connection-24 (server order) and connection-04
-    scenario.spec_expect(
-        "connection-24.t1: server observes connect events in order [A, B], exactly once",
-        |ctx| {
-            let a_connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
-            let b_connected = ctx.client(client_b_key, |c| c.connection_status().is_connected());
+    // Verify order is [A, B] and no duplicates (spec-gap control: no row
+    // contracts multi-client connect order).
+    scenario.expect(|ctx| {
+        let a_connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
+        let b_connected = ctx.client(client_b_key, |c| c.connection_status().is_connected());
 
-            // The fact that we captured exactly 2 connect events implies the server sees them as connected.
-            // Checking client status confirms handshake completion on client side too.
-            (connect_order.len() == 2
-                && connect_order[0] == client_a_key
-                && connect_order[1] == client_b_key
-                && a_connected
-                && b_connected)
-                .then_some(())
-        },
-    );
-
-    // Intermediate step to satisfy alternating mutate/expect requirement
-    scenario.mutate(|_| {});
-
-    scenario.spec_expect(
-        "connection-04.t1: clients connect without pre-auth when require_auth defaults to false",
-        |_ctx| {
-            // clients connected without explicit pre-auth requirement
-            (connect_order.len() == 2
-                && connect_order[0] == client_a_key
-                && connect_order[1] == client_b_key)
-                .then_some(())
-        },
-    );
+        // The fact that we captured exactly 2 connect events implies the server sees them as connected.
+        // Checking client status confirms handshake completion on client side too.
+        (connect_order.len() == 2
+            && connect_order[0] == client_a_key
+            && connect_order[1] == client_b_key
+            && a_connected
+            && b_connected)
+            .then_some(())
+    });
 }
 
 /// No ConnectEvent before the handshake finalizes
@@ -727,7 +715,8 @@ fn concurrent_auth_requests_serialize() {
         |ctx| {
             server_and_client_connected(ctx, client_a_key)?;
             server_and_client_connected(ctx, client_b_key)?;
-            (ctx.server(|s| s.users_count()) == 2).then_some(())
+            (ctx.server(|s| s.users_count()) == 2 && count_a == 1 && count_b == 1)
+                .then_some(())
         },
     );
 }
@@ -792,8 +781,9 @@ fn disconnect_idempotent_and_clean() {
         });
     });
 
-    // Verify: A fully removed, B remains connected (also demonstrates connection without required auth)
-    scenario.spec_expect("connection-05.t1: connection succeeds without required auth (require_auth defaults to false)", |ctx| {
+    // Verify: A fully removed, B remains connected (spec-gap control: no row
+    // covers user-record removal; the default config requires auth).
+    scenario.expect(|ctx| {
         let a_removed = !ctx.server(|s| s.user_exists(&client_a_key));
         let b_connected = ctx.client(client_b_key, |c| c.connection_status().is_connected());
 
@@ -1786,7 +1776,7 @@ fn silent_server_surfaces_single_auth_timeout() {
                     }
                 }
             });
-            (auth_timeouts == 1).then_some(())
+            (auth_timeouts == 1 && other_disconnects == 0).then_some(())
         },
     );
 
@@ -1834,7 +1824,7 @@ fn silent_server_surfaces_single_auth_timeout() {
 }
 
 /// Protocol or handshake mismatch fails before connection
-/// Contract: [connection-31], [connection-19]
+/// Contract: [connection-31], [connection-19], [connection-22]
 ///
 /// Given a server on the base protocol; when a client built on a
 /// wire-different protocol (one extra channel, so a different
@@ -1894,7 +1884,7 @@ fn protocol_handshake_mismatch_fails() {
                     }
                 }
             });
-            mismatch_rejected.then_some(())
+            (mismatch_rejected && !stray_connect).then_some(())
         },
     );
     assert!(
@@ -2334,6 +2324,9 @@ fn protocol_id_verified_before_connect_event() {
 /// Reconnecting client receives fresh entity spawns
 /// Contract: [connection-28]
 ///
+/// Fresh-spawn presence only: the no-carryover prose (authority, buffered
+/// data, pending requests discarded) is not pinned by this leg.
+///
 /// Given client connects, receives entities, disconnects, then reconnects;
 /// when reconnect completes; then client receives fresh entity spawns (not resumed).
 #[test]
@@ -2422,6 +2415,10 @@ fn reconnect_is_fresh_session() {
 /// Same protocol crate produces same protocol_id
 /// Contract: [connection-29.t3]
 ///
+/// Same-build smoke only: two definitions built in this binary connect
+/// against one server. Cross-build (recompilation) determinism is not
+/// exercised by this leg.
+///
 /// Given identical protocol definitions;
 /// when protocol is built; then protocol_id is deterministic.
 #[test]
@@ -2457,7 +2454,7 @@ fn same_protocol_produces_same_id() {
 
     // Both should be connected (same protocol definition produces same deterministic protocol_id)
     scenario.spec_expect(
-        "connection-29.t3: same protocol crate produces the same protocol_id across builds",
+        "connection-29.t3 (same-build): identical protocol definitions connect; cross-build determinism not exercised",
         |ctx| {
             let a_connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
             let b_connected = ctx.client(client_b_key, |c| c.connection_status().is_connected());
@@ -2639,7 +2636,7 @@ fn no_partial_protocol_compatibility() {
                     }
                 }
             });
-            mismatch_rejected.then_some(())
+            (mismatch_rejected && !stray_connect).then_some(())
         },
     );
     assert!(
