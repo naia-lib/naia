@@ -2374,15 +2374,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 false
             };
         let explicit = self.entity_scope_map.get(user_key, global_entity).copied();
-        let entity_is_roomless = self
-            .entity_room_map
-            .entity_get_rooms(global_entity)
-            .is_none();
-        let server_owned_roomless_non_resource =
-            owner.is_some_and(|o| o.is_server()) && !is_resource && entity_is_roomless;
         let should_be_in_scope = match explicit {
-            Some(true) if server_owned_roomless_non_resource => false,
-            Some(in_scope) => in_scope,
+            Some(false) => false,
+            // [entity-scopes-14]: rooms are a required gate for non-owners.
+            // An explicit include cannot force scope without a shared room;
+            // it only selects among room-mates. Resources stay exempt: they
+            // are in scope by default without rooms.
+            Some(true) => in_common_room || is_resource,
             None => is_resource || in_common_room,
         };
         if should_be_in_scope {

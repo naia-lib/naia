@@ -657,14 +657,16 @@ fn authority_releases_when_holder_goes_out_of_scope() {
 }
 
 /// Manual user-scope include overrides room absence
-/// Contract: [entity-scopes-06], [entity-scopes-11]
+/// Manual include needs a shared room; joining shows, leaving hides again.
+/// Contract: [entity-scopes-01], [entity-scopes-02], [entity-scopes-14]
 ///
-/// Given E in RoomA and U not in RoomA; when server manually includes E in U's user scope;
-/// then U sees E while override is active, and despawns E when override is removed
-/// (even though E stays in RoomA).
-#[test]
-fn manual_user_scope_include_overrides_room_absence() {
-    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+/// Given E in RoomA and U in RoomB; when server includes E in U's scope;
+/// then U still does not see E (rooms are a required gate). When U joins
+/// RoomA, U sees E; when U leaves RoomA, E hides again while the include is
+/// still active; rejoining shows E again. The explicit-route last-call-wins
+/// tail lives in `resident_manual_include_exclude_last_call_wins`.
+fn manual_include_needs_shared_room(mode: naia_server::ServerMode) {
+    let mut scenario = Scenario::new(mode);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -702,8 +704,8 @@ fn manual_user_scope_include_overrides_room_absence() {
         (!u_sees_e).then_some(())
     });
 
-    // Manually include E in U's scope (entity is already in room_a, U is in room_b)
-    // Note: Manual scope inclusion should work even when entity is in different room
+    // Include E in U's scope while no room is shared: rooms are a required
+    // gate ([entity-scopes-14] t1), so U must still not see E.
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             server
@@ -713,13 +715,113 @@ fn manual_user_scope_include_overrides_room_absence() {
         });
     });
 
-    // Verify U now sees E
-    scenario.expect(|ctx| {
-        let u_sees_e = ctx.client(client_u_key, |c| c.has_entity(&entity_e));
-        u_sees_e.then_some(())
+    holds_for(
+        &mut scenario,
+        10,
+        "include-14.t1: include without a shared room stays out of scope",
+        move |ctx| ctx.client(client_u_key, |c| !c.has_entity(&entity_e)),
+    );
+
+    // U joins RoomA: the include now applies and U sees E.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .room_mut(&room_a_key)
+                .unwrap()
+                .add_user(&client_u_key);
+        });
     });
 
-    // Remove the override
+    assert_sees(&mut scenario, client_u_key, entity_e, true);
+
+    // U leaves RoomA: the room gate closes again even though the include is
+    // still active.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .room_mut(&room_a_key)
+                .unwrap()
+                .remove_user(&client_u_key);
+        });
+    });
+
+    holds_for(
+        &mut scenario,
+        10,
+        "include-14.t1: leaving the shared room hides the entity again",
+        move |ctx| ctx.client(client_u_key, |c| !c.has_entity(&entity_e)),
+    );
+
+    // U rejoins RoomA: the standing include applies again and U sees E.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .room_mut(&room_a_key)
+                .unwrap()
+                .add_user(&client_u_key);
+        });
+    });
+
+    assert_sees(&mut scenario, client_u_key, entity_e, true);
+}
+
+#[test]
+fn resident_manual_include_needs_shared_room() {
+    manual_include_needs_shared_room(naia_server::ServerMode::Resident);
+}
+
+#[test]
+fn pipelined_manual_include_needs_shared_room() {
+    manual_include_needs_shared_room(naia_server::ServerMode::Pipelined);
+}
+
+/// Explicit-route last call wins: include, exclude, include in a shared room.
+/// Contract: [entity-scopes-02], [entity-scopes-03]
+///
+/// Given E and U sharing RoomA; when server includes, excludes, then includes
+/// E for U; then U sees E, hides E, and sees E again in that order.
+///
+/// Resident-only: the include/exclude bits stage through the scope ledger,
+/// which the harness's Pipelined driving never drains (same gap as the armed
+/// overrides above); the room-gate half of this row runs on both engines in
+/// `manual_include_needs_shared_room`.
+#[test]
+fn resident_manual_include_exclude_last_call_wins() {
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    let client_u_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client U",
+        Auth::new("client_u", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    let entity_e = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.enter_room(&room_key);
+                })
+                .0
+        })
+    });
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .user_scope_mut(&client_u_key)
+                .unwrap()
+                .include(&entity_e);
+        });
+    });
+
+    assert_sees(&mut scenario, client_u_key, entity_e, true);
+
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             server
@@ -729,11 +831,23 @@ fn manual_user_scope_include_overrides_room_absence() {
         });
     });
 
-    // Verify U no longer sees E (even though E is still in RoomA)
-    scenario.expect(|ctx| {
-        let u_sees_e = ctx.client(client_u_key, |c| c.has_entity(&entity_e));
-        (!u_sees_e).then_some(())
+    holds_for(
+        &mut scenario,
+        10,
+        "include-03.t1: exclude after include hides the entity",
+        move |ctx| ctx.client(client_u_key, |c| !c.has_entity(&entity_e)),
+    );
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .user_scope_mut(&client_u_key)
+                .unwrap()
+                .include(&entity_e);
+        });
     });
+
+    assert_sees(&mut scenario, client_u_key, entity_e, true);
 }
 
 /// Manual user-scope exclude hides an entity despite shared room

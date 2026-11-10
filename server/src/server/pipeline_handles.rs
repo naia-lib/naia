@@ -655,9 +655,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// once the `is_resource` substitution is accounted for):
     /// 1. Owner of a client-owned entity is always in-scope.
     /// 2. Private entities are never in-scope for non-owners.
-    /// 3. Explicit `include()`/`exclude()` wins unless the entity is a
-    ///    roomless server-owned non-resource, in which case `include()` is
-    ///    vetoed per [entity-scopes-09].
+    /// 3. Explicit `exclude()` wins. Explicit `include()` wins iff the user
+    ///    and the entity share at least one room (rooms are a required gate
+    ///    per [entity-scopes-14]); resources stay exempt.
     /// 4. Default: in-scope iff user and entity share at least one room.
     ///
     /// Returns `false` if `world_entity` is not registered in the global
@@ -720,29 +720,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
 
         // Check explicit include/exclude.
         if let Some(in_scope) = self.state.entity_scope_map.get(*user_key, global_entity) {
-            if *in_scope {
-                // [entity-scopes-09]: explicit include() cannot bypass the
-                // room gate for server-owned non-resource entities that have
-                // no rooms at all.
-                let entity_is_roomless = self
-                    .state
-                    .entity_room_map
-                    .entity_get_rooms(global_entity)
-                    .is_none();
-                if entity_is_roomless {
-                    let server_owned = self
-                        .state
-                        .shared
-                        .global_world_manager
-                        .read()
-                        .entity_owner(global_entity)
-                        .is_some_and(|o| o.is_server());
-                    if server_owned && !is_resource {
-                        return false;
-                    }
-                }
+            if !in_scope {
+                return false;
             }
-            return *in_scope;
+            // [entity-scopes-14]: rooms are a required gate for non-owners.
+            // An explicit include cannot force scope without a shared room;
+            // it only selects among room-mates. Resources stay exempt: they
+            // are in scope by default without rooms.
+            if is_resource {
+                return true;
+            }
+            let Some(entity_rooms) = self.state.entity_room_map.entity_get_rooms(global_entity)
+            else {
+                return false;
+            };
+            let Some(user_rooms) = self.state.user_room_map.get(user_key) else {
+                return false;
+            };
+            return entity_rooms.intersection(user_rooms).next().is_some();
         }
 
         // Default: in-scope if user and entity share a room.

@@ -5176,25 +5176,23 @@ pub(crate) fn user_scope_has_entity_impl<E: Copy + Eq + Hash + Send + Sync>(
 
     // Check explicit include/exclude
     if let Some(in_scope) = entity_scope_map.get(user_key, global_entity) {
-        if *in_scope {
-            // [entity-scopes-09]: explicit include() cannot bypass the room gate for
-            // server-owned non-resource entities that have no rooms at all. Entities
-            // in rooms (even rooms the user isn't in) are valid include() targets per
-            // [entity-scopes-06]; only completely roomless entities are gated.
-            let entity_is_roomless = entity_room_map.entity_get_rooms(global_entity).is_none();
-            if entity_is_roomless {
-                let is_resource = resource_registry.is_resource_entity(global_entity);
-                let server_owned = shared
-                    .global_world_manager
-                    .read()
-                    .entity_owner(global_entity)
-                    .is_some_and(|o| o.is_server());
-                if server_owned && !is_resource {
-                    return false;
-                }
-            }
+        if !in_scope {
+            return false;
         }
-        return *in_scope;
+        // [entity-scopes-14]: rooms are a required gate for non-owners. An
+        // explicit include cannot force scope without a shared room; it only
+        // selects among room-mates. Resources stay exempt: they are in scope
+        // by default without rooms.
+        if resource_registry.is_resource_entity(global_entity) {
+            return true;
+        }
+        let Some(user) = user_store.get(user_key) else {
+            return false;
+        };
+        let Some(entity_rooms) = entity_room_map.entity_get_rooms(global_entity) else {
+            return false;
+        };
+        return entity_rooms.intersection(user.room_keys()).next().is_some();
     }
     // Default: in-scope if user and entity share a room
     let Some(user) = user_store.get(user_key) else {
