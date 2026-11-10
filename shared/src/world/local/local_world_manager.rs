@@ -761,19 +761,14 @@ impl LocalWorldManager {
             .is_some_and(|(_, message)| matches!(message, EntityMessage::Noop))
     }
 
-    /// nydus-3nl: whether this command was already written in an earlier
-    /// packet. A retransmitted insert reuses its CommandId, so a prior
-    /// record means this write is a resend. Records leave only on delivery
-    /// or TTL expiry, and a delivered command leaves the pending queue, so
-    /// a still-pending command with no record is on its first write.
     /// nydus-3nl: whether this command already went out as real (non-Noop)
     /// content in an earlier packet. A retransmitted insert reuses its
-    /// CommandId: a resend that degrades to Noop must still re-arm the
-    /// netted marker (the paired remove's own resend must skip too), but a
-    /// resend after a real write means the peer held the component — arming
-    /// would journal-skip the genuine remove riding beside it. Records leave
-    /// only on delivery or TTL expiry, and a delivered command leaves the
-    /// pending queue, so a still-pending command's record stands.
+    /// CommandId: a resend that degrades to Noop may still re-arm the netted
+    /// marker (harmless: any path to a new genuine remove passes through a
+    /// real insert write that clears it), but a resend after a real write
+    /// must not arm — the genuine remove riding beside it has to journal.
+    /// Records leave only on delivery or TTL expiry, and a delivered command
+    /// leaves the pending queue, so a still-pending command's record stands.
     pub(crate) fn command_written_real_before(&self, command_id: CommandId) -> bool {
         self.sent_command_packets.iter().any(|(_, (_, actions))| {
             actions

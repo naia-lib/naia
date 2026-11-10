@@ -342,14 +342,14 @@ fn same_window_insert_remove_journals_agree(mode: ServerMode) {
 }
 
 /// nydus-3nl: a retransmitted insert must not arm the netted marker.
-/// Insert, drop the first copy (so no ack ever arrives), remove before any
-/// ack, then deliver: the insert's resend rides beside the genuine remove.
-/// The server must journal both, like the client does.
+/// Insert, delay the first copy (its ack arrives too late, so the insert
+/// resends), remove before the resend, then deliver: the insert's resend
+/// rides beside the genuine remove. The server must journal both, like the
+/// client does.
 /// Resident writes the insert for real on the first pass, so both sides hold
 /// the pair. Pipelined stages the insert into D-slots, so the remove nets it
-/// before any real write and both sides hold nothing — but the Noop resends
-/// must still re-arm, or the remove's own resend would journal alone. Either
-/// way the two journals must agree.
+/// before any real write and both sides hold nothing. Either way the two
+/// journals must agree.
 fn resent_insert_beside_remove_journals_agree(mode: ServerMode, expect_insert: bool) {
     let mut link = Link::new(mode, true);
     let _room = link.seed_replication();
@@ -371,7 +371,8 @@ fn resent_insert_beside_remove_journals_agree(mode: ServerMode, expect_insert: b
     link.server
         .entity_mut(link.server_world.proxy_mut(), &entity)
         .insert_component(Velocity::new(7.0, 8.0));
-    // The first copy never reaches the client: no ack, so the insert resends.
+    // The first copy is delayed past the ack window, so the insert resends
+    // in the next packet — before the delayed copy's ack can return.
     link.step(false);
     // Removed before the insert is ever acked.
     let _ = link
