@@ -111,6 +111,22 @@ struct PendingRequest {
     receiver: mpsc::Receiver<Result<(u16, String), String>>,
 }
 
+/// Parse a UDP auth reply body of the form `"identity_token\r\nserver_addr"`,
+/// the same shape the local transport accepts. A body with no separator or
+/// an unparseable address is refused as `Err`, never panicked on.
+fn parse_auth_reply(response_text: &str) -> Result<(String, SocketAddr), String> {
+    let mut response_parts = response_text.splitn(2, "\r\n");
+    let id_token = response_parts.next().unwrap_or_default().to_string();
+    let data_addr_str = match response_parts.next() {
+        Some(addr) => addr,
+        None => return Err(format!("Malformed auth reply: no CRLF separator")),
+    };
+    match data_addr_str.parse() {
+        Ok(data_addr) => Ok((id_token, data_addr)),
+        Err(_) => Err(format!("Malformed auth reply: bad address")),
+    }
+}
+
 impl PendingRequest {
     fn new(
         url: String,
@@ -142,11 +158,14 @@ impl PendingRequest {
                         }
                     };
 
-                    let mut response_parts = response_text.splitn(2, "\r\n");
-                    let id_token = response_parts.next().unwrap().to_string();
-                    let data_addr = response_parts.next().unwrap().to_string();
-                    let data_addr: SocketAddr = data_addr.parse().unwrap();
                     // parse out the server's address, put into addrcell
+                    let (id_token, data_addr) = match parse_auth_reply(&response_text) {
+                        Ok(parsed) => parsed,
+                        Err(e) => {
+                            let _ = tx.send(Err(e));
+                            return;
+                        }
+                    };
                     addr_cell.recv(&data_addr);
 
                     Ok((status_code, id_token))
@@ -174,4 +193,42 @@ impl PendingRequest {
 enum HttpError {
     UreqError(String),
     ChannelClosed,
+}
+
+#[cfg(test)]
+mod auth_reply_tests {
+    use super::parse_auth_reply;
+
+    /// Well-formed "token\r\naddr" parses to its two parts.
+    #[test]
+    fn well_formed_reply_parses() {
+        let (token, addr) =
+            parse_auth_reply("TOKEN\r\n127.0.0.1:1234").expect("well-formed reply must parse");
+        assert_eq!(token, "TOKEN");
+        assert_eq!(addr, "127.0.0.1:1234".parse().unwrap());
+    }
+
+    /// A reply with no "\r\n" separator is refused, not a panic.
+    #[test]
+    fn reply_without_separator_is_refused() {
+        assert!(
+            parse_auth_reply("TOKENONLY").is_err(),
+            "separator-less reply must be refused"
+        );
+    }
+
+    /// A reply whose address part does not parse is refused, not a panic.
+    #[test]
+    fn reply_with_bad_address_is_refused() {
+        assert!(
+            parse_auth_reply("TOKEN\r\nnot-an-addr").is_err(),
+            "bad-address reply must be refused"
+        );
+    }
+
+    /// An empty reply is refused, not a panic.
+    #[test]
+    fn empty_reply_is_refused() {
+        assert!(parse_auth_reply("").is_err(), "empty reply must be refused");
+    }
 }

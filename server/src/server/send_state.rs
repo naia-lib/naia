@@ -2203,10 +2203,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         self.scope_changes_done_this_tick = true;
     }
 
-    /// Per-(user, entity) scope evaluator. Mirrors the body of legacy
-    /// `InternalWorldServer::apply_scope_for_user` (`server/src/server/world_server.rs`
-    /// ~lines 3712-3894), but reads only from `SendState` + `shared` +
-    /// the per-call `world` + `user_addresses` snapshot.
+    /// Per-(user, entity) scope evaluator. This is the single
+    /// `apply_scope_for_user` (nydus-24l unified the drifted
+    /// `InternalWorldServer` copy into this one); it reads only from
+    /// `SendState` + `shared` + the per-call `world` + `user_addresses`
+    /// snapshot.
     ///
     /// Two contract deviations vs legacy:
     ///
@@ -2242,7 +2243,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         );
     }
 
-    fn apply_scope_for_user<W: WorldRefType<E>>(
+    pub(crate) fn apply_scope_for_user<W: WorldRefType<E>>(
         &mut self,
         world: &W,
         user_addresses: &HashMap<UserKey, SocketAddr>,

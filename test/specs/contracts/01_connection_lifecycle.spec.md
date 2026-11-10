@@ -562,6 +562,25 @@ When protocol changes require breaking compatibility:
 
 ---
 
+### [connection-34] — Malformed UDP auth reply is refused, not a panic
+
+**Obligations:**
+- **t1**: The UDP client MUST parse the auth reply (`identity_token`, server
+address) without panicking. A reply with no separator or an unparseable
+address MUST be refused as a connection error (surfaced through the auth
+channel, never applied), identical in kind to the local transport's
+`ParseError` refusal. No `unwrap` on the reply path.
+
+Rationale (nydus-24l): `client/src/transport/udp/auth.rs` held three
+`unwrap`s on the reply; the local transport already parses the same shape
+with matches. The UDP path now mirrors it via `parse_auth_reply`.
+
+**Test obligations:**
+- `connection-34.t1`: well-formed reply parses; separator-less, bad-address,
+and empty replies are refused (`auth_reply_tests`).
+
+---
+
 ## Non-goals / Out of scope
 
 - The exact HTTP route(s), headers, or body format of the auth request.
@@ -589,6 +608,7 @@ Summary of test obligations from contracts above:
 **Rejection:**
 - `connection-18.t1`: Missing token causes rejection when required
 - `connection-19.t1`: Rejected client emits RejectEvent, not ConnectEvent
+- `connection-34.t1`: Malformed UDP auth reply refused, never a panic
 
 **Disconnect:**
 - `connection-21.t1`: Client DisconnectEvent only after ConnectEvent (except give-up)

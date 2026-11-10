@@ -4625,6 +4625,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         // Snapshot the queue so we can re-borrow self mutably for apply_scope_for_user.
         let changes: Vec<ScopeChange<E>> =
             self.shared.scope_change_queue.lock().drain(..).collect();
+        // Snapshot `UserKey → SocketAddr` once for the unified
+        // `SendState::apply_scope_for_user` below (same build as
+        // `SendState`'s own drain: reverse-scan avoided in the loop).
+        let user_addresses: HashMap<UserKey, SocketAddr> = if changes.is_empty() {
+            HashMap::new()
+        } else {
+            self.send
+                .state
+                .send_user_connections
+                .iter()
+                .map(|(addr, conn)| (conn.user_key, *addr))
+                .collect()
+        };
         #[cfg(feature = "f3_diag")]
         if !changes.is_empty() {
             let summary: Vec<String> = changes
@@ -4664,7 +4677,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                     // send_state.rs for the rationale.
                     entity_list.sort_by_key(BigMapKey::to_u64);
                     for global_entity in &entity_list {
-                        self.apply_scope_for_user(world, user_key, *global_entity);
+                        let Some(world_entity) = self
+                            .shared
+                            .global_entity_map
+                            .read()
+                            .global_entity_to_entity(*global_entity)
+                            .ok()
+                        else {
+                            continue;
+                        };
+                        self.send.state.apply_scope_for_user(
+                            world,
+                            &user_addresses,
+                            user_key,
+                            *global_entity,
+                            &world_entity,
+                            self.sim_handle
+                                .state
+                                .resource_registry
+                                .is_resource_entity(*global_entity),
+                        );
                     }
                 }
                 ScopeChange::UserLeftRoom(user_key, room_key) => {
@@ -4761,11 +4793,49 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .map(|r| r.user_keys().copied().collect())
                         .unwrap_or_default();
                     for user_key in &user_keys {
-                        self.apply_scope_for_user(world, *user_key, global_entity);
+                        let Some(world_entity) = self
+                            .shared
+                            .global_entity_map
+                            .read()
+                            .global_entity_to_entity(global_entity)
+                            .ok()
+                        else {
+                            continue;
+                        };
+                        self.send.state.apply_scope_for_user(
+                            world,
+                            &user_addresses,
+                            *user_key,
+                            global_entity,
+                            &world_entity,
+                            self.sim_handle
+                                .state
+                                .resource_registry
+                                .is_resource_entity(global_entity),
+                        );
                     }
                 }
                 ScopeChange::ScopeToggled(user_key, global_entity, _is_included) => {
-                    self.apply_scope_for_user(world, user_key, global_entity);
+                    let Some(world_entity) = self
+                        .shared
+                        .global_entity_map
+                        .read()
+                        .global_entity_to_entity(global_entity)
+                        .ok()
+                    else {
+                        continue;
+                    };
+                    self.send.state.apply_scope_for_user(
+                        world,
+                        &user_addresses,
+                        user_key,
+                        global_entity,
+                        &world_entity,
+                        self.sim_handle
+                            .state
+                            .resource_registry
+                            .is_resource_entity(global_entity),
+                    );
                 }
                 ScopeChange::RoomChange(_) => {
                     unreachable!(
@@ -4781,272 +4851,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         "ConfigureReplication is never pushed on the fused InternalWorldServer path"
                     );
                 }
-            }
-        }
-    }
-
-    /// Evaluate scope for one (user, entity) pair and apply any spawn/despawn/pause/resume.
-    fn apply_scope_for_user<W: WorldRefType<E>>(
-        &mut self,
-        world: &W,
-        user_key: UserKey,
-        global_entity: GlobalEntity,
-    ) {
-        // Resolve GlobalEntityIndex before any mutable borrows on self.
-        let entity_idx = self.entity_global_idx(global_entity);
-
-        let Some(user) = self.sim_handle.state.user_store.get(user_key) else {
-            #[cfg(feature = "f3_diag")]
-            eprintln!(
-                "[F3-DIAG naia/apply_scope_for_user] EARLY user={:?} ge={:?} reason=user_not_found",
-                user_key, global_entity
-            );
-            return;
-        };
-        let user_addr = user.address();
-        let Some(send_conn) = self.send.state.send_user_connections.get_mut(&user_addr) else {
-            #[cfg(feature = "f3_diag")]
-            eprintln!("[F3-DIAG naia/apply_scope_for_user] EARLY user={:?} addr={:?} ge={:?} reason=no_send_conn", user_key, user_addr, global_entity);
-            return;
-        };
-        let Some(world_entity) = self
-            .shared
-            .global_entity_map
-            .read()
-            .global_entity_to_entity(global_entity)
-            .ok()
-        else {
-            #[cfg(feature = "f3_diag")]
-            eprintln!("[F3-DIAG naia/apply_scope_for_user] EARLY user={:?} ge={:?} reason=no_world_entity_mapping", user_key, global_entity);
-            return;
-        };
-        if !world.has_entity(&world_entity) {
-            #[cfg(feature = "f3_diag")]
-            eprintln!("[F3-DIAG naia/apply_scope_for_user] REQUEUE user={:?} ge={:?} reason=world.has_entity=false", user_key, global_entity);
-            // Entity not yet spawned in Bevy (deferred commands still pending).
-            // Re-queue so we retry next frame instead of permanently losing the scope change.
-            self.shared
-                .scope_change_queue
-                .lock()
-                .push_back(ScopeChange::ScopeToggled(user_key, global_entity, true));
-            return;
-        }
-        if self
-            .shared
-            .global_world_manager
-            .read()
-            .entity_is_public_and_owned_by_user(user_key, global_entity)
-        {
-            // entity is owned by client but public — don't replicate via this path
-            return;
-        }
-        // Per [entity-publication]: Private (Client/ClientWaiting) entities must
-        // never be replicated via this path.
-        if matches!(
-            self.shared
-                .global_world_manager
-                .read()
-                .entity_owner(global_entity),
-            Some(EntityOwner::Client(_) | EntityOwner::ClientWaiting(_))
-        ) {
-            return;
-        }
-
-        // Visibility-based scope state:
-        //   currently_visible = entity is actively in scope (tracked AND not paused)
-        //   is_tracked         = entity is in entity_map (active OR paused)
-        //   currently_paused   = tracked but not active
-        let currently_visible = send_conn.visibility.is_set(entity_idx);
-        let is_tracked = send_conn
-            .base
-            .world_manager
-            .has_global_entity(global_entity);
-        let currently_paused = is_tracked && !currently_visible;
-
-        // Decide scope membership. Per contract [entity-scopes-06] /
-        // [entity-scopes-12]: an explicit user-scope override wins
-        // over the room-default rule. Three cases:
-        //   - explicit override = Some(true)  → in scope (even if no
-        //     room overlap; "include overrides room absence")
-        //   - explicit override = Some(false) → out of scope (even with
-        //     room overlap; "exclude hides despite shared room")
-        //   - explicit override = None        → use the room default
-        //     (in scope iff user and entity share a room)
-        // Replicated Resources (D14 / §4.3 of RESOURCES_PLAN) bypass
-        // the room rule entirely and are unconditionally in-scope for
-        // every connected user, but the explicit-exclude override still
-        // applies defensively.
-        let in_common_room = if let Some(entity_rooms) = self
-            .send
-            .state
-            .entity_room_map
-            .entity_get_rooms(global_entity)
-        {
-            entity_rooms.intersection(user.room_keys()).next().is_some()
-        } else {
-            false
-        };
-        let explicit = self
-            .send
-            .state
-            .entity_scope_map
-            .get(user_key, global_entity)
-            .copied();
-        let is_resource = self
-            .sim_handle
-            .state
-            .resource_registry
-            .is_resource_entity(global_entity);
-        // [entity-scopes-09]: explicit include() MUST NOT bypass the room gate for
-        // server-owned entities that have no rooms at all. If the entity has rooms
-        // (even rooms the user isn't in), include() is a valid cross-room override
-        // per [entity-scopes-06]. Resources and client-owned entities are exempt.
-        let entity_is_roomless = self
-            .send
-            .state
-            .entity_room_map
-            .entity_get_rooms(global_entity)
-            .is_none();
-        let server_owned_roomless_non_resource = self
-            .shared
-            .global_world_manager
-            .read()
-            .entity_owner(global_entity)
-            .is_some_and(|o| o.is_server())
-            && !is_resource
-            && entity_is_roomless;
-        let should_be_in_scope = match explicit {
-            Some(true) if server_owned_roomless_non_resource => false,
-            Some(in_scope) => in_scope,
-            None => is_resource || in_common_room,
-        };
-        #[cfg(feature = "f3_diag")]
-        eprintln!("[F3-DIAG naia/apply_scope_for_user] DECIDE user={:?} ge={:?} should_be_in_scope={} currently_visible={} currently_paused={} in_common_room={} explicit={:?} is_resource={}", user_key, global_entity, should_be_in_scope, currently_visible, currently_paused, in_common_room, explicit, is_resource);
-        if should_be_in_scope {
-            // Any include closes this pair's exit→re-entry cycle, whether or not
-            // it is a transition into visibility: disarm the one-shot despawn
-            // override so a later legitimate scope churn cannot replay a stale
-            // revocation (TrueSight N6). This must run above the already-visible
-            // early return, otherwise a same-batch revoke-then-include leaves the
-            // pair resident with the tombstone still armed.
-            self.send
-                .state
-                .entity_scope_map
-                .clear_despawn_on_next_exit(user_key, global_entity);
-            if currently_visible {
-                // Entity already active — no change needed.
-                return;
-            }
-            if currently_paused {
-                // Re-entering scope on a paused (ScopeExit::Persist) entity.
-                send_conn.base.world_manager.resume_entity(global_entity);
-                send_conn.set_entity_visible(entity_idx);
-                return;
-            }
-            // Entity not yet tracked for this connection — enter scope.
-            let component_kinds = self
-                .shared
-                .global_world_manager
-                .read()
-                .component_kinds(global_entity)
-                .unwrap();
-            #[cfg(feature = "f3_diag")]
-            eprintln!("[F3-DIAG naia/apply_scope_for_user] HOST_INIT user={:?} ge={:?} component_kinds.len={}", user_key, global_entity, component_kinds.len());
-            send_conn.base.world_manager.host_init_entity(
-                global_entity,
-                component_kinds,
-                &self.shared.component_kinds,
-                self.shared
-                    .global_world_manager
-                    .read()
-                    .entity_is_static(global_entity),
-            );
-            send_conn.set_entity_visible(entity_idx);
-            #[cfg(feature = "e2e_debug")]
-            {
-                SERVER_SCOPE_DIFF_ENQUEUED.fetch_add(1, Ordering::Relaxed);
-            }
-
-            if !self
-                .shared
-                .global_world_manager
-                .read()
-                .entity_is_delegated(global_entity)
-            {
-                return;
-            }
-            send_conn.base.world_manager.send_enable_delegation(
-                HostType::Server,
-                false,
-                global_entity,
-            );
-            // Re-entering scope on a delegated entity that already has a
-            // holder must surface the current holder's state to the
-            // freshly-included user — otherwise the EnableDelegation
-            // default of Available silently overrides the real Denied
-            // status. Per contract [entity-delegation-15] / scope-re-entry:
-            // "re-entering scope yields current authority status".
-            if self
-                .shared
-                .global_world_manager
-                .read()
-                .entity_has_holder(global_entity)
-            {
-                let new_status = if self
-                    .shared
-                    .global_world_manager
-                    .read()
-                    .user_is_authority_holder(user_key, global_entity)
-                {
-                    EntityAuthStatus::Granted
-                } else {
-                    EntityAuthStatus::Denied
-                };
-                send_conn
-                    .base
-                    .world_manager
-                    .host_send_set_auth(global_entity, new_status);
-            }
-        } else if currently_visible {
-            // Entity leaving active scope — check ScopeExit policy.
-            let scope_exit = self
-                .shared
-                .global_world_manager
-                .read()
-                .entity_replication_config(global_entity)
-                .map_or(ScopeExit::Despawn, |c| c.scope_exit);
-            // One-shot per-(user, entity) override: firing consumes it, so
-            // the next exit follows the entity's own policy again.
-            let scope_exit = if self
-                .send
-                .state
-                .entity_scope_map
-                .take_despawn_on_next_exit(user_key, global_entity)
-            {
-                ScopeExit::Despawn
-            } else {
-                scope_exit
-            };
-            match scope_exit {
-                ScopeExit::Persist => {
-                    send_conn.base.world_manager.pause_entity(global_entity);
-                    send_conn.clear_entity_visible(entity_idx);
-                }
-                ScopeExit::Despawn => {
-                    send_conn.base.world_manager.despawn_entity(global_entity);
-                    send_conn.clear_entity_visible(entity_idx);
-                }
-            }
-            #[cfg(feature = "e2e_debug")]
-            {
-                SERVER_SCOPE_DIFF_ENQUEUED.fetch_add(1, Ordering::Relaxed);
-            }
-            // Priority layer eviction: this user's per-user priority entry for
-            // this entity is scoped to in-scope lifetime. Drop it regardless
-            // of scope-exit policy — a Persist pause still means no outbound
-            // traffic for this (user, entity) pair until re-scoped.
-            if let Some(layer) = self.send.state.user_priorities.get_mut(&user_key) {
-                layer.on_scope_exit(&world_entity);
             }
         }
     }

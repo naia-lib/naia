@@ -212,6 +212,23 @@ If the server receives (or internally attempts) a scope operation referencing an
 - in production, it MUST ignore the operation silently.
 - when Debug mode is enabled, it MAY emit a warning.
 
+### [entity-scopes-16] — Bounded scope-enter retry (single evaluator)
+
+**Obligations:**
+- **t1**: Exactly one scope evaluator; a scope-enter for an entity absent from
+the snapshot world MUST be re-queued at most `SCOPE_RETRY_MAX` (16) times per
+(user, entity) pair, then dropped with a warning. Unbounded re-queue MUST NOT
+exist on any scope path.
+- **t2**: The retry counter MUST reset on the success path (`world.has_entity == true`).
+
+Rationale (nydus-24l): two drifted copies of `apply_scope_for_user` existed;
+the `InternalWorldServer` copy re-queued forever on an absent entity. The
+`SendState` copy (bounded, `scope_retry_decision`) is the single evaluator;
+all drains route through it.
+
+**Test obligations:**
+- `entity-scopes-16.t1`: `scope_retry_decision` accepts attempts `0..16` and drops at/above 16 (`scope_retry_decision_caps_at_max`).
+
 ---
 
 ## State Transition Table: Scope
