@@ -1675,6 +1675,30 @@ mod protocol_tests {
         assert_ne!(id, ProtocolId::default());
     }
 
+    /// Golden pin: a fixed protocol definition produces exactly this digest.
+    ///
+    /// This is the value a downstream consumer (e.g. cyberlith's golden
+    /// protocol test) pins alongside its own version number: any
+    /// wire-relevant change to the definition below reds this test, which
+    /// names the new digest so the consumer can see whether its version
+    /// needs a bump. Minted from `compute_protocol_id`; sensitivity (a
+    /// layout change fails it) is demonstrated, not assumed.
+    #[test]
+    fn the_pinned_digest_for_a_fixed_protocol_definition() {
+        let id = locked(|p| {
+            p.add_default_channels();
+            p.add_message::<Whisper>();
+            p.add_component::<Ghost>();
+        })
+        .protocol_id();
+
+        assert_eq!(
+            id.to_hex(),
+            "1b48d714978632dd3482e1ad19767bc3",
+            "protocol digest changed: if a wire-relevant registration changed on purpose, mint the new hex; otherwise the fingerprint regressed",
+        );
+    }
+
     /// F6a -- **Message field layout is covered, not just the name.**
     ///
     /// v1 folded names only, so two peers that agreed on every message name
