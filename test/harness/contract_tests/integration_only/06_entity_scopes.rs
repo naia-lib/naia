@@ -665,6 +665,10 @@ fn authority_releases_when_holder_goes_out_of_scope() {
 /// RoomA, U sees E; when U leaves RoomA, E hides again while the include is
 /// still active; rejoining shows E again. The explicit-route last-call-wins
 /// tail lives in `resident_manual_include_exclude_last_call_wins`.
+/// The gate-via-explicit-route is proven resident-only: the harness's
+/// Pipelined driving never drains the scope ledger, so the pipelined wrapper
+/// pins the contract observable plus the room-route ordering, not the
+/// include path.
 fn manual_include_needs_shared_room(mode: naia_server::ServerMode) {
     let mut scenario = Scenario::new(mode);
     let test_protocol = protocol();

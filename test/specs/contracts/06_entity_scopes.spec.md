@@ -275,7 +275,7 @@ Both engine shapes (`Resident`, `Pipelined`) MUST resolve the join identically.
 - **entity-scopes-11**: Prove same-tick flip-flops collapse to final state; no intermediate spawn/despawn.
 - **entity-scopes-12**: Prove re-entry after ≥1 tick out-of-scope produces fresh spawn snapshot lifetime.
 - **entity-scopes-13**: Prove disconnect implies OutOfScope for that user and replication ceases.
-- **entity-scopes-14**: Prove rooms are a required gate over the explicit include route: include without a shared room stays out-of-scope, joining the room shows the entity, leaving hides it again (`manual_include_needs_shared_room`, resident + pipelined). The explicit-route last-call-wins tail runs resident-only (`resident_manual_include_exclude_last_call_wins`); the harness's Pipelined driving never drains the scope ledger.
+- **entity-scopes-14**: Prove rooms are a required gate over the explicit include route: include without a shared room stays out-of-scope, joining the room shows the entity, leaving hides it again. The gate-via-explicit-route is proven resident-only (`manual_include_needs_shared_room` resident); the harness's Pipelined driving never drains the scope ledger, so the pipelined wrapper pins the contract observable plus the room-route join/leave ordering, not the include path. The explicit-route last-call-wins tail runs resident-only (`resident_manual_include_exclude_last_call_wins`).
 - **entity-scopes-17**: Prove a user joining a room that already holds several entities spawns them in the same order on every fresh server in one process (room membership is walked in a hash-independent order, `room_join_spawn_order`, resident + pipelined).
 
 ---

@@ -655,9 +655,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// once the `is_resource` substitution is accounted for):
     /// 1. Owner of a client-owned entity is always in-scope.
     /// 2. Private entities are never in-scope for non-owners.
-    /// 3. Explicit `exclude()` wins. Explicit `include()` wins iff the user
-    ///    and the entity share at least one room (rooms are a required gate
-    ///    per [entity-scopes-14]); resources stay exempt.
+    /// 3. Explicit `exclude()` wins for non-owners. Explicit `include()`
+    ///    wins for non-owners iff the user and the entity share at least
+    ///    one room (rooms are a required gate per [entity-scopes-14]);
+    ///    resources stay exempt from the room gate.
     /// 4. Default: in-scope iff user and entity share at least one room.
     ///
     /// Returns `false` if `world_entity` is not registered in the global
