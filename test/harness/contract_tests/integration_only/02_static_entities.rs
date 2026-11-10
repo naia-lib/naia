@@ -10,7 +10,8 @@ mod _helpers;
 
 /// Server-owned static entity panics on insert_component after construction.
 ///
-/// Contract: [static-entity-05]
+/// Contract: none — `[static-entity-05]` named no spec row (no static-entity
+/// contract exists; spec gap, see card).
 /// Calling `insert_component` on a static entity after the `spawn()` closure
 /// has returned must panic.  This is a protocol invariant enforced at the
 /// server-entity handle level; it cannot be tested via BDD (panics are
@@ -46,7 +47,8 @@ fn server_static_entity_panics_on_insert_after_construction() {
 
 /// Client-owned static entity panics on insert_component after construction.
 ///
-/// Contract: [client-static-03]
+/// Contract: none — `[client-static-03]` named no spec row (no static-entity
+/// contract exists; spec gap, see card).
 /// Calling `insert_component` on a client-owned static entity after the
 /// `spawn_static()` closure has returned must panic.  Mirrors the server-side
 /// invariant above for client-authoritative entities.
