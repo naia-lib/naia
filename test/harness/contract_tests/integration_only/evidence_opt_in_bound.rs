@@ -22,7 +22,7 @@ use naia_server::{
     transport::local::{LocalServerSocket, LocalTransportHub, Socket as ServerSocket},
     AuthEvent, ReplicationConfig, RoomKey, Server, ServerConfig, ServerMode, UserKey,
 };
-use naia_shared::{AppliedCause, Instant, TestClock, WorldRefType};
+use naia_shared::{AppliedCause, CauseKind, ComponentKind, Instant, TestClock, WorldRefType};
 use naia_test_harness::{protocol, Auth, Position, Velocity};
 use parking_lot::Mutex;
 
@@ -328,33 +328,128 @@ fn same_window_insert_remove_journals_agree(mode: ServerMode) {
 
     // One entity ever exists, so every entry in the window is its own:
     // compare (kind, component, wire id) multisets across the two journals.
-    fn project<E: Copy>(entries: &[AppliedCause<E>]) -> Vec<String> {
-        let mut projected: Vec<String> = entries
-            .iter()
-            .map(|entry| {
-                let identity = entry.identity();
-                format!(
-                    "{:?} {:?} {:?}",
-                    entry.kind(),
-                    identity.component_kind,
-                    identity.command_id
-                )
-            })
-            .collect();
-        projected.sort();
-        projected
-    }
-    let server_entries = project(
+    let server_entries = project_entries(
         &link
             .server
             .take_transmit_causes(&user)
             .expect("evidence on must drain server-side"),
     );
-    let client_entries = project(&link.client.take_applied_causes());
+    let client_entries = project_entries(&link.client.take_applied_causes());
     assert_eq!(
         server_entries, client_entries,
         "server and client journals disagree after a same-window insert+remove: server {server_entries:?} vs client {client_entries:?}",
     );
+}
+
+/// nydus-3nl: a retransmitted insert must not arm the netted marker.
+/// Insert, drop the first copy (so no ack ever arrives), remove before any
+/// ack, then deliver: the insert's resend rides beside the genuine remove.
+/// The server must journal both, like the client does.
+/// Resident writes the insert for real on the first pass, so both sides hold
+/// the pair. Pipelined stages the insert into D-slots, so the remove nets it
+/// before any real write and both sides hold nothing — but the Noop resends
+/// must still re-arm, or the remove's own resend would journal alone. Either
+/// way the two journals must agree.
+fn resent_insert_beside_remove_journals_agree(mode: ServerMode, expect_insert: bool) {
+    let mut link = Link::new(mode, true);
+    let _room = link.seed_replication();
+    let user = link.user.unwrap();
+    // Drain the seed journals so only the insert/remove window is compared.
+    let _ = link
+        .server
+        .take_transmit_causes(&user)
+        .expect("evidence on must drain server-side");
+    let _ = link.client.take_applied_causes();
+    let entity = link
+        .server_world
+        .proxy()
+        .entities()
+        .pop()
+        .expect("one seeded entity");
+    let velocity_kind = ComponentKind::of::<Velocity>();
+
+    link.server
+        .entity_mut(link.server_world.proxy_mut(), &entity)
+        .insert_component(Velocity::new(7.0, 8.0));
+    // The first copy never reaches the client: no ack, so the insert resends.
+    link.step(false);
+    // Removed before the insert is ever acked.
+    let _ = link
+        .server
+        .entity_mut(link.server_world.proxy_mut(), &entity)
+        .remove_component::<Velocity>();
+
+    // Accumulate per-step drains so a slow apply cannot lapse entries behind
+    // the evidence window (16) before the comparison.
+    let mut server_accumulated = Vec::new();
+    let mut client_accumulated = Vec::new();
+    for _ in 0..60 {
+        link.step(true);
+        server_accumulated.extend(
+            link.server
+                .take_transmit_causes(&user)
+                .expect("evidence on must drain server-side")
+                .into_iter()
+                .filter(|entry| entry.identity().component_kind == Some(velocity_kind)),
+        );
+        client_accumulated.extend(
+            link.client
+                .take_applied_causes()
+                .into_iter()
+                .filter(|entry| entry.identity().component_kind == Some(velocity_kind)),
+        );
+        if client_accumulated
+            .iter()
+            .any(|entry: &AppliedCause<_>| entry.kind() == CauseKind::Insert)
+            && client_accumulated
+                .iter()
+                .any(|entry: &AppliedCause<_>| entry.kind() == CauseKind::Remove)
+        {
+            break;
+        }
+    }
+
+    let server_entries = project_entries(&server_accumulated);
+    let client_entries = project_entries(&client_accumulated);
+    assert_eq!(
+        expect_insert,
+        server_entries
+            .iter()
+            .any(|entry| entry.starts_with("Insert")),
+        "server journal insert presence must match the engine shape: {server_entries:?}",
+    );
+    assert_eq!(
+        server_entries, client_entries,
+        "server and client journals disagree after a resend beside a genuine remove: server {server_entries:?} vs client {client_entries:?}",
+    );
+}
+
+#[test]
+fn resent_insert_beside_remove_journals_agree_resident() {
+    resent_insert_beside_remove_journals_agree(ServerMode::Resident, true);
+}
+
+#[test]
+fn resent_insert_beside_remove_journals_agree_pipelined() {
+    resent_insert_beside_remove_journals_agree(ServerMode::Pipelined, false);
+}
+
+/// Compare (kind, component, wire id) multisets across the two journals.
+fn project_entries<E: Copy>(entries: &[AppliedCause<E>]) -> Vec<String> {
+    let mut projected: Vec<String> = entries
+        .iter()
+        .map(|entry| {
+            let identity = entry.identity();
+            format!(
+                "{:?} {:?} {:?}",
+                entry.kind(),
+                identity.component_kind,
+                identity.command_id
+            )
+        })
+        .collect();
+    projected.sort();
+    projected
 }
 
 #[test]

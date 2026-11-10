@@ -35,6 +35,14 @@
 //!   removes, so journaling the Remove would manufacture a mismatch. Wire
 //!   bytes and the send record are untouched; a later real insert clears the
 //!   marker, so a genuine remove still journals.
+//! - Netted-marker arming (nydus-3nl): the marker arms unless the insert
+//!   already went out as real content. A retransmitted insert reuses its
+//!   CommandId: a resend that degrades to Noop still re-arms, so the paired
+//!   remove's own resend skips too — but a resend after a real write means
+//!   the peer held the component, and arming would journal-skip the genuine
+//!   remove riding beside it. A despawn clears every pending marker for the
+//!   entity in the same commit that queues it, so no stale marker survives
+//!   the entity it was armed for.
 //! - `generation` is journal-owned, starting at 0 (one known world lifetime
 //!   per stream). [`CauseStream::advance_generation`] emits an
 //!   [`CauseKind::Epoch`] marker; Cyberlith overlays its live generation at

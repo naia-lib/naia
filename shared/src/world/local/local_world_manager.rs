@@ -761,6 +761,27 @@ impl LocalWorldManager {
             .is_some_and(|(_, message)| matches!(message, EntityMessage::Noop))
     }
 
+    /// nydus-3nl: whether this command was already written in an earlier
+    /// packet. A retransmitted insert reuses its CommandId, so a prior
+    /// record means this write is a resend. Records leave only on delivery
+    /// or TTL expiry, and a delivered command leaves the pending queue, so
+    /// a still-pending command with no record is on its first write.
+    /// nydus-3nl: whether this command already went out as real (non-Noop)
+    /// content in an earlier packet. A retransmitted insert reuses its
+    /// CommandId: a resend that degrades to Noop must still re-arm the
+    /// netted marker (the paired remove's own resend must skip too), but a
+    /// resend after a real write means the peer held the component — arming
+    /// would journal-skip the genuine remove riding beside it. Records leave
+    /// only on delivery or TTL expiry, and a delivered command leaves the
+    /// pending queue, so a still-pending command's record stands.
+    pub(crate) fn command_written_real_before(&self, command_id: CommandId) -> bool {
+        self.sent_command_packets.iter().any(|(_, (_, actions))| {
+            actions
+                .iter()
+                .any(|(id, message)| *id == command_id && !matches!(message, EntityMessage::Noop))
+        })
+    }
+
     /// nydus-cae: remember that this pair's insert degraded to a wire Noop
     /// because a same-window remove netted it. The paired remove, when
     /// written, is journal-skipped (consuming this entry).
@@ -1424,6 +1445,11 @@ impl LocalWorldManager {
     pub fn despawn_entity(&mut self, global_entity: GlobalEntity) {
         // Clean up pause state if entity was Paused (ScopeExit::Persist)
         self.paused_entities.remove(&global_entity);
+        // nydus-3nl: a despawn ends every pending netted-insert window for
+        // the entity, in the same commit that queues the Despawn. A stale
+        // marker must never survive the entity it was armed for.
+        self.netted_inserts
+            .retain(|(entity, _)| *entity != global_entity);
 
         let Ok(local_entity) = self.em_read().global_entity_to_owned_entity(global_entity) else {
             return;

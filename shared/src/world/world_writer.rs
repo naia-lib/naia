@@ -665,13 +665,23 @@ impl WorldWriter {
 
                     // if we are actually writing this packet
                     if is_writing {
+                        // nydus-3nl: arm the netted marker unless this command
+                        // already went out as real content. A retransmitted
+                        // insert reuses its CommandId: a resend that degrades
+                        // to Noop must still re-arm (the paired remove's own
+                        // resend must skip too), but a resend after a real
+                        // write means the peer held the component — arming
+                        // would journal-skip the genuine remove riding beside
+                        // it. Check before recording: this pass's record would
+                        // match itself.
+                        let went_out_real = world_manager.command_written_real_before(command_id);
                         // add it to command record
                         world_manager.record_command_written(
                             packet_index,
                             command_id,
                             EntityMessage::Noop,
                         );
-                        if insert_netted {
+                        if insert_netted && !went_out_real {
                             // nydus-cae: the paired RemoveComponent, written
                             // behind this Noop, is journal-skipped (the peer
                             // never held the component).
