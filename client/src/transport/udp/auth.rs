@@ -119,11 +119,11 @@ fn parse_auth_reply(response_text: &str) -> Result<(String, SocketAddr), String>
     let id_token = response_parts.next().unwrap_or_default().to_string();
     let data_addr_str = match response_parts.next() {
         Some(addr) => addr,
-        None => return Err(format!("Malformed auth reply: no CRLF separator")),
+        None => return Err("Malformed auth reply: no CRLF separator".to_string()),
     };
     match data_addr_str.parse() {
         Ok(data_addr) => Ok((id_token, data_addr)),
-        Err(_) => Err(format!("Malformed auth reply: bad address")),
+        Err(_) => Err("Malformed auth reply: bad address".to_string()),
     }
 }
 

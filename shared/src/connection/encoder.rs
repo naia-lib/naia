@@ -28,6 +28,15 @@ cfg_if! {
             }
         }
 
+        // SAFETY: zstd's `Compressor` is `Send` but not `Sync` because its
+        // context is a raw `ZSTD_CCtx` pointer. `Encoder` reaches that context
+        // only through `&mut self` (`encode`); `Clone` rebuilds a fresh context
+        // from `mode` and never touches the handle. A shared `&Encoder` can
+        // therefore never observe or mutate the context, so sharing it across
+        // threads is sound. Needed because the Bevy adapters hold io state in
+        // ECS resources, which must be `Send + Sync`.
+        unsafe impl Sync for Encoder {}
+
         impl Encoder {
             /// Creates an encoder with the configured compression mode.
             pub fn new(compression_mode: CompressionMode) -> Self {
@@ -178,5 +187,19 @@ cfg_if! {
                 &self.result
             }
         }
+    }
+}
+
+// See `decoder.rs` `sync_tests`: zstd's compression context is `Send` but
+// not `Sync`; `Encoder` is held inside ECS resources by the Bevy adapters.
+#[cfg(all(test, feature = "zstd_support"))]
+mod sync_tests {
+    use super::Encoder;
+
+    fn assert_sync<T: Sync>() {}
+
+    #[test]
+    fn encoder_is_sync_for_ecs_resources() {
+        assert_sync::<Encoder>();
     }
 }

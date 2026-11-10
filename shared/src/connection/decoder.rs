@@ -23,6 +23,15 @@ cfg_if! {
             }
         }
 
+        // SAFETY: zstd's `Decompressor` is `Send` but not `Sync` because its
+        // context is a raw `ZSTD_DCtx` pointer. `Decoder` reaches that context
+        // only through `&mut self` (`decode`); `Clone` rebuilds a fresh context
+        // from `mode` and never touches the handle. A shared `&Decoder` can
+        // therefore never observe or mutate the context, so sharing it across
+        // threads is sound. Needed because the Bevy adapters hold io state in
+        // ECS resources, which must be `Send + Sync`.
+        unsafe impl Sync for Decoder {}
+
         impl Decoder {
             /// Creates a decoder with the configured compression mode.
             // Local-only: the constructor takes locally built config, never
@@ -127,5 +136,21 @@ mod corrupt_payload_tests {
             decoder.decode(&payload).is_none(),
             "corrupt compressed bytes must decode to None, never panic",
         );
+    }
+}
+
+// Bevy adapters hold the server and client io state as ECS resources, which
+// must be `Send + Sync`. zstd's decompression context is `Send` but not
+// `Sync`, so without `Decoder`'s manual `Sync` impl `naia-bevy-server` fails
+// to compile under `zstd_support` (brock-0zf-stage fold, 2026-11-10).
+#[cfg(all(test, feature = "zstd_support"))]
+mod sync_tests {
+    use super::Decoder;
+
+    fn assert_sync<T: Sync>() {}
+
+    #[test]
+    fn decoder_is_sync_for_ecs_resources() {
+        assert_sync::<Decoder>();
     }
 }
