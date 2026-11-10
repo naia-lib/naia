@@ -664,11 +664,8 @@ fn authority_releases_when_holder_goes_out_of_scope() {
 /// then U still does not see E (rooms are a required gate). When U joins
 /// RoomA, U sees E; when U leaves RoomA, E hides again while the include is
 /// still active; rejoining shows E again. The explicit-route last-call-wins
-/// tail lives in `resident_manual_include_exclude_last_call_wins`.
-/// The gate-via-explicit-route is proven resident-only: the harness's
-/// Pipelined driving never drains the scope ledger, so the pipelined wrapper
-/// pins the contract observable plus the room-route ordering, not the
-/// include path.
+/// tail lives in `manual_include_exclude_last_call_wins` (both engines: the
+/// monolithic bridge drains the scope ledger (D7) for Pipelined driving).
 fn manual_include_needs_shared_room(mode: naia_server::ServerMode) {
     let mut scenario = Scenario::new(mode);
     let test_protocol = protocol();
@@ -785,13 +782,11 @@ fn pipelined_manual_include_needs_shared_room() {
 /// Given E and U sharing RoomA; when server includes, excludes, then includes
 /// E for U; then U sees E, hides E, and sees E again in that order.
 ///
-/// Resident-only: the include/exclude bits stage through the scope ledger,
-/// which the harness's Pipelined driving never drains (same gap as the armed
-/// overrides above); the room-gate half of this row runs on both engines in
-/// `manual_include_needs_shared_room`.
-#[test]
-fn resident_manual_include_exclude_last_call_wins() {
-    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+/// The include/exclude bits stage through the scope ledger, which the
+/// monolithic bridge drains (D7) for the harness's Pipelined driving, so this
+/// runs on both engines.
+fn manual_include_exclude_last_call_wins(mode: naia_server::ServerMode) {
+    let mut scenario = Scenario::new(mode);
     let test_protocol = protocol();
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
@@ -852,6 +847,16 @@ fn resident_manual_include_exclude_last_call_wins() {
     });
 
     assert_sees(&mut scenario, client_u_key, entity_e, true);
+}
+
+#[test]
+fn resident_manual_include_exclude_last_call_wins() {
+    manual_include_exclude_last_call_wins(naia_server::ServerMode::Resident);
+}
+
+#[test]
+fn pipelined_manual_include_exclude_last_call_wins() {
+    manual_include_exclude_last_call_wins(naia_server::ServerMode::Pipelined);
 }
 
 /// Manual user-scope exclude hides an entity despite shared room
@@ -1923,16 +1928,26 @@ fn pipelined_a_persist_user_removed_from_its_room_keeps_the_entity() {
     a_persist_user_removed_from_its_room_keeps_the_entity(naia_server::ServerMode::Pipelined);
 }
 
-// The override arms through the scope ledger, which the harness's Pipelined
-// driving never drains (see the L6 suite above), so these two are Resident-only.
+// The override arms through the scope ledger; the monolithic bridge drains it
+// (D7) for the harness's Pipelined driving, so these run on both engines.
 #[test]
 fn resident_an_armed_override_fires_on_the_entity_room_route() {
     an_armed_override_fires_on_the_entity_room_route(naia_server::ServerMode::Resident);
 }
 
 #[test]
+fn pipelined_an_armed_override_fires_on_the_entity_room_route() {
+    an_armed_override_fires_on_the_entity_room_route(naia_server::ServerMode::Pipelined);
+}
+
+#[test]
 fn resident_an_armed_override_fires_on_the_user_room_route() {
     an_armed_override_fires_on_the_user_room_route(naia_server::ServerMode::Resident);
+}
+
+#[test]
+fn pipelined_an_armed_override_fires_on_the_user_room_route() {
+    an_armed_override_fires_on_the_user_room_route(naia_server::ServerMode::Pipelined);
 }
 
 // ============================================================================

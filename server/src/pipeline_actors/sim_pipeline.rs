@@ -505,17 +505,25 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         &mut self,
         f: impl FnOnce(&mut crate::InternalWorldServer<E>) -> R,
     ) -> R {
-        let coord = self.coord.take().expect(
+        let mut coord = self.coord.take().expect(
             "PipelinedWorldServer::with_monolithic_world_server: CoordHandle not available",
         );
         let recv =
             self.recv_slot.lock().take().expect(
                 "PipelinedWorldServer::with_monolithic_world_server: RecvHandle not in slot",
             );
-        let send =
+        let mut send =
             self.send_slot.lock().take().expect(
                 "PipelinedWorldServer::with_monolithic_world_server: SendHandle not in slot",
             );
+
+        // F80: run production's D7 scope-ledger drain here, so coord-staged
+        // explicit-scope ops (include/exclude/armed override) land on the
+        // send side before the fused world server runs. The harness drives
+        // every pipelined Server op through this bridge and never runs the
+        // D1-D9 tick, so without this the staged ops sat forever and
+        // explicit-scope tests proved Resident only.
+        Self::drain_pending_scope_ledger_ops(&mut coord, &mut send);
 
         let coord_state = coord.state;
         let mut ws = InternalWorldServer::from_pipeline_states(coord_state, recv.state, send.state);
