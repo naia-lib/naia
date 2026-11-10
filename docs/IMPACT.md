@@ -112,10 +112,12 @@ A native process success without valid content-key credit is UNKNOWN.
 
 ## Required product-feature coverage
 
-Usher160979 (November 1, 2026) requires the existing strict workspace Clippy
-leg to enable the previously uncovered native transport, visibility, compression
-and metrics product features. Their dependency feature closure includes UDP's
-ureq/local_ipaddress and shared zstd. Diagnostic frame tracing, e2e diagnostics,
-benchmark instrumentation, pipeline timing and test-only harness helpers are
-explicitly named with individual reasons under `cargo_targets.uncovered_feature`.
-These exclusions do not waive any product feature or weaken Clippy warnings.
+Usher160979 (November 1, 2026) requires the strict workspace Clippy leg to
+enable the previously uncovered native transport, visibility, compression and
+metrics product features. Their dependency feature closure includes UDP's
+ureq/local_ipaddress and shared zstd. Diagnostic frame tracing, e2e
+diagnostics, benchmark instrumentation, pipeline timing and test-only harness
+helpers carry no `cargo_targets.uncovered_feature` row: clerc derives feature
+coverage from the legs themselves and refuses such a row for a covered feature
+(`clerc impact verify-map`, 2026-11-10). Nothing here waives a product feature
+or weakens Clippy warnings.
