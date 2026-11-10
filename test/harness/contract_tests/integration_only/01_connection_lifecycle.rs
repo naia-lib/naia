@@ -830,19 +830,106 @@ fn successful_auth_with_require_auth() {
 
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
-    // Use helper to connect (handles auth and accept)
+    // Start the client manually (not via client_connect, which consumes
+    // the auth event internally) so this test observes the
+    // ServerAuthEvent itself.
+    scenario.allow_flexible_next();
     let client_auth = Auth::new("valid_user", "valid_password");
-    let client_a_key = client_connect(
-        &mut scenario,
-        &room_key,
+    let client_a_key = scenario.client_start(
         "Client A",
-        client_auth,
-        ClientConfig::default(),
+        client_auth.clone(),
+        test_client_config(),
         test_protocol,
     );
 
+    // [connection-08.t1]: require_auth surfaces exactly one auth event
+    // for A, carrying the presented credentials, before any accept.
+    // Every poll drains fully (no early return) so same-tick duplicates
+    // are collected, not discarded; stragglers in later ticks surface in
+    // the post-connect drain below.
+    let mut auth_events = Vec::new();
+    let mut sighted = false;
+    let mut quiet_ticks = 0;
+    for _ in 0..30 {
+        let before = auth_events.len();
+        scenario.expect(|ctx| {
+            ctx.server(|server| {
+                for (key, auth) in server.read_events::<ServerAuthEvent<Auth>>() {
+                    if key == client_a_key {
+                        auth_events.push(auth);
+                    }
+                }
+                Some(())
+            })
+        });
+        scenario.mutate(|_| {});
+        if auth_events.len() > before {
+            sighted = true;
+            quiet_ticks = 0;
+        } else if sighted {
+            quiet_ticks += 1;
+            if quiet_ticks >= 5 {
+                break;
+            }
+        }
+    }
+    assert_eq!(
+        auth_events.len(),
+        1,
+        "require_auth must surface one auth event for the connecting client"
+    );
+    assert!(
+        auth_events[0] == client_auth,
+        "auth event must carry the presented credentials"
+    );
+
+    // Accept and drive to connected, mirroring client_connect.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_a_key);
+        });
+    });
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some(incoming_client_key) = server.read_event::<ServerConnectEvent>() {
+                if incoming_client_key == client_a_key {
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .room_mut(&room_key)
+                .expect("room to exist")
+                .add_user(&client_a_key);
+        });
+    });
+
     // Verify A is connected
     scenario.expect(|ctx| server_and_client_connected(ctx, client_a_key));
+
+    // Exactly one: no second auth event for A after connect.
+    let mut late_auth_events = 0;
+    for _ in 0..10 {
+        scenario.expect(|ctx| {
+            ctx.server(|server| {
+                for (key, _auth) in server.read_events::<ServerAuthEvent<Auth>>() {
+                    if key == client_a_key {
+                        late_auth_events += 1;
+                    }
+                }
+                Some(())
+            })
+        });
+        scenario.mutate(|_| {});
+    }
+    assert_eq!(
+        late_auth_events, 0,
+        "no further auth event may fire for A after connect"
+    );
 
     // Spawn entity
     let entity = scenario.mutate(|ctx| {
@@ -880,7 +967,7 @@ fn successful_auth_with_require_auth() {
 
     scenario.spec_expect(
         "connection-08.t1: server emits auth event when require_auth enabled",
-        |_ctx| Some(()),
+        |_ctx| (auth_events.len() == 1 && late_auth_events == 0).then_some(()),
     );
 }
 
