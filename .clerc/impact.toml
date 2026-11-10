@@ -1,5 +1,5 @@
 # Naia's impact selector, inventoried from the 42 public workspace members.
-# 131 legs (8 lint floor + 123 test-selected checks); a same-name library
+# 133 legs (8 lint floor + 125 test-selected checks); a same-name library
 # and binary keep both selectors in the same physical command. Six testless
 # demo bins left test selection per Kepler ruling seq 135988 option (b) and
 # live in [[cargo_targets.unchecked]]; their bins still compile under clippy
@@ -97,6 +97,7 @@ checks = [
     "test:naia-server:close_releases_ports",
     "test:naia-server:naia_server",
     "test:naia-server:udp_close_releases_port",
+    "test:naia-shared:applied_cause_evidence",
     "test:naia-shared:delegation_tag_stability",
     "test:naia-shared:derive_enum",
     "test:naia-shared:derive_message_enum",
@@ -120,6 +121,7 @@ checks = [
     "test:naia-socket-shared:naia_socket_shared",
     "test:naia-spec-tool:naia-spec-tool",
     "test:naia-test-harness:12_reconnect_cancel",
+    "test:naia-test-harness:command_resend_identity",
     "test:naia-test-harness:evidence_opt_in_bound",
     "test:naia-test-harness:g8_real_ack_byte_identity",
     "test:naia-test-harness:g9pre_resident_pipelined_byte_identity",
@@ -520,6 +522,10 @@ checks = ["test:naia-server-socket-demo:naia-server-socket-demo"]
 argv = ["cargo", "test", "-p", "naia-server-socket-demo", "--bin", "naia-server-socket-demo", "--no-fail-fast"]
 
 [[leg]]
+checks = ["test:naia-shared:applied_cause_evidence"]
+argv = ["cargo", "test", "-p", "naia-shared", "--test", "applied_cause_evidence", "--no-fail-fast"]
+
+[[leg]]
 checks = ["test:naia-shared:delegation_tag_stability"]
 argv = ["cargo", "test", "-p", "naia-shared", "--test", "delegation_tag_stability", "--no-fail-fast"]
 
@@ -614,6 +620,10 @@ argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "evidence_opt_in_b
 [[leg]]
 checks = ["test:naia-test-harness:12_reconnect_cancel"]
 argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "12_reconnect_cancel", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:command_resend_identity"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "command_resend_identity", "--features", "deterministic", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-test-harness:g8_real_ack_byte_identity"]
@@ -1220,6 +1230,10 @@ depends_on = ["naia-bevy-derive", "naia-derive", "naia-serde", "naia-socket-shar
 
 [[edge]]
 from = "shared/"
+to = "test:naia-shared:applied_cause_evidence"
+
+[[edge]]
+from = "shared/"
 to = "test:naia-shared:delegation_tag_stability"
 
 [[edge]]
@@ -1348,6 +1362,10 @@ depends_on = ["naia-client", "naia-demo-world", "naia-server", "naia-shared"]
 [[edge]]
 from = "test/harness/"
 to = "test:naia-test-harness:12_reconnect_cancel"
+
+[[edge]]
+from = "test/harness/"
+to = "test:naia-test-harness:command_resend_identity"
 
 [[edge]]
 from = "test/harness/"
@@ -1616,8 +1634,9 @@ budget_minutes = 60
 # ---------------------------------------------------------------------------
 # R1 — pure deterministic unit (TESTING.md ladder R1): lib targets whose
 # tests use no clock, thread, or socket. Covers 24 vacuous lib targets
-# (zero #[test] in src, machine-verified) plus naia-serde wire roundtrips
-# and naia-server-socket HTTP-parsing tests (both audited pure).
+# (zero #[test] in src, machine-verified) plus naia-serde wire roundtrips,
+# naia-server-socket HTTP-parsing tests, and naia-shared applied-cause
+# evidence (all audited pure).
 [[rung]]
 level = 1
 checks = [
@@ -1646,6 +1665,7 @@ checks = [
     "test:naia-serde:naia_serde",
     "test:naia-serde:serde_roundtrip",
     "test:naia-server-socket:naia_server_socket",
+    "test:naia-shared:applied_cause_evidence",
     "test:naia-socket-client-demo-app:naia_socket_client_demo_app",
     "test:naia-socket-client-demo-wb:naia_socket_client_demo_wb",
     "test:naia-socket-demo-shared:naia_socket_demo_shared",
@@ -1725,6 +1745,7 @@ checks = [
     "test:naia-socket-shared:naia_socket_shared",
     "test:naia-spec-tool:naia-spec-tool",
     "test:naia-test-harness:12_reconnect_cancel",
+    "test:naia-test-harness:command_resend_identity",
     "test:naia-test-harness:evidence_opt_in_bound",
     "test:naia-test-harness:g8_real_ack_byte_identity",
     "test:naia-test-harness:g9pre_resident_pipelined_byte_identity",
