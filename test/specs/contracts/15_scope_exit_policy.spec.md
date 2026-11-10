@@ -129,6 +129,37 @@ pair, not of the route that resolved `OutOfScope(U,E)`.
   despawned for `U` and the override is consumed.
 - **t4**: Both engine shapes (`Resident`, `Pipelined`) MUST resolve t1 and t2 identically.
 
+### [scope-exit-10] — Explicit-route one-shot override fires and is consumed
+
+**Obligations:**
+- **t1**: Explicit-route firing and consumption.
+Given a `ScopeExit::Persist` entity visible to `U`; when a one-shot
+`despawn_on_next_exit` override armed for `(U,E)` is followed by an explicit
+`UserScopeMut::exclude` resolving `OutOfScope(U,E)`; then `E` is despawned for
+`U` (`client.has_entity(E)` becomes `false`), and the override is consumed: a
+later exit after re-entry follows `Persist` again (continued presence, never a
+replay despawn).
+- **t2**: Pair scoping.
+The override is scoped to the `(user, entity)` pair, not the entity: arming
+for `(U,E)` MUST NOT despawn `E` for any other user `V` that shares scope.
+- **t3**: Stranded-override disarm.
+If `(U,E)` re-enters scope (include) while an override armed out-of-scope is
+still pending, re-entry MUST disarm it: the next exit follows the entity's own
+policy, never the stranded override.
+
+Proof is Resident-driven: the harness's Pipelined driving never drains the
+scope ledger, so explicit user-scope mutations take no effect there at all (a
+plain `exclude` is equally inert — pre-existing, unrelated to the override).
+Pipelined coverage is handle-level in `server/src/pipeline_actors/tests.rs`.
+
+**Test obligations:**
+- `scope-exit-10.t1`: `armed_override_despawns_a_persisted_entity_on_scope_exit`
+  (firing) and `repeated_churn_after_a_fired_override_never_despawns_again`
+  (consumption: churn after the firing never re-revokes).
+- `scope-exit-10.t2`: `the_override_is_scoped_to_one_user_not_the_entity`.
+- `scope-exit-10.t3`: `re_entry_clears_the_override_so_the_next_exit_persists_again`
+  and `an_override_stranded_across_a_re_entry_is_disarmed_by_the_inclusion`.
+
 ---
 
 ## 8) State Transition Table: ScopeExit::Persist

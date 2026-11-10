@@ -231,6 +231,26 @@ all drains route through it.
 
 ---
 
+## 8) Room-Join Spawn Order
+
+### [entity-scopes-17] — Room-join spawn order is deterministic across fresh servers
+
+**Obligations:**
+- **t1**: Deterministic room-join spawn order.
+Given a room already holding several entities; when a user joins the room;
+then the client spawns those entities in the same order on every fresh server
+in one process: room membership MUST be walked in a hash-independent order.
+Both engine shapes (`Resident`, `Pipelined`) MUST resolve the join identically.
+
+**Test obligations:**
+- `entity-scopes-17.t1`: `room_join_spawn_order` helper (every room entity
+  spawns exactly once, and the spawned set is the room's entity set), driven
+  twice per engine with the orders asserted equal
+  (`resident_a_room_join_spawns_entities_in_the_same_order_on_every_fresh_server`,
+  `pipelined_a_room_join_spawns_entities_in_the_same_order_on_every_fresh_server`).
+
+---
+
 ## State Transition Table: Scope
 
 | Current State | Trigger | Preconditions | Next State | Side Effects |
@@ -244,7 +264,7 @@ all drains route through it.
 
 ---
 
-## 8) Test obligations (TODO placeholders; not implementing yet)
+## 9) Test obligations (TODO placeholders; not implementing yet)
 
 - **entity-scopes-01/04**: Prove Rooms gating is necessary; roomless entities out-of-scope for non-owners.
 - **entity-scopes-02/03**: Prove include/exclude filter works, last call wins, and does not bypass Rooms gate.
@@ -259,7 +279,7 @@ all drains route through it.
 
 ---
 
-## 9) Cross-references
+## 10) Cross-references
 
 - Ownership: `08_entity_ownership.spec.md`
 - Publication: `09_entity_publication.spec.md`

@@ -1172,9 +1172,9 @@ fn holds_for(
 }
 
 /// A persisted entity is despawned for one user when the override is armed
-/// Contract: none — explicit-route override firing is uncontracted (spec gap).
+/// Contract: [scope-exit-10].
 /// Row 09 obligates the room-membership routes by reference to the explicit
-/// route, but no row obligates the explicit firing itself.
+/// route; row 10 obligates the explicit firing itself.
 ///
 /// Given a `ScopeExit::Persist` entity visible to U; when the override is armed
 /// and the entity is excluded; then U's client despawns it rather than keeping
@@ -1206,7 +1206,7 @@ fn armed_override_despawns_a_persisted_entity_on_scope_exit(mode: naia_server::S
         });
     });
 
-    // Override control (spec gap): the armed pair despawns on explicit exit.
+    // scope-exit-10.t1: the armed pair despawns on explicit exit.
     scenario.expect(move |ctx| (!ctx.client(client_u, |c| c.has_entity(&entity))).then_some(()));
 }
 
@@ -1248,8 +1248,8 @@ fn an_unarmed_user_keeps_the_default_persist_policy(mode: naia_server::ServerMod
 }
 
 /// The override touches only the pair it was armed for
-/// Contract: none — U's explicit-route despawn is the uncontracted firing
-/// (spec gap); only V's continued presence matches [scope-exit-02].
+/// Contract: [scope-exit-10] — U's explicit-route despawn is t1's firing,
+/// V's continued presence is t2's pair scoping.
 ///
 /// Given two users both seeing the same persisted entity; when only U is armed;
 /// then U despawns and V stays paused-and-present.
@@ -1293,7 +1293,7 @@ fn the_override_is_scoped_to_one_user_not_the_entity(mode: naia_server::ServerMo
     holds_for(
         &mut scenario,
         10,
-        "override control (spec gap): arming U despawns U only; V stays present",
+        "scope-exit-10.t2: arming U despawns U only; V stays present",
         move |ctx| {
             let u_gone = !ctx.client(client_u, |c| c.has_entity(&entity));
             let v_kept = ctx.client(client_v, |c| c.has_entity(&entity));
@@ -1303,10 +1303,10 @@ fn the_override_is_scoped_to_one_user_not_the_entity(mode: naia_server::ServerMo
 }
 
 /// Re-entry disarms the override; the following exit is Persist again
-/// Contract: [scope-exit-02]
+/// Contract: [scope-exit-10]
 ///
-/// The leg observes continued presence (02.t1); one-shot consumption is
-/// inferred, not directly pinned, and explicit-route firing is uncontracted.
+/// The leg observes continued presence after the second exit (10.t3); the
+/// first firing is 10.t1's shape.
 ///
 /// Given an override that has fired; when the entity re-enters scope and later
 /// exits again; then that second exit follows the entity's own `Persist` policy
@@ -1357,16 +1357,16 @@ fn re_entry_clears_the_override_so_the_next_exit_persists_again(mode: naia_serve
     holds_for(
         &mut scenario,
         10,
-        "scope-exit-02.t1: re-entry disarms the override; the next exit follows Persist",
+        "scope-exit-10.t3: re-entry disarms the override; the next exit follows Persist",
         move |ctx| ctx.client(client_u, |c| c.has_entity(&entity)),
     );
 }
 
 /// Repeated scope churn after a fired override never revokes again
-/// Contract: [scope-exit-02]
+/// Contract: [scope-exit-10]
 ///
-/// The leg observes continued presence (02.t1); one-shot consumption is
-/// inferred, not directly pinned, and explicit-route firing is uncontracted.
+/// The leg observes continued presence across the churn (10.t1's consumption
+/// half); the first firing is 10.t1's firing half.
 fn repeated_churn_after_a_fired_override_never_despawns_again(mode: naia_server::ServerMode) {
     let mut scenario = Scenario::new(mode);
     let test_protocol = protocol();
@@ -1413,7 +1413,7 @@ fn repeated_churn_after_a_fired_override_never_despawns_again(mode: naia_server:
         holds_for(
             &mut scenario,
             5,
-            "scope-exit-02.t1: churn after the override fired never re-revokes",
+            "scope-exit-10.t1: churn after the override fired never re-revokes",
             move |ctx| ctx.client(client_u, |c| c.has_entity(&entity)),
         );
     }
@@ -1424,7 +1424,7 @@ fn repeated_churn_after_a_fired_override_never_despawns_again(mode: naia_server:
 ///
 /// The leg observes presence across the re-seed (04.t2's no-despawn half);
 /// no-spurious-update-bytes is not pinned, and the A→B explicit-route revoke
-/// is the uncontracted firing (spec gap).
+/// is the firing [scope-exit-10] pins.
 ///
 /// Models the team switch: entity revoked on the A→B switch, re-seeded on the
 /// B→A switch, and the re-seed must not thrash (no spurious despawn afterwards).
@@ -1477,10 +1477,10 @@ fn the_a_to_b_to_a_round_trip_re_seeds_without_thrash(mode: naia_server::ServerM
 }
 
 /// An override armed out-of-scope is disarmed by the re-entry, not carried over
-/// Contract: [scope-exit-02]
+/// Contract: [scope-exit-10]
 ///
-/// The leg observes continued presence (02.t1); disarm-on-inclusion is
-/// inferred, not directly pinned, and explicit-route firing is uncontracted.
+/// The leg observes continued presence after the next exit (10.t3's
+/// disarm-on-inclusion).
 ///
 /// The stale-revocation path. An arm can outlive the exit it was meant for —
 /// the entity may already be out of the user's scope when the policy runs, or
@@ -1541,7 +1541,7 @@ fn an_override_stranded_across_a_re_entry_is_disarmed_by_the_inclusion(
     holds_for(
         &mut scenario,
         10,
-        "scope-exit-02.t1: a stranded override is disarmed by re-entry, not replayed",
+        "scope-exit-10.t3: a stranded override is disarmed by re-entry, not replayed",
         move |ctx| ctx.client(client_u, |c| c.has_entity(&entity)),
     );
 }
@@ -1818,8 +1818,7 @@ fn resident_an_armed_override_fires_on_the_user_room_route() {
 }
 
 // ============================================================================
-// Room-join spawn order is hash-independent (spec gap: no §14 row pins this;
-// row 14 pins include-without-room, not order — see the nydus-fuc hollow-leg list)
+// Room-join spawn order is hash-independent — Contract: [entity-scopes-17].
 // ============================================================================
 
 /// Connects a client into an empty room, fills a second room with `N`
@@ -1876,10 +1875,7 @@ fn room_join_spawn_order(mode: naia_server::ServerMode) -> Vec<EntityKey> {
 
 /// Two fresh servers in one process spawn a joined room's entities in the
 /// same order.
-///
-/// Spec gap: deterministic cross-server spawn order is uncontracted (§14
-/// pins include-without-room, not order) — a behavior control, not a
-/// contract pin. Listed as a hollow leg under nydus-fuc.
+/// Contract: [entity-scopes-17].
 ///
 /// Every `HashMap`/`HashSet` instance draws its own `RandomState`, so walking
 /// the room's entity set in hash order gave each fresh server its own spawn
@@ -1892,7 +1888,7 @@ fn a_room_join_spawns_entities_in_the_same_order_on_every_fresh_server(
     let second = room_join_spawn_order(mode);
     assert_eq!(
         first, second,
-        "room-join spawn order must not depend on hash state (spec-gap control)"
+        "entity-scopes-17.t1: room-join spawn order must not depend on hash state"
     );
 }
 
