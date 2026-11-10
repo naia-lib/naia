@@ -1169,7 +1169,9 @@ fn holds_for(
 }
 
 /// A persisted entity is despawned for one user when the override is armed
-/// Contract: [scope-exit-09]
+/// Contract: none — explicit-route override firing is uncontracted (spec gap).
+/// Row 09 obligates the room-membership routes by reference to the explicit
+/// route, but no row obligates the explicit firing itself.
 ///
 /// Given a `ScopeExit::Persist` entity visible to U; when the override is armed
 /// and the entity is excluded; then U's client despawns it rather than keeping
@@ -1201,10 +1203,8 @@ fn armed_override_despawns_a_persisted_entity_on_scope_exit(mode: naia_server::S
         });
     });
 
-    scenario.spec_expect(
-        "scope-exit-09.t3: an armed override despawns a Persist entity for that user",
-        move |ctx| (!ctx.client(client_u, |c| c.has_entity(&entity))).then_some(()),
-    );
+    // Override control (spec gap): the armed pair despawns on explicit exit.
+    scenario.expect(move |ctx| (!ctx.client(client_u, |c| c.has_entity(&entity))).then_some(()));
 }
 
 /// Without the override, a persisted entity survives scope exit
@@ -1245,7 +1245,8 @@ fn an_unarmed_user_keeps_the_default_persist_policy(mode: naia_server::ServerMod
 }
 
 /// The override touches only the pair it was armed for
-/// Contract: [scope-exit-09], [scope-exit-02]
+/// Contract: none — U's explicit-route despawn is the uncontracted firing
+/// (spec gap); only V's continued presence matches [scope-exit-02].
 ///
 /// Given two users both seeing the same persisted entity; when only U is armed;
 /// then U despawns and V stays paused-and-present.
@@ -1289,7 +1290,7 @@ fn the_override_is_scoped_to_one_user_not_the_entity(mode: naia_server::ServerMo
     holds_for(
         &mut scenario,
         10,
-        "scope-exit-09.t3: arming U despawns U only; V keeps the entity's own policy",
+        "override control (spec gap): arming U despawns U only; V stays present",
         move |ctx| {
             let u_gone = !ctx.client(client_u, |c| c.has_entity(&entity));
             let v_kept = ctx.client(client_v, |c| c.has_entity(&entity));
@@ -1299,7 +1300,10 @@ fn the_override_is_scoped_to_one_user_not_the_entity(mode: naia_server::ServerMo
 }
 
 /// Re-entry disarms the override; the following exit is Persist again
-/// Contract: [scope-exit-02], [scope-exit-09]
+/// Contract: [scope-exit-02]
+///
+/// The leg observes continued presence (02.t1); one-shot consumption is
+/// inferred, not directly pinned, and explicit-route firing is uncontracted.
 ///
 /// Given an override that has fired; when the entity re-enters scope and later
 /// exits again; then that second exit follows the entity's own `Persist` policy
@@ -1356,7 +1360,10 @@ fn re_entry_clears_the_override_so_the_next_exit_persists_again(mode: naia_serve
 }
 
 /// Repeated scope churn after a fired override never revokes again
-/// Contract: [scope-exit-02], [scope-exit-09]
+/// Contract: [scope-exit-02]
+///
+/// The leg observes continued presence (02.t1); one-shot consumption is
+/// inferred, not directly pinned, and explicit-route firing is uncontracted.
 fn repeated_churn_after_a_fired_override_never_despawns_again(mode: naia_server::ServerMode) {
     let mut scenario = Scenario::new(mode);
     let test_protocol = protocol();
@@ -1410,7 +1417,11 @@ fn repeated_churn_after_a_fired_override_never_despawns_again(mode: naia_server:
 }
 
 /// A→B→A entitlement round trip re-seeds cleanly with no second despawn
-/// Contract: [scope-exit-09], [scope-exit-04]
+/// Contract: [scope-exit-04]
+///
+/// The leg observes presence across the re-seed (04.t2's no-despawn half);
+/// no-spurious-update-bytes is not pinned, and the A→B explicit-route revoke
+/// is the uncontracted firing (spec gap).
 ///
 /// Models the team switch: entity revoked on the A→B switch, re-seeded on the
 /// B→A switch, and the re-seed must not thrash (no spurious despawn afterwards).
@@ -1463,7 +1474,10 @@ fn the_a_to_b_to_a_round_trip_re_seeds_without_thrash(mode: naia_server::ServerM
 }
 
 /// An override armed out-of-scope is disarmed by the re-entry, not carried over
-/// Contract: [scope-exit-02], [scope-exit-09]
+/// Contract: [scope-exit-02]
+///
+/// The leg observes continued presence (02.t1); disarm-on-inclusion is
+/// inferred, not directly pinned, and explicit-route firing is uncontracted.
 ///
 /// The stale-revocation path. An arm can outlive the exit it was meant for —
 /// the entity may already be out of the user's scope when the policy runs, or
