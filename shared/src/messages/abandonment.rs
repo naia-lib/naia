@@ -182,11 +182,26 @@ pub enum RequestPoll<S> {
     Response(S),
     /// The peer abandoned the exchange; no response will arrive.
     Abandoned,
+    /// The request's deadline passed with no response (messaging-24 t2).
+    /// Like `Abandoned`, no response will ever arrive for the key — but the
+    /// reason is expiry, not cancellation, so the application can tell the
+    /// two apart.
+    TimedOut,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// messaging-24 t2: a timed-out request reports a terminal state that is
+    /// neither Pending nor Abandoned, so the application can tell "no reply
+    /// will arrive" apart from "still waiting" and "cancelled".
+    #[test]
+    fn timed_out_is_a_distinct_terminal_state() {
+        let timed: RequestPoll<u8> = RequestPoll::TimedOut;
+        assert_ne!(timed, RequestPoll::Pending);
+        assert_ne!(timed, RequestPoll::Abandoned);
+    }
 
     #[test]
     fn allocator_issues_sequential_nonces_from_zero() {

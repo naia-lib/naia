@@ -5,10 +5,10 @@ use log::{debug, warn};
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKinds, ConnectionConfig, DiffMask,
-    EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity, GlobalEntityIndex,
-    GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, PacketType, Protocol,
-    Serde, SerdeErr, StandardHeader, Tick, Timer, UpdateKinds, WorldMutType, WorldRefType,
-    MTU_SIZE_BYTES,
+    EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GameInstant, GlobalEntity,
+    GlobalEntityIndex, GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds,
+    PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick, Timer, UpdateKinds, WorldMutType,
+    WorldRefType, MTU_SIZE_BYTES,
 };
 
 use crate::{
@@ -218,8 +218,11 @@ impl Connection {
         }
         // Responses
         for (global_request_id, response) in responses {
-            self.global_request_manager
-                .receive_response(&global_request_id, response);
+            self.global_request_manager.receive_response(
+                &global_request_id,
+                response,
+                GameInstant::new(now),
+            );
         }
 
         // Receive World Events

@@ -29,6 +29,12 @@ pub struct ClientConfig {
     /// `cause_evidence` is on. Older history is evicted, each eviction
     /// declared as one refusal lapse. Default: 16 (the Diax matcher window).
     pub cause_evidence_window: u16,
+    /// Default deadline for outgoing requests whose type does not override
+    /// [`Request::timeout`](naia_shared::Request::timeout) (messaging-24
+    /// t3). Applies from send; a request still unanswered past it is
+    /// cancelled locally and polls
+    /// [`TimedOut`](naia_shared::RequestPoll::TimedOut).
+    pub request_timeout: Duration,
 }
 
 impl Default for ClientConfig {
@@ -52,6 +58,7 @@ impl Default for ClientConfig {
             jitter_buffer,
             cause_evidence: false,
             cause_evidence_window: DEFAULT_CAUSE_EVIDENCE_WINDOW,
+            request_timeout: Duration::from_secs(30),
         }
     }
 }

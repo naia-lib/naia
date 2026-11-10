@@ -10,6 +10,29 @@ use crate::Message;
 pub trait Request: Message {
     /// The corresponding response type returned by the remote endpoint.
     type Response: Response;
+
+    /// How long the requester waits for a response before cancelling the
+    /// exchange locally (messaging-24 t3). The default asks for the
+    /// connection default, so existing requests keep working with no
+    /// behavior change; override for a per-request deadline
+    /// ([`RequestTimeout::After`]) or to wait without a deadline
+    /// ([`RequestTimeout::Never`]).
+    fn timeout() -> RequestTimeout {
+        RequestTimeout::Default
+    }
+}
+
+/// Per-request timeout selection for [`Request::timeout`] (messaging-24 t3).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RequestTimeout {
+    /// Use the connection default (`ClientConfig::request_timeout`).
+    Default,
+    /// Cancel the exchange locally if no response arrives within this long.
+    After(std::time::Duration),
+    /// Wait for a response without a deadline. Prefer a finite timeout:
+    /// without one an unanswered request lives until it is cancelled or the
+    /// connection drops.
+    Never,
 }
 
 /// Marker trait for message types that are sent as a reply to a `Request`.
@@ -78,6 +101,12 @@ impl<S: Response> Debug for ResponseSendKey<S> {
 /// Identity impls are hand-written for the same reason as [`ResponseSendKey`].
 pub struct ResponseReceiveKey<S: Response> {
     request_id: GlobalRequestId,
+    /// Connection epoch the key was issued in (messaging-23 t1). Request
+    /// ids restart on a fresh connection, so the id alone cannot tell a
+    /// stale key from a live one after reconnect; the epoch can. Kept out
+    /// of the identity impls below: keys index pending-request tables by
+    /// exchange, which is the id alone.
+    epoch: u64,
     phantom_s: PhantomData<S>,
 }
 
@@ -87,6 +116,20 @@ impl<S: Response> ResponseReceiveKey<S> {
     pub fn new(request_id: GlobalRequestId) -> Self {
         Self {
             request_id,
+            epoch: 0,
+            phantom_s: PhantomData,
+        }
+    }
+
+    /// Creates a `ResponseReceiveKey` tied to the given global request ID
+    /// and connection epoch (messaging-23 t1). The client stamps keys at
+    /// send; polling a key against a newer epoch reports `Abandoned`
+    /// instead of resolving into another connection's exchange.
+    #[must_use]
+    pub fn new_with_epoch(request_id: GlobalRequestId, epoch: u64) -> Self {
+        Self {
+            request_id,
+            epoch,
             phantom_s: PhantomData,
         }
     }
@@ -95,6 +138,12 @@ impl<S: Response> ResponseReceiveKey<S> {
     #[must_use]
     pub fn request_id(&self) -> GlobalRequestId {
         self.request_id
+    }
+
+    /// Returns the connection epoch this key was issued in.
+    #[must_use]
+    pub fn epoch(&self) -> u64 {
+        self.epoch
     }
 }
 
@@ -165,7 +214,9 @@ mod request_tests {
 
     use crate::{Message, Request, Response};
 
-    use super::{GlobalRequestId, GlobalResponseId, ResponseReceiveKey, ResponseSendKey};
+    use super::{
+        GlobalRequestId, GlobalResponseId, RequestTimeout, ResponseReceiveKey, ResponseSendKey,
+    };
 
     #[derive(Message)]
     struct Question {
@@ -285,6 +336,38 @@ mod request_tests {
         assert_ne!(GlobalRequestId::new(1), GlobalRequestId::new(2));
         assert_eq!(GlobalResponseId::new(1), GlobalResponseId::new(1));
         assert_ne!(GlobalResponseId::new(1), GlobalResponseId::new(2));
+    }
+
+    /// messaging-24 t3: the default timeout hook asks for the connection
+    /// default, so existing requests keep working with no behavior change.
+    #[test]
+    fn request_timeout_defaults_to_connection_default() {
+        assert!(matches!(Question::timeout(), RequestTimeout::Default));
+    }
+
+    /// messaging-23 t1: a receive key stamped at send hands back both the
+    /// request id and the connection epoch, so a stale key can be told apart
+    /// from a live one after reconnect.
+    #[test]
+    fn a_receive_key_stamped_with_epoch_hands_back_both() {
+        let key: ResponseReceiveKey<Answer> =
+            ResponseReceiveKey::new_with_epoch(GlobalRequestId::new(7), 3);
+
+        assert_eq!(key.request_id(), GlobalRequestId::new(7));
+        assert_eq!(key.epoch(), 3);
+    }
+
+    /// The epoch rides along without changing identity: keys index the
+    /// pending-request tables by exchange, which is the id alone.
+    #[test]
+    fn epoch_does_not_change_key_identity() {
+        let first_epoch: ResponseReceiveKey<Answer> =
+            ResponseReceiveKey::new_with_epoch(GlobalRequestId::new(1), 1);
+        let second_epoch: ResponseReceiveKey<Answer> =
+            ResponseReceiveKey::new_with_epoch(GlobalRequestId::new(1), 2);
+
+        assert_eq!(first_epoch, second_epoch);
+        assert_eq!(hash_of(&first_epoch), hash_of(&second_epoch));
     }
 
     #[test]

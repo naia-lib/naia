@@ -92,6 +92,31 @@ impl naia_shared::Request for TestRequest {
 
 impl naia_shared::Response for TestResponse {}
 
+// Request with a short per-request timeout for the messaging-24 proof: the
+// server never answers it, so the client's deadline fires after three ticks.
+// Answers with the shared TestResponse so the late-answer half of the test
+// can send a real reply past the deadline.
+#[derive(Message)]
+pub struct TestTimeoutRequest {
+    pub query: String,
+}
+
+impl TestTimeoutRequest {
+    pub fn new(query: &str) -> Self {
+        Self {
+            query: query.to_string(),
+        }
+    }
+}
+
+impl naia_shared::Request for TestTimeoutRequest {
+    type Response = TestResponse;
+
+    fn timeout() -> naia_shared::RequestTimeout {
+        naia_shared::RequestTimeout::After(std::time::Duration::from_millis(48))
+    }
+}
+
 // Large request/response pair for fragmentation testing (messaging-16.t3).
 // Payloads exceed the ~430-byte MTU so they are fragmented via VecBitWriter +
 // ReliableMessageSender::send_or_fragment before transmission.
@@ -274,6 +299,62 @@ pub fn protocol() -> Protocol {
         .add_message::<EntityCommandMessage>()
         .add_message::<TestRequest>()
         .add_message::<TestResponse>()
+        .add_channel::<ReliableChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<UnreliableChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedUnreliable,
+        )
+        .add_channel::<OrderedChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::OrderedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<UnorderedChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<SequencedChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::SequencedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<TickBufferedChannel>(
+            ChannelDirection::ClientToServer,
+            ChannelMode::TickBuffered(TickBufferSettings::default()),
+        )
+        .add_channel::<RequestResponseChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<ServerToClientChannel>(
+            ChannelDirection::ServerToClient,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .enable_client_authoritative_entities()
+        .build()
+}
+
+/// Extended protocol that adds `TestTimeoutRequest` for the request-timeout
+/// proof (`messaging-24`). Kept separate from `protocol()` so the main
+/// protocol's fingerprint is stable and the mismatch detection tests are
+/// unaffected.
+pub fn protocol_with_timeout_req() -> Protocol {
+    Protocol::builder()
+        .add_component::<Position>()
+        .add_component::<Velocity>()
+        .add_component::<ImmutableLabel>()
+        .add_component::<ImmutableSeed>()
+        .add_resource::<TestScore>()
+        .add_resource::<TestMatchState>()
+        .add_resource::<TestPlayerSelection>()
+        .add_message::<Auth>()
+        .add_message::<TestMessage>()
+        .add_message::<LargeTestMessage>()
+        .add_message::<EntityCommandMessage>()
+        .add_message::<TestRequest>()
+        .add_message::<TestResponse>()
+        .add_message::<TestTimeoutRequest>()
         .add_channel::<ReliableChannel>(
             ChannelDirection::Bidirectional,
             ChannelMode::UnorderedReliable(ReliableSettings::default()),

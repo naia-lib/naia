@@ -318,6 +318,15 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
         state.client_mut().receive_response(response_key)
     }
 
+    /// Poll a pending request without consuming its response (messaging-23/24)
+    pub fn poll_request<S: Response>(
+        &mut self,
+        response_key: &ResponseReceiveKey<S>,
+    ) -> naia_shared::RequestPoll<S> {
+        let state = self.ctx.scenario_mut().client_state_mut(&self.client_key);
+        state.client_mut().poll_request(response_key)
+    }
+
     /// Send tick-buffered message
     pub fn send_tick_buffer_message<C: Channel, M: Message>(&mut self, tick: &Tick, message: &M) {
         let state = self.ctx.scenario_mut().client_state_mut(&self.client_key);

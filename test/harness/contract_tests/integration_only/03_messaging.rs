@@ -11,22 +11,24 @@ use std::time::Duration;
 
 use naia_client::{ClientConfig, JitterBufferType, Publicity as ClientReplicationConfig};
 use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
-use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response, TestClock, Tick};
+use naia_shared::{
+    AuthorityError, EntityAuthStatus, Protocol, Request, RequestPoll, Response, TestClock, Tick,
+};
 
 use naia_test_harness::{
-    protocol, protocol_with_large_req_resp, protocol_with_sequenced_unreliable, Auth,
-    ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
-    ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent, ClientErrorEvent, ClientKey,
-    ClientRejectEvent, EntityCommandMessage, ExpectCtx, LargeTestMessage, LargeTestRequest,
-    LargeTestResponse, LinkConditionerConfig, Position, Scenario, ServerAuthEvent,
-    ServerConnectEvent, ServerDisconnectEvent, ToTicks,
+    protocol, protocol_with_large_req_resp, protocol_with_sequenced_unreliable,
+    protocol_with_timeout_req, Auth, ClientConnectEvent, ClientDisconnectEvent,
+    ClientEntityAuthDeniedEvent, ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent,
+    ClientErrorEvent, ClientKey, ClientRejectEvent, EntityCommandMessage, ExpectCtx,
+    LargeTestMessage, LargeTestRequest, LargeTestResponse, LinkConditionerConfig, Position,
+    Scenario, ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent, ToTicks,
 };
 
 // Test protocol types (channels and messages)
 use naia_test_harness::test_protocol::{
     OrderedChannel, ReliableChannel, RequestResponseChannel, SequencedChannel,
-    SequencedUnreliableChannel, TestMessage, TestRequest, TestResponse, TickBufferedChannel,
-    UnorderedChannel, UnreliableChannel,
+    SequencedUnreliableChannel, TestMessage, TestRequest, TestResponse, TestTimeoutRequest,
+    TickBufferedChannel, UnorderedChannel, UnreliableChannel,
 };
 
 mod _helpers;
@@ -880,22 +882,18 @@ fn matched_protocol_id_enables_successful_messaging() {
     );
 }
 
-/// Request timeouts are surfaced and cleaned up
-/// Contract: none — [messaging-23] requires a distinguishable timeout error,
-/// which Naia does not yet implement (see NOTE). This test is a no-leak
-/// smoke only: None while unanswered, client still usable afterwards.
+/// A request unanswered past its deadline is cancelled locally and reported
+/// Contract: [messaging-24]
 ///
-/// Given client sends request R; when server never replies and timeout elapses;
-/// then client surfaces a timeout result for R, releases tracking, and does not leak resources.
-///
-/// NOTE: This test currently verifies that requests don't leak resources when no response is received.
-/// Naia does not yet implement request timeout handling, so we cannot verify that timeouts are
-/// "surfaced" as events. Once timeout handling is implemented in Naia, this test should be
-/// updated to verify timeout events are emitted and tracking is released.
+/// Given client sends request R with a 48ms per-request timeout; when the
+/// server never replies and the deadline passes; then R polls `TimedOut`
+/// (t1, reported not silent), tracking releases with a tombstoned nonce
+/// (t4), and a reply arriving after the deadline is dropped, never
+/// delivered (t2).
 #[test]
 fn request_timeouts_are_surfaced_and_cleaned_up() {
     let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
-    let test_protocol = protocol();
+    let test_protocol = protocol_with_timeout_req();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
@@ -910,36 +908,91 @@ fn request_timeouts_are_surfaced_and_cleaned_up() {
         test_protocol.clone(),
     );
 
-    // Client sends request (server will not reply)
+    // Client sends a request the server will never answer.
     let response_key = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
             client_a
-                .send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("query"))
+                .send_request::<RequestResponseChannel, TestTimeoutRequest>(
+                    &TestTimeoutRequest::new("query"),
+                )
                 .expect("Failed to send request")
         })
     });
 
-    // Wait for a reasonable timeout period (5 seconds = ~312 ticks at 16ms/tick)
-    // Then verify that receive_response() returns None (no response received)
-    scenario.until(312usize.ticks()).expect(|_ctx| Some(()));
+    // Burn 20 ticks (~320ms game time) past the 48ms per-request deadline,
+    // capturing the server's send key in the same loop: request events are
+    // per-tick, and a later expect would find nothing. The exchange must
+    // report TimedOut, not sit Pending.
+    let mut late_key = None;
+    let mut burned = 0;
+    scenario.until(60usize.ticks()).expect_msg(
+        "messaging-24: server receives request, clock burns past deadline",
+        |ctx| {
+            burned += 1;
+            ctx.server(|server| {
+                if late_key.is_none() {
+                    late_key = server
+                        .read_request::<RequestResponseChannel, TestTimeoutRequest>()
+                        .next()
+                        .map(|(_, resp_id, _)| naia_shared::ResponseSendKey::new(resp_id));
+                }
+            });
+            (late_key.is_some() && burned >= 20).then_some(())
+        },
+    );
+    let timed_out =
+        scenario.mutate(|ctx| ctx.client(client_a_key, |c| c.poll_request(&response_key)));
+    let state = match &timed_out {
+        RequestPoll::Pending => "Pending",
+        RequestPoll::Abandoned => "Abandoned",
+        RequestPoll::TimedOut => "TimedOut",
+        RequestPoll::Response(_) => "Response",
+    };
+    assert!(
+        matches!(timed_out, RequestPoll::TimedOut),
+        "unanswered request past its deadline must poll TimedOut, got {state}"
+    );
 
-    // Verify that receive_response() returns None (no response received)
-    // TODO: Once Naia implements timeout handling, verify that a timeout event/error is surfaced
-    // Note: receive_response() mutates state, so it must be in a mutate block
-    let response_result = scenario.mutate(|ctx| {
+    // The reported timeout also released tracking: nothing is live for the
+    // key, and the take finds no response.
+    scenario
+        .expect(|ctx| (!ctx.client(client_a_key, |c| c.has_response(&response_key))).then_some(()));
+    let taken = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |c| {
             c.receive_response::<TestResponse>(&response_key)
         })
     });
     assert!(
-        response_result.is_none(),
-        "receive_response() should return None when no response received"
+        taken.is_none(),
+        "receive_response() must return None after the timeout released the slot"
+    );
+    let gone = scenario.mutate(|ctx| ctx.client(client_a_key, |c| c.poll_request(&response_key)));
+    assert!(
+        matches!(gone, RequestPoll::Abandoned),
+        "a reaped timeout must poll Abandoned afterwards"
     );
 
-    // Verify client is still usable (can send new requests) - proves no resource leaks
-    // This verifies that pending requests don't prevent new requests from being sent
-    // We need an expect between mutate calls, so we'll do a no-op expect
-    scenario.expect(|_ctx| Some(()));
+    // The server answers LATE, past the deadline, with the key captured
+    // above; the reply must drop, never land in the dead exchange.
+    let response_send_key = late_key.expect("server must have received the request");
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            assert!(server.send_response(&response_send_key, &TestResponse::new("late")));
+        });
+    });
+    scenario.until(10usize.ticks()).expect(|_ctx| Some(()));
+
+    let late_poll =
+        scenario.mutate(|ctx| ctx.client(client_a_key, |c| c.poll_request(&response_key)));
+    assert!(
+        matches!(late_poll, RequestPoll::Abandoned),
+        "a reply past the deadline must never resurrect the exchange"
+    );
+    scenario
+        .expect(|ctx| (!ctx.client(client_a_key, |c| c.has_response(&response_key))).then_some(()));
+
+    // Verify client is still usable (can send new requests) - proves no resource leaks.
+    // The last operation was expect(), so a mutate() follows directly.
     let _response_key2 = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
             client_a
@@ -949,19 +1002,65 @@ fn request_timeouts_are_surfaced_and_cleaned_up() {
     });
 }
 
-/// Requests fail cleanly on disconnect mid-flight
-/// Contract: none — [messaging-24] requires pending handlers invoked with an
-/// error indication, which Naia does not yet implement (see NOTE). This test
-/// is a no-state-leak smoke only: None after disconnect, reconnect reusable.
+/// Requests without a per-request override use the connection default
+/// Contract: [messaging-24]
 ///
-/// Given in-flight request R from client; when connection drops before response;
-/// then both sides eventually mark R failed/cancelled, do not leak state, and ignore any late response for R after reconnect.
+/// Given a request type with the default timeout hook and a 48ms connection
+/// default; when the server never replies and the deadline passes; then the
+/// exchange polls `TimedOut` (t3, the override and the default resolve to
+/// the same terminal state).
+#[test]
+fn request_without_override_uses_connection_default_timeout() {
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+
+    let short_default = ClientConfig {
+        request_timeout: Duration::from_millis(48),
+        ..Default::default()
+    };
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        short_default,
+        test_protocol.clone(),
+    );
+
+    // TestRequest keeps the default hook, so the connection default applies.
+    let response_key = scenario.mutate(|ctx| {
+        ctx.client(client_a_key, |client_a| {
+            client_a
+                .send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("query"))
+                .expect("Failed to send request")
+        })
+    });
+
+    // Burn 20 ticks (~320ms game time) past the 48ms connection default.
+    for _ in 0..20 {
+        scenario.mutate(|_| {});
+    }
+    let timed_out =
+        scenario.mutate(|ctx| ctx.client(client_a_key, |c| c.poll_request(&response_key)));
+    assert!(
+        matches!(timed_out, RequestPoll::TimedOut),
+        "default-hook request past the connection default must poll TimedOut"
+    );
+}
+
+/// A request in flight at disconnect never resolves, even across reconnect
+/// Contract: [messaging-23]
 ///
-/// NOTE: This test verifies that requests are effectively cancelled when the connection is dropped
-/// (Connection is destroyed, so GlobalRequestManager is dropped, cleaning up pending requests).
-/// The test verifies that receive_response() returns None after disconnect, proving the request
-/// was cancelled. Once Naia implements explicit request cancellation on disconnect, this test
-/// should verify that cancellation events are emitted.
+/// Given in-flight R from client; when the connection drops before any
+/// response; then R polls Abandoned and takes None — never Response (t1) —
+/// the disconnect handler runs (t2), and after a same-client reconnect the
+/// stale key still polls Abandoned while a new exchange completes (t1
+/// stale-key half: ids restart per connection, so only the epoch tells a
+/// stale key from a live one).
 #[test]
 fn requests_fail_cleanly_on_disconnect_mid_flight() {
     let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
@@ -971,16 +1070,17 @@ fn requests_fail_cleanly_on_disconnect_mid_flight() {
 
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
+    let auth = Auth::new("client_a", "password");
     let client_a_key = client_connect(
         &mut scenario,
         &room_key,
         "Client A",
-        Auth::new("client_a", "password"),
-        ClientConfig::default(),
+        auth.clone(),
+        test_client_config(),
         test_protocol.clone(),
     );
 
-    // Client sends request
+    // Client sends request; the server will not answer before the drop.
     let response_key = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
             client_a
@@ -992,48 +1092,141 @@ fn requests_fail_cleanly_on_disconnect_mid_flight() {
     // Need expect between mutate calls
     scenario.expect(|_ctx| Some(()));
 
-    // Client disconnects before server responds
+    // Server drops the connection before responding. Explicit server-side
+    // disconnect: the client-initiated drop leaves the server session live
+    // and a same-client reconnect never settles (proven in 12_reconnect).
     scenario.mutate(|ctx| {
-        ctx.client(client_a_key, |c| {
-            c.disconnect();
+        ctx.server(|server| {
+            assert!(server.disconnect_user(&client_a_key));
         });
     });
 
-    // Wait for disconnect
-    scenario.expect(|ctx| (!ctx.server(|s| s.user_exists(&client_a_key))).then_some(()));
+    // Wait for disconnect. The client handshake event queue is per-tick:
+    // read the disconnect event in this same loop or it is lost by the
+    // time a later expect runs (01/12 accumulate the same way).
+    let mut saw_disconnect = false;
+    scenario.expect_msg("23.disconnect: both sides agree disconnected", |ctx| {
+        ctx.client(client_a_key, |c| {
+            if c.read_event::<ClientDisconnectEvent>().is_some() {
+                saw_disconnect = true;
+            }
+        });
+        (server_and_client_disconnected(ctx, client_a_key).is_some() && saw_disconnect)
+            .then_some(())
+    });
 
-    // Verify that receive_response() returns None after disconnect (Connection is gone)
-    // This proves the request was effectively cancelled when Connection was dropped
-    // Note: receive_response() mutates state, so it must be in a mutate block
-    let response_after_disconnect = scenario.mutate(|ctx| {
+    // t1: the in-flight key is dead — Abandoned, never Response.
+    let gone = scenario.mutate(|ctx| ctx.client(client_a_key, |c| c.poll_request(&response_key)));
+    assert!(
+        matches!(gone, RequestPoll::Abandoned),
+        "in-flight request at disconnect must poll Abandoned, never Response"
+    );
+    let taken = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |c| {
             c.receive_response::<TestResponse>(&response_key)
         })
     });
     assert!(
-        response_after_disconnect.is_none(),
+        taken.is_none(),
         "receive_response() should return None after disconnect"
     );
 
-    // Verify client can reconnect and send new requests (proves no state leaks)
-    // client_connect() ends with an expect(), so we need to ensure state is correct
-    // The last operation was mutate(), so client_connect's first expect() will work
-    let client_b_key = client_connect(
-        &mut scenario,
-        &room_key,
-        "Client B",
-        Auth::new("client_b", "password"),
-        ClientConfig::default(),
-        test_protocol.clone(),
+    // t2: the disconnect handler ran — captured in the loop above.
+    assert!(
+        saw_disconnect,
+        "t2: the client must observe its ClientDisconnectEvent on disconnect"
     );
-    // client_connect() ends with expect(), so next operation should be mutate()
-    let _response_key_new = scenario.mutate(|ctx| {
-        ctx.client(client_b_key, |client_b| {
-            client_b
+
+    // Same client reconnects; the stale key must stay dead even though the
+    // new connection restarts request ids from zero.
+    scenario.client_reconnect(client_a_key);
+    scenario.expect_msg("23.reconnect: server sees fresh auth", |ctx| {
+        ctx.server(|server| {
+            if let Some((incoming_client_key, incoming_auth)) =
+                server.read_event::<ServerAuthEvent<Auth>>()
+            {
+                if incoming_client_key == client_a_key && incoming_auth == auth {
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_a_key);
+        });
+    });
+    scenario.expect_msg("23.reconnect: server sees connect event", |ctx| {
+        ctx.server(|server| {
+            if let Some(incoming_client_key) = server.read_event::<ServerConnectEvent>() {
+                if incoming_client_key == client_a_key {
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+    scenario.expect_msg("23.reconnect: both sides agree connected", |ctx| {
+        server_and_client_connected(ctx, client_a_key)
+    });
+
+    let stale = scenario.mutate(|ctx| ctx.client(client_a_key, |c| c.poll_request(&response_key)));
+    assert!(
+        matches!(stale, RequestPoll::Abandoned),
+        "stale key from the previous connection must stay Abandoned after reconnect"
+    );
+
+    // A new exchange on the fresh connection completes, while the stale key
+    // stays dead beside it (id-reuse aliasing guard).
+    let response_key_new = scenario.mutate(|ctx| {
+        ctx.client(client_a_key, |client_a| {
+            client_a
                 .send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("query_new"))
                 .expect("Failed to send request after reconnect")
         })
     });
+    let response_send_key = scenario.until(200usize.ticks()).expect_msg(
+        "messaging-23.t1: server receives post-reconnect request within 200 ticks",
+        |ctx| {
+            ctx.server(|server| {
+                for (recv_client_key, resp_id, _) in
+                    server.read_request::<RequestResponseChannel, TestRequest>()
+                {
+                    if recv_client_key == client_a_key {
+                        return Some(naia_shared::ResponseSendKey::new(resp_id));
+                    }
+                }
+                None
+            })
+        },
+    );
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.send_response(&response_send_key, &TestResponse::new("result_new"));
+        });
+    });
+    scenario.until(200usize.ticks()).expect(|ctx| {
+        ctx.client(client_a_key, |c| {
+            c.has_response(&response_key_new).then_some(())
+        })
+    });
+
+    let fresh =
+        scenario.mutate(|ctx| ctx.client(client_a_key, |c| c.poll_request(&response_key_new)));
+    match fresh {
+        RequestPoll::Response(answer) => assert_eq!(
+            answer.result, "result_new",
+            "the post-reconnect exchange must deliver the server's answer"
+        ),
+        _ => panic!("the post-reconnect exchange must complete with Response"),
+    }
+    let stale_beside_fresh =
+        scenario.mutate(|ctx| ctx.client(client_a_key, |c| c.poll_request(&response_key)));
+    assert!(
+        matches!(stale_beside_fresh, RequestPoll::Abandoned),
+        "the stale key must stay dead beside a live exchange reusing its id"
+    );
 }
 
 /// Unordered unreliable channel shows best-effort semantics

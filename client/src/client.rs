@@ -16,9 +16,9 @@ use naia_shared::{
     GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId,
     GlobalWorldManagerType, HostType, Instant, LocalEntityAndGlobalEntityConverter, Message,
     MessageContainer, MessageIndex, OwnedLocalEntity, PacketType, Protocol, ProtocolId, Replicate,
-    ReplicatedComponent, Request, RequestPoll, Response, ResponseReceiveKey, ResponseSendKey,
-    Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, Tick, Timer, UserPriorityState,
-    WorldMutType, WorldRefType, PROTOCOL_MISMATCH_STATUS,
+    ReplicatedComponent, Request, RequestPoll, RequestTimeout, Response, ResponseReceiveKey,
+    ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, Tick, Timer,
+    UserPriorityState, WorldMutType, WorldRefType, PROTOCOL_MISMATCH_STATUS,
 };
 
 use super::{
@@ -68,6 +68,12 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     auth_headers: Option<Vec<(String, String)>>,
     io: Io,
     server_connection: Option<Connection>,
+    /// Connection generation stamp (messaging-23 t1). Bumped every time a
+    /// new connection is established; request keys are stamped with the
+    /// epoch at send, so a key from a previous connection polls
+    /// `Abandoned` instead of resolving into the new connection's
+    /// restarted request-id space.
+    connection_epoch: u64,
     handshake_manager: Box<dyn Handshaker>,
     manual_disconnect: bool,
     /// Set when the server's disconnect packet named a reason, with the
@@ -256,6 +262,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 &compression_config,
             ),
             server_connection: None,
+            connection_epoch: 0,
             handshake_manager: Box::new(handshake_manager),
             manual_disconnect: false,
             server_disconnect: false,
@@ -837,8 +844,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ) -> Result<ResponseReceiveKey<Q::Response>, NaiaClientError> {
         let cloned_request = Q::clone_box(request);
         // let response_type_id = TypeId::of::<Q::Response>();
-        let id = self.send_request_inner(&ChannelKind::of::<C>(), cloned_request)?;
-        Ok(ResponseReceiveKey::new(id))
+        // messaging-24 t3: per-request override wins; otherwise the
+        // connection default applies.
+        let timeout = match Q::timeout() {
+            RequestTimeout::After(limit) => Some(limit),
+            RequestTimeout::Never => None,
+            RequestTimeout::Default => Some(self.client_config.request_timeout),
+        };
+        let id = self.send_request_inner(&ChannelKind::of::<C>(), cloned_request, timeout)?;
+        Ok(ResponseReceiveKey::new_with_epoch(
+            id,
+            self.connection_epoch,
+        ))
     }
 
     fn send_request_inner(
@@ -846,7 +863,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         channel_kind: &ChannelKind,
         // response_type_id: TypeId,
         request_box: Box<dyn Message>,
+        timeout: Option<Duration>,
     ) -> Result<GlobalRequestId, NaiaClientError> {
+        // Read the app-wide simulated clock up front (no-op without
+        // test_time): without this, a thread whose thread-local clock never
+        // advances would stamp deadlines from frozen time. Must precede the
+        // connection borrow below, which holds &mut self.
+        self.sync_thread_clock();
         let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
 
         assert!(
@@ -868,9 +891,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // connection rather than aliasing a live nonce, so a spent supply
         // is a typed backpressure error, not a panic. The nonce names the
         // exchange on the wire (envelope cutover, codec grammar 2).
+        // Deadline base: the connection's own time manager (elapsed since
+        // its start), never a freshly sampled Instant — GameInstant::new
+        // measures *since* its argument, so sampling now would stamp ~0.
+        let send_now = connection.time_manager.game_time_now();
         let (request_id, nonce) = connection
             .global_request_manager
-            .create_request_id()
+            .create_request_id(timeout, send_now)
             .map_err(|_| NaiaClientError::RequestNonceExhausted)?;
         let message = MessageContainer::new(request_box);
         if !connection.base.send.message_manager.send_request(
@@ -964,6 +991,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         let Some(connection) = &self.server_connection else {
             return false;
         };
+        // messaging-23 t1: a key from a previous connection names nothing
+        // live, even when the new connection reuses its request id.
+        if response_key.epoch() != self.connection_epoch {
+            return false;
+        }
         let request_id = response_key.request_id();
         connection.global_request_manager.has_response(&request_id)
     }
@@ -977,9 +1009,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         &mut self,
         response_key: &ResponseReceiveKey<S>,
     ) -> Option<S> {
+        // messaging-23 t1: stale keys never resolve, even across id reuse.
+        if response_key.epoch() != self.connection_epoch {
+            return None;
+        }
+        // Sync the simulated clock before the connection borrow below (which
+        // holds &mut self): the app may call from a thread whose
+        // thread-local clock never advances. No-op without test_time.
+        self.sync_thread_clock();
         let Some(connection) = &mut self.server_connection else {
             return None;
         };
+        let now = connection.time_manager.game_time_now();
+        // messaging-24 t4: an expired-but-unreaped slot releases here, so
+        // the take below can only return a response that arrived in time.
+        connection.global_request_manager.reap_expired(now);
         let request_id = response_key.request_id();
         let container = connection
             .global_request_manager
@@ -1005,6 +1049,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         let Some(connection) = &mut self.server_connection else {
             return CancelDisposition::UnknownKey;
         };
+        // messaging-23 t1: a stale key cancels nothing on the new
+        // connection.
+        if response_key.epoch() != self.connection_epoch {
+            return CancelDisposition::UnknownKey;
+        }
         connection
             .global_request_manager
             .cancel_request(&response_key.request_id())
@@ -1017,19 +1066,38 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// [`receive_response`](Client::receive_response) to take it.
     /// [`RequestPoll::Abandoned`] means no reply will ever arrive: the
     /// request was cancelled or the key names nothing live.
+    /// [`RequestPoll::TimedOut`] means the request's deadline passed with
+    /// no response (messaging-24 t2) — likewise terminal, but told apart
+    /// so the application can distinguish expiry from cancellation.
     pub fn poll_request<S: Response>(
         &mut self,
         response_key: &ResponseReceiveKey<S>,
     ) -> RequestPoll<S> {
+        // messaging-23 t1: stale keys never resolve, even across id reuse.
+        if response_key.epoch() != self.connection_epoch {
+            return RequestPoll::Abandoned;
+        }
+        // Sync the simulated clock before the connection borrow below (which
+        // holds &mut self): the app may poll from a thread whose
+        // thread-local clock is frozen. No-op without test_time.
+        self.sync_thread_clock();
         let Some(connection) = &mut self.server_connection else {
             return RequestPoll::Abandoned;
         };
-        match connection
+        let now = connection.time_manager.game_time_now();
+        // messaging-24: poll BEFORE reaping. Reaping first would delete
+        // the expired slot, so the poll could only report Abandoned and
+        // the timeout would never surface. Polling first reports TimedOut
+        // once; the reap after releases tracking and tombstones the
+        // nonce (t4).
+        let polled = connection
             .global_request_manager
-            .poll_slot(&response_key.request_id())
-        {
+            .poll_slot(&response_key.request_id(), now);
+        connection.global_request_manager.reap_expired(now);
+        match polled {
             SlotPoll::Pending => RequestPoll::Pending,
             SlotPoll::Abandoned => RequestPoll::Abandoned,
+            SlotPoll::TimedOut => RequestPoll::TimedOut,
             SlotPoll::Ready => {
                 let container = connection
                     .global_request_manager
@@ -2647,6 +2715,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     match self.handshake_manager.recv(&mut reader) {
                         Some(HandshakeResult::Connected(time_manager)) => {
                             // new connect!
+                            self.connection_epoch = self.connection_epoch.wrapping_add(1);
                             self.server_connection = Some(Connection::new(
                                 &self.client_config.connection,
                                 &self.protocol.channel_kinds,

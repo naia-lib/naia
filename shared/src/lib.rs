@@ -175,7 +175,8 @@ pub use messages::{
     message_kinds::{MessageKind, MessageKinds},
     message_manager::MessageManager,
     request::{
-        GlobalRequestId, GlobalResponseId, Request, Response, ResponseReceiveKey, ResponseSendKey,
+        GlobalRequestId, GlobalResponseId, Request, RequestTimeout, Response, ResponseReceiveKey,
+        ResponseSendKey,
     },
 };
 pub use named::Named;

@@ -1,10 +1,11 @@
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::time::Duration;
 
 use log::warn;
 
 use naia_shared::{
-    CancelDisposition, ChannelKind, ConnectionRequestNonce, GlobalRequestId, GlobalResponseId,
-    LocalResponseId, MessageContainer, NonceAllocator, NonceExhaustion,
+    CancelDisposition, ChannelKind, ConnectionRequestNonce, GameInstant, GlobalRequestId,
+    GlobalResponseId, LocalResponseId, MessageContainer, NonceAllocator, NonceExhaustion,
 };
 
 /// Non-destructive read of a request slot's state.
@@ -17,13 +18,27 @@ pub(crate) enum SlotPoll {
     /// No response will ever arrive: the request was cancelled, its
     /// exchange abandoned, or the key names nothing live.
     Abandoned,
+    /// The request's deadline passed with no response (messaging-24 t2).
+    /// Reported, never silent: the application can tell expiry apart from
+    /// cancellation.
+    TimedOut,
 }
 
-/// One live outgoing request: its checked H3 nonce plus an optional
-/// arrived-but-untaken response.
+/// One live outgoing request: its checked H3 nonce, an optional
+/// arrived-but-untaken response, and an optional deadline (messaging-24).
 struct RequestSlot {
     nonce: ConnectionRequestNonce,
     response: Option<MessageContainer>,
+    deadline: Option<GameInstant>,
+}
+
+impl RequestSlot {
+    /// True when the slot holds no response and `now` is past its deadline.
+    /// A slot holding a response is never expired: the response arrived
+    /// within the timeout, so the exchange stays receivable after it.
+    fn is_expired(&self, now: GameInstant) -> bool {
+        self.response.is_none() && self.deadline.is_some_and(|at| now.is_more_than(&at))
+    }
 }
 
 // GlobalRequestManager
@@ -72,18 +87,28 @@ impl GlobalRequestManager {
     /// connection, never by aliasing a live nonce — so this fails rather
     /// than wrapping. The nonce is handed back alongside the id so the
     /// caller can name the exchange on the wire (envelope cutover).
+    ///
+    /// `timeout` arms the messaging-24 deadline from `now`; `None` waits
+    /// without a deadline.
     pub(crate) fn create_request_id(
         &mut self,
+        timeout: Option<Duration>,
+        now: GameInstant,
     ) -> Result<(GlobalRequestId, ConnectionRequestNonce), NonceExhaustion> {
         let nonce = self.nonces.next()?;
         let id = GlobalRequestId::new(self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
 
+        let deadline = timeout.map(|limit| {
+            let millis = u32::try_from(limit.as_millis()).unwrap_or(u32::MAX);
+            now.add_millis(millis)
+        });
         self.slots.insert(
             id,
             RequestSlot {
                 nonce,
                 response: None,
+                deadline,
             },
         );
 
@@ -97,15 +122,37 @@ impl GlobalRequestManager {
             .is_some_and(|slot| slot.response.is_some())
     }
 
-    /// Non-destructive read of a slot: live without a response is Pending,
-    /// live with one is Ready, anything else is Abandoned — a cancelled,
+    /// Non-destructive read of a slot: live with a response is Ready, live
+    /// past its deadline without one is TimedOut, live otherwise is
+    /// Pending, anything else is Abandoned — a cancelled,
     /// completed-and-taken, or never-allocated key will never yield a
-    /// response again.
-    pub(crate) fn poll_slot(&self, request_id: &GlobalRequestId) -> SlotPoll {
+    /// response again. Call [`reap_expired`](Self::reap_expired) first so a
+    /// reported timeout also releases tracking.
+    pub(crate) fn poll_slot(&self, request_id: &GlobalRequestId, now: GameInstant) -> SlotPoll {
         match self.slots.get(request_id) {
             Some(slot) if slot.response.is_some() => SlotPoll::Ready,
+            Some(slot) if slot.is_expired(now) => SlotPoll::TimedOut,
             Some(_) => SlotPoll::Pending,
             None => SlotPoll::Abandoned,
+        }
+    }
+
+    /// Removes every expired response-less slot and tombstones its nonce
+    /// (messaging-24 t4): tracking returns to baseline, and a late
+    /// response for a reaped exchange drops on the unknown-id path instead
+    /// of resurrecting the slot. Slots holding a response survive — the
+    /// response arrived within the timeout and stays receivable.
+    pub(crate) fn reap_expired(&mut self, now: GameInstant) {
+        let mut expired = Vec::new();
+        for (id, slot) in &self.slots {
+            if slot.is_expired(now) {
+                expired.push(*id);
+            }
+        }
+        for id in expired {
+            if let Some(slot) = self.slots.remove(&id) {
+                self.abandoned.insert(slot.nonce);
+            }
         }
     }
 
@@ -152,11 +199,23 @@ impl GlobalRequestManager {
         &mut self,
         request_id: &GlobalRequestId,
         response: MessageContainer,
+        now: GameInstant,
     ) {
-        if let Some(slot) = self.slots.get_mut(request_id) {
-            slot.response = Some(response);
-        } else {
-            warn!("receive_response: dropping response for unknown request_id {request_id:?}; request was likely cancelled or the connection was reset");
+        match self.slots.get(request_id) {
+            Some(slot) if slot.is_expired(now) => {
+                // Late for a timed-out exchange (messaging-24 t2): reap the
+                // slot and drop the response rather than landing it in a
+                // dead exchange.
+                let slot = self.slots.remove(request_id).unwrap();
+                self.abandoned.insert(slot.nonce);
+                warn!("receive_response: dropping late response for timed-out request_id {request_id:?}; the request was already cancelled by its timeout");
+            }
+            Some(_) => {
+                self.slots.get_mut(request_id).unwrap().response = Some(response);
+            }
+            None => {
+                warn!("receive_response: dropping response for unknown request_id {request_id:?}; request was likely cancelled or the connection was reset");
+            }
         }
     }
 }
@@ -349,8 +408,10 @@ mod tests {
     #[test]
     fn local_guest_abandonment_cancel_removes_slot_and_names_nonce() {
         let mut manager = request_manager();
-        let (id, _) = manager.create_request_id().expect("capacity remains");
-        assert_eq!(manager.poll_slot(&id), SlotPoll::Pending);
+        let (id, _) = manager
+            .create_request_id(None, test_start())
+            .expect("capacity remains");
+        assert_eq!(manager.poll_slot(&id, test_start()), SlotPoll::Pending);
 
         let disposition = manager.cancel_request(&id);
         let CancelDisposition::Cancelled { nonce } = disposition else {
@@ -358,7 +419,7 @@ mod tests {
         };
         assert_eq!(nonce.value(), 0);
         assert!(!manager.has_response(&id));
-        assert_eq!(manager.poll_slot(&id), SlotPoll::Abandoned);
+        assert_eq!(manager.poll_slot(&id, test_start()), SlotPoll::Abandoned);
     }
 
     #[test]
@@ -367,12 +428,14 @@ mod tests {
         // must vanish, but no abandonment tombstone may record it — the
         // peer never saw the exchange, so there is nothing to suppress.
         let mut manager = request_manager();
-        let (id, first_nonce) = manager.create_request_id().expect("capacity remains");
+        let (id, first_nonce) = manager
+            .create_request_id(None, test_start())
+            .expect("capacity remains");
         assert_eq!(manager.outstanding(), 1);
 
         manager.discard_unsent_request(&id);
         assert_eq!(manager.outstanding(), 0);
-        assert_eq!(manager.poll_slot(&id), SlotPoll::Abandoned);
+        assert_eq!(manager.poll_slot(&id, test_start()), SlotPoll::Abandoned);
         assert!(
             manager.abandoned.is_empty(),
             "an unsent request leaves no tombstone: the peer never saw it"
@@ -380,7 +443,9 @@ mod tests {
 
         // The spent nonce stays spent: the next allocation moves forward,
         // never back onto the discarded exchange.
-        let (_, second_nonce) = manager.create_request_id().expect("capacity remains");
+        let (_, second_nonce) = manager
+            .create_request_id(None, test_start())
+            .expect("capacity remains");
         assert_ne!(
             second_nonce.value(),
             first_nonce.value(),
@@ -391,7 +456,9 @@ mod tests {
     #[test]
     fn local_guest_abandonment_second_cancel_is_unknown_key() {
         let mut manager = request_manager();
-        let (id, _) = manager.create_request_id().expect("capacity remains");
+        let (id, _) = manager
+            .create_request_id(None, test_start())
+            .expect("capacity remains");
         assert!(matches!(
             manager.cancel_request(&id),
             CancelDisposition::Cancelled { .. }
@@ -402,32 +469,38 @@ mod tests {
     #[test]
     fn local_guest_abandonment_poll_pending_then_ready() {
         let mut manager = request_manager();
-        let (id, _) = manager.create_request_id().expect("capacity remains");
-        assert_eq!(manager.poll_slot(&id), SlotPoll::Pending);
+        let (id, _) = manager
+            .create_request_id(None, test_start())
+            .expect("capacity remains");
+        assert_eq!(manager.poll_slot(&id, test_start()), SlotPoll::Pending);
 
-        manager.receive_response(&id, probe_container());
-        assert_eq!(manager.poll_slot(&id), SlotPoll::Ready);
+        manager.receive_response(&id, probe_container(), test_start());
+        assert_eq!(manager.poll_slot(&id, test_start()), SlotPoll::Ready);
     }
 
     #[test]
     fn local_guest_abandonment_late_response_after_cancel_drops() {
         let mut manager = request_manager();
-        let (id, _) = manager.create_request_id().expect("capacity remains");
+        let (id, _) = manager
+            .create_request_id(None, test_start())
+            .expect("capacity remains");
         manager.cancel_request(&id);
 
-        manager.receive_response(&id, probe_container());
+        manager.receive_response(&id, probe_container(), test_start());
         assert!(!manager.has_response(&id));
-        assert_eq!(manager.poll_slot(&id), SlotPoll::Abandoned);
+        assert_eq!(manager.poll_slot(&id, test_start()), SlotPoll::Abandoned);
     }
 
     #[test]
     fn local_guest_abandonment_exhaustion_is_checked() {
         let mut manager = GlobalRequestManager::with_nonce_start(u64::MAX);
-        let (last, _) = manager.create_request_id().expect("u64::MAX allocatable");
-        assert!(manager.create_request_id().is_err());
+        let (last, _) = manager
+            .create_request_id(None, test_start())
+            .expect("u64::MAX allocatable");
+        assert!(manager.create_request_id(None, test_start()).is_err());
         // No wrap: the failed create allocated nothing.
         assert_eq!(manager.outstanding(), 1);
-        assert_eq!(manager.poll_slot(&last), SlotPoll::Pending);
+        assert_eq!(manager.poll_slot(&last, test_start()), SlotPoll::Pending);
     }
 
     /// H3 envelope cutover: the response routing keeps the incoming
@@ -449,17 +522,136 @@ mod tests {
         let mut manager = request_manager();
         let mut ids = Vec::new();
         for _ in 0..64 {
-            let (id, _) = manager.create_request_id().expect("capacity remains");
+            let (id, _) = manager
+                .create_request_id(None, test_start())
+                .expect("capacity remains");
             ids.push(id);
         }
         for (i, id) in ids.iter().enumerate() {
             if i % 2 == 0 {
                 manager.cancel_request(id);
             } else {
-                manager.receive_response(id, probe_container());
+                manager.receive_response(id, probe_container(), test_start());
                 manager.destroy_request_id(id);
             }
         }
         assert_eq!(manager.outstanding(), 0);
+    }
+
+    use std::time::Duration;
+
+    use naia_shared::GameInstant;
+
+    /// Fixed test clock: `GameInstant::from_millis` needs no running clock,
+    /// so deadlines stay deterministic under `test_time` and wall alike.
+    fn test_start() -> GameInstant {
+        GameInstant::from_millis(1_000)
+    }
+
+    fn millis_after(start: GameInstant, millis: u32) -> GameInstant {
+        start.add_millis(millis)
+    }
+
+    /// messaging-24 t1: an unanswered request past its deadline polls
+    /// TimedOut — reported, never silent.
+    #[test]
+    fn expired_request_polls_timed_out() {
+        let mut manager = request_manager();
+        let start = test_start();
+        let (id, _) = manager
+            .create_request_id(Some(Duration::from_millis(1)), start)
+            .expect("capacity remains");
+
+        assert_eq!(
+            manager.poll_slot(&id, millis_after(start, 30_000)),
+            SlotPoll::TimedOut
+        );
+    }
+
+    /// messaging-24 t4: reaping an expired slot releases tracking and leaves
+    /// a tombstone, so a late response still drops on the unknown-id path.
+    #[test]
+    fn reap_expired_removes_slot_and_tombstones_nonce() {
+        let mut manager = request_manager();
+        let start = test_start();
+        let (id, _) = manager
+            .create_request_id(Some(Duration::from_millis(1)), start)
+            .expect("capacity remains");
+
+        let later = millis_after(start, 30_000);
+        manager.reap_expired(later);
+
+        assert_eq!(manager.outstanding(), 0);
+        assert_eq!(manager.poll_slot(&id, later), SlotPoll::Abandoned);
+        manager.receive_response(&id, probe_container(), later);
+        assert!(!manager.has_response(&id));
+    }
+
+    /// A response that arrives BEFORE the deadline is still receivable after
+    /// it: the timeout cancels unanswered requests, not delivered ones.
+    #[test]
+    fn response_arriving_before_deadline_survives_it() {
+        let mut manager = request_manager();
+        let start = test_start();
+        let (id, _) = manager
+            .create_request_id(Some(Duration::from_secs(30)), start)
+            .expect("capacity remains");
+
+        manager.receive_response(&id, probe_container(), start);
+        assert_eq!(
+            manager.poll_slot(&id, millis_after(start, 31_000)),
+            SlotPoll::Ready
+        );
+        assert!(manager.has_response(&id));
+    }
+
+    /// messaging-24 t2: a response arriving after the deadline never lands —
+    /// even when the slot has not been reaped yet, the receive path drops it.
+    #[test]
+    fn late_response_after_deadline_is_dropped_without_reap() {
+        let mut manager = request_manager();
+        let start = test_start();
+        let (id, _) = manager
+            .create_request_id(Some(Duration::from_millis(1)), start)
+            .expect("capacity remains");
+
+        let later = millis_after(start, 30_000);
+        manager.receive_response(&id, probe_container(), later);
+
+        assert!(!manager.has_response(&id));
+        assert_eq!(manager.poll_slot(&id, later), SlotPoll::Abandoned);
+        assert_eq!(manager.outstanding(), 0);
+    }
+
+    /// Cancel wins over expiry: an explicitly cancelled key polls Abandoned,
+    /// never TimedOut, however late it is polled.
+    #[test]
+    fn cancelled_slot_polls_abandoned_not_timed_out() {
+        let mut manager = request_manager();
+        let start = test_start();
+        let (id, _) = manager
+            .create_request_id(Some(Duration::from_millis(1)), start)
+            .expect("capacity remains");
+        manager.cancel_request(&id);
+
+        assert_eq!(
+            manager.poll_slot(&id, millis_after(start, 30_000)),
+            SlotPoll::Abandoned
+        );
+    }
+
+    /// A request with no timeout never expires, however late it is polled.
+    #[test]
+    fn request_without_timeout_never_expires() {
+        let mut manager = request_manager();
+        let start = test_start();
+        let (id, _) = manager
+            .create_request_id(None, start)
+            .expect("capacity remains");
+
+        assert_eq!(
+            manager.poll_slot(&id, millis_after(start, 1_000_000)),
+            SlotPoll::Pending
+        );
     }
 }
