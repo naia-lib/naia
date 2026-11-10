@@ -114,18 +114,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ahash"
-version = "0.8.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
-dependencies = [
- "cfg-if",
- "once_cell",
- "version_check",
- "zerocopy",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2854,11 +2842,11 @@ dependencies = [
 
 [[package]]
 name = "fontdue"
-version = "0.7.3"
+version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0793f5137567643cf65ea42043a538804ff0fbf288649e2141442b602d81f9bc"
+checksum = "e796cb6894e6418daacea84b28dd4f98d3b32c74d5bb452ba1ecfbf5ad8e84ca"
 dependencies = [
- "hashbrown 0.13.2",
+ "hashbrown 0.15.5",
  "ttf-parser",
 ]
 
@@ -3083,9 +3071,9 @@ dependencies = [
 
 [[package]]
 name = "glam"
-version = "0.21.3"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "518faa5064866338b013ff9b2350dc318e14cc4fcd6cb8206d7e7c9886c98815"
+checksum = "9e05e7e6723e3455f4818c7b26e855439f7546cf617ef669d1adedb8669e5cb9"
 
 [[package]]
 name = "glam"
@@ -3225,19 +3213,12 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43a3c133739dddd0d2990f9a4bdf8eb4b21ef50e4851ca85ab661199821d510e"
-dependencies = [
- "ahash",
-]
-
-[[package]]
-name = "hashbrown"
 version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
 dependencies = [
+ "allocator-api2",
+ "equivalent",
  "foldhash 0.1.5",
 ]
 
@@ -3793,16 +3774,15 @@ dependencies = [
 
 [[package]]
 name = "macroquad"
-version = "0.3.26"
+version = "0.4.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b92608a005ca1f16fe4e78c85a1cb18481898ac1347c71ae3398a6795c493c15"
+checksum = "1cbd54d99d4d3ac59deed7ee4927bbbf4eb33a55635530af3be9395a55746090"
 dependencies = [
- "bumpalo",
  "fontdue",
- "glam 0.21.3",
+ "glam 0.27.0",
  "image 0.24.9",
  "macroquad_macro",
- "miniquad",
+ "miniquad 0.4.11",
  "quad-rand",
 ]
 
@@ -3893,6 +3873,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "miniquad"
+version = "0.4.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcbaea978d741f3b60ced666b06a2a1e4a2bc81cb8b9dd29f4a40965e1f59e65"
+dependencies = [
+ "libc",
+ "ndk-sys 0.2.2",
+ "objc-rs",
+ "winapi",
+]
+
+[[package]]
 name = "miniz_oxide"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3972,7 +3964,7 @@ version = "0.1.0"
 dependencies = [
  "cfg-if",
  "log",
- "miniquad",
+ "miniquad 0.3.16",
  "naia-basic-demo-shared",
  "naia-client",
  "naia-demo-world",
@@ -3983,7 +3975,7 @@ name = "naia-basic-client-demo-mq"
 version = "0.1.0"
 dependencies = [
  "cfg-if",
- "miniquad",
+ "miniquad 0.3.16",
  "naia-basic-client-demo-app",
 ]
 
@@ -4161,7 +4153,7 @@ dependencies = [
  "futures-channel",
  "js-sys",
  "log",
- "miniquad",
+ "miniquad 0.3.16",
  "naia-socket-shared",
  "smol",
  "tinyjson",
@@ -4366,7 +4358,7 @@ version = "0.1.0"
 dependencies = [
  "cfg-if",
  "log",
- "miniquad",
+ "miniquad 0.3.16",
  "naia-client-socket",
  "naia-shared",
  "naia-socket-demo-shared",
@@ -4377,7 +4369,7 @@ name = "naia-socket-client-demo-mq"
 version = "0.1.0"
 dependencies = [
  "cfg-if",
- "miniquad",
+ "miniquad 0.3.16",
  "naia-socket-client-demo-app",
 ]
 
@@ -4597,6 +4589,15 @@ name = "objc"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "915b1b472bc21c53464d6c8461c9d3af805ba1ef837e1cac254428f4a77177b1"
+dependencies = [
+ "malloc_buf",
+]
+
+[[package]]
+name = "objc-rs"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64a1e7069a2525126bf12a9f1f7916835fafade384fb27cabf698e745e2a1eb8"
 dependencies = [
  "malloc_buf",
 ]
@@ -6395,9 +6396,12 @@ dependencies = [
 
 [[package]]
 name = "ttf-parser"
-version = "0.15.2"
+version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b3e06c9b9d80ed6b745c7159c40b311ad2916abb34a49e9be2653b90db0d8dd"
+checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
+dependencies = [
+ "core_maths",
+]
 
 [[package]]
 name = "typeid"
