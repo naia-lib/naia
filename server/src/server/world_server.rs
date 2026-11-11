@@ -2310,7 +2310,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// Returns the number of users that have fully connected (handshake complete).
     #[must_use]
     pub fn user_count(&self) -> usize {
-        self.sim_handle.user_count()
+        // Counts users with a live send connection (this engine's `user_keys`),
+        // not every `user_store` entry as `CoordHandle::user_count` does.
+        self.user_keys().len()
     }
 
     /// Returns the total number of replicated entities currently tracked by the server.
