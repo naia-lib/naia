@@ -34,6 +34,14 @@ impl ConditionedPacketReceiver {
     }
 
     /// Receives a packet from the Client Socket
+    ///
+    /// # Panics
+    ///
+    /// Panics once the poll counter exhausts `u64`.
+    #[expect(
+        clippy::expect_used,
+        reason = "a u64 poll counter cannot exhaust; a wrapped counter would misorder delayed packets"
+    )]
     pub fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
         self.poll = self
             .poll
@@ -64,9 +72,8 @@ impl ConditionedPacketReceiver {
                     }
                 }
             }
-            if self.poll_queue.has_due(self.poll) {
-                self.last_payload = Some(self.poll_queue.pop_due(self.poll).unwrap());
-                return Ok(Some(self.last_payload.as_ref().unwrap()));
+            if let Some(payload) = self.poll_queue.pop_due(self.poll) {
+                return Ok(Some(self.last_payload.insert(payload)));
             }
             return Ok(None);
         }
@@ -91,11 +98,9 @@ impl ConditionedPacketReceiver {
         }
 
         let now = Instant::now();
-        if self.time_queue.has_item(&now) {
-            self.last_payload = Some(self.time_queue.pop_item(&now).unwrap());
-            Ok(Some(self.last_payload.as_ref().unwrap()))
-        } else {
-            Ok(None)
+        match self.time_queue.pop_item(&now) {
+            Some(payload) => Ok(Some(self.last_payload.insert(payload))),
+            None => Ok(None),
         }
     }
 

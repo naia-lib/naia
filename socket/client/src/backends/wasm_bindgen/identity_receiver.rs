@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use naia_socket_shared::IdentityToken;
 
@@ -37,9 +37,7 @@ impl IdentityReceiver {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Option<IdentityResult>> {
-        self.id_cell
-            .lock()
-            .expect("This should never happen, message_queue should always be available in a single-threaded context")
+        self.id_cell.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
 

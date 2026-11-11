@@ -1,6 +1,6 @@
 use std::{
     net::SocketAddr,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, PoisonError},
 };
 
 use crate::{server_addr::ServerAddr, wasm_utils::candidate_to_addr};
@@ -27,10 +27,8 @@ impl AddrCell {
     /// Parses an ICE candidate string and, if it yields a usable address,
     /// records it.
     pub fn receive_candidate(&self, candidate_str: &str) {
-        self.cell
-            .lock()
-            .expect("This should never happen, receive_candidate() should only be called once ever during the session initialization")
-            .0 = candidate_to_addr(candidate_str);
+        self.cell.lock().unwrap_or_else(PoisonError::into_inner).0 =
+            candidate_to_addr(candidate_str);
     }
 
     /// Returns the server's data-channel address, or `Finding` if it has not
@@ -44,6 +42,6 @@ impl AddrCell {
 
     /// Directly records the server's resolved address.
     pub fn set_addr(&mut self, addr: &SocketAddr) {
-        self.cell.lock().expect("cannot borrow AddrCell.cell!").0 = ServerAddr::Found(*addr);
+        self.cell.lock().unwrap_or_else(PoisonError::into_inner).0 = ServerAddr::Found(*addr);
     }
 }

@@ -1,6 +1,6 @@
 use std::{
     collections::VecDeque,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, PoisonError},
 };
 
 use wasm_bindgen::{closure::Closure, JsCast};
@@ -29,7 +29,7 @@ impl DataPort {
                 uarray.copy_to(&mut body[..]);
                 message_queue_2
                     .lock()
-                    .expect("can't borrow 'message_queue_2' to retrieve message!")
+                    .unwrap_or_else(PoisonError::into_inner)
                     .push_back(body.into_boxed_slice());
             }
         });
