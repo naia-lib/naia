@@ -252,9 +252,11 @@ pub use world::snapshot_world::{SendPlan, SendUpdateEvents, SnapshotWorld};
 pub use world::sync::auth_channel::EntityAuthChannelState;
 pub use world::sync::authority_error::AuthorityError;
 pub use world::sync::host_entity_channel::HostEntityChannel;
-#[cfg(feature = "e2e_debug")]
-pub use world::sync::remote_entity_channel::EntityChannelState;
 pub use world::sync::remote_entity_channel::RemoteEntityChannel;
+#[cfg(feature = "e2e_debug")]
+pub use world::sync::remote_entity_channel::{
+    DebugChannelDiagnostic, DebugChannelSnapshot, EntityChannelState,
+};
 pub use world::update::atomic_bit_set::AtomicBitSet;
 pub use world::update::component_update::{ComponentFieldUpdate, PendingComponentUpdate};
 pub use world::update::connection_visibility_bitset::ConnectionVisibilityBitset;

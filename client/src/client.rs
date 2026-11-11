@@ -3207,15 +3207,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     pub fn debug_remote_channel_diagnostic(
         &self,
         remote_entity: &naia_shared::RemoteEntity,
-    ) -> Option<(
-        naia_shared::EntityChannelState,
-        (
-            naia_shared::SubCommandId,
-            usize,
-            Option<naia_shared::SubCommandId>,
-            usize,
-        ),
-    )> {
+    ) -> Option<naia_shared::DebugChannelDiagnostic> {
         let Some(connection) = self.server_connection.as_ref() else {
             return None;
         };
@@ -3230,13 +3222,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     pub fn debug_remote_channel_snapshot(
         &self,
         remote_entity: &naia_shared::RemoteEntity,
-    ) -> Option<(
-        naia_shared::EntityChannelState,
-        Option<naia_shared::MessageIndex>,
-        usize,
-        Option<(naia_shared::MessageIndex, naia_shared::EntityMessageType)>,
-        Option<naia_shared::MessageIndex>,
-    )> {
+    ) -> Option<naia_shared::DebugChannelSnapshot> {
         let Some(connection) = self.server_connection.as_ref() else {
             return None;
         };

@@ -7,7 +7,6 @@ use std::time::Duration;
 /// A Timer with a given duration after which it will enter into a "Ringing"
 /// state. The Timer can be reset at an given time, or manually set to start
 /// "Ringing" again.
-
 pub struct Timer {
     duration: f64,
     last: f64,

@@ -141,10 +141,7 @@ use crate::{
 
 cfg_if! {
     if #[cfg(feature = "e2e_debug")] {
-        use crate::world::{
-            host::host_world_manager::SubCommandId,
-            sync::remote_entity_channel::EntityChannelState,
-        };
+        use crate::world::sync::remote_entity_channel::{DebugChannelDiagnostic, DebugChannelSnapshot};
     }
 }
 
@@ -856,10 +853,7 @@ impl LocalWorldManager {
     pub fn debug_remote_channel_diagnostic(
         &self,
         remote_entity: RemoteEntity,
-    ) -> Option<(
-        EntityChannelState,
-        (SubCommandId, usize, Option<SubCommandId>, usize),
-    )> {
+    ) -> Option<DebugChannelDiagnostic> {
         self.remote.debug_channel_diagnostic(remote_entity)
     }
 
@@ -868,13 +862,7 @@ impl LocalWorldManager {
     pub fn debug_remote_channel_snapshot(
         &self,
         remote_entity: RemoteEntity,
-    ) -> Option<(
-        EntityChannelState,
-        Option<MessageIndex>,
-        usize,
-        Option<(MessageIndex, EntityMessageType)>,
-        Option<MessageIndex>,
-    )> {
+    ) -> Option<DebugChannelSnapshot> {
         self.remote.debug_channel_snapshot(remote_entity)
     }
 
@@ -1199,6 +1187,10 @@ impl LocalWorldManager {
                     let remote_entity = local_entity.take_remote();
                     // Count when Spawn is routed to incoming_remote_messages
                     #[cfg(feature = "e2e_debug")]
+                    #[expect(
+                        unsafe_code,
+                        reason = "e2e_debug counter hook resolved by the naia-client test harness"
+                    )]
                     if incoming_message.get_type() == EntityMessageType::Spawn {
                         extern "Rust" {
                             fn client_routed_remote_spawn_increment();

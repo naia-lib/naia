@@ -25,11 +25,7 @@ use crate::{
 
 cfg_if! {
     if #[cfg(feature = "e2e_debug")] {
-        use crate::world::{
-            host::host_world_manager::SubCommandId,
-            sync::remote_entity_channel::EntityChannelState,
-        };
-        use crate::EntityMessageType;
+        use crate::world::sync::remote_entity_channel::{DebugChannelDiagnostic, DebugChannelSnapshot};
     }
 }
 
@@ -126,10 +122,7 @@ impl RemoteWorldManager {
     pub fn debug_channel_diagnostic(
         &self,
         remote_entity: RemoteEntity,
-    ) -> Option<(
-        EntityChannelState,
-        (SubCommandId, usize, Option<SubCommandId>, usize),
-    )> {
+    ) -> Option<DebugChannelDiagnostic> {
         self.remote_engine
             .get_world()
             .get(&remote_entity)
@@ -141,13 +134,7 @@ impl RemoteWorldManager {
     pub fn debug_channel_snapshot(
         &self,
         remote_entity: RemoteEntity,
-    ) -> Option<(
-        EntityChannelState,
-        Option<MessageIndex>,
-        usize,
-        Option<(MessageIndex, EntityMessageType)>,
-        Option<MessageIndex>,
-    )> {
+    ) -> Option<DebugChannelSnapshot> {
         self.remote_engine
             .get_world()
             .get(&remote_entity)

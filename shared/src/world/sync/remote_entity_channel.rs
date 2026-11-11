@@ -101,6 +101,26 @@ pub enum EntityChannelState {
     Spawned,
 }
 
+/// E2E-debug view of one remote entity channel: its lifecycle state plus the
+/// auth receiver's diagnostic (see `AuthChannelReceiver::debug_diagnostic`).
+#[cfg(feature = "e2e_debug")]
+pub type DebugChannelDiagnostic = (
+    EntityChannelState,
+    (SubCommandId, usize, Option<SubCommandId>, usize),
+);
+
+/// E2E-debug snapshot of one remote entity channel: lifecycle state, last
+/// epoch id, buffered message count, buffered head (id, type), and the id of
+/// the first buffered Spawn, if any.
+#[cfg(feature = "e2e_debug")]
+pub type DebugChannelSnapshot = (
+    EntityChannelState,
+    Option<MessageIndex>,
+    usize,
+    Option<(MessageIndex, EntityMessageType)>,
+    Option<MessageIndex>,
+);
+
 /// Per-entity demultiplexer that buffers and reorders incoming messages from an unordered reliable channel into a causal stream.
 pub struct RemoteEntityChannel {
     state: EntityChannelState,
@@ -233,6 +253,10 @@ impl RemoteEntityChannel {
                     self.state = EntityChannelState::Spawned;
                     // Count when Spawn transitions state to Spawned
                     #[cfg(feature = "e2e_debug")]
+                    #[expect(
+                        unsafe_code,
+                        reason = "e2e_debug counter hook resolved by the naia-client test harness"
+                    )]
                     {
                         extern "Rust" {
                             fn client_processed_spawn_increment();
@@ -377,26 +401,13 @@ impl RemoteEntityChannel {
     }
 
     #[cfg(feature = "e2e_debug")]
-    pub(crate) fn debug_auth_diagnostic(
-        &self,
-    ) -> (
-        EntityChannelState,
-        (SubCommandId, usize, Option<SubCommandId>, usize),
-    ) {
+    pub(crate) fn debug_auth_diagnostic(&self) -> DebugChannelDiagnostic {
         let auth_diag = self.auth_channel.receiver_debug_diagnostic();
         (self.state, auth_diag)
     }
 
     #[cfg(feature = "e2e_debug")]
-    pub(crate) fn debug_channel_snapshot(
-        &self,
-    ) -> (
-        EntityChannelState,
-        Option<MessageIndex>,
-        usize,
-        Option<(MessageIndex, EntityMessageType)>,
-        Option<MessageIndex>,
-    ) {
+    pub(crate) fn debug_channel_snapshot(&self) -> DebugChannelSnapshot {
         let state = self.state;
         let last_epoch_id = self.last_epoch_id;
         let buffered_len = self.buffered_messages.len();
