@@ -89,8 +89,8 @@ impl PingManager {
     fn process_new_rtt(&mut self, rtt_millis: u32) {
         // Saturate at u16::MAX (≈65s, adequate for any real RTT); the u16
         // sample converts to f32 losslessly, unlike a direct `u32 as f32`.
-        let sample = u16::try_from(rtt_millis.min(u32::from(u16::MAX)))
-            .expect("RTT sample clamped to u16 range");
+        // Clamped above, so this cast can never truncate.
+        let sample = rtt_millis.min(u32::from(u16::MAX)) as u16;
         let rtt_millis_f32 = f32::from(sample);
         let new_jitter = ((rtt_millis_f32 - self.rtt_average) / 2.0).abs();
         self.jitter_average = (0.9 * self.jitter_average) + (0.1 * new_jitter);

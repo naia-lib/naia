@@ -177,6 +177,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
     /// to the two predecessor methods (the `live` and `entries` predicates are
     /// independent per index; resolving the world-entity first is equivalent).
     #[must_use]
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned GlobalDiffHandler lock means a writer panicked mid-update; replicating from it would corrupt every peer"
+    )]
     pub fn needed_live_and_snapshot_entries(&self) -> (Vec<E>, Vec<(E, ComponentKind)>) {
         let gwm = self.shared.global_world_manager.read();
         let gem = self.shared.global_entity_map.read();

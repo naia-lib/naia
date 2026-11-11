@@ -68,7 +68,16 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserRef<'s, E> {
     }
 
     /// Returns the remote [`SocketAddr`] for this connection.
+    ///
+    /// # Panics
+    /// Panics if the user is no longer connected. A `UserRef` is only ever
+    /// handed out for a currently-connected user, so this is a naia-side
+    /// invariant, never reachable from peer input.
     #[must_use]
+    #[expect(
+        clippy::unwrap_used,
+        reason = "internal invariant: a UserRef names a currently-connected user"
+    )]
     pub fn address(&self) -> SocketAddr {
         match &self.server {
             UserRefTarget::Resident(ws) => ws.user_address(self.key),
@@ -78,7 +87,16 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserRef<'s, E> {
     }
 
     /// Returns the number of rooms this user currently belongs to.
+    ///
+    /// # Panics
+    /// Panics if the user is no longer connected. A `UserRef` is only ever
+    /// handed out for a currently-connected user, so this is a naia-side
+    /// invariant, never reachable from peer input.
     #[must_use]
+    #[expect(
+        clippy::unwrap_used,
+        reason = "internal invariant: a UserRef names a currently-connected user"
+    )]
     pub fn rooms_count(&self) -> usize {
         match &self.server {
             UserRefTarget::Resident(ws) => ws.user_rooms_count(self.key),
@@ -88,7 +106,16 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserRef<'s, E> {
     }
 
     /// Returns an iterator over the [`RoomKey`]s of all rooms the user belongs to.
+    ///
+    /// # Panics
+    /// Panics if the user is no longer connected. A `UserRef` is only ever
+    /// handed out for a currently-connected user, so this is a naia-side
+    /// invariant, never reachable from peer input.
     #[must_use]
+    #[expect(
+        clippy::unwrap_used,
+        reason = "internal invariant: a UserRef names a currently-connected user"
+    )]
     pub fn room_keys(&self) -> Iter<'_, RoomKey> {
         match &self.server {
             UserRefTarget::Resident(ws) => ws.user_room_keys(self.key),
@@ -129,7 +156,16 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserMut<'s, E> {
     }
 
     /// Returns the remote [`SocketAddr`] for this connection.
+    ///
+    /// # Panics
+    /// Panics if the user is no longer connected. A `UserMut` is only ever
+    /// handed out for a currently-connected user, so this is a naia-side
+    /// invariant, never reachable from peer input.
     #[must_use]
+    #[expect(
+        clippy::unwrap_used,
+        reason = "internal invariant: a UserMut names a currently-connected user"
+    )]
     pub fn address(&self) -> SocketAddr {
         match &self.server {
             UserMutTarget::Resident(ws) => ws.user_address(self.key),
@@ -181,7 +217,16 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserMut<'s, E> {
     }
 
     /// Returns the number of rooms this user currently belongs to.
+    ///
+    /// # Panics
+    /// Panics if the user is no longer connected. A `UserMut` is only ever
+    /// handed out for a currently-connected user, so this is a naia-side
+    /// invariant, never reachable from peer input.
     #[must_use]
+    #[expect(
+        clippy::unwrap_used,
+        reason = "internal invariant: a UserMut names a currently-connected user"
+    )]
     pub fn rooms_count(&self) -> usize {
         match &self.server {
             UserMutTarget::Resident(ws) => ws.user_rooms_count(self.key),
@@ -191,7 +236,16 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserMut<'s, E> {
     }
 
     /// Returns an iterator over the [`RoomKey`]s of all rooms the user belongs to.
+    ///
+    /// # Panics
+    /// Panics if the user is no longer connected. A `UserMut` is only ever
+    /// handed out for a currently-connected user, so this is a naia-side
+    /// invariant, never reachable from peer input.
     #[must_use]
+    #[expect(
+        clippy::unwrap_used,
+        reason = "internal invariant: a UserMut names a currently-connected user"
+    )]
     pub fn room_keys(&'_ self) -> Iter<'_, RoomKey> {
         match &self.server {
             UserMutTarget::Resident(ws) => ws.user_room_keys(self.key),

@@ -587,6 +587,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// `SpawnWithComponents` / `InsertComponent` isn't yet fully delivered". The
     /// snapshot builder unions this with `global_dirty` (component updates)
     /// to get the full must-include set.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: a global entity index never approaches u32::MAX"
+    )]
     pub fn refresh_needed_entities(&mut self) {
         let needed = &self.shared.needed_entities;
         let _ = needed.clear();
@@ -794,6 +798,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     ///
     /// Panics if a component kind bit does not fit in `u16`, which cannot
     /// happen for registered component kinds.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: a registered component kind bit never approaches u16::MAX"
+    )]
     fn collect_entity_kinds(
         send_conn: &SendConnection,
         guard: &std::sync::RwLockReadGuard<GlobalDiffHandler>,
@@ -928,7 +936,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     ///
     /// # Panics
     ///
-    /// Panics if the global diff handler lock is poisoned.
+    /// Panics if `user_addresses` (snapshotted from `send_user_connections`
+    /// at the top of this fn, with no removal in between) names an address no
+    /// longer in `send_user_connections` — a naia bug.
+    /// Also panics if the global diff handler lock is poisoned.
+    #[expect(
+        clippy::unwrap_used,
+        reason = "invariant: user_addresses is snapshotted from send_user_connections with no removal before use"
+    )]
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned GlobalDiffHandler lock means a writer panicked mid-update; replicating from it would corrupt every peer"
+    )]
     pub fn prepare_send_job<W: WorldRefType<E> + Sync>(&mut self, world: &W) -> SendPlan {
         #[cfg(feature = "f3_diag")]
         eprintln!(
@@ -1120,6 +1139,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// plan's frozen dirty domain (Phase 1/2), then serializes each user's plan
     /// using the FROZEN `DiffMask`s and records the per-packet `sent_updates`
     /// ledger (Phase 3B). No live per-user diff state is read or cleared here.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a component kind bit does not fit in `u16` (cannot happen for
+    /// registered component kinds), or if a component verified present by
+    /// `has_component_of_kind` is then absent from `component_of_kind` (a naia bug).
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: registered kind bits fit u16; a component verified present moments earlier cannot vanish"
+    )]
     pub fn transmit_send_job<W: WorldRefType<E> + Sync>(&mut self, world: &W, plan: SendPlan) {
         let SendPlan {
             per_user,
@@ -1741,6 +1770,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// Send-side equivalent of `InternalWorldServer::entity_global_idx`
     /// (`world_server.rs:3946`) — resolve the dense `GlobalEntityIndex`
     /// via the shared diff handler.
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned GlobalDiffHandler lock means a writer panicked mid-update; replicating from it would corrupt every peer"
+    )]
     fn configure_entity_global_idx(&self, global_entity: GlobalEntity) -> GlobalEntityIndex {
         let handler = self.shared.global_world_manager.read().diff_handler();
         let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
@@ -1973,6 +2006,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     ///
     /// Idempotent within a tick: setting `scope_changes_done_this_tick`
     /// causes the subsequent `send_all_packets` to skip its auto-call.
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned GlobalDiffHandler lock means a writer panicked mid-update; replicating from it would corrupt every peer"
+    )]
     pub fn apply_pending_scope_changes<W: WorldRefType<E>>(&mut self, world: &W) {
         #[cfg(feature = "f3_diag")]
         eprintln!(
@@ -2243,6 +2280,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         );
     }
 
+    #[expect(
+        clippy::unwrap_used,
+        reason = "invariant: global_entity is a known replicating entity by the time scope is applied"
+    )]
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned GlobalDiffHandler lock means a writer panicked mid-update; replicating from it would corrupt every peer"
+    )]
     pub(crate) fn apply_scope_for_user<W: WorldRefType<E>>(
         &mut self,
         world: &W,
@@ -2526,6 +2571,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// with `excluding_user_opt = None` inlined (the host-sync drain always
     /// passes `None`, so the `sim_handle.user_store` lookup in
     /// `insert_new_component_into_entity_scopes` is dead — omitted here).
+    ///
+    /// # Panics
+    /// Panics if `world_entity` is not a known replicating entity (caller misuse).
+    #[expect(
+        clippy::unwrap_used,
+        reason = "invariant: caller passes a known replicating entity"
+    )]
     pub(crate) fn insert_component_worldless(
         &mut self,
         world_entity: &E,
@@ -2603,6 +2655,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
 
     /// Pipeline-mode `remove_component_worldless`. Byte-for-byte mirror of
     /// `InternalWorldServer::remove_component_worldless` (`world_server.rs:2492`).
+    ///
+    /// # Panics
+    /// Panics if `world_entity` is not a known replicating entity (caller misuse).
+    #[expect(
+        clippy::unwrap_used,
+        reason = "invariant: caller passes a known replicating entity"
+    )]
     pub(crate) fn remove_component_worldless(
         &mut self,
         world_entity: &E,
@@ -2707,6 +2766,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// (`world_server.rs:2199`). Resolves the global idx, clears
     /// `idx_to_world`, and despawns the entity from every connection that
     /// has it in scope.
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned GlobalDiffHandler lock means a writer panicked mid-update; replicating from it would corrupt every peer"
+    )]
     fn despawn_entity_from_all_connections(&mut self, global_entity: GlobalEntity) {
         let entity_idx = {
             let handler = self.shared.global_world_manager.read().diff_handler();

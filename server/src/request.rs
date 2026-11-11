@@ -98,11 +98,10 @@ impl GlobalRequestManager {
         request_id: GlobalRequestId,
     ) -> Option<(UserKey, MessageContainer)> {
         let (_, _, response_opt) = self.map.get(&request_id)?;
-        if response_opt.is_some() {
-            let (user_key, _, response_opt) = self.map.remove(&request_id).unwrap();
-            return Some((user_key, response_opt.unwrap()));
-        }
-        None
+        response_opt.as_ref()?;
+        let (user_key, _, response_opt) = self.map.remove(&request_id)?;
+        let response = response_opt?;
+        Some((user_key, response))
     }
 
     pub(crate) fn receive_response(
@@ -201,7 +200,9 @@ impl GlobalResponseManager {
         // the cap. Dropping the routing entry makes the request unanswerable, and
         // `send_response` already models exactly that as `Undeliverable`.
         while queue.len() > MAX_OUTSTANDING_RESPONSES_PER_USER {
-            let oldest = queue.pop_front().unwrap();
+            let Some(oldest) = queue.pop_front() else {
+                break;
+            };
             self.map.remove(&oldest);
             warn!(
                 "user has more than {MAX_OUTSTANDING_RESPONSES_PER_USER} unanswered requests outstanding; dropping the oldest. \

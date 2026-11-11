@@ -169,6 +169,10 @@ impl MainServer {
 
     /// Accepts an incoming Client User, allowing them to establish a connection
     /// with the Server
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: listen() sets auth_io before any AuthEvent can fire"
+    )]
     pub fn accept_connection(&mut self, user_key: &UserKey) {
         let Some(user) = self.users.get_mut(user_key) else {
             warn!("unknown user is finalizing connection...");
@@ -223,6 +227,10 @@ impl MainServer {
 
     /// Rejects an incoming Client User, optionally handing them an
     /// already-serialized message explaining why (naia-lib/naia#133).
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: listen() sets auth_io before any AuthEvent can fire"
+    )]
     pub fn reject_connection_with_payload(&mut self, user_key: &UserKey, payload: Option<&[u8]>) {
         if let Some(user) = self.users.get_mut(user_key) {
             let Some(auth_addr) = user.take_auth_address() else {
@@ -461,9 +469,8 @@ impl MainServer {
                                 continue;
                             };
                             self.incoming_events.push_auth(user_key, auth_message);
-                        } else {
+                        } else if let Some(user) = self.users.get_mut(&user_key) {
                             // auto-accept: no ServerAuthEvent; generate token and send immediately
-                            let user = self.users.get_mut(&user_key).expect("user just inserted");
                             let _ = user.take_auth_address(); // consume the auth address
                             let identity_token = naia_shared::IdentityToken::generate();
                             self.handshake_manager.authenticate_user(

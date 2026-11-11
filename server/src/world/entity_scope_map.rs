@@ -40,16 +40,13 @@ impl EntityScopeMap {
     }
 
     pub fn insert(&mut self, user_key: UserKey, entity: GlobalEntity, in_scope: bool) {
-        self.entities_of_user.entry(user_key).or_default();
-        self.users_of_entity.entry(entity).or_default();
-
         self.entities_of_user
-            .get_mut(&user_key)
-            .unwrap()
+            .entry(user_key)
+            .or_default()
             .insert(entity);
         self.users_of_entity
-            .get_mut(&entity)
-            .unwrap()
+            .entry(entity)
+            .or_default()
             .insert(user_key);
 
         self.main_map.insert((user_key, entity), in_scope);

@@ -76,10 +76,7 @@ impl TransportReceiver for PacketChannelReceiver {
     /// Receives a packet from the Server Socket
     fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
         match self.receiver.try_recv() {
-            Ok((address, payload)) => {
-                self.current_payload = Some(payload);
-                Ok(Some((address, self.current_payload.as_ref().unwrap())))
-            }
+            Ok((address, payload)) => Ok(Some((address, self.current_payload.insert(payload)))),
             Err(TryRecvError::Empty) => Ok(None),
             Err(_) => Err(RecvError),
         }

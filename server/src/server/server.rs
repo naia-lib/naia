@@ -149,7 +149,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
 
         // handle connects
         for user_key in main_events.read::<ConnectEvent>() {
-            let user_address = self.main.user_address(user_key).unwrap();
+            let Some(user_address) = self.main.user_address(user_key) else {
+                continue;
+            };
             self.world.receive_user(user_key, user_address);
         }
 
@@ -162,10 +164,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         }
 
         // handle world packets
-        let to_world_sender = self.to_world_sender_opt.as_mut().unwrap();
-        for (_, addr, payload) in main_events.read::<WorldPacketEvent>() {
-            if let Err(_e) = to_world_sender.send(&addr, &payload) {
-                main_events.push_error(NaiaServerError::SendError(addr));
+        if let Some(to_world_sender) = self.to_world_sender_opt.as_mut() {
+            for (_, addr, payload) in main_events.read::<WorldPacketEvent>() {
+                if let Err(_e) = to_world_sender.send(&addr, &payload) {
+                    main_events.push_error(NaiaServerError::SendError(addr));
+                }
             }
         }
 
@@ -204,7 +207,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         let mut main_events = self.main.receive();
 
         for user_key in main_events.read::<ConnectEvent>() {
-            let user_address = self.main.user_address(user_key).unwrap();
+            let Some(user_address) = self.main.user_address(user_key) else {
+                continue;
+            };
             self.world.receive_user(user_key, user_address);
         }
 
@@ -215,10 +220,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
             );
         }
 
-        let to_world_sender = self.to_world_sender_opt.as_mut().unwrap();
-        for (_, addr, payload) in main_events.read::<WorldPacketEvent>() {
-            if let Err(_e) = to_world_sender.send(&addr, &payload) {
-                main_events.push_error(NaiaServerError::SendError(addr));
+        if let Some(to_world_sender) = self.to_world_sender_opt.as_mut() {
+            for (_, addr, payload) in main_events.read::<WorldPacketEvent>() {
+                if let Err(_e) = to_world_sender.send(&addr, &payload) {
+                    main_events.push_error(NaiaServerError::SendError(addr));
+                }
             }
         }
 

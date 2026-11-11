@@ -20,9 +20,7 @@ impl EntityRoomMap {
     }
 
     pub(crate) fn entity_add_room(&mut self, entity: GlobalEntity, room_key: RoomKey) {
-        self.map.entry(entity).or_default();
-        let rooms = self.map.get_mut(&entity).unwrap();
-        rooms.insert(room_key);
+        self.map.entry(entity).or_default().insert(room_key);
     }
 
     pub(crate) fn remove_from_room(&mut self, entity: GlobalEntity, room_key: RoomKey) {

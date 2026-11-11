@@ -158,29 +158,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> RecvHandle<E> {
         message: M,
     ) -> bool {
         use crate::connection::connection::new_connection_pair;
+        use std::collections::hash_map::Entry;
 
-        if !self.state.recv_user_connections.contains_key(&address) {
-            let gwm_guard = self.state.shared.global_world_manager.read();
-            let (recv_conn, _send_conn) = new_connection_pair(
-                &self.state.shared.server_config.connection,
-                &self.state.shared.server_config.ping,
-                &address,
-                *user_key,
-                &self.state.shared.channel_kinds,
-                &gwm_guard,
-                self.state.shared.server_config.max_replicated_entities as usize,
-            );
-            drop(gwm_guard);
-            self.state.recv_user_connections.insert(address, recv_conn);
-        }
+        let connection = match self.state.recv_user_connections.entry(address) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                let gwm_guard = self.state.shared.global_world_manager.read();
+                let (recv_conn, _send_conn) = new_connection_pair(
+                    &self.state.shared.server_config.connection,
+                    &self.state.shared.server_config.ping,
+                    &address,
+                    *user_key,
+                    &self.state.shared.channel_kinds,
+                    &gwm_guard,
+                    self.state.shared.server_config.max_replicated_entities as usize,
+                );
+                drop(gwm_guard);
+                entry.insert(recv_conn)
+            }
+        };
 
         let channel_kind = naia_shared::ChannelKind::of::<C>();
         let container = naia_shared::MessageContainer::new(Box::new(message));
-        self.state
-            .recv_user_connections
-            .get_mut(&address)
-            .expect("connection just inserted")
-            .inject_tick_buffer_message(&channel_kind, host_tick, message_tick, container)
+        connection.inject_tick_buffer_message(&channel_kind, host_tick, message_tick, container)
     }
 }
 

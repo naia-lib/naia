@@ -50,6 +50,10 @@ impl GlobalWorldManager {
     /// Pre-populates the stride from the static protocol `ComponentKinds` total.
     /// Must be called at startup (after `Protocol::build()`) and before any connection
     /// is accepted, so that `UserDiffHandler::new()` reads a non-zero `kind_count`.
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned GlobalDiffHandler lock means a writer panicked mid-update; replicating from it would corrupt every peer"
+    )]
     pub fn init_protocol_kind_count(&mut self, count: u16) {
         self.diff_handler
             .write()
@@ -69,6 +73,10 @@ impl GlobalWorldManager {
     }
 
     // Spawn
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned GlobalDiffHandler lock means a writer panicked mid-update; replicating from it would corrupt every peer"
+    )]
     pub fn insert_entity_record(
         &mut self,
         global_entity: GlobalEntity,
@@ -86,6 +94,10 @@ impl GlobalWorldManager {
             .alloc_entity(global_entity)
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned GlobalDiffHandler lock means a writer panicked mid-update; replicating from it would corrupt every peer"
+    )]
     pub fn insert_static_entity_record(
         &mut self,
         global_entity: GlobalEntity,
@@ -120,6 +132,14 @@ impl GlobalWorldManager {
         }
     }
 
+    /// # Panics
+    /// Panics if `global_entity` has no entity record. Callers must only
+    /// despawn an entity they already hold a record for; this is a naia-side
+    /// invariant, never reachable from peer input.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: caller already holds this entity's record"
+    )]
     pub fn remove_entity_record(&mut self, global_entity: GlobalEntity) {
         // info!("Despawning Entity: {:?}", global_entity);
         self.diff_handler
@@ -139,16 +159,8 @@ impl GlobalWorldManager {
 
     // Component Kinds
     pub fn component_kinds(&self, global_entity: GlobalEntity) -> Option<Vec<ComponentKind>> {
-        if !self.entity_records.contains_key(&global_entity) {
-            return None;
-        }
-
-        let component_kind_set = &self
-            .entity_records
-            .get(&global_entity)
-            .unwrap()
-            .component_kinds;
-        Some(component_kind_set.iter().copied().collect())
+        let record = self.entity_records.get(&global_entity)?;
+        Some(record.component_kinds.iter().copied().collect())
     }
 
     // Insert Component
@@ -158,16 +170,10 @@ impl GlobalWorldManager {
         global_entity: GlobalEntity,
         component_kind: &ComponentKind,
     ) {
-        assert!(
-            self.entity_records.contains_key(&global_entity),
-            "entity does not exist!"
-        );
-        let component_kind_set = &mut self
-            .entity_records
-            .get_mut(&global_entity)
-            .unwrap()
-            .component_kinds;
-        component_kind_set.insert(*component_kind);
+        let Some(record) = self.entity_records.get_mut(&global_entity) else {
+            panic!("entity does not exist!");
+        };
+        record.component_kinds.insert(*component_kind);
         // info!("Registered Component: {:?} for Entity: {:?}", component_kinds.kind_to_name(component_kind), global_entity);
     }
 
@@ -176,15 +182,10 @@ impl GlobalWorldManager {
         global_entity: GlobalEntity,
         component_kind: &ComponentKind,
     ) -> bool {
-        if !self.entity_records.contains_key(&global_entity) {
+        let Some(record) = self.entity_records.get(&global_entity) else {
             return false;
-        }
-        let component_kind_set = &self
-            .entity_records
-            .get(&global_entity)
-            .unwrap()
-            .component_kinds;
-        component_kind_set.contains(component_kind)
+        };
+        record.component_kinds.contains(component_kind)
     }
 
     pub fn insert_component_diff_handler(
@@ -209,21 +210,19 @@ impl GlobalWorldManager {
         global_entity: GlobalEntity,
         component_kind: &ComponentKind,
     ) {
+        let Some(record) = self.entity_records.get_mut(&global_entity) else {
+            panic!("entity does not exist!");
+        };
         assert!(
-            self.entity_records.contains_key(&global_entity),
-            "entity does not exist!"
-        );
-        let component_kind_set = &mut self
-            .entity_records
-            .get_mut(&global_entity)
-            .unwrap()
-            .component_kinds;
-        assert!(
-            component_kind_set.remove(component_kind),
+            record.component_kinds.remove(component_kind),
             "component does not exist!"
         );
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned GlobalDiffHandler lock means a writer panicked mid-update; replicating from it would corrupt every peer"
+    )]
     pub fn remove_component_diff_handler(
         &mut self,
         global_entity: GlobalEntity,
@@ -232,7 +231,7 @@ impl GlobalWorldManager {
         self.diff_handler
             .as_ref()
             .write()
-            .expect("Haven't initialized DiffHandler")
+            .expect("GlobalDiffHandler lock poisoned")
             .deregister_component(global_entity, *component_kind);
     }
 
@@ -557,6 +556,10 @@ impl GlobalWorldManagerType for GlobalWorldManager {
         self.diff_handler.clone()
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned GlobalDiffHandler lock means a writer panicked mid-update; replicating from it would corrupt every peer"
+    )]
     fn register_component(
         &self,
         component_kinds: &ComponentKinds,
@@ -568,7 +571,7 @@ impl GlobalWorldManagerType for GlobalWorldManager {
             .diff_handler
             .as_ref()
             .write()
-            .expect("DiffHandler should be initialized")
+            .expect("GlobalDiffHandler lock poisoned")
             .register_component(
                 component_kinds,
                 self,
@@ -627,6 +630,10 @@ impl InScopeEntities<GlobalEntity> for GlobalWorldManager {
 
 #[cfg(feature = "test_utils")]
 impl GlobalWorldManager {
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned GlobalDiffHandler lock means a writer panicked mid-update; replicating from it would corrupt every peer"
+    )]
     pub fn global_diff_handler_count(&self) -> usize {
         self.diff_handler
             .read()
@@ -634,6 +641,10 @@ impl GlobalWorldManager {
             .receiver_count()
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned GlobalDiffHandler lock means a writer panicked mid-update; replicating from it would corrupt every peer"
+    )]
     pub fn global_diff_handler_count_by_kind(
         &self,
     ) -> std::collections::HashMap<naia_shared::ComponentKind, usize> {

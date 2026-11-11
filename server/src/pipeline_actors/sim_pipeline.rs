@@ -208,6 +208,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     ///
     /// Panics if `coord` is temporarily absent (only during [`Self::tick`] or
     /// `Self::with_monolithic_world_server` — both restore it before returning).
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: coord is only absent mid-tick, both callers restore it before returning"
+    )]
     pub fn coord(&self) -> &CoordHandle<E> {
         self.coord
             .as_ref()
@@ -215,6 +219,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     }
 
     /// Mutably borrow the coordination handle.
+    ///
+    /// Panics if `coord` is temporarily absent (only during [`Self::tick`] or
+    /// `Self::with_monolithic_world_server` — both restore it before returning).
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: coord is only absent mid-tick, both callers restore it before returning"
+    )]
     pub fn coord_mut(&mut self) -> &mut CoordHandle<E> {
         self.coord
             .as_mut()
@@ -248,6 +259,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// Workers must be parked before calling `tick()` — this ensures the
     /// handles are in their slots. The bevy adapter wraps this with
     /// `PluginInternalState::park_workers` / `unpark_workers`.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: parked workers guarantee coord/recv/send are in their slots"
+    )]
     pub fn tick<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
@@ -294,6 +309,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// independent access to the recv/send Arcs (via `RecvHandleRes` /
     /// `SendHandleRes`). MUST be followed by [`Self::restore_coord`] before the
     /// pipeline is used again.
+    ///
+    /// Panics if `coord` is temporarily absent (only during [`Self::tick`] or
+    /// `Self::with_monolithic_world_server` — both restore it before returning).
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: coord is only absent mid-tick, both callers restore it before returning"
+    )]
     pub fn take_coord(&mut self) -> CoordHandle<E> {
         self.coord
             .take()
@@ -322,6 +344,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// `receive`/`send`/`tick` all share this hazard; it is acceptable for the
     /// oracle/test path (a panic there already aborts the run) but a debugger
     /// chasing the second panic should look upstream for the first.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: parked workers guarantee coord/recv/send are in their slots"
+    )]
     pub fn take_handles(&mut self) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>) {
         // A worker that panicked during the preceding `park_workers()` never
         // deposits its handle (park breaks early on a finished worker), so a
@@ -398,6 +424,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// Note: the byte-exact moat (`naia_test_harness` / g9pre) drives the core
     /// bracket synchronously and never calls this, so spawning parked threads here
     /// cannot affect determinism.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: listen() has already placed the recv handle in its slot"
+    )]
     pub fn start_workers(&mut self, timing: RuntimeTimingHooks) {
         // The snapshot job channel always exists (`new_armed` needs the
         // receiver); only the worker-driven build points `send` at it.
@@ -501,6 +531,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// control mutations should use coord fast paths or D-slot staging instead.
     ///
     /// Workers must be parked (or not yet started) before calling this.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: parked (or unstarted) workers guarantee coord/recv/send are in their slots"
+    )]
     pub(crate) fn with_monolithic_world_server<R>(
         &mut self,
         f: impl FnOnce(&mut crate::InternalWorldServer<E>) -> R,
@@ -706,6 +740,15 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     }
 
     /// Server takes authority without reassembling the split engine.
+    ///
+    /// # Panics
+    /// Panics if `world_entity` is not a known replicating entity (caller
+    /// misuse), or if `recv_slot` is not in its slot (workers must be parked).
+    #[expect(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "invariant: caller passes a known replicating entity; parked workers guarantee recv_slot is populated"
+    )]
     pub fn entity_take_authority(&mut self, world_entity: &E) -> Result<(), AuthorityError> {
         let global_entity = self
             .coord()
@@ -741,6 +784,15 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     }
 
     /// Server grants authority to a user without reassembling the split engine.
+    ///
+    /// # Panics
+    /// Panics if `world_entity` is not a known replicating entity (caller
+    /// misuse), or if `recv_slot` is not in its slot (workers must be parked).
+    #[expect(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "invariant: caller passes a known replicating entity; parked workers guarantee recv_slot is populated"
+    )]
     pub fn entity_give_authority(
         &mut self,
         user_key: &UserKey,
@@ -787,6 +839,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     }
 
     /// Server/client releases authority without reassembling the split engine.
+    ///
+    /// # Panics
+    /// Panics if `world_entity` is not a known replicating entity (caller misuse).
+    #[expect(
+        clippy::unwrap_used,
+        reason = "invariant: caller passes a known replicating entity"
+    )]
     pub fn entity_release_authority(
         &mut self,
         origin_user: Option<UserKey>,
@@ -901,6 +960,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     /// Stage component insertion's send-side fanout after applying coord/global
     /// component records synchronously.
+    ///
+    /// # Panics
+    /// Panics if `world_entity` is not a known replicating entity (caller misuse).
+    #[expect(
+        clippy::unwrap_used,
+        reason = "invariant: caller passes a known replicating entity"
+    )]
     pub fn insert_component_worldless(&mut self, world_entity: &E, component: &mut dyn Replicate) {
         let component_kind = component.kind();
         let global_entity = self
@@ -968,6 +1034,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     /// Stage component removal's send-side fanout after applying coord/global
     /// component cleanup synchronously.
+    ///
+    /// # Panics
+    /// Panics if `world_entity` is not a known replicating entity (caller misuse).
+    #[expect(
+        clippy::unwrap_used,
+        reason = "invariant: caller passes a known replicating entity"
+    )]
     pub fn remove_component_worldless(&mut self, world_entity: &E, component_kind: &ComponentKind) {
         let global_entity = self
             .coord()
@@ -1345,6 +1418,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     /// `true` once the transport is bound + listening. Send-resident
     /// (`send.send_io`); reads the parked send handle.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller reads between receive() and send(), guaranteeing send_slot is populated"
+    )]
     pub fn is_listening(&self) -> bool {
         self.send_slot
             .lock()
@@ -1357,6 +1434,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     /// The pending incremental scope-check tuples. Send-resident
     /// (`send.scope_checks_cache`); reads the parked send handle.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller reads between receive() and send(), guaranteeing send_slot is populated"
+    )]
     pub fn scope_checks_pending(&self) -> Vec<(RoomKey, UserKey, E)> {
         self.send_slot
             .lock()
@@ -1370,6 +1451,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     /// Clears the pending scope-check queue. Send-resident
     /// (`send.scope_checks_cache`); mutates the parked send handle.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller calls between receive() and send(), guaranteeing send_slot is populated"
+    )]
     pub fn mark_scope_checks_pending_handled(&mut self) {
         self.send_slot
             .lock()
@@ -1382,6 +1467,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     /// Re-enqueues every current scope-check tuple. Send-resident
     /// (`send.scope_checks_cache`); mutates the parked send handle.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller calls between receive() and send(), guaranteeing send_slot is populated"
+    )]
     pub fn mark_all_scope_checks_pending(&mut self) {
         self.send_slot
             .lock()
@@ -1394,6 +1483,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     /// Average RTT to the given user's client, or `None` if not connected.
     /// Reads the coord user address + the parked recv handle's ping manager.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller reads between receive() and send(), guaranteeing recv_slot is populated"
+    )]
     pub fn rtt(&self, user_key: &UserKey) -> Option<f32> {
         let addr = self.coord().user_address(*user_key)?;
         let recv = self.recv_slot.lock();
@@ -1410,6 +1503,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     }
 
     /// Average jitter to the given user's client, or `None` if not connected.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller reads between receive() and send(), guaranteeing recv_slot is populated"
+    )]
     pub fn jitter(&self, user_key: &UserKey) -> Option<f32> {
         let addr = self.coord().user_address(*user_key)?;
         let recv = self.recv_slot.lock();
@@ -1427,6 +1524,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     /// Per-connection diagnostics for the given user, or `None` if not connected.
     /// Reads the coord user address + both parked recv and send handles.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller reads between receive() and send(), guaranteeing recv_slot/send_slot are populated"
+    )]
     pub fn connection_stats(&self, user_key: &UserKey) -> Option<ConnectionStats> {
         let addr = self.coord().user_address(*user_key)?;
         let recv = self.recv_slot.lock();
@@ -1520,6 +1621,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     /// Total outgoing bandwidth averaged over the monitor window (bytes/sec).
     /// Send-resident (`send.send_io`); reads the parked send handle.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller reads between receive() and send(), guaranteeing send_slot is populated"
+    )]
     pub fn outgoing_bandwidth_total(&self) -> f32 {
         self.send_slot
             .lock()
@@ -1531,6 +1636,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     }
 
     /// Bytes sent during the most recent send. Send-resident (`send.send_io`).
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller reads between receive() and send(), guaranteeing send_slot is populated"
+    )]
     pub fn outgoing_bytes_last_tick(&self) -> u64 {
         self.send_slot
             .lock()
@@ -1543,6 +1652,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     /// Total incoming bandwidth averaged over the monitor window (bytes/sec).
     /// Recv-resident (`recv.recv_io`); reads the parked recv handle.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller reads between receive() and send(), guaranteeing recv_slot is populated"
+    )]
     pub fn incoming_bandwidth_total(&self) -> f32 {
         self.recv_slot
             .lock()
@@ -1554,6 +1667,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     }
 
     /// Outgoing bandwidth to a specific client address (bytes/sec). Send-resident.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller reads between receive() and send(), guaranteeing send_slot is populated"
+    )]
     pub fn outgoing_bandwidth_to_client(&self, address: &SocketAddr) -> f32 {
         self.send_slot
             .lock()
@@ -1565,6 +1682,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     }
 
     /// Incoming bandwidth from a specific client address (bytes/sec). Recv-resident.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller reads between receive() and send(), guaranteeing recv_slot is populated"
+    )]
     pub fn incoming_bandwidth_from_client(&self, address: &SocketAddr) -> f32 {
         self.recv_slot
             .lock()
@@ -1627,6 +1748,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     /// Test-only: per-user diff-handler receiver counts (parked send handle).
     #[cfg(feature = "test_utils")]
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller reads between receive() and send(), guaranteeing send_slot is populated"
+    )]
     pub fn diff_handler_user_counts(&self) -> std::collections::HashMap<UserKey, usize> {
         self.send_slot
             .lock()
@@ -1641,6 +1766,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     /// Test-only: summed dirty-update count across all send connections.
     #[cfg(feature = "test_utils")]
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller reads between receive() and send(), guaranteeing send_slot is populated"
+    )]
     pub fn total_dirty_update_count(&self) -> usize {
         self.send_slot
             .lock()
@@ -1658,6 +1787,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// handle's scope/room maps plus coord user/resource state, and shares the
     /// canonical predicate (`user_scope_has_entity_impl`) with the fused engine
     /// — zero drift. Fail-loud if the send handle is not parked.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller reads between receive() and send(), guaranteeing send_slot is populated"
+    )]
     pub fn user_scope_has_entity_ref(&self, user_key: &UserKey, world_entity: &E) -> bool {
         let coord = self.coord();
         let send = self.send_slot.lock();
@@ -1715,6 +1848,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// exist (matches the resident contract). Mirrors
     /// `InternalWorldServer::local_entities`.
     #[cfg(feature = "interior_visibility")]
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller reads between receive() and send(), guaranteeing send_slot is populated"
+    )]
     pub fn local_entities(&self, user_key: &UserKey) -> Vec<naia_shared::LocalEntity> {
         let coord = self.coord();
         let send = self.send_slot.lock();
@@ -1731,6 +1868,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// Resolve the world entity a `local_entity` maps to for `user_key`. Mirrors
     /// `InternalWorldServer::local_to_world_entity`.
     #[cfg(feature = "interior_visibility")]
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller reads between receive() and send(), guaranteeing send_slot is populated"
+    )]
     pub fn local_to_world_entity(
         &self,
         user_key: &UserKey,
@@ -1753,6 +1894,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// Resolve the `LocalEntity` a `world_entity` maps to for `user_key`. Mirrors
     /// `InternalWorldServer::world_to_local_entity`.
     #[cfg(feature = "interior_visibility")]
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller reads between receive() and send(), guaranteeing send_slot is populated"
+    )]
     pub fn world_to_local_entity(
         &self,
         user_key: &UserKey,
@@ -2153,8 +2298,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         // here — the workers deposit their handles in the slots and block, so the
         // `take_handles` below is race-free. No-op for the synchronous oracle
         // (no runtime) — byte-identical to the pre-ownership-move bracket.
-        if self.is_running() {
-            self.runtime.as_ref().unwrap().park_workers();
+        if let Some(rt) = self
+            .runtime
+            .as_ref()
+            .filter(|rt| rt.state() == RuntimeState::Running)
+        {
+            rt.park_workers();
         }
         let (mut coord, mut recv, mut send) = self.take_handles();
         let server_tick = coord.current_tick();
@@ -2221,8 +2370,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         // §2f: CLOSE the park window — resume the workers (the send worker picks
         // up the freshly-published frozen job and transmits it next tick). No-op
         // for the synchronous oracle (no runtime).
-        if self.is_running() {
-            self.runtime.as_ref().unwrap().unpark_workers();
+        if let Some(rt) = self
+            .runtime
+            .as_ref()
+            .filter(|rt| rt.state() == RuntimeState::Running)
+        {
+            rt.unpark_workers();
         }
     }
 
@@ -2478,6 +2631,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     /// Phase C / D2 — publish coord-staged replicated-resource carrier work into
     /// send-resident state before any later lifecycle/authority/host-sync ops.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: world_entity was spawned and registered moments earlier in insert_resource, same tick"
+    )]
     fn drain_pending_resource_ops<W: WorldRefType<E>>(
         coord: &mut CoordHandle<E>,
         send: &mut SendHandle<E>,
@@ -2500,7 +2657,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                             .global_entity_map
                             .read()
                             .entity_to_global_entity(&world_entity)
-                            .unwrap();
+                            .expect(
+                                "invariant: world_entity was registered moments earlier in insert_resource",
+                            );
                         send.state
                             .entity_scope_map
                             .insert(user_key, global_entity, true);
@@ -2698,6 +2857,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .remove_from_all_rooms(global_entity);
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned GlobalDiffHandler lock means a writer panicked mid-update; replicating from it would corrupt every peer"
+    )]
     fn entity_global_idx(coord: &CoordHandle<E>, global_entity: GlobalEntity) -> GlobalEntityIndex {
         let handler = coord.shared.global_world_manager.read().diff_handler();
         let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
