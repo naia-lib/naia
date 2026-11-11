@@ -22,6 +22,10 @@ pub struct Instant {
 /// [`Instant`] and naia-shared's wasm `Timer` read it, so the two never
 /// disagree about elapsed time.
 #[must_use]
+#[expect(
+    clippy::expect_used,
+    reason = "performance.now is the required monotonic source (hr-time-3); a fallback would reintroduce wall-clock steps"
+)]
 pub fn monotonic_now_ms() -> f64 {
     let global = js_sys::global();
     let performance = js_sys::Reflect::get(&global, &"performance".into())
@@ -109,6 +113,10 @@ mod wall_jump_tests {
 
     use super::Instant;
 
+    #[expect(
+        clippy::expect_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn patch_date_back_one_hour() {
         js_sys::eval(
             "Date.now = (() => { const real = Date.now.bind(Date); return () => real() - 3600000; })()",
@@ -116,6 +124,10 @@ mod wall_jump_tests {
         .expect("patch Date.now backwards");
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn restore_date() {
         js_sys::eval("delete Date.now").expect("restore Date.now");
     }
