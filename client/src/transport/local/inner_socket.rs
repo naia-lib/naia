@@ -65,7 +65,15 @@ impl LocalClientSocket {
         (identity, sender, receiver)
     }
 
+    /// # Panics
+    /// Panics if the request fails to build. The header values here are all
+    /// naia-controlled (base64 of `auth_bytes`, hex of `protocol_id`), so this
+    /// is an internal invariant, never caller input.
     #[doc(hidden)]
+    #[expect(
+        clippy::expect_used,
+        reason = "header values are naia-controlled and always valid"
+    )]
     pub fn connect_with_auth(
         self,
         protocol_id: ProtocolId,
@@ -80,7 +88,7 @@ impl LocalClientSocket {
             .header("Authorization", base64_encoded)
             .header(PROTOCOL_ID_HEADER, protocol_id.to_hex())
             .body(Vec::new())
-            .unwrap();
+            .expect("header values are naia-controlled and always valid");
 
         let request_bytes = naia_shared::transport::request_to_bytes(request);
 
@@ -96,7 +104,14 @@ impl LocalClientSocket {
         self.connect()
     }
 
+    /// # Panics
+    /// Panics if `auth_headers` contains a header name or value that is not
+    /// valid for an HTTP request (caller misuse, not peer input).
     #[doc(hidden)]
+    #[expect(
+        clippy::expect_used,
+        reason = "caller-supplied header name/value is not valid for an HTTP request"
+    )]
     pub fn connect_with_auth_headers(
         self,
         protocol_id: ProtocolId,
@@ -111,7 +126,9 @@ impl LocalClientSocket {
             builder = builder.header(key, value);
         }
 
-        let request = builder.body(Vec::new()).unwrap();
+        let request = builder
+            .body(Vec::new())
+            .expect("caller-supplied header name/value is not valid for an HTTP request");
         let request_bytes = naia_shared::transport::request_to_bytes(request);
 
         // Send to async channel (non-blocking)
@@ -126,7 +143,14 @@ impl LocalClientSocket {
         self.connect()
     }
 
+    /// # Panics
+    /// Panics if `auth_headers` contains a header name or value that is not
+    /// valid for an HTTP request (caller misuse, not peer input).
     #[doc(hidden)]
+    #[expect(
+        clippy::expect_used,
+        reason = "caller-supplied header name/value is not valid for an HTTP request"
+    )]
     pub fn connect_with_auth_and_headers(
         self,
         protocol_id: ProtocolId,
@@ -145,7 +169,9 @@ impl LocalClientSocket {
             builder = builder.header(key, value);
         }
 
-        let request = builder.body(Vec::new()).unwrap();
+        let request = builder
+            .body(Vec::new())
+            .expect("caller-supplied header name/value is not valid for an HTTP request");
         let request_bytes = naia_shared::transport::request_to_bytes(request);
 
         // Send to async channel (non-blocking)

@@ -51,9 +51,9 @@ impl PacketReceiver for ConditionedPacketReceiver {
         }
 
         let now = Instant::now();
-        if self.time_queue.has_item(&now) {
-            self.last_payload = Some(self.time_queue.pop_item(&now).unwrap());
-            Ok(Some(self.last_payload.as_ref().unwrap()))
+        if let Some(payload) = self.time_queue.pop_item(&now) {
+            self.last_payload = Some(payload);
+            Ok(self.last_payload.as_deref())
         } else {
             Ok(None)
         }

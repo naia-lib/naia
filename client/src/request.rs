@@ -187,12 +187,8 @@ impl GlobalRequestManager {
         &mut self,
         request_id: &GlobalRequestId,
     ) -> Option<MessageContainer> {
-        let slot = self.slots.get(request_id)?;
-        if slot.response.is_some() {
-            let slot = self.slots.remove(request_id).unwrap();
-            return Some(slot.response.unwrap());
-        }
-        None
+        self.slots.get(request_id)?.response.as_ref()?;
+        self.slots.remove(request_id)?.response
     }
 
     pub(crate) fn receive_response(
@@ -201,22 +197,21 @@ impl GlobalRequestManager {
         response: MessageContainer,
         now: GameInstant,
     ) {
-        match self.slots.get(request_id) {
-            Some(slot) if slot.is_expired(now) => {
-                // Late for a timed-out exchange (messaging-24 t2): reap the
-                // slot and drop the response rather than landing it in a
-                // dead exchange.
-                let slot = self.slots.remove(request_id).unwrap();
-                self.abandoned.insert(slot.nonce);
-                warn!("receive_response: dropping late response for timed-out request_id {request_id:?}; the request was already cancelled by its timeout");
-            }
-            Some(_) => {
-                self.slots.get_mut(request_id).unwrap().response = Some(response);
-            }
-            None => {
-                warn!("receive_response: dropping response for unknown request_id {request_id:?}; request was likely cancelled or the connection was reset");
-            }
+        let Some(slot) = self.slots.get_mut(request_id) else {
+            warn!("receive_response: dropping response for unknown request_id {request_id:?}; request was likely cancelled or the connection was reset");
+            return;
+        };
+        if slot.is_expired(now) {
+            // Late for a timed-out exchange (messaging-24 t2): reap the
+            // slot and drop the response rather than landing it in a
+            // dead exchange.
+            let nonce = slot.nonce;
+            self.slots.remove(request_id);
+            self.abandoned.insert(nonce);
+            warn!("receive_response: dropping late response for timed-out request_id {request_id:?}; the request was already cancelled by its timeout");
+            return;
         }
+        slot.response = Some(response);
     }
 }
 
@@ -283,7 +278,9 @@ impl GlobalResponseManager {
         // the request unanswerable, which `send_response` reports as
         // `Undeliverable`.
         while self.order.len() > MAX_OUTSTANDING_RESPONSES {
-            let oldest = self.order.pop_front().unwrap();
+            let Some(oldest) = self.order.pop_front() else {
+                break;
+            };
             self.map.remove(&oldest);
             warn!(
                 "server has more than {MAX_OUTSTANDING_RESPONSES} unanswered requests outstanding; dropping the oldest. \

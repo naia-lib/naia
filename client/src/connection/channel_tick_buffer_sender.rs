@@ -89,13 +89,7 @@ impl ChannelTickBufferSender {
         let mut last_written_tick = *host_tick;
         let mut output = Vec::new();
 
-        loop {
-            if self.outgoing_messages.is_empty() {
-                break;
-            }
-
-            let (message_tick, messages) = self.outgoing_messages.front().unwrap();
-
+        while let Some((message_tick, messages)) = self.outgoing_messages.front() {
             // check that we can write the next message
             let mut counter = writer.counter();
             // write MessageContinue bit
