@@ -1,8 +1,8 @@
 #[no_mangle]
 pub extern "C" fn naia_socket_crate_version() -> u32 {
-    let major = dbg!(env!("CARGO_PKG_VERSION_MAJOR").parse::<u32>().unwrap());
+    let major = env!("CARGO_PKG_VERSION_MAJOR").parse::<u32>().unwrap();
     let minor = env!("CARGO_PKG_VERSION_MINOR").parse::<u32>().unwrap();
-    let patch = dbg!(env!("CARGO_PKG_VERSION_PATCH").parse::<u32>().unwrap());
+    let patch = env!("CARGO_PKG_VERSION_PATCH").parse::<u32>().unwrap();
 
     (major << 24) + (minor << 16) + patch
 }

@@ -17,3 +17,6 @@ naia-shared = { version = "0.25", path = "../shared", features = ["observability
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 naia-shared = { version = "0.25", path = "../shared", features = ["wbindgen", "observability"] }
+
+[lints]
+workspace = true

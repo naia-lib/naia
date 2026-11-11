@@ -15,15 +15,15 @@ pub struct EmptyWorldMut;
 
 impl WorldRefType<EmptyEntity> for EmptyWorldRef {
     fn has_entity(&self, _world_entity: &EmptyEntity) -> bool {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn entities(&self) -> Vec<EmptyEntity> {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn has_component<R: ReplicatedComponent>(&self, _world_entity: &EmptyEntity) -> bool {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn has_component_of_kind(
@@ -31,14 +31,14 @@ impl WorldRefType<EmptyEntity> for EmptyWorldRef {
         _world_entity: &EmptyEntity,
         _component_kind: ComponentKind,
     ) -> bool {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn component<'a, R: ReplicatedComponent>(
         &'a self,
         _world_entity: &EmptyEntity,
     ) -> Option<ReplicaRefWrapper<'a, R>> {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn component_of_kind<'a>(
@@ -46,21 +46,21 @@ impl WorldRefType<EmptyEntity> for EmptyWorldRef {
         _world_entity: &EmptyEntity,
         _component_kind: ComponentKind,
     ) -> Option<ReplicaDynRefWrapper<'a>> {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 }
 
 impl WorldRefType<EmptyEntity> for EmptyWorldMut {
     fn has_entity(&self, _world_entity: &EmptyEntity) -> bool {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn entities(&self) -> Vec<EmptyEntity> {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn has_component<R: ReplicatedComponent>(&self, _world_entity: &EmptyEntity) -> bool {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn has_component_of_kind(
@@ -68,14 +68,14 @@ impl WorldRefType<EmptyEntity> for EmptyWorldMut {
         _world_entity: &EmptyEntity,
         _component_kind: ComponentKind,
     ) -> bool {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn component<'a, R: ReplicatedComponent>(
         &'a self,
         _world_entity: &EmptyEntity,
     ) -> Option<ReplicaRefWrapper<'a, R>> {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn component_of_kind<'a>(
@@ -83,17 +83,17 @@ impl WorldRefType<EmptyEntity> for EmptyWorldMut {
         _world_entity: &EmptyEntity,
         _component_kind: ComponentKind,
     ) -> Option<ReplicaDynRefWrapper<'a>> {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 }
 
 impl WorldMutType<EmptyEntity> for EmptyWorldMut {
     fn spawn_entity(&mut self) -> EmptyEntity {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn local_duplicate_entity(&mut self, _world_entity: &EmptyEntity) -> EmptyEntity {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn local_duplicate_components(
@@ -101,22 +101,22 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         _mutable_entity: &EmptyEntity,
         _immutable_entity: &EmptyEntity,
     ) {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn despawn_entity(&mut self, _world_entity: &EmptyEntity) {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn component_kinds(&mut self, _world_entity: &EmptyEntity) -> Vec<ComponentKind> {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn component_mut<'a, R: ReplicatedComponent>(
         &'a mut self,
         _world_entity: &EmptyEntity,
     ) -> Option<ReplicaMutWrapper<'a, R>> {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn component_mut_of_kind<'a>(
@@ -124,7 +124,7 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         _world_entity: &EmptyEntity,
         _component_kind: ComponentKind,
     ) -> Option<ReplicaDynMutWrapper<'a>> {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn component_apply_update(
@@ -134,7 +134,7 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         _component_kind: ComponentKind,
         _update: PendingComponentUpdate,
     ) -> Result<(), SerdeErr> {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn component_apply_field_update(
@@ -144,11 +144,11 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         _component_kind: ComponentKind,
         _update: ComponentFieldUpdate,
     ) -> Result<(), SerdeErr> {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn mirror_entities(&mut self, _mutable_entity: &EmptyEntity, _immutable_entity: &EmptyEntity) {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn mirror_components(
@@ -157,7 +157,7 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         _immutable_entity: &EmptyEntity,
         _component_kind: ComponentKind,
     ) {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn insert_component<R: ReplicatedComponent>(
@@ -165,7 +165,7 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         _world_entity: &EmptyEntity,
         _component_ref: R,
     ) {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn insert_boxed_component(
@@ -173,14 +173,14 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         _world_entity: &EmptyEntity,
         _boxed_component: Box<dyn Replicate>,
     ) {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn remove_component<R: ReplicatedComponent>(
         &mut self,
         _world_entity: &EmptyEntity,
     ) -> Option<R> {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn remove_component_of_kind(
@@ -188,7 +188,7 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         _world_entity: &EmptyEntity,
         _component_kind: ComponentKind,
     ) -> Option<Box<dyn Replicate>> {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn entity_publish(
@@ -198,7 +198,7 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         _global_world_manager: &dyn GlobalWorldManagerType,
         _world_entity: &EmptyEntity,
     ) {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn component_publish(
@@ -209,15 +209,15 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         _world_entity: &EmptyEntity,
         _component_kind: ComponentKind,
     ) {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn entity_unpublish(&mut self, _world_entity: &EmptyEntity) {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn component_unpublish(&mut self, _world_entity: &EmptyEntity, _component_kind: ComponentKind) {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn entity_enable_delegation(
@@ -227,7 +227,7 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         _global_world_manager: &dyn GlobalWorldManagerType,
         _world_entity: &EmptyEntity,
     ) {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn component_enable_delegation(
@@ -238,11 +238,11 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         _world_entity: &EmptyEntity,
         _component_kind: ComponentKind,
     ) {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn entity_disable_delegation(&mut self, _world_entity: &EmptyEntity) {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 
     fn component_disable_delegation(
@@ -250,6 +250,6 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         _world_entity: &EmptyEntity,
         _component_kind: ComponentKind,
     ) {
-        unimplemented!()
+        panic!("EmptyWorld has no entities or components")
     }
 }

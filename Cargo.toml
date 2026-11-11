@@ -82,3 +82,13 @@ default-members = [
 [profile.release]
 opt-level = 's'
 lto = true
+
+# Kingdom shared Rust lint set, first rung (ambry standards/RUST_LINTS.md).
+# Copied, never inherited across repos; every member says `[lints] workspace = true`.
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"

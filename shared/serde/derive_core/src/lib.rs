@@ -34,6 +34,6 @@ pub fn derive_serde_common(
                 impls::derive_serde_struct(struct_, &input_name, &input.generics, serde_crate_name)
             }
         },
-        _ => unimplemented!("Only structs and enums are supported"),
+        _ => panic!("Only structs and enums are supported"),
     }
 }

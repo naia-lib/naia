@@ -14,3 +14,6 @@ bevy_app = { version = "0.19", default-features=false }
 bevy_diagnostic = { version = "0.19", default-features=false }
 bevy_ecs = { version = "0.19", default-features=false }
 bevy_log = { version = "0.19", default-features=false }
+
+[lints]
+workspace = true

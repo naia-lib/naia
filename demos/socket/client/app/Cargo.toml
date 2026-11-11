@@ -19,3 +19,5 @@ cfg-if = { version = "1.0" }
 # Not optional: the non-mquad branch of the cfg_if in app.rs always logs through it.
 log = { version = "0.4" }
 miniquad = { version = "0.3", features = ["log-impl"], optional = true }
+[lints]
+workspace = true

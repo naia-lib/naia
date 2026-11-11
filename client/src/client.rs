@@ -5198,32 +5198,32 @@ mod diag_progress_tests {
 
     impl WorldMutType<u64> for StubWorld {
         fn spawn_entity(&mut self) -> u64 {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn local_duplicate_entity(&mut self, _world_entity: &u64) -> u64 {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn local_duplicate_components(&mut self, _mutable_entity: &u64, _immutable_entity: &u64) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn despawn_entity(&mut self, _world_entity: &u64) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_kinds(&mut self, _world_entity: &u64) -> Vec<ComponentKind> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_mut<'a, R: ReplicatedComponent>(
             &'a mut self,
             _world_entity: &u64,
         ) -> Option<ReplicaMutWrapper<'a, R>> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_mut_of_kind<'a>(
             &'a mut self,
             _world_entity: &u64,
             _component_kind: ComponentKind,
         ) -> Option<ReplicaDynMutWrapper<'a>> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_apply_update(
             &mut self,
@@ -5232,7 +5232,7 @@ mod diag_progress_tests {
             _component_kind: ComponentKind,
             _update: PendingComponentUpdate,
         ) -> Result<(), SerdeErr> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_apply_field_update(
             &mut self,
@@ -5241,10 +5241,10 @@ mod diag_progress_tests {
             _component_kind: ComponentKind,
             _update: ComponentFieldUpdate,
         ) -> Result<(), SerdeErr> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn mirror_entities(&mut self, _mutable_entity: &u64, _immutable_entity: &u64) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn mirror_components(
             &mut self,
@@ -5252,31 +5252,31 @@ mod diag_progress_tests {
             _immutable_entity: &u64,
             _component_kind: ComponentKind,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn insert_component<R: ReplicatedComponent>(
             &mut self,
             _world_entity: &u64,
             _component_ref: R,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn insert_boxed_component(
             &mut self,
             _world_entity: &u64,
             _boxed_component: Box<dyn Replicate>,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn remove_component<R: ReplicatedComponent>(&mut self, _world_entity: &u64) -> Option<R> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn remove_component_of_kind(
             &mut self,
             _world_entity: &u64,
             _component_kind: ComponentKind,
         ) -> Option<Box<dyn Replicate>> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn entity_publish(
             &mut self,
@@ -5285,7 +5285,7 @@ mod diag_progress_tests {
             _global_world_manager: &dyn GlobalWorldManagerType,
             _world_entity: &u64,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_publish(
             &mut self,
@@ -5295,13 +5295,13 @@ mod diag_progress_tests {
             _world_entity: &u64,
             _component_kind: ComponentKind,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn entity_unpublish(&mut self, _world_entity: &u64) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_unpublish(&mut self, _world_entity: &u64, _component_kind: ComponentKind) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn entity_enable_delegation(
             &mut self,
@@ -5310,7 +5310,7 @@ mod diag_progress_tests {
             _global_world_manager: &dyn GlobalWorldManagerType,
             _world_entity: &u64,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_enable_delegation(
             &mut self,
@@ -5320,17 +5320,17 @@ mod diag_progress_tests {
             _world_entity: &u64,
             _component_kind: ComponentKind,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn entity_disable_delegation(&mut self, _world_entity: &u64) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_disable_delegation(
             &mut self,
             _world_entity: &u64,
             _component_kind: ComponentKind,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
     }
 
@@ -5428,32 +5428,32 @@ mod forbidden_entity_event_tests {
 
     impl WorldMutType<u64> for StubWorld {
         fn spawn_entity(&mut self) -> u64 {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn local_duplicate_entity(&mut self, _world_entity: &u64) -> u64 {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn local_duplicate_components(&mut self, _mutable_entity: &u64, _immutable_entity: &u64) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn despawn_entity(&mut self, _world_entity: &u64) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_kinds(&mut self, _world_entity: &u64) -> Vec<ComponentKind> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_mut<'a, R: ReplicatedComponent>(
             &'a mut self,
             _world_entity: &u64,
         ) -> Option<ReplicaMutWrapper<'a, R>> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_mut_of_kind<'a>(
             &'a mut self,
             _world_entity: &u64,
             _component_kind: ComponentKind,
         ) -> Option<ReplicaDynMutWrapper<'a>> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_apply_update(
             &mut self,
@@ -5462,7 +5462,7 @@ mod forbidden_entity_event_tests {
             _component_kind: ComponentKind,
             _update: PendingComponentUpdate,
         ) -> Result<(), SerdeErr> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_apply_field_update(
             &mut self,
@@ -5471,10 +5471,10 @@ mod forbidden_entity_event_tests {
             _component_kind: ComponentKind,
             _update: ComponentFieldUpdate,
         ) -> Result<(), SerdeErr> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn mirror_entities(&mut self, _mutable_entity: &u64, _immutable_entity: &u64) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn mirror_components(
             &mut self,
@@ -5482,31 +5482,31 @@ mod forbidden_entity_event_tests {
             _immutable_entity: &u64,
             _component_kind: ComponentKind,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn insert_component<R: ReplicatedComponent>(
             &mut self,
             _world_entity: &u64,
             _component_ref: R,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn insert_boxed_component(
             &mut self,
             _world_entity: &u64,
             _boxed_component: Box<dyn Replicate>,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn remove_component<R: ReplicatedComponent>(&mut self, _world_entity: &u64) -> Option<R> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn remove_component_of_kind(
             &mut self,
             _world_entity: &u64,
             _component_kind: ComponentKind,
         ) -> Option<Box<dyn Replicate>> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn entity_publish(
             &mut self,
@@ -5515,7 +5515,7 @@ mod forbidden_entity_event_tests {
             _global_world_manager: &dyn GlobalWorldManagerType,
             _world_entity: &u64,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_publish(
             &mut self,
@@ -5525,13 +5525,13 @@ mod forbidden_entity_event_tests {
             _world_entity: &u64,
             _component_kind: ComponentKind,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn entity_unpublish(&mut self, _world_entity: &u64) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_unpublish(&mut self, _world_entity: &u64, _component_kind: ComponentKind) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn entity_enable_delegation(
             &mut self,
@@ -5540,7 +5540,7 @@ mod forbidden_entity_event_tests {
             _global_world_manager: &dyn GlobalWorldManagerType,
             _world_entity: &u64,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_enable_delegation(
             &mut self,
@@ -5550,17 +5550,17 @@ mod forbidden_entity_event_tests {
             _world_entity: &u64,
             _component_kind: ComponentKind,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn entity_disable_delegation(&mut self, _world_entity: &u64) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_disable_delegation(
             &mut self,
             _world_entity: &u64,
             _component_kind: ComponentKind,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
     }
 

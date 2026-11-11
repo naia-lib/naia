@@ -9,3 +9,6 @@ description = "Compile-fail test harness for Naia derive macros (Phase 5 fixture
 [dev-dependencies]
 trybuild = "1"
 naia-shared = { path = "../../shared", features = ["transport_local"] }
+
+[lints]
+workspace = true

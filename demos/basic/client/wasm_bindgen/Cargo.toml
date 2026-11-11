@@ -30,3 +30,5 @@ simple_logger = { version = "4.0", default-features = false, features = ["timest
 wasm-logger = { version = "0.2" }
 wasm-bindgen = { version = "0.2", features = [ "serde-serialize" ] }
 web-sys = { version = "0.3.64", features = [ 'Window' ] }
+[lints]
+workspace = true

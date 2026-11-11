@@ -13,3 +13,5 @@ mquad = [ "naia-socket-shared/mquad" ]
 
 [dependencies]
 naia-socket-shared = { path = "../../../socket/shared" }
+[lints]
+workspace = true

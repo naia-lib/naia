@@ -18,3 +18,5 @@ naia-basic-demo-shared = { path = "../../shared" }
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }
 miniquad = { version = "0.3", features = ["log-impl"], optional = true }
+[lints]
+workspace = true

@@ -9,3 +9,6 @@ description = "Repository invariant checks for naia, run by hand or from self-ho
 [[bin]]
 name = "check_no_escaping_path_deps"
 path = "src/main.rs"
+
+[lints]
+workspace = true

@@ -34,3 +34,5 @@ naia-client-socket = { version = "0.25", path = "../client" }
 # relocated from the provider 2026-10-29): in-repo path, never escaping.
 webrtc-unreliable-client = { version = "0.6.0" }
 async-net = { version = "2" }
+[lints]
+workspace = true

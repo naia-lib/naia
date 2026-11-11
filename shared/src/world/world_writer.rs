@@ -1698,7 +1698,7 @@ mod delegated_send_guard_tests {
             &'a self,
             _: &u64,
         ) -> Option<ReplicaRefWrapper<'a, R>> {
-            unimplemented!("the update path uses component_of_kind")
+            panic!("the update path uses component_of_kind")
         }
         fn component_of_kind<'a>(
             &'a self,
@@ -1969,7 +1969,7 @@ mod delegated_send_guard_tests {
             vec![1, 2]
         }
         fn has_component<R: ReplicatedComponent>(&self, _: &u64) -> bool {
-            unimplemented!("the update path uses has_component_of_kind")
+            panic!("the update path uses has_component_of_kind")
         }
         fn has_component_of_kind(&self, _: &u64, kind: ComponentKind) -> bool {
             // `Wraith` is the one kind this world has already lost.
@@ -1979,7 +1979,7 @@ mod delegated_send_guard_tests {
             &'a self,
             _: &u64,
         ) -> Option<ReplicaRefWrapper<'a, R>> {
-            unimplemented!("the update path uses component_of_kind")
+            panic!("the update path uses component_of_kind")
         }
         fn component_of_kind<'a>(
             &'a self,

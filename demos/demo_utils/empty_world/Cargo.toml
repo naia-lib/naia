@@ -12,3 +12,5 @@ publish = false
 
 [dependencies]
 naia-shared = { path = "../../../shared" }
+[lints]
+workspace = true

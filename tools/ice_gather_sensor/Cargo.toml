@@ -9,3 +9,6 @@ description = "Manual browser-path ICE instruments for naia: the logging session
 [[bin]]
 name = "session_proxy"
 path = "src/main.rs"
+
+[lints]
+workspace = true
