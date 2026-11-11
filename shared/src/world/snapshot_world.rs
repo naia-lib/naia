@@ -313,11 +313,13 @@ mod tests {
 
     // ----- Minimal Replicate stubs (no derive macros needed in this crate) -----
 
+    #[derive(Clone)]
     struct TestPosition {
         x: i32,
         y: i32,
     }
     struct TestPositionBuilder;
+    #[derive(Clone)]
     struct TestVelocity {
         dx: i32,
     }
@@ -401,8 +403,7 @@ mod tests {
                     self
                 }
                 fn copy_to_box(&self) -> Box<dyn Replicate> {
-                    // Field-by-field copy avoids requiring Clone bound on the type itself.
-                    Box::new(unsafe { std::ptr::read(self as *const $val) })
+                    Box::new(self.clone())
                 }
                 fn create_builder() -> Box<dyn ReplicateBuilder>
                 where

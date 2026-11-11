@@ -94,6 +94,10 @@ impl WorldReader {
             EntityMessageType::Spawn => {
                 // Count when Spawn message KIND is recognized on wire (before routing)
                 #[cfg(feature = "e2e_debug")]
+                #[expect(
+                    unsafe_code,
+                    reason = "e2e_debug counter hook resolved by the naia-client test harness"
+                )]
                 {
                     extern "Rust" {
                         fn client_saw_spawn_increment();
@@ -262,6 +266,10 @@ impl WorldReader {
 
                 // Count when SetAuthority message KIND is recognized on wire (before entity mapping)
                 #[cfg(feature = "e2e_debug")]
+                #[expect(
+                    unsafe_code,
+                    reason = "e2e_debug counter hook resolved by the naia-client test harness"
+                )]
                 {
                     extern "Rust" {
                         fn client_saw_set_auth_wire_increment();

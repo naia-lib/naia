@@ -71,6 +71,10 @@ mod auth_error_cell_tests {
     /// the exact decoded body, and then reports Waiting; generic packet errors
     /// stay on their own queue -- and a second socket's cells are untouched.
     #[test]
+    #[expect(
+        unsafe_code,
+        reason = "resets the single-threaded wasm32 socket table after the test"
+    )]
     fn non_200_answer_is_consumed_once_while_generic_errors_stay_queued() {
         use super::super::shared::alloc_socket;
         use crate::socket_table::SocketId;
@@ -125,6 +129,8 @@ mod auth_error_cell_tests {
         assert_eq!(decode_reject_payload(""), None);
         assert_eq!(decode_reject_payload("!!!"), None);
 
+        // SAFETY: wasm32 is single-threaded and no table borrow from above
+        // is still alive, so nothing aliases the static while it is reset.
         unsafe {
             SOCKET_TABLE = None;
         }

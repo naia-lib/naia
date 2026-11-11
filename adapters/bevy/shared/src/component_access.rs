@@ -236,6 +236,10 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
         casted
     }
 
+    #[expect(
+        unsafe_code,
+        reason = "two disjoint component borrows through UnsafeWorldCell"
+    )]
     fn mirror_components(
         &self,
         world: &mut World,
@@ -243,7 +247,7 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
         immutable_world_entity: &Entity,
     ) {
         let mut query = world.query::<&mut R>();
-        // Safety: We need two simultaneous borrows of R from different entities (one &mut,
+        // SAFETY: We need two simultaneous borrows of R from different entities (one &mut,
         // one &). The standard Bevy query API only allows one borrow at a time. Using
         // as_unsafe_world_cell() + query.get_unchecked lets us borrow two distinct entities
         // simultaneously. The two entities are guaranteed to be different by the call-site

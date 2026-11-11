@@ -25,6 +25,13 @@ struct PeakTracking;
 
 static PEAK_ALLOC: AtomicUsize = AtomicUsize::new(0);
 
+// SAFETY: every method forwards its arguments unchanged to `System`, so the
+// `GlobalAlloc` contract holds exactly as far as `System` upholds it; the only
+// addition is a relaxed atomic max of the requested size.
+#[expect(
+    unsafe_code,
+    reason = "GlobalAlloc is an unsafe trait; this impl only observes sizes and forwards to System"
+)]
 unsafe impl GlobalAlloc for PeakTracking {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         PEAK_ALLOC.fetch_max(layout.size(), Ordering::Relaxed);

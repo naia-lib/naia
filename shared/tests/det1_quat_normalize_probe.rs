@@ -149,16 +149,22 @@ fn trace_inputs_grouping_report() {
     }
 }
 
+use core::sync::atomic::{AtomicU32, Ordering};
+
 /// Import-free wasm entry: runs the scan + trace-input norms, writes exact
 /// bits into OUT ([n_ltr, n_sse] per case, then scan input quats + norms).
 /// Callable from JS with an empty import object; no I/O, no allocator.
-static mut OUT: [u32; 32] = [0; 32];
+/// Atomics only so the export is plain safe code; `[AtomicU32; 32]` has the
+/// same layout as `[u32; 32]`, so JS reads it through `det1_probe_out`.
+static OUT: [AtomicU32; 32] = [const { AtomicU32::new(0) }; 32];
+
+fn out_set(idx: usize, v: u32) {
+    OUT[idx].store(v, Ordering::Relaxed);
+}
 
 fn emit(idx: usize, v: [f32; 4]) {
-    unsafe {
-        for (i, x) in v.iter().enumerate() {
-            OUT[idx + i] = x.to_bits();
-        }
+    for (i, x) in v.iter().enumerate() {
+        out_set(idx + i, x.to_bits());
     }
 }
 
@@ -183,31 +189,29 @@ fn scan_first() -> Option<[f32; 4]> {
     None
 }
 
+#[expect(unsafe_code, reason = "no_mangle wasm export that JS calls by name")]
 #[no_mangle]
 pub extern "C" fn det1_probe_run() -> u32 {
     let mut o = 0;
     for tag in [T28N, T30N, T44N] {
         let v = q(tag);
-        unsafe {
-            OUT[o] = bits(norm_ltr(v));
-            OUT[o + 1] = bits(norm_sse(v));
-        }
+        out_set(o, bits(norm_ltr(v)));
+        out_set(o + 1, bits(norm_sse(v)));
         o += 2;
     }
     if let Some(v) = scan_first() {
         emit(o, v);
-        unsafe {
-            OUT[o + 4] = bits(norm_ltr(v));
-            OUT[o + 5] = bits(norm_sse(v));
-        }
+        out_set(o + 4, bits(norm_ltr(v)));
+        out_set(o + 5, bits(norm_sse(v)));
         o += 6;
     }
     o as u32
 }
 
+#[expect(unsafe_code, reason = "no_mangle wasm export that JS calls by name")]
 #[no_mangle]
 pub extern "C" fn det1_probe_out() -> *const u32 {
-    core::ptr::addr_of!(OUT).cast::<u32>()
+    OUT.as_ptr().cast::<u32>()
 }
 
 /// Deterministic xorshift32 scan for the first near-trace input where the two

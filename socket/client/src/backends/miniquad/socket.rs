@@ -67,6 +67,7 @@ impl Socket {
     }
 
     /// Connects to the given server address
+    #[expect(unsafe_code, reason = "miniquad JS bridge FFI call")]
     fn connect_inner(
         server_session_url: &str,
         config: &SocketConfig,
@@ -86,7 +87,7 @@ impl Socket {
         // connect opens a second slot; it never resets the first socket's
         // state (naia-lib/naia#193).
         //
-        // Safety: alloc_socket initializes this socket's slot before any
+        // SAFETY: alloc_socket initializes this socket's slot before any
         // callback for it can fire, and everything afterwards is only
         // accessed from the same wasm32 thread via the JS bridge callbacks
         // and the handles below.

@@ -83,10 +83,12 @@ default-members = [
 opt-level = 's'
 lto = true
 
-# Kingdom shared Rust lint set, first rung (ambry standards/RUST_LINTS.md).
+# Kingdom shared Rust lint set, rungs 1-2 (ambry standards/RUST_LINTS.md).
 # Copied, never inherited across repos; every member says `[lints] workspace = true`.
+# Each remaining `unsafe` item carries `#[expect(unsafe_code, reason = "...")]`.
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
+unsafe_code = "deny"
 
 [workspace.lints.clippy]
 dbg_macro = "deny"

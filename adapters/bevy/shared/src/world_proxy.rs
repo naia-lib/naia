@@ -621,8 +621,12 @@ fn component_mut_of_kind_raw<'a>(
     component_access.component_mut(world, entity)
 }
 
+#[expect(
+    unsafe_code,
+    reason = "resource access through UnsafeWorldCell under an exclusive &mut World"
+)]
 fn world_data_unchecked_mut(world: &'_ mut World) -> Mut<'_, WorldData> {
-    // Safety: We have exclusive access via &mut World. as_unsafe_world_cell() is used here
+    // SAFETY: We have exclusive access via &mut World. as_unsafe_world_cell() is used here
     // because get_resource_mut() requires UnsafeWorldCell; no other borrow of WorldData
     // is alive at the call site. The returned Mut<'_> is tied to the world's lifetime.
     unsafe {
