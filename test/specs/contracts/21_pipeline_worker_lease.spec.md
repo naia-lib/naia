@@ -38,10 +38,13 @@ This contract names the replacement: the worker **owns** its handle and
   (`workers_active`) worker reclaims the handle. If the consumer kept it
   (`take_handles` without `restore_handles`), the worker idles bounded (100µs)
   and retries; it never drops a buffered send job on a failed reclaim.
-- **L-4 Deposit on exit.** A worker that returns (shutdown, closed readiness,
-  hung-up output channel) or unwinds (worker panic) deposits a held handle
-  through the lease's `Drop`, so the consumer's park-window borrow keeps
-  working after the worker is gone.
+- **L-4 Deposit on exit, never on panic.** A worker that returns (shutdown,
+  closed readiness, hung-up output channel) deposits a held handle through the
+  lease's `Drop`, so the consumer's park-window borrow keeps working after the
+  worker is gone. A worker that panics does not deposit: a handle interrupted
+  mid-`receive()` or mid-transmit is not known to be sound, so the slot stays
+  empty and the consumer's next borrow fails loud after
+  `propagate_panic_if_any` surfaces the payload (unchanged from before).
 - **L-5 Deterministic path never holds.** In `not(workers_active)` builds the
   lease never reclaims: the consumer drives recv/send synchronously inside the
   window and the workers are pure parking services.

@@ -722,9 +722,12 @@ impl WorkerWake {
 /// window (`take_handles` without `restore_handles`); the worker then idles
 /// bounded and retries, exactly as the former `try_lock` spin did.
 ///
-/// Dropping a lease deposits anything still held (worker exit on shutdown or
-/// peer loss, or unwind on a worker panic), so the consumer's park-window
-/// borrow keeps working after the worker is gone.
+/// Dropping a lease on a normal worker exit (shutdown, peer loss, hung-up
+/// output channel) deposits anything still held, so the consumer's park-window
+/// borrow keeps working after the worker is gone. On a panic unwind it does
+/// NOT: a handle left mid-`receive()` or mid-transmit is not known to be
+/// sound, so the slot stays empty and the consumer's next borrow fails loud
+/// (`propagate_panic_if_any` surfaces the payload first), exactly as before.
 pub(crate) struct HandleLease<'a, H> {
     held: Option<H>,
     slot: &'a Arc<Mutex<Option<H>>>,
@@ -777,7 +780,9 @@ impl<'a, H> HandleLease<'a, H> {
 
 impl<H> Drop for HandleLease<'_, H> {
     fn drop(&mut self) {
-        self.deposit();
+        if !thread::panicking() {
+            self.deposit();
+        }
     }
 }
 
