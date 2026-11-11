@@ -33,6 +33,10 @@ use naia_test_harness::{protocol, Auth, ClientKey, ExpectCtx, Position, Scenario
 mod _helpers;
 use _helpers::{client_connect, test_client_config};
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn setup() -> (Scenario, ClientKey, naia_test_harness::EntityKey) {
     let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();

@@ -571,6 +571,10 @@ pub(crate) fn register_client_entity_event(
 }
 
 /// Process spawn events to match and register client-spawned entities with server entities
+#[expect(
+    clippy::expect_used,
+    reason = "test harness: a failure must fail the calling test"
+)]
 pub(crate) fn process_spawn_events(
     scenario: &mut Scenario,
     _server_events: &mut ServerEvents,
@@ -637,6 +641,10 @@ pub(crate) fn process_despawn_events(
 }
 
 /// Register client spawns by matching LocalEntity values with server entities.
+#[expect(
+    clippy::expect_used,
+    reason = "test harness: a failure must fail the calling test"
+)]
 fn register_client_spawns(
     scenario: &mut Scenario,
     spawns_to_register: Vec<(ClientKey, LocalEntity, TestEntity)>,

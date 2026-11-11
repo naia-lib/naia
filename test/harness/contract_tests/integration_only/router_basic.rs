@@ -48,6 +48,10 @@ const FAKE_SERVER_ADDR: &str = "127.0.0.1:54322";
 /// `LocalServerSocket` (so `RecvHandle::receive` doesn't trip the
 /// "must call listen() first" guard). Returns the handle plus the two
 /// other split pieces so the caller can keep them alive.
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn build_pipeline_split() -> (
     naia_server::CoordinatorState<u64>,
     naia_server::RecvHandle<u64>,

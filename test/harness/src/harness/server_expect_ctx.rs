@@ -31,6 +31,10 @@ impl<'a> ServerExpectCtx<'a> {
     }
 
     /// Get the server's current tick
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn current_tick(&self) -> naia_shared::Tick {
         let (server, _) = self
             .scenario
@@ -98,6 +102,10 @@ impl<'a> ServerExpectCtx<'a> {
     }
 
     /// Get all entities as EntityKeys
+    #[expect(
+        clippy::unwrap_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn entities(&self) -> Vec<EntityKey> {
         let (server, registry) = self.scenario.server_and_registry().unwrap();
         let world_ref = self.scenario.server_world_ref();
@@ -158,6 +166,10 @@ impl<'a> ServerExpectCtx<'a> {
     }
 
     /// Get all ClientKeys for connected users
+    #[expect(
+        clippy::unwrap_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn user_keys(&self) -> Vec<ClientKey> {
         let (server, _) = self.scenario.server_and_registry().unwrap();
         let user_keys = server.user_keys();
@@ -168,12 +180,20 @@ impl<'a> ServerExpectCtx<'a> {
     }
 
     /// Get count of connected users
+    #[expect(
+        clippy::unwrap_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn users_count(&self) -> usize {
         let (server, _) = self.scenario.server_and_registry().unwrap();
         server.users_count()
     }
 
     /// Check if room exists
+    #[expect(
+        clippy::unwrap_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn room_exists(&self, room_key: &RoomKey) -> bool {
         let (server, _) = self.scenario.server_and_registry().unwrap();
         server.room_exists(room_key)
@@ -192,12 +212,20 @@ impl<'a> ServerExpectCtx<'a> {
     }
 
     /// Get all room keys
+    #[expect(
+        clippy::unwrap_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn room_keys(&self) -> Vec<RoomKey> {
         let (server, _) = self.scenario.server_and_registry().unwrap();
         server.room_keys()
     }
 
     /// Get count of rooms
+    #[expect(
+        clippy::unwrap_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn rooms_count(&self) -> usize {
         let (server, _) = self.scenario.server_and_registry().unwrap();
         server.rooms_count()
@@ -229,6 +257,10 @@ impl<'a> ServerExpectCtx<'a> {
 
     /// Read messages from a specific channel sent by clients
     /// Returns an iterator over (ClientKey, M) tuples for messages of type M received on channel C
+    #[expect(
+        clippy::expect_used,
+        reason = "messages are stored and downcast under the same type M"
+    )]
     pub fn read_message<C: naia_shared::Channel, M: naia_shared::Message>(
         &mut self,
     ) -> impl Iterator<Item = (ClientKey, M)> {
@@ -268,6 +300,10 @@ impl<'a> ServerExpectCtx<'a> {
 
     /// Read requests from a specific channel sent by clients
     /// Returns an iterator over (ClientKey, ResponseId, Request) tuples received on channel C
+    #[expect(
+        clippy::expect_used,
+        reason = "requests are stored and downcast under the same type Q"
+    )]
     pub fn read_request<C: naia_shared::Channel, Q: naia_shared::Request>(
         &mut self,
     ) -> impl Iterator<Item = (ClientKey, naia_shared::GlobalResponseId, Q)> {

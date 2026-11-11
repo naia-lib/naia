@@ -31,6 +31,11 @@ struct Link {
 }
 
 impl Link {
+    #[expect(
+        clippy::expect_used,
+        clippy::unwrap_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn new() -> Self {
         TestClock::init(0);
         let hub = LocalTransportHub::new("127.0.0.1:54491".parse().unwrap());
@@ -118,6 +123,10 @@ impl Link {
         self.server.send_all_packets(&self.server_world.proxy());
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn decode(&mut self) {
         self.client.receive_all_packets();
         let received_tick = self
@@ -150,6 +159,10 @@ impl Link {
             .collect()
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn queue(&mut self, value: u32) {
         self.server
             .send_message::<OrderedChannel, _>(&self.user, &TestMessage::new(value))

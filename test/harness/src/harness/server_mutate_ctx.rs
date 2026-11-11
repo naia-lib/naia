@@ -54,6 +54,10 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     }
 
     /// Get the server's current tick
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn current_tick(&self) -> Tick {
         let scenario = self.ctx.scenario();
         let (server, _) = scenario.server_and_registry().expect("server not started");
@@ -176,9 +180,13 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     // Entity Operations
 
     /// Get all entities as EntityKeys
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn entities(&self) -> Vec<EntityKey> {
         let scenario = self.ctx.scenario();
-        let (server, registry) = scenario.server_and_registry().unwrap();
+        let (server, registry) = scenario.server_and_registry().expect("server not started");
         let world_ref = scenario.server_world_ref();
         let server_entities = server.entities(&world_ref);
         server_entities
@@ -189,8 +197,16 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
 
     /// Server-side outgoing bytes sent during the last completed tick.
     /// Used by wire-level tests (e.g. per-field-diff assertion).
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn server_outgoing_bytes_last_tick(&self) -> u64 {
-        let (server, _) = self.ctx.scenario().server_and_registry().unwrap();
+        let (server, _) = self
+            .ctx
+            .scenario()
+            .server_and_registry()
+            .expect("server not started");
         server.outgoing_bytes_last_tick()
     }
 
@@ -231,9 +247,13 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     }
 
     /// Get all user keys as ClientKeys
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn user_keys(&self) -> Vec<ClientKey> {
         let scenario = self.ctx.scenario();
-        let (server, _) = scenario.server_and_registry().unwrap();
+        let (server, _) = scenario.server_and_registry().expect("server not started");
         let users = scenario.client_users();
         server
             .user_keys()
@@ -243,8 +263,16 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     }
 
     /// Get user count
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn users_count(&self) -> usize {
-        let (server, _) = self.ctx.scenario().server_and_registry().unwrap();
+        let (server, _) = self
+            .ctx
+            .scenario()
+            .server_and_registry()
+            .expect("server not started");
         server.users_count()
     }
 
@@ -286,9 +314,13 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     }
 
     /// True iff a resource of type `R` is currently inserted.
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn has_resource<R: naia_shared::ReplicatedComponent>(&self) -> bool {
         let scenario = self.ctx.scenario();
-        let (server, _) = scenario.server_and_registry().unwrap();
+        let (server, _) = scenario.server_and_registry().expect("server not started");
         server.has_resource::<R>()
     }
 
@@ -364,9 +396,15 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     ///
     /// Requires that the ClientKey has been mapped to a UserKey (via reading AuthEvent).
     /// Panics if the mapping doesn't exist.
+    #[expect(
+        clippy::expect_used,
+        reason = "documented panic: caller must have read an AuthEvent for this client_key first"
+    )]
     pub fn accept_connection(&mut self, client_key: &ClientKey) {
         let scenario = self.ctx.scenario_mut();
-        let user_key = scenario.client_to_user_key(client_key).unwrap();
+        let user_key = scenario
+            .client_to_user_key(client_key)
+            .expect("no AuthEvent mapping for this client_key");
         let (server, _, _, _) = scenario.split_for_server_mut();
         server.accept_connection(&user_key);
     }
@@ -455,8 +493,16 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     }
 
     /// Check if room exists
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn room_exists(&self, room_key: &RoomKey) -> bool {
-        let (server, _) = self.ctx.scenario().server_and_registry().unwrap();
+        let (server, _) = self
+            .ctx
+            .scenario()
+            .server_and_registry()
+            .expect("server not started");
         server.room_exists(room_key)
     }
 
@@ -491,14 +537,30 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     }
 
     /// Get all room keys
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn room_keys(&self) -> Vec<RoomKey> {
-        let (server, _) = self.ctx.scenario().server_and_registry().unwrap();
+        let (server, _) = self
+            .ctx
+            .scenario()
+            .server_and_registry()
+            .expect("server not started");
         server.room_keys()
     }
 
     /// Get room count
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn rooms_count(&self) -> usize {
-        let (server, _) = self.ctx.scenario().server_and_registry().unwrap();
+        let (server, _) = self
+            .ctx
+            .scenario()
+            .server_and_registry()
+            .expect("server not started");
         server.rooms_count()
     }
 

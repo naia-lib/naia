@@ -15,6 +15,10 @@ use naia_server::{
 use naia_shared::WorldMutType;
 use naia_test_harness::protocol;
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn listening(addr: &str, mut server: WorldServer<DemoEntity>) -> WorldServer<DemoEntity> {
     let hub = LocalTransportHub::new(addr.parse().unwrap());
     let server_socket = ServerSocket::new(LocalServerSocket::new(hub), None);
@@ -108,6 +112,10 @@ fn world_server_enum_pipelined_entity_builder() {
 /// engine shapes expose the same public behavior: disabled record is a no-op,
 /// enable creates an empty buffer, and record stores a snapshot for the exact
 /// tick.
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn drive_historian_fast_path(mut server: WorldServer<DemoEntity>) {
     let world = DemoWorld::default();
 

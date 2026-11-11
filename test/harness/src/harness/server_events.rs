@@ -447,6 +447,10 @@ pub struct AuthEvent<M: Message> {
     _phantom: std::marker::PhantomData<M>,
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "messages are stored and downcast under the same type M"
+)]
 fn read_messages<M: Message>(messages: Vec<(ClientKey, MessageContainer)>) -> Vec<(ClientKey, M)> {
     let mut output_list = Vec::new();
     for (client_key, message_container) in messages {

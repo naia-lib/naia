@@ -81,6 +81,10 @@ fn setup(mode: ServerMode) -> (Scenario, EntityKey) {
     (scenario, entity_key)
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn apply_mutation(scenario: &mut Scenario, entity_key: &EntityKey, mutation: Mutation) {
     scenario.mutate(|ctx| {
         ctx.server(|server| {

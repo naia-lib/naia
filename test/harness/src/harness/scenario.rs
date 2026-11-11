@@ -229,6 +229,10 @@ pub struct OperationResult {
 }
 
 impl Scenario {
+    #[expect(
+        clippy::expect_used,
+        reason = "FAKE_SERVER_ADDR is a fixed valid address literal"
+    )]
     pub fn new(server_mode: ServerMode) -> Self {
         // Initialize simulated clock for deterministic test time
         TestClock::init(0);
@@ -894,10 +898,18 @@ impl Scenario {
     }
 
     /// Get read-only access to client state
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: a failure must fail the calling test"
+    )]
     pub(crate) fn client_state(&self, client_key: &ClientKey) -> &ClientState {
         self.clients.get(client_key).expect("client not found")
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: a failure must fail the calling test"
+    )]
     pub(crate) fn client_state_mut(&mut self, client_key: &ClientKey) -> &mut ClientState {
         self.clients.get_mut(client_key).expect("client not found")
     }
@@ -1074,6 +1086,10 @@ impl Scenario {
         );
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     fn tick(&mut self) {
         self.assert_clock_thread();
         // Increment tick counter
@@ -1134,6 +1150,10 @@ impl Scenario {
     /// Everything else runs normally, `held` included -- it still receives and
     /// processes, so it observes the very change that invalidates what it is
     /// holding. Only its outbound flush is suppressed.
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn tick_holding_client_send(&mut self, held: ClientKey) {
         self.assert_clock_thread();
         self.global_tick += 1;
@@ -1179,6 +1199,10 @@ impl Scenario {
     /// MISSION_TICK_FLOOR Lever 3 (test support): mutate the server + its world
     /// WITHOUT ticking or sending — so a test can stage component mutations and
     /// capture frozen snapshots/`global_dirty` for a manual lagged send.
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn with_server_world_mut<R>(
         &mut self,
         f: impl FnOnce(&mut Server, &mut TestWorld) -> R,
@@ -1194,6 +1218,10 @@ impl Scenario {
     /// (see `Scenario::prepare_send_job`), with the live per-user masks already
     /// cleared. Clients are pumped (receive/process/send) so the lagged job is
     /// delivered + applied; the server's normal live send is suppressed.
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn transmit_and_pump(&mut self, snap: SnapshotWorld<TestEntity>, plan: SendPlan) {
         self.assert_clock_thread();
         self.global_tick += 1;
@@ -1217,12 +1245,20 @@ impl Scenario {
     /// still reflect this tick. Captures the per-property `DiffMask`s and clears
     /// the live masks (so a subsequent mutation re-dirties cleanly). Pair with
     /// [`Self::transmit_and_pump`] to drive the one-tick send lag manually.
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn prepare_send_job(&mut self) -> SendPlan {
         let world_ref = self.server_world.proxy();
         let server = self.server.as_mut().expect("server not started");
         server.prepare_send_job(&world_ref)
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub(crate) fn take_server_events(&mut self) -> ServerEvents {
         let server = self.server.as_mut().expect("server not started");
         let now = Instant::now();
@@ -1255,6 +1291,10 @@ impl Scenario {
 
     /// Split borrow fields needed for ServerMut
     /// Returns disjoint mutable references to server, world, registry, and users
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub(crate) fn split_for_server_mut(
         &'_ mut self,
     ) -> (
@@ -1505,6 +1545,10 @@ impl Scenario {
 
     /// Get the last client key that was started.
     /// Panics if no client has been started.
+    #[expect(
+        clippy::expect_used,
+        reason = "documented panic: test harness convenience getter requires a started client"
+    )]
     pub fn last_client(&self) -> ClientKey {
         self.last_client_key.expect("No client has been started")
     }
@@ -1516,6 +1560,10 @@ impl Scenario {
 
     /// Get the last room key that was created.
     /// Panics if no room has been created.
+    #[expect(
+        clippy::expect_used,
+        reason = "documented panic: test harness convenience getter requires a created room"
+    )]
     pub fn last_room(&self) -> RoomKey {
         self.last_room_key.expect("No room has been created")
     }
@@ -1585,6 +1633,10 @@ impl Scenario {
     /// Returns counts of component registrations in the global and per-user
     /// diff handlers. Useful for asserting that registrations appear/disappear
     /// at the right points in a scenario.
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn diff_handler_snapshot(&self) -> DiffHandlerSnapshot {
         let server = self.server.as_ref().expect("server not started");
         let global_receivers = server.diff_handler_global_count();
@@ -1608,6 +1660,10 @@ impl Scenario {
     /// Returns 0 when the `v2_push_pipeline` feature is not enabled (the legacy
     /// full-scan path has no queue).  Under `v2_push_pipeline`, returns the
     /// number of unprocessed entries after the last tick.
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn scope_change_queue_len(&self) -> usize {
         let server = self.server.as_ref().expect("server not started");
         server.scope_change_queue_len()
@@ -1617,6 +1673,10 @@ impl Scenario {
     ///
     /// Returns 0 on the legacy full-scan path (no dirty set exists).
     /// Returns 0 after a Phase 3 tick that drained the dirty set cleanly.
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: driving a Scenario before start_server is a test-author bug"
+    )]
     pub fn total_dirty_update_count(&self) -> usize {
         let server = self.server.as_ref().expect("server not started");
         server.total_dirty_update_count()

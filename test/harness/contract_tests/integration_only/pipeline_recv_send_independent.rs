@@ -389,6 +389,10 @@ fn pipeline_recv_send_threads_overlap() {
 /// `send_all_packets`) differ by 30x+, so any count threshold asserts a
 /// machine-speed ratio, not concurrency. Co-residence is the property;
 /// counts only prove each thread advanced at all.
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn active_window_overlap(recv: &[(Instant, Instant)], send: &[(Instant, Instant)]) -> Option<f64> {
     if recv.len() < 2 || send.len() < 2 {
         return None;
