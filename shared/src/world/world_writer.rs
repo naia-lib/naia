@@ -1257,7 +1257,7 @@ impl WorldWriter {
         // + written-kinds Vec + HashMap-remove dance of the old HashMap path.
         let mut written_count = 0usize;
 
-        for (component_kind, kind_bit, plan_diff_mask) in kinds.iter() {
+        for (component_kind, kind_bit, plan_diff_mask) in kinds.iter_mut() {
             let component_kind = *component_kind;
             let kind_bit = *kind_bit;
             // MISSION_TICK_FLOOR Lever 3: on the SERVER (entity_idx valid) the
@@ -1268,11 +1268,16 @@ impl WorldWriter {
             // here, which desynced under the send lag). The CLIENT send is
             // synchronous (no lag), keeps the GlobalEntity-keyed live fetch, and
             // carries a placeholder mask in the plan.
-            let diff_mask = if entity_idx.is_valid() {
-                plan_diff_mask.clone()
-            } else {
-                world_manager.get_diff_mask(global_entity, component_kind)
-            };
+            //
+            // nydus-qli: the server path BORROWS the plan's mask for the write and
+            // MOVES it out of the plan (`mem::take`) only once the write is
+            // committed, where the ledger record consumes it. Every overflow
+            // `break` above that point leaves the entry intact for the next
+            // packet, so the drained prefix is exactly the taken entries. No
+            // per-(entity, user, kind) clone.
+            let client_mask = (!entity_idx.is_valid())
+                .then(|| world_manager.get_diff_mask(global_entity, component_kind));
+            let diff_mask: &DiffMask = client_mask.as_ref().unwrap_or(&*plan_diff_mask);
 
             // When `global_diff_handler` is `Some` (server path), attempt PATH A or PATH B.
             // When `None` (client path or fallback), `optimized_write` stays `false` and
@@ -1317,7 +1322,7 @@ impl WorldWriter {
                             let mut temp = BitWriter::new();
                             true.ser(&mut temp);
                             component_kind.ser(component_kinds, &mut temp);
-                            component.write_update(&diff_mask, &mut temp, &mut converter);
+                            component.write_update(diff_mask, &mut temp, &mut converter);
                             let c = CachedComponentUpdate::capture(&temp).expect(
                                 "component exceeds the CachedComponentUpdate \
                                      ceiling; impossible after registration check \
@@ -1362,7 +1367,7 @@ impl WorldWriter {
                         let mut counter = writer.counter();
                         true.ser(&mut counter);
                         component_kind.ser(component_kinds, &mut counter);
-                        snapshot.write_update(&diff_mask, &mut counter, &mut converter);
+                        snapshot.write_update(diff_mask, &mut counter, &mut converter);
                         if counter.overflowed() {
                             if !*has_written {
                                 Self::warn_overflow_update(
@@ -1379,7 +1384,7 @@ impl WorldWriter {
                         // Writer pass
                         true.ser(writer);
                         component_kind.ser(component_kinds, writer);
-                        snapshot.write_update(&diff_mask, writer, &mut converter);
+                        snapshot.write_update(diff_mask, writer, &mut converter);
                         optimized_write = true;
                     }
                 }
@@ -1402,7 +1407,7 @@ impl WorldWriter {
                 world
                     .component_of_kind(world_entity, component_kind)
                     .expect("Component does not exist in World")
-                    .write_update(&diff_mask, &mut counter, &mut converter);
+                    .write_update(diff_mask, &mut counter, &mut converter);
                 if counter.overflowed() {
                     if !*has_written {
                         let component_name = component_kinds.kind_to_name(component_kind);
@@ -1420,7 +1425,7 @@ impl WorldWriter {
                 world
                     .component_of_kind(world_entity, component_kind)
                     .expect("Component does not exist in World")
-                    .write_update(&diff_mask, writer, &mut converter);
+                    .write_update(diff_mask, writer, &mut converter);
             }
 
             written_count += 1;
@@ -1435,7 +1440,7 @@ impl WorldWriter {
                     packet_index,
                     global_entity,
                     component_kind,
-                    diff_mask,
+                    std::mem::take(plan_diff_mask),
                 );
             } else {
                 world_manager.record_update(
@@ -1443,7 +1448,7 @@ impl WorldWriter {
                     packet_index,
                     global_entity,
                     component_kind,
-                    diff_mask,
+                    client_mask.expect("client path fetched its mask above"),
                 );
             }
         }
@@ -2210,6 +2215,8 @@ mod delegated_send_guard_tests {
         /// two-pass fallback -- both emit identical bytes, so asserting on the
         /// packet alone cannot tell which path ran.
         ghost_cached: bool,
+        /// `DiffMask` clones the pass performed (nydus-qli measure).
+        mask_clones: u64,
     }
 
     /// Runs one `write_updates` pass with a `GlobalDiffHandler` present, which
@@ -2254,6 +2261,8 @@ mod delegated_send_guard_tests {
         let mut writer = BitWriter::new();
         let mut has_written = false;
 
+        let clones_before = DiffMask::clones_on_this_thread();
+
         WorldWriter::write_updates(
             &kinds,
             &Instant::now(),
@@ -2269,6 +2278,7 @@ mod delegated_send_guard_tests {
             &mut update_list,
             None,
         );
+        let mask_clones = DiffMask::clones_on_this_thread() - clones_before;
 
         let ghost_cached = DiffMask::new(1)
             .as_key()
@@ -2279,7 +2289,26 @@ mod delegated_send_guard_tests {
             has_written,
             entries_left: update_list.len(),
             ghost_cached,
+            mask_clones,
         }
+    }
+
+    /// nydus-qli: the server path borrows the plan's frozen `DiffMask` for the
+    /// write and moves it into the retransmit ledger once the write is known to
+    /// fit. Before, it cloned the mask (one heap allocation) for every written
+    /// component of every entity for every user on every tick: measured 1 per
+    /// written kind on this pass.
+    #[cfg(feature = "entity_delegation")]
+    #[test]
+    fn the_server_path_moves_the_plan_mask_instead_of_cloning_it() {
+        let outcome = run_server_pass(false);
+
+        assert!(outcome.has_written, "nothing was serialized at all");
+        assert_eq!(
+            outcome.mask_clones, 0,
+            "the server write path cloned a DiffMask {} time(s); it must move the plan's mask",
+            outcome.mask_clones
+        );
     }
 
     /// A user-independent component must go down PATH A, which serializes once

@@ -1,9 +1,37 @@
 use std::fmt;
 
 /// Variable-length bitmask where each bit tracks whether the corresponding property on a replicated component has been mutated and needs to be sent to the remote peer.
-#[derive(PartialEq, Eq, Clone, Debug)]
+/// `Default` is the empty (zero-byte) mask: what a send plan entry holds after
+/// the writer has moved its mask into the retransmit ledger (nydus-qli).
+#[derive(PartialEq, Eq, Debug, Default)]
 pub struct DiffMask {
     mask: Vec<u8>,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Measure (nydus-qli): `DiffMask` clones on this thread. Each clone of a
+    /// non-empty mask is one heap allocation.
+    static CLONES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+impl Clone for DiffMask {
+    fn clone(&self) -> Self {
+        #[cfg(test)]
+        CLONES.with(|c| c.set(c.get() + 1));
+        Self {
+            mask: self.mask.clone(),
+        }
+    }
+}
+
+impl DiffMask {
+    /// Measure (nydus-qli): `DiffMask` clones performed on the calling thread so
+    /// far. A test takes a delta around the pass it measures.
+    #[cfg(test)]
+    pub(crate) fn clones_on_this_thread() -> u64 {
+        CLONES.with(std::cell::Cell::get)
+    }
 }
 
 impl DiffMask {
