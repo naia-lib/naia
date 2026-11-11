@@ -67,6 +67,10 @@ impl AuthChannel {
         }
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "a delegated entity always holds an auth status; its absence is a naia bug"
+    )]
     pub(crate) fn validate_command(&mut self, command: &EntityCommand) {
         let entity = command.entity();
 
@@ -125,7 +129,9 @@ impl AuthChannel {
                     panic!("Expected SetAuthority command");
                 };
 
-                let from_status = self.auth_status.unwrap();
+                let from_status = self
+                    .auth_status
+                    .expect("a delegated entity holds an auth status");
                 #[cfg(feature = "e2e_debug")]
                 crate::e2e_trace!(
                     "[CLIENT_RECV] SetAuthority entity={:?} from_status={:?} to_status={:?}",

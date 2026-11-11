@@ -18,17 +18,7 @@ impl<T> SequenceList<T> {
     }
 
     pub fn contains_scan_from_back(&self, id: u16) -> bool {
-        let mut index = self.list.len();
-
-        loop {
-            if index == 0 {
-                // made it all the way through
-                return false;
-            }
-
-            index -= 1;
-
-            let (old_id, _) = self.list.get(index).unwrap();
+        for (old_id, _) in self.list.iter().rev() {
             if *old_id == id {
                 return true;
             }
@@ -36,101 +26,51 @@ impl<T> SequenceList<T> {
                 return false;
             }
         }
+        // made it all the way through
+        false
     }
 
     pub fn get_scan_from_back(&self, id: u16) -> Option<&T> {
-        let mut index = self.list.len();
-
-        loop {
-            if index == 0 {
-                // made it all the way through
+        for (old_id, item) in self.list.iter().rev() {
+            if *old_id == id {
+                return Some(item);
+            }
+            if sequence_less_than(*old_id, id) {
                 return None;
             }
-
-            index -= 1;
-
-            {
-                let (old_id, _) = self.list.get(index).unwrap();
-                if *old_id == id {
-                    break;
-                }
-                if sequence_less_than(*old_id, id) {
-                    return None;
-                }
-            }
         }
-
-        let (_, item) = self.list.get(index).unwrap();
-        Some(item)
+        // made it all the way through
+        None
     }
 
     pub fn get_mut_scan_from_back(&mut self, id: u16) -> Option<&mut T> {
-        let mut index = self.list.len();
-
-        loop {
-            if index == 0 {
-                // made it all the way through
+        for (old_id, item) in self.list.iter_mut().rev() {
+            if *old_id == id {
+                return Some(item);
+            }
+            if sequence_less_than(*old_id, id) {
                 return None;
             }
-
-            index -= 1;
-
-            {
-                let (old_id, _) = self.list.get(index).unwrap();
-                if *old_id == id {
-                    break;
-                }
-                if sequence_less_than(*old_id, id) {
-                    return None;
-                }
-            }
         }
-
-        let (_, item) = self.list.get_mut(index).unwrap();
-        Some(item)
+        // made it all the way through
+        None
     }
 
     pub fn insert_scan_from_back(&mut self, id: u16, item: T) {
-        let mut index = self.list.len();
-
-        loop {
-            if index == 0 {
-                // made it all the way through, insert at front and be done
-                self.list.insert(index, (id, item));
-                return;
-            }
-
-            index -= 1;
-
-            let (old_id, _) = self.list.get(index).unwrap();
+        for (index, (old_id, _)) in self.list.iter().enumerate().rev() {
             assert!(*old_id != id, "duplicates are not allowed");
             if sequence_less_than(*old_id, id) {
                 self.list.insert(index + 1, (id, item));
                 return;
             }
         }
+        // made it all the way through, insert at front and be done
+        self.list.insert(0, (id, item));
     }
 
     pub fn remove_scan_from_front(&mut self, id: u16) -> Option<T> {
-        let mut index = 0;
-        let mut remove = false;
-
-        loop {
-            if index >= self.list.len() {
-                return None;
-            }
-
-            let (old_id, _) = self.list.get(index).unwrap();
-            if *old_id == id {
-                remove = true;
-            }
-
-            if remove {
-                return Some(self.list.remove(index).1);
-            }
-
-            index += 1;
-        }
+        let index = self.list.iter().position(|(old_id, _)| *old_id == id)?;
+        Some(self.list.remove(index).1)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &(u16, T)> {

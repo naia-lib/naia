@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::Arc,
+};
 
 use parking_lot::Mutex;
 
@@ -103,10 +107,11 @@ impl LocalTransportHub {
             current
         };
 
-        // Create fake client address based on ID
-        let client_addr: SocketAddr = format!("127.0.0.1:{}", 12345 + client_id)
-            .parse()
-            .expect("invalid client addr");
+        // Create fake client address based on ID. Built directly rather than
+        // formatted-then-parsed, so there is no parse failure to handle; the
+        // port wraps rather than overflow-panicking on a very high client_id.
+        let port = 12345u16.wrapping_add(client_id);
+        let client_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
 
         // Create 1:1 auth channels
         let (auth_req_tx, auth_req_rx, auth_resp_tx, auth_resp_rx) = create_auth_channels();

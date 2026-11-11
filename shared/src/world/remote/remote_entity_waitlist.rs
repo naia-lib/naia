@@ -113,7 +113,9 @@ impl RemoteEntityWaitlist {
         // oldest waiter. Retire through the same path the TTL sweep uses, so an
         // evicted handle is recycled only when its owning store relinquishes it.
         while self.handle_ttls.len() >= TOTAL_WAITLIST_CAP {
-            let (_, oldest) = self.handle_ttls.pop_front().unwrap();
+            let Some((_, oldest)) = self.handle_ttls.pop_front() else {
+                break;
+            };
             warn!(
                 "entity waitlist full ({TOTAL_WAITLIST_CAP} items); evicting the oldest waiting handle {oldest:?}. \
                  A peer can reach this by referencing entities that never come into scope."
@@ -293,9 +295,16 @@ impl RemoteEntityWaitlist {
     /// the entry they just popped -- paying for the scan again would make every
     /// eviction cost O(cap), which a peer sitting at the cap could drive once per
     /// message it sends.
+    #[expect(
+        clippy::expect_used,
+        reason = "handle came from handle_ttls, which queue() always populates in lockstep with handle_to_required_entities; a miss is a waitlist bookkeeping bug"
+    )]
     fn drop_waiting_handle_indexes(&mut self, handle: WaitlistHandle) {
         // remove handle from required entities map
-        let entities = self.handle_to_required_entities.remove(&handle).unwrap();
+        let entities = self
+            .handle_to_required_entities
+            .remove(&handle)
+            .expect("handle from handle_ttls must have a required-entities entry");
 
         // for all associated entities, remove from waitlist
         for entity in entities {
@@ -313,11 +322,11 @@ impl RemoteEntityWaitlist {
     }
 
     fn check_handle_ttls(&mut self, now: &Instant) {
-        while let Some((ttl, _)) = self.handle_ttls.front() {
+        while let Some((ttl, handle)) = self.handle_ttls.pop_front() {
             if ttl.elapsed(now) < self.handle_ttl {
+                self.handle_ttls.push_front((ttl, handle));
                 break;
             }
-            let (_, handle) = self.handle_ttls.pop_front().unwrap();
             self.removed_handles.insert(handle);
             self.drop_waiting_handle_indexes(handle);
         }
@@ -342,6 +351,10 @@ impl<T> WaitlistStore<T> {
         self.items.insert(handle, item);
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "handle is drawn from item_handles, kept in lockstep with items by queue()/remove(); a miss is a store bookkeeping bug"
+    )]
     pub fn collect_ready_items(
         &mut self,
         ready_handles: &mut HashSet<WaitlistHandle>,
@@ -362,7 +375,9 @@ impl<T> WaitlistStore<T> {
 
         for handle in intersection {
             ready_handles.remove(&handle);
-            let item = self.remove(handle).unwrap();
+            let item = self
+                .remove(handle)
+                .expect("handle from item_handles must have a stored item");
             collected_handles.push(handle);
             ready_messages.push(item);
         }

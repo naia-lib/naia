@@ -314,6 +314,10 @@ impl RemoteWorldManager {
 
     /// For each [`EntityMessage`] that can be executed now,
     /// execute it and emit a corresponding event.
+    #[expect(
+        clippy::expect_used,
+        reason = "global_entity/world_entity lookups below are reached only after their remote_entity is confirmed present in local_entity_map; a miss is a bookkeeping bug linking local_entity_map to the spawner's reverse map"
+    )]
     fn process_ready_messages<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         spawner: &mut dyn GlobalEntitySpawner<E>,
@@ -369,11 +373,15 @@ impl RemoteWorldManager {
                     let global_entity = if is_client {
                         *local_entity_map
                             .global_entity_from_remote(remote_entity)
-                            .unwrap()
+                            .expect(
+                            "remote_entity was confirmed mapped by contains_remote_entity above",
+                        )
                     } else {
                         local_entity_map.remove_by_remote_entity(remote_entity)
                     };
-                    let world_entity = spawner.global_entity_to_entity(global_entity).unwrap();
+                    let world_entity = spawner.global_entity_to_entity(global_entity).expect(
+                        "global_entity resolved from a known remote entity must have a live spawner entity",
+                    );
 
                     if let Some(component_kinds) =
                         global_world_manager.component_kinds(global_entity)
@@ -427,11 +435,12 @@ impl RemoteWorldManager {
                     };
                     let (_, _, _, component) = incoming_components.remove(position);
 
-                    if local_entity_map.contains_remote_entity(remote_entity) {
-                        let global_entity = *local_entity_map
-                            .global_entity_from_remote(remote_entity)
-                            .unwrap();
-                        let world_entity = spawner.global_entity_to_entity(global_entity).unwrap();
+                    if let Some(&global_entity) =
+                        local_entity_map.global_entity_from_remote(remote_entity)
+                    {
+                        let world_entity = spawner.global_entity_to_entity(global_entity).expect(
+                            "global_entity resolved from a known remote entity must have a live spawner entity",
+                        );
 
                         self.process_insert(InsertParams {
                             tick,
@@ -460,8 +469,12 @@ impl RemoteWorldManager {
                     }
                     let global_entity = local_entity_map
                         .global_entity_from_remote(remote_entity)
-                        .unwrap();
-                    let world_entity = spawner.global_entity_to_entity(*global_entity).unwrap();
+                        .expect(
+                            "remote_entity was confirmed mapped by contains_remote_entity above",
+                        );
+                    let world_entity = spawner.global_entity_to_entity(*global_entity).expect(
+                        "global_entity resolved from a known remote entity must have a live spawner entity",
+                    );
                     self.process_remove(
                         Some(id),
                         tick,
@@ -540,6 +553,10 @@ impl RemoteWorldManager {
 
     /// Same shape as `process_insert` above; same reason for the allow.
     #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::expect_used,
+        reason = "entity is already known-mapped by every caller (InsertComponent arm checks contains_remote_entity; process_waitlist_messages checks remote_entity_to_global_entity) before reaching finish_insert"
+    )]
     fn finish_insert<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         params: InsertParams<'_, '_, E, W>,
@@ -562,7 +579,9 @@ impl RemoteWorldManager {
 
         world.insert_boxed_component(world_entity, component);
 
-        let global_entity = converter.remote_entity_to_global_entity(entity).unwrap();
+        let global_entity = converter
+            .remote_entity_to_global_entity(entity)
+            .expect("entity is already known-mapped by every caller of finish_insert");
 
         self.incoming_events.push((
             Some(command_id),
@@ -653,6 +672,10 @@ impl RemoteWorldManager {
     }
 
     /// Process component updates from raw bits for a given entity
+    #[expect(
+        clippy::expect_used,
+        reason = "local_entity is returned by self.waitlist.process_ready_updates, which only yields entities it already resolved through this same converter"
+    )]
     fn process_ready_updates<WE: Copy + Eq + Hash + Send + Sync, W: WorldMutType<WE>>(
         &mut self,
         local_converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -671,7 +694,7 @@ impl RemoteWorldManager {
         ) {
             let global_entity = local_converter
                 .owned_entity_to_global_entity(local_entity)
-                .unwrap();
+                .expect("local_entity came from this same converter via self.waitlist.process_ready_updates");
             self.incoming_events.push((
                 None,
                 EntityEvent::UpdateComponent(tick, global_entity, component_kind),
@@ -679,6 +702,10 @@ impl RemoteWorldManager {
         }
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "remote_entity is returned by self.waitlist.process_waitlist_updates, which only yields entities it already resolved through this same converter"
+    )]
     fn process_waitlist_updates<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         local_converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -692,7 +719,7 @@ impl RemoteWorldManager {
         {
             let global_entity = local_converter
                 .remote_entity_to_global_entity(remote_entity)
-                .unwrap();
+                .expect("remote_entity came from this same converter via self.waitlist.process_waitlist_updates");
             self.incoming_events.push((
                 None,
                 EntityEvent::UpdateComponent(tick, global_entity, component_kind),
@@ -703,6 +730,10 @@ impl RemoteWorldManager {
     /// Emit `UpdateComponent` events for updates that were buffered waiting on
     /// their own target entity to spawn, and have now been applied. Mirrors
     /// `process_waitlist_updates`.
+    #[expect(
+        clippy::expect_used,
+        reason = "remote_entity is returned by self.waitlist.process_self_waitlist_updates, which only yields entities it already resolved through this same converter"
+    )]
     fn process_self_waitlist_updates<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         local_converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -718,7 +749,7 @@ impl RemoteWorldManager {
         ) {
             let global_entity = local_converter
                 .remote_entity_to_global_entity(remote_entity)
-                .unwrap();
+                .expect("remote_entity came from this same converter via self.waitlist.process_self_waitlist_updates");
             self.incoming_events.push((
                 None,
                 EntityEvent::UpdateComponent(tick, global_entity, component_kind),
@@ -759,6 +790,7 @@ impl RemoteWorldManager {
             .insert_entity_channel(remote_entity, channel);
     }
 
+    #[cfg(test)]
     pub(crate) fn has_entity_channel(&self, remote_entity: RemoteEntity) -> bool {
         self.remote_engine.has_entity(&remote_entity)
     }

@@ -78,13 +78,7 @@ impl MessageChannelSender for UnorderedUnreliableSender {
         writer: &mut BitWriter,
         has_written: &mut bool,
     ) -> Option<Vec<MessageIndex>> {
-        loop {
-            if self.outgoing_messages.is_empty() {
-                break;
-            }
-
-            let message = self.outgoing_messages.front().unwrap();
-
+        while let Some(message) = self.outgoing_messages.front() {
             // Check that we can write the next message
             let mut counter = writer.counter();
             // write MessageContinue bit

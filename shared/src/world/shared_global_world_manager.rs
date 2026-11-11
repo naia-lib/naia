@@ -28,7 +28,9 @@ impl SharedGlobalWorldManager {
 
         for global_entity in entities {
             // Get world entity
-            let world_entity = converter.global_entity_to_entity(global_entity).unwrap();
+            let Ok(world_entity) = converter.global_entity_to_entity(global_entity) else {
+                panic!("despawn_all_entities is handed only entities the converter maps");
+            };
 
             // Generate remove event for each component, handing references off just in
             // case

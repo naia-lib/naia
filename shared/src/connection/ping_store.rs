@@ -47,10 +47,6 @@ impl PingStore {
     }
 
     /// Removes and returns the send-time for the given `ping_index`, or `None` if not found.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a value expected to be present is missing.
     pub fn remove(&mut self, ping_index: PingIndex) -> Option<GameInstant> {
         let mut vec_index = self.buffer.len();
 
@@ -80,8 +76,10 @@ impl PingStore {
                 // Local-only: vec_index just returned Some from `.get`
                 // above with no mutation between; the remove cannot miss.
                 // Unknown peer ping_indexes return None via the paths above.
-                let (_, ping_instant) = self.buffer.remove(vec_index).unwrap();
-                return Some(ping_instant);
+                if let Some((_, ping_instant)) = self.buffer.remove(vec_index) {
+                    return Some(ping_instant);
+                }
+                return None;
             }
 
             // made it to the front

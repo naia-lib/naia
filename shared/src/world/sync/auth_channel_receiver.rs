@@ -119,7 +119,10 @@ impl AuthChannelReceiver {
             // Move to the next expected subcommand ID
             self.next_subcommand_id = self.next_subcommand_id.wrapping_add(1);
 
-            let (id, (tick, msg)) = self.buffered_messages.pop_front().unwrap();
+            // The loop just peeked this entry.
+            let Some((id, (tick, msg))) = self.buffered_messages.pop_front() else {
+                break;
+            };
 
             self.incoming_messages.push((id, tick, msg));
         }

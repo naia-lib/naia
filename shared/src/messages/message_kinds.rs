@@ -195,6 +195,10 @@ impl MessageKinds {
     ///
     /// Panics if the expected value is missing: `MessageKinds` net-ID space must be dense.
     #[must_use]
+    #[expect(
+        clippy::expect_used,
+        reason = "net-ID space is dense by construction; a gap is a broken invariant"
+    )]
     pub fn schema_descriptor_entries(&self) -> Vec<(NetId, Vec<u8>)> {
         let mut output = Vec::with_capacity(self.current_net_id as usize);
         for net_id in 0..self.current_net_id {
@@ -237,6 +241,10 @@ impl MessageKinds {
         self.net_id_map.get(&net_id).copied().ok_or(SerdeErr)
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "registration invariant: Message must be registered via add_message()"
+    )]
     fn kind_to_net_id(&self, message_kind: &MessageKind) -> NetId {
         self.kind_map
             .get(message_kind)
@@ -244,6 +252,10 @@ impl MessageKinds {
             .0
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "registration invariant: Message must be registered via add_message()"
+    )]
     fn kind_to_builder(&self, message_kind: &MessageKind) -> &dyn MessageBuilder {
         self.kind_map
             .get(message_kind)
@@ -272,6 +284,10 @@ impl MessageKinds {
     ///
     /// Panics if the expected value is missing: `MessageKinds` net-ID space must be dense.
     #[must_use]
+    #[expect(
+        clippy::expect_used,
+        reason = "net-ID space is dense by construction; a gap is a broken invariant"
+    )]
     pub fn schema_entries(&self) -> Vec<(NetId, String)> {
         let mut output = Vec::with_capacity(self.current_net_id as usize);
         for net_id in 0..self.current_net_id {

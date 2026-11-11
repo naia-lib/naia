@@ -10,7 +10,6 @@ use naia_socket_shared::monotonic_now_ms;
 /// time facade ([`monotonic_now_ms`], the `performance.now()` timeline), the
 /// same source as `Instant` — never the wall clock — so timers and instants
 /// cannot disagree about elapsed time.
-
 pub struct Timer {
     duration: f64,
     last: f64,

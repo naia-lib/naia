@@ -251,7 +251,9 @@ impl EntityMessage<RemoteEntity> {
     /// receiver journals the author's tick, not its own watermark.
     #[must_use]
     pub fn to_event(self, local_entity_map: &LocalEntityMap, tick: Tick) -> Option<EntityEvent> {
-        let remote_entity = self.entity().unwrap();
+        let Some(remote_entity) = self.entity() else {
+            panic!("Cannot convert Noop message to an event");
+        };
         let global_entity = if let Some(ge) =
             local_entity_map.global_entity_from_remote(remote_entity)
         {
@@ -315,7 +317,9 @@ impl EntityMessage<HostEntity> {
     /// Panics when the invalid state is reached: Handled elsewhere.
     #[must_use]
     pub fn to_event(self, local_entity_map: &LocalEntityMap, tick: Tick) -> Option<EntityEvent> {
-        let host_entity = self.entity().unwrap();
+        let Some(host_entity) = self.entity() else {
+            panic!("Cannot convert Noop message to an event");
+        };
         let global_entity = if let Some(ge) = local_entity_map.global_entity_from_host(host_entity)
         {
             *ge

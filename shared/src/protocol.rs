@@ -261,6 +261,10 @@ impl Protocol {
     ///
     /// Panics if the expected value is missing: Protocol must be locked before calling `protocol_id()`.
     #[must_use]
+    #[expect(
+        clippy::expect_used,
+        reason = "API misuse invariant: caller must lock() the Protocol before reading its id"
+    )]
     pub fn protocol_id(&self) -> ProtocolId {
         self.cached_protocol_id
             .expect("Protocol must be locked before calling protocol_id()")

@@ -269,6 +269,10 @@ impl<T: Serde> Property<T> {
     /// # Panics
     ///
     /// Panics when the invalid state is reached: Property of type `{:?}` should never enable delegation this way.
+    #[expect(
+        clippy::expect_used,
+        reason = "a host-owned property gains its mutator when it enters the host world, before delegation can run"
+    )]
     pub fn enable_delegation(
         &mut self,
         accessor: &EntityAuthAccessor,

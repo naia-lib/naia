@@ -81,7 +81,8 @@ pub fn bytes_to_request(request_bytes: &[u8]) -> Result<http::Request<Vec<u8>>, 
     let body = request_bytes[head_len + 4..].to_vec();
 
     let mut head_parts = head.splitn(2, "\r\n");
-    let path_line = head_parts.next().unwrap();
+    // `splitn` always yields at least one item, even on an empty string.
+    let path_line = head_parts.next().unwrap_or("");
     let headers_str = head_parts.next().unwrap_or(""); // If there are no headers, it's an empty string
     let (method, url) = parse_path_line(path_line)?;
     let headers = parse_headers(headers_str)?;
@@ -108,7 +109,11 @@ pub fn response_to_bytes(response: http::Response<Vec<u8>>) -> Vec<u8> {
 }
 
 #[doc(hidden)]
-pub fn bytes_to_response(response_bytes: &[u8]) -> http::Response<Vec<u8>> {
+/// # Errors
+///
+/// Returns the builder's error when the peer sent a status code or header
+/// that `http` cannot represent.
+pub fn bytes_to_response(response_bytes: &[u8]) -> Result<http::Response<Vec<u8>>, http::Error> {
     let response_str = String::from_utf8_lossy(response_bytes);
 
     let (status_line, headers_str, body_start_index) = split_response(&response_str);
@@ -123,14 +128,18 @@ pub fn bytes_to_response(response_bytes: &[u8]) -> http::Response<Vec<u8>> {
     for (key, value) in headers {
         response = response.header(key, value);
     }
-    response.body(body).unwrap()
+    // A status code or header the peer sent may be one `http` cannot
+    // represent; the builder reports it here, and the caller treats it as a
+    // malformed response.
+    response.body(body)
 }
 
 fn split_response(response_str: &str) -> (&str, &str, usize) {
     let mut parts = response_str.splitn(3, "\r\n\r\n");
-    let status_and_headers = parts.next().unwrap();
+    // `splitn` always yields at least one item, even on an empty string.
+    let status_and_headers = parts.next().unwrap_or("");
     let mut status_and_headers_parts = status_and_headers.splitn(2, "\r\n");
-    let status_line = status_and_headers_parts.next().unwrap();
+    let status_line = status_and_headers_parts.next().unwrap_or("");
     let headers = status_and_headers_parts.next().unwrap_or(""); // If there are no headers, it's an empty string
     let body_start_index = response_str
         .find("\r\n\r\n")
@@ -157,10 +166,15 @@ fn parse_path_line(path_line: &str) -> Result<(Method, String), RequestParseErro
 
 fn parse_status_line(status_line: &str) -> (u16, String) {
     let mut parts = status_line.splitn(3, ' ');
-    let _http_version = parts.next().unwrap();
-    let status_code = parts.next().unwrap();
+    // All of these come straight off the wire from a peer. A short or
+    // non-numeric status line is malformed input, not a local bug, so it
+    // falls back to the same tolerant defaults headers already use rather
+    // than panicking. A missing or non-numeric code becomes 0, which is out
+    // of range, so `bytes_to_response` rejects it as malformed.
+    let _http_version = parts.next().unwrap_or("");
+    let status_code = parts.next().unwrap_or("");
     let status_text = parts.next().unwrap_or("").to_string(); // Status text can be empty
-    let status_code = status_code.parse::<u16>().unwrap();
+    let status_code = status_code.parse::<u16>().unwrap_or(0);
     (status_code, status_text)
 }
 
@@ -176,6 +190,10 @@ fn parse_headers(headers: &str) -> Result<Vec<(String, String)>, RequestParseErr
     Ok(header_store)
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "writing to an in-memory Vec<u8> via std::io::Write is infallible"
+)]
 fn response_header_to_vec(r: &http::Response<Vec<u8>>) -> Vec<u8> {
     let mut v = Vec::with_capacity(120);
     write_response_header(r, &mut v).expect("unable to write response header to stream");

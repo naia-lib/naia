@@ -38,6 +38,10 @@ impl ReplicationLedger {
 
     // ── Container growth — write guard (boundary: scope/spawn, worker idle) ──
 
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned ledger means a registration panicked mid-resize; replicating from half-grown state would corrupt every peer"
+    )]
     pub fn register_component(
         &self,
         address: &Option<SocketAddr>,
@@ -50,6 +54,10 @@ impl ReplicationLedger {
             .register_component(address, entity, component_kind);
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned ledger means a registration panicked mid-resize; replicating from half-grown state would corrupt every peer"
+    )]
     pub fn deregister_component(&self, entity: GlobalEntity, component_kind: ComponentKind) {
         self.handler
             .write()
@@ -147,6 +155,10 @@ impl ReplicationLedger {
     }
 
     #[inline]
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned ledger means a registration panicked mid-resize; replicating from half-grown state would corrupt every peer"
+    )]
     fn read(&self) -> std::sync::RwLockReadGuard<'_, UserDiffHandler> {
         self.handler
             .read()

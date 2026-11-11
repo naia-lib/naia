@@ -23,13 +23,7 @@ impl IndexedMessageWriter {
         let mut last_written_id: Option<MessageIndex> = None;
         let mut message_indices = Vec::new();
 
-        loop {
-            if outgoing_messages.is_empty() {
-                break;
-            }
-
-            let (message_index, message) = outgoing_messages.front().unwrap();
-
+        while let Some((message_index, message)) = outgoing_messages.front() {
             // check that we can write the next message
             let mut counter = writer.counter();
             // write MessageContinue bit

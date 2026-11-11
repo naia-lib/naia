@@ -395,6 +395,10 @@ impl WorldWriter {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::expect_used,
+        reason = "every lookup below resolves a global_entity this host's own command queue already references; a miss is a bookkeeping bug in the host's entity maps, not peer input. The caller also guarantees next_send_commands is non-empty before calling"
+    )]
     fn write_command<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         component_kinds: &ComponentKinds,
         world: &W,
@@ -407,7 +411,9 @@ impl WorldWriter {
         is_writing: bool,
         next_send_commands: &mut VecDeque<(CommandId, EntityCommand)>,
     ) {
-        let (command_id, command) = next_send_commands.front().unwrap();
+        let (command_id, command) = next_send_commands
+            .front()
+            .expect("caller checked next_send_commands is non-empty before calling write_command");
         let command_id = *command_id;
 
         // info!("Writing (command_id: {:?}), command {:?} into packet {:?}", command_id, command, packet_index);
@@ -423,7 +429,7 @@ impl WorldWriter {
                 let host_entity = world_manager
                     .entity_converter()
                     .global_entity_to_host_entity(*global_entity)
-                    .unwrap();
+                    .expect("global_entity is from this host's own command queue and must be present in its entity maps");
 
                 // write host entity
                 host_entity.ser(writer);
@@ -538,7 +544,7 @@ impl WorldWriter {
                 let host_entity = world_manager
                     .entity_converter()
                     .global_entity_to_host_entity(*global_entity)
-                    .unwrap();
+                    .expect("global_entity is from this host's own command queue and must be present in its entity maps");
                 host_entity.copy_to_owned().ser(writer);
 
                 let count = comp_kind_list.len() as u8;
@@ -575,7 +581,7 @@ impl WorldWriter {
                 let local_entity = world_manager
                     .entity_converter()
                     .global_entity_to_owned_entity(*global_entity)
-                    .unwrap();
+                    .expect("global_entity is from this host's own command queue and must be present in its entity maps");
 
                 // write local entity
                 local_entity.ser(writer);
@@ -695,7 +701,7 @@ impl WorldWriter {
                     let local_entity = world_manager
                         .entity_converter()
                         .global_entity_to_owned_entity(*global_entity)
-                        .unwrap();
+                        .expect("global_entity is from this host's own command queue and must be present in its entity maps");
 
                     // write local entity
                     local_entity.ser(writer);
@@ -734,7 +740,7 @@ impl WorldWriter {
                     let local_entity = world_manager
                         .entity_converter()
                         .global_entity_to_owned_entity(*global_entity)
-                        .unwrap();
+                        .expect("global_entity is from this host's own command queue and must be present in its entity maps");
 
                     // write local entity
                     local_entity.ser(writer);
@@ -780,7 +786,7 @@ impl WorldWriter {
                 let local_entity = world_manager
                     .entity_converter()
                     .global_entity_to_owned_entity(*global_entity)
-                    .unwrap();
+                    .expect("global_entity is from this host's own command queue and must be present in its entity maps");
 
                 // write local entity
                 local_entity.ser(writer);
@@ -810,7 +816,7 @@ impl WorldWriter {
                 let local_entity = world_manager
                     .entity_converter()
                     .global_entity_to_owned_entity(*global_entity)
-                    .unwrap();
+                    .expect("global_entity is from this host's own command queue and must be present in its entity maps");
 
                 // write local entity
                 local_entity.ser(writer);
@@ -840,7 +846,7 @@ impl WorldWriter {
                 let local_entity = world_manager
                     .entity_converter()
                     .global_entity_to_owned_entity(*global_entity)
-                    .unwrap();
+                    .expect("global_entity is from this host's own command queue and must be present in its entity maps");
 
                 local_entity.ser(writer);
 
@@ -871,7 +877,7 @@ impl WorldWriter {
                 let host_entity = world_manager
                     .entity_converter()
                     .global_entity_to_host_entity(*global_entity)
-                    .unwrap();
+                    .expect("global_entity is from this host's own command queue and must be present in its entity maps");
 
                 // write host entity
                 host_entity.ser(writer);
@@ -957,7 +963,7 @@ impl WorldWriter {
                 let remote_entity = world_manager
                     .entity_converter()
                     .global_entity_to_remote_entity(*global_entity)
-                    .unwrap();
+                    .expect("global_entity is from this host's own command queue and must be present in its entity maps");
 
                 // write remote entity
                 remote_entity.ser(writer);
@@ -990,7 +996,7 @@ impl WorldWriter {
                 let local_entity = world_manager
                     .entity_converter()
                     .global_entity_to_owned_entity(*global_entity)
-                    .unwrap();
+                    .expect("global_entity is from this host's own command queue and must be present in its entity maps");
 
                 // write local entity
                 local_entity.ser(writer);
@@ -1022,7 +1028,7 @@ impl WorldWriter {
                 let remote_entity = world_manager
                     .entity_converter()
                     .global_entity_to_remote_entity(*global_entity)
-                    .unwrap();
+                    .expect("global_entity is from this host's own command queue and must be present in its entity maps");
 
                 // write remote entity
                 remote_entity.ser(writer);
@@ -1083,13 +1089,19 @@ impl WorldWriter {
         }
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "caller only invokes this on a just-overflowed write_command call, which itself required next_send_commands to be non-empty"
+    )]
     fn warn_overflow_command(
         component_kinds: &ComponentKinds,
         bits_needed: u32,
         bits_free: u32,
         next_send_commands: &VecDeque<(CommandId, EntityCommand)>,
     ) {
-        let (_command_id, command) = next_send_commands.front().unwrap();
+        let (_command_id, command) = next_send_commands
+            .front()
+            .expect("caller's write_command call already required a non-empty next_send_commands");
 
         match command {
             EntityCommand::Spawn(_entity) => {
@@ -1130,6 +1142,10 @@ impl WorldWriter {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::expect_used,
+        reason = "entities/components here are host-local send-plan entries already screened by planned_update_drop_reason or an explicit has_component_of_kind check; a miss past that is a bookkeeping bug, not peer input"
+    )]
     fn write_updates<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         component_kinds: &ComponentKinds,
         now: &Instant,
@@ -1168,7 +1184,7 @@ impl WorldWriter {
             let local_entity = world_manager
                 .entity_converter()
                 .global_entity_to_owned_entity(global_entity)
-                .unwrap();
+                .expect("global_entity survived planned_update_drop_reason and must be present in the host's entity maps");
 
             // check that we can at least write a LocalEntity and a ComponentContinue bit
             let mut counter = writer.counter();
@@ -1233,6 +1249,10 @@ impl WorldWriter {
     ///   per-user local entity IDs. ECS is read once per component per tick into
     ///   `snapshot_map`; all users serialize from the snapshot, not ECS.
     #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::expect_used,
+        reason = "update writes only name entities and components the host already tracks; a miss is a naia bug"
+    )]
     fn write_update<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         component_kinds: &ComponentKinds,
         now: &Instant,

@@ -84,6 +84,10 @@ impl HostAuthHandler {
     ///
     /// Panics if the expected value is missing: Entity must be registered with Server before it can receive messages!.
     #[must_use]
+    #[expect(
+        clippy::expect_used,
+        reason = "touching an entity the server never registered is API misuse and must stop loudly"
+    )]
     pub fn get_accessor(&self, entity: GlobalEntity) -> EntityAuthAccessor {
         let (_, receiver) = self
             .auth_channels
@@ -108,6 +112,10 @@ impl HostAuthHandler {
     /// # Panics
     ///
     /// Panics if the expected value is missing: Entity must be registered with Server before it can be mutated!.
+    #[expect(
+        clippy::expect_used,
+        reason = "touching an entity the server never registered is API misuse and must stop loudly"
+    )]
     pub fn set_auth_status(&self, entity: GlobalEntity, auth_status: EntityAuthStatus) {
         let (sender, _) = self
             .auth_channels

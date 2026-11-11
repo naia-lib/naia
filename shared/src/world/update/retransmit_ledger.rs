@@ -45,11 +45,10 @@ impl RetransmitLedger {
         diff_mask: DiffMask,
     ) {
         self.last_update_packet_index = packet_index;
-
-        self.sent_updates
+        let (_, sent_updates_map) = self
+            .sent_updates
             .entry(packet_index)
             .or_insert_with(|| (now.clone(), HashMap::new()));
-        let (_, sent_updates_map) = self.sent_updates.get_mut(&packet_index).unwrap();
         sent_updates_map.insert((global_entity, component_kind), diff_mask);
     }
 

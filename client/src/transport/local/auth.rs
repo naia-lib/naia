@@ -46,7 +46,10 @@ impl PendingRequest {
         };
 
         // Parse HTTP response
-        let response = naia_shared::transport::bytes_to_response(&response_bytes);
+        let Ok(response) = naia_shared::transport::bytes_to_response(&response_bytes) else {
+            self.cached_result = Some(Err(LocalAuthError::ParseError));
+            return Err(LocalAuthError::ParseError);
+        };
         let status_code = response.status().as_u16();
 
         if status_code != 200 {
@@ -69,7 +72,8 @@ impl PendingRequest {
         };
 
         let mut parts = body.splitn(2, "\r\n");
-        let identity_token = parts.next().unwrap().to_string();
+        // `splitn` always yields at least one item, even for an empty string.
+        let identity_token = parts.next().unwrap_or_default().to_string();
         let server_addr_str = match parts.next() {
             Some(addr) => addr,
             None => {
@@ -125,6 +129,10 @@ impl ClientAuthIo {
     }
 
     // Called by LocalClientSocket during connect
+    #[expect(
+        clippy::expect_used,
+        reason = "pending_req_opt is only Some once auth_responses_rx is taken; a mismatch is a naia bug"
+    )]
     pub(crate) fn connect(&mut self) {
         // Create PendingRequest immediately (not lazily!) if one doesn't exist
         if self.pending_req_opt.is_some() {
@@ -155,13 +163,10 @@ impl ClientAuthIo {
             return ClientIdentityReceiverResult::ErrorResponseCode(code, payload);
         }
 
-        // Check if we have a pending request
-        if self.pending_req_opt.is_none() {
-            panic!("No PendingRequest (did you forget to call connect?)");
-        }
-
         // Poll the pending request
-        let pending_req = self.pending_req_opt.as_mut().unwrap();
+        let Some(pending_req) = self.pending_req_opt.as_mut() else {
+            panic!("No PendingRequest (did you forget to call connect?)");
+        };
         match pending_req.poll_response() {
             Ok(Some((status_code, id_token))) => {
                 if status_code != 200 {

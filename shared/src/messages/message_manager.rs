@@ -346,10 +346,6 @@ impl MessageManager {
     }
 
     /// Encodes all pending outgoing messages across all channels into `writer`, ordered by channel criticality.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a value expected to be present is missing.
     pub fn write_messages(
         &mut self,
         channel_kinds: &ChannelKinds,
@@ -399,7 +395,11 @@ impl MessageManager {
         self.packet_to_message_map.remove(&packet_index);
 
         for (channel_kind, _gain) in &ordered {
-            let channel = self.channel_senders.get_mut(channel_kind).unwrap();
+            // `ordered`'s keys came straight from `self.channel_senders.keys()`
+            // above with no mutation of that map in between.
+            let Some(channel) = self.channel_senders.get_mut(channel_kind) else {
+                continue;
+            };
             if !channel.has_messages() {
                 continue;
             }
@@ -429,8 +429,7 @@ impl MessageManager {
             {
                 // Stale-wrap drop already ran once per packet above; here we only
                 // append this channel's indices to the current packet's record.
-                self.packet_to_message_map.entry(packet_index).or_default();
-                let channel_list = self.packet_to_message_map.get_mut(&packet_index).unwrap();
+                let channel_list = self.packet_to_message_map.entry(packet_index).or_default();
                 channel_list.push((*channel_kind, message_indices));
             }
 
@@ -519,12 +518,13 @@ impl MessageManager {
         let mut request_output = Vec::new();
         let mut response_output = Vec::new();
         for (channel_kind, channel) in &mut self.channel_receivers {
-            if !self
-                .channel_settings
-                .get(channel_kind)
-                .unwrap()
-                .can_request_and_respond()
-            {
+            // `channel_settings` and `channel_receivers` are populated together
+            // from the same `channel_kinds.channels()` in `new()`, so every
+            // receiver key has a settings entry.
+            let Some(settings) = self.channel_settings.get(channel_kind) else {
+                continue;
+            };
+            if !settings.can_request_and_respond() {
                 continue;
             }
 

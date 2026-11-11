@@ -86,13 +86,17 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
             return;
         }
 
-        let entity = msg.entity().unwrap();
+        // Only `Noop` carries no entity, and it returned above.
+        let Some(entity) = msg.entity() else {
+            return;
+        };
 
         // If the entity channel does not exist, create it
-        if !self.entity_channels.contains_key(&entity) {
-            self.insert_entity_channel(entity, RemoteEntityChannel::new(self.host_type));
-        }
-        let entity_channel = self.entity_channels.get_mut(&entity).unwrap();
+        let host_type = self.host_type;
+        let entity_channel = self
+            .entity_channels
+            .entry(entity)
+            .or_insert_with(|| RemoteEntityChannel::new(host_type));
 
         // if log {
         //     info!("Engine::accept_message(id={}, entity={:?}, msgType={:?})", id, entity, msg.get_type());
@@ -114,12 +118,11 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
     }
 
     pub fn send_auth_command(&mut self, entity: E, command: EntityCommand) {
-        assert!(
-            self.entity_channels.contains_key(&entity),
-            "Cannot send a command to an entity that does not exist in the engine: {entity:?}"
-        );
-
-        let entity_channel = self.entity_channels.get_mut(&entity).unwrap();
+        let Some(entity_channel) = self.entity_channels.get_mut(&entity) else {
+            panic!(
+                "Cannot send a command to an entity that does not exist in the engine: {entity:?}"
+            );
+        };
         entity_channel.send_command(command);
         entity_channel.drain_outgoing_messages_into(&mut self.outgoing_commands);
     }
@@ -175,6 +178,10 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
         self.outgoing_commands.push(command);
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "removing a channel that does not exist is a migration bug and must stop loudly"
+    )]
     pub(crate) fn remove_entity_channel(&mut self, entity: &E) -> RemoteEntityChannel {
         self.entity_channels
             .remove(entity)

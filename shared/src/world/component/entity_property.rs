@@ -613,6 +613,10 @@ impl EntityProperty {
     /// # Panics
     ///
     /// Panics when the invalid state is reached: `EntityProperty` of type `{:?}` should never enable delegation..
+    #[expect(
+        clippy::expect_used,
+        reason = "a host-owned property gains its mutator when it enters the host world, before delegation can run"
+    )]
     pub fn enable_delegation(
         &mut self,
         accessor: &EntityAuthAccessor,
