@@ -1,4 +1,4 @@
-use std::{thread::sleep, time::Duration};
+use std::{net::SocketAddr, thread::sleep, time::Duration};
 
 use naia_server::{
     shared::{default_channels::UnorderedReliableChannel, Instant},
@@ -27,13 +27,9 @@ impl App {
         let mut world = World::default();
 
         let server_addresses = webrtc::ServerAddrs::new(
-            "127.0.0.1:14191"
-                .parse()
-                .expect("could not parse Signaling address/port"),
+            SocketAddr::from(([127, 0, 0, 1], 14191)),
             // IP Address to listen on for UDP WebRTC data channels
-            "127.0.0.1:14192"
-                .parse()
-                .expect("could not parse WebRTC data address/port"),
+            SocketAddr::from(([127, 0, 0, 1], 14192)),
             // The public WebRTC IP address to advertise
             "http://127.0.0.1:14192",
         );
@@ -140,9 +136,12 @@ impl App {
                         );
 
                         let new_message = StringMessage::new(new_message_contents);
-                        self.server
+                        if let Err(err) = self
+                            .server
                             .send_message::<UnorderedReliableChannel, _>(&user_key, &new_message)
-                            .unwrap();
+                        {
+                            warn!("could not send to {user_key:?}: {err}");
+                        }
                     }
                 }
 

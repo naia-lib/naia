@@ -12,7 +12,7 @@ fn main() -> io::Result<()> {
     SimpleLogger::new()
         .with_level(LevelFilter::Info)
         .init()
-        .expect("A logger was already initialized");
+        .map_err(io::Error::other)?;
 
     let mut app = App::new();
     loop {

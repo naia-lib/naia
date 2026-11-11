@@ -2,7 +2,7 @@ use bevy_ecs::{
     message::Messages,
     system::{Commands, Query, ResMut},
 };
-use bevy_log::info;
+use bevy_log::{info, warn};
 
 use naia_bevy_server::{
     events::{
@@ -86,12 +86,12 @@ pub fn connect_events(
         let mut assignment_message = EntityAssignment::new(true);
         assignment_message.entity.set(&server, &entity);
 
-        server
-            .send_message::<EntityAssignmentChannel, EntityAssignment>(
-                &user_key,
-                &assignment_message,
-            )
-            .unwrap();
+        if let Err(err) = server.send_message::<EntityAssignmentChannel, EntityAssignment>(
+            &user_key,
+            &assignment_message,
+        ) {
+            warn!("could not send the entity assignment to {user_key:?}: {err}");
+        }
     }
 }
 

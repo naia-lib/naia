@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use macroquad::prelude::{
-    clear_background, draw_circle, draw_rectangle, info, is_key_down, KeyCode, BLACK, BLUE, GREEN,
-    RED, WHITE, YELLOW,
+    clear_background, draw_circle, draw_rectangle, info, is_key_down, warn, KeyCode, BLACK, BLUE,
+    GREEN, RED, WHITE, YELLOW,
 };
 
 use naia_client::{
@@ -153,7 +153,10 @@ impl App {
         {
             let assign = entity_assignment.assign;
 
-            let entity = entity_assignment.entity.get(&self.client).unwrap();
+            let Some(entity) = entity_assignment.entity.get(&self.client) else {
+                warn!("entity assignment names an entity this client does not have");
+                continue;
+            };
             if assign {
                 info!("gave ownership of entity");
 
@@ -294,6 +297,12 @@ impl App {
         if !self.client.connection_status().is_connected() {
             return;
         }
+        let (Some(server_interp), Some(client_interp)) = (
+            self.client.server_interpolation(),
+            self.client.client_interpolation(),
+        ) else {
+            return;
+        };
 
         // draw unowned squares
         for entity in &self.server_entities {
@@ -326,8 +335,7 @@ impl App {
                     }
                 }
 
-                let interp_amount = self.client.server_interpolation().unwrap();
-                interp.interpolate(interp_amount);
+                interp.interpolate(server_interp);
 
                 match shape_value {
                     ShapeValue::Square => {
@@ -361,8 +369,7 @@ impl App {
                     }
                 }
 
-                let interp_amount = self.client.client_interpolation().unwrap();
-                interp.interpolate(interp_amount);
+                interp.interpolate(client_interp);
 
                 draw_rectangle(
                     interp.interp_x,
