@@ -39,11 +39,24 @@
 //! [`SnapshotSender::pair`] — both halves are cheap clones of an
 //! internal `Arc<Mutex<Option<SnapshotWorld<E>>>>`.
 
-use std::{hash::Hash, sync::Arc};
+use std::{
+    hash::Hash,
+    sync::{Arc, OnceLock},
+};
 
 use parking_lot::Mutex;
 
 use naia_shared::SnapshotWorld;
+
+use super::runtime::WorkerWake;
+
+/// What both halves share: the latest-wins slot and, once the pipeline
+/// runtime is armed, the send worker's idle wake (nydus-y2e) so a publish
+/// wakes the worker instead of a 100µs poll finding the job.
+struct Shared<E: Copy + Eq + Hash + Send + Sync + 'static> {
+    slot: Mutex<Option<SnapshotWorld<E>>>,
+    wake: OnceLock<Arc<WorkerWake>>,
+}
 
 /// Sim-side outbound snapshot sender. Cloneable (Arc-internal).
 ///
@@ -53,13 +66,13 @@ use naia_shared::SnapshotWorld;
 /// The matching [`SnapshotReceiver`] lives wherever the Send-side
 /// `send_all_packets` runs (typically a Send `SubApp`).
 pub struct SnapshotSender<E: Copy + Eq + Hash + Send + Sync + 'static> {
-    slot: Arc<Mutex<Option<SnapshotWorld<E>>>>,
+    shared: Arc<Shared<E>>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync + 'static> Clone for SnapshotSender<E> {
     fn clone(&self) -> Self {
         Self {
-            slot: Arc::clone(&self.slot),
+            shared: Arc::clone(&self.shared),
         }
     }
 }
@@ -68,12 +81,15 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SnapshotSender<E> {
     /// Construct a matched sender/receiver pair.
     #[must_use]
     pub fn pair() -> (Self, SnapshotReceiver<E>) {
-        let slot = Arc::new(Mutex::new(None));
+        let shared = Arc::new(Shared {
+            slot: Mutex::new(None),
+            wake: OnceLock::new(),
+        });
         (
             Self {
-                slot: Arc::clone(&slot),
+                shared: Arc::clone(&shared),
             },
-            SnapshotReceiver { slot },
+            SnapshotReceiver { shared },
         )
     }
 
@@ -82,28 +98,33 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SnapshotSender<E> {
     /// Latest-wins: if the receiver hasn't drained yet, this overwrites
     /// the pending snapshot. The previous snapshot drops.
     pub fn send(&self, snapshot: SnapshotWorld<E>) {
-        let mut guard = self.slot.lock();
-        *guard = Some(snapshot);
+        *self.shared.slot.lock() = Some(snapshot);
+        // Wake the idle send worker (nydus-y2e). The slot write above happens
+        // before `notify` takes the wake mutex, so a worker that found the slot
+        // empty under that mutex is inside `wait()` and is woken.
+        if let Some(wake) = self.shared.wake.get() {
+            wake.notify();
+        }
     }
 
     /// Returns `true` if a snapshot has been published and not yet
     /// drained. Useful for telemetry; not load-bearing for correctness.
     #[must_use]
     pub fn has_pending(&self) -> bool {
-        self.slot.lock().is_some()
+        self.shared.slot.lock().is_some()
     }
 }
 
 /// Send-side consumer half of a [`SnapshotSender`]. Cloneable
 /// (Arc-internal).
 pub struct SnapshotReceiver<E: Copy + Eq + Hash + Send + Sync + 'static> {
-    slot: Arc<Mutex<Option<SnapshotWorld<E>>>>,
+    shared: Arc<Shared<E>>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync + 'static> Clone for SnapshotReceiver<E> {
     fn clone(&self) -> Self {
         Self {
-            slot: Arc::clone(&self.slot),
+            shared: Arc::clone(&self.shared),
         }
     }
 }
@@ -114,7 +135,15 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SnapshotReceiver<E> {
     /// drain.
     #[must_use]
     pub fn take_latest(&self) -> Option<SnapshotWorld<E>> {
-        self.slot.lock().take()
+        self.shared.slot.lock().take()
+    }
+
+    /// Share the send worker's idle wake with the publisher, so
+    /// [`SnapshotSender::send`] wakes the worker. Set once by
+    /// [`crate::pipeline_actors::PipelineRuntime::new_armed`]; a later call is a
+    /// no-op.
+    pub(crate) fn attach_wake(&self, wake: Arc<WorkerWake>) {
+        let _ = self.shared.wake.set(wake);
     }
 
     /// `true` if a snapshot has been published and not yet drained. Used by
@@ -122,6 +151,6 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SnapshotReceiver<E> {
     /// empty (not load-bearing for the normal lagged path).
     #[must_use]
     pub fn has_pending(&self) -> bool {
-        self.slot.lock().is_some()
+        self.shared.slot.lock().is_some()
     }
 }
