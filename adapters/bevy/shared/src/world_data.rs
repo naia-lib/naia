@@ -93,6 +93,10 @@ impl WorldData {
     /// [`HostSyncDespawnTrailer`], where `on_despawn` is registered by the
     /// plugins) are chained so the trackers execute as one deterministic
     /// sequence.
+    #[expect(
+        clippy::expect_used,
+        reason = "registration_order and kind_to_accessor_map are filled together"
+    )]
     pub fn add_systems(&self, app: &mut App) {
         for (ordinal, kind) in self.registration_order.iter().enumerate() {
             let accessor = self
@@ -109,6 +113,10 @@ impl WorldData {
     /// `schedule` instead of `Update`. Used by `Plugin::sim_integration`
     /// when the host bevy app's gameplay schedule is e.g. `SimMain`
     /// rather than the canonical `Update`.
+    #[expect(
+        clippy::expect_used,
+        reason = "registration_order and kind_to_accessor_map are filled together"
+    )]
     pub fn add_systems_to_schedule(&self, app: &mut App, schedule: InternedScheduleLabel) {
         for (ordinal, kind) in self.registration_order.iter().enumerate() {
             let accessor = self
@@ -189,6 +197,10 @@ impl WorldData {
 
     /// D.3 sugar: lookup `ComponentAccess` by kind and invoke
     /// `insert_component` in one call. Panics if the kind is not registered.
+    #[expect(
+        clippy::expect_used,
+        reason = "an unregistered ComponentKind is API misuse; the docs promise this panic"
+    )]
     pub fn insert_component_dyn(
         &self,
         world: &mut bevy_ecs::world::World,

@@ -265,6 +265,10 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
         }
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "the accessor for R is handed only R components"
+    )]
     fn insert_component(
         &self,
         world: &mut World,
@@ -272,7 +276,9 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
         boxed_component: Box<dyn Replicate>,
     ) {
         let boxed_any = boxed_component.to_boxed_any();
-        let inner: R = *(boxed_any.downcast::<R>().unwrap());
+        let inner: R = *(boxed_any
+            .downcast::<R>()
+            .expect("the accessor for R is handed only R components"));
         world.entity_mut(*world_entity).insert(inner);
     }
 
@@ -283,6 +289,10 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
         Box::new(new_me)
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "publish runs only on entities the host has mapped"
+    )]
     fn component_publish(
         &self,
         component_kinds: &ComponentKinds,
@@ -294,7 +304,9 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
         if let Some(mut component_mut) = world.get_mut::<R>(*world_entity) {
             let component_kind = component_mut.kind();
             let diff_mask_size = component_mut.diff_mask_size();
-            let global_entity = converter.entity_to_global_entity(world_entity).unwrap();
+            let global_entity = converter
+                .entity_to_global_entity(world_entity)
+                .expect("a published entity is mapped to a global entity");
             // let component_name = component_kinds.kind_to_name(&component_kind);
             // info!(
             //     "ComponentAccessor: Publishing Component {:?} for Entity {:?}",
@@ -316,6 +328,10 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
         }
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "delegation is enabled only on entities the host has mapped"
+    )]
     fn component_enable_delegation(
         &self,
         component_kinds: &ComponentKinds,
@@ -325,7 +341,9 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
         world_entity: &Entity,
     ) {
         if let Some(mut component_mut) = world.get_mut::<R>(*world_entity) {
-            let global_entity = converter.entity_to_global_entity(world_entity).unwrap();
+            let global_entity = converter
+                .entity_to_global_entity(world_entity)
+                .expect("a published entity is mapped to a global entity");
             let accessor = global_manager.get_entity_auth_accessor(global_entity);
             if global_manager.entity_needs_mutator_for_delegation(global_entity) {
                 let component_kind = component_mut.kind();
