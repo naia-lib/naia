@@ -28,6 +28,10 @@ impl<T: Eq + PartialEq> TimeQueue<T> {
     /// # Panics
     ///
     /// Panics once the insertion sequence exhausts `u64` (after 2^64 inserts).
+    #[expect(
+        clippy::expect_used,
+        reason = "2^64 inserts cannot happen; a wrapped sequence would silently reorder equal-time items"
+    )]
     pub fn add_item(&mut self, instant: Instant, item: T) {
         let sequence = self.next_sequence;
         self.next_sequence = self

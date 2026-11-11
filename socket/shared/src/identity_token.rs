@@ -22,20 +22,13 @@ pub struct IdentityToken(Box<[u8]>);
 
 impl IdentityToken {
     /// Mints a new random token.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a `gen_range_u32(0, 256)` draw does not fit in a `u8`
-    /// (unreachable: the range always fits).
     #[must_use]
     pub fn generate() -> Self {
         let mut bytes = Vec::with_capacity(TOKEN_LEN);
         for _ in 0..TOKEN_LEN {
-            // `gen_range_u32(0, 256)` yields `[0, 256)`, which always fits a `u8`.
-            bytes.push(
-                u8::try_from(Random::gen_range_u32(0, 256))
-                    .expect("gen_range_u32(0, 256) fits in a u8"),
-            );
+            // `gen_range_u32(0, 256)` yields `[0, 256)`, so its low byte is the whole draw.
+            let [byte, ..] = Random::gen_range_u32(0, 256).to_le_bytes();
+            bytes.push(byte);
         }
         Self(bytes.into_boxed_slice())
     }
