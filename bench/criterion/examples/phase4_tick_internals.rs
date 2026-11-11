@@ -64,7 +64,7 @@ fn run(u: usize, n: usize, immutable: bool) {
 
     let median = |v: &mut Vec<f64>| -> f64 {
         v.drain(..WARMUP);
-        v.sort_by(|x, y| x.partial_cmp(y).unwrap());
+        v.sort_by(f64::total_cmp);
         v[v.len() / 2]
     };
     let hub_m = median(&mut hub);

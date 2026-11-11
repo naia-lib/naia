@@ -8,6 +8,10 @@ fn bit_length_of(entity: OwnedLocalEntity) -> u32 {
     counter.bits_needed()
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn round_trip(entity: OwnedLocalEntity) -> OwnedLocalEntity {
     let mut writer = BitWriter::with_max_capacity();
     entity.ser(&mut writer);

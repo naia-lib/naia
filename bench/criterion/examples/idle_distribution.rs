@@ -43,6 +43,10 @@ struct CellReport {
     spikes: Vec<(usize, u64)>,
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "SAMPLES is a nonzero const, so the sample vector is never empty"
+)]
 fn measure_cell(u: usize, n: usize, immutable: bool) -> CellReport {
     let mut builder = BenchWorldBuilder::new().users(u).entities(n);
     if immutable {
