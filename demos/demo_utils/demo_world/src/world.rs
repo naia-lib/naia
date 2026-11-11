@@ -413,7 +413,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     }
 
     fn component_disable_delegation(&mut self, _entity: &Entity, _component_kind: ComponentKind) {
-        // No-op for demo world - delegation is handled at the framework level
+        panic!("component_disable_delegation is not implemented for the demo world")
     }
 }
 
