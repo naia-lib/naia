@@ -269,6 +269,10 @@ impl WireSchemaContext {
     /// Non-generic traversal core for [`exit`](Self::exit). Never inlined,
     /// for the same reason as [`enter_inner`](Self::enter_inner).
     #[inline(never)]
+    #[expect(
+        clippy::expect_used,
+        reason = "enter and exit pair in derive-generated code; an underflow is a derive bug and must stop loudly"
+    )]
     fn exit_inner(stack: &mut Vec<TypeId>) -> TypeId {
         stack
             .pop()
