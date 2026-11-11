@@ -9,7 +9,7 @@ use async_dup::Arc;
 use futures_core::Stream;
 use futures_util::{pin_mut, select, FutureExt};
 use http::{header, HeaderValue, Response};
-use log::{info, warn};
+use log::{error, info, warn};
 use smol::{
     io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader, Lines},
     lock::Mutex,
@@ -113,16 +113,22 @@ async fn listen(
     };
     let socket_address = server_addrs.session_listen_addr;
 
-    let listener = Async::<TcpListener>::bind(socket_address)
-        .expect("unable to bind a TCP Listener to the supplied socket address");
-    info!(
-        "Session initiator available at POST http://{}/{}",
-        listener
-            .get_ref()
-            .local_addr()
-            .expect("Listener does not have a local address"),
-        config.rtc_endpoint_path
-    );
+    // This task is detached, so a bind failure has no caller to return to:
+    // log it and end the task (the webrtc task still owns its own port).
+    let listener = match Async::<TcpListener>::bind(socket_address) {
+        Ok(listener) => listener,
+        Err(err) => {
+            error!("Unable to bind the session TCP listener to {socket_address}: {err}");
+            return;
+        }
+    };
+    match listener.get_ref().local_addr() {
+        Ok(local_addr) => info!(
+            "Session initiator available at POST http://{local_addr}/{}",
+            config.rtc_endpoint_path
+        ),
+        Err(err) => warn!("Session listener has no local address: {err}"),
+    }
 
     let mut auth_mux_sender_opt = to_session_all_auth_receiver.map(setup_auth_mux);
 
@@ -135,10 +141,17 @@ async fn listen(
         // Accept the next connection.
         let accept = listener.accept().fuse();
         pin_mut!(accept);
-        let (response_stream, remote_addr) = select! {
+        let accepted = select! {
             () = shutdown => return,
-            result = accept => {
-                result.expect("was not able to accept the incoming stream from the listener")
+            result = accept => result,
+        };
+        // One failed accept (a peer reset mid-handshake, a full fd table) is
+        // that connection's problem, not the listener's: log it and keep serving.
+        let (response_stream, remote_addr) = match accepted {
+            Ok(accepted) => accepted,
+            Err(err) => {
+                warn!("Unable to accept a session connection: {err}");
+                continue;
             }
         };
 
@@ -151,10 +164,11 @@ async fn listen(
             } else {
                 (None, None)
             };
-        if let Some(to_session_single_auth_sender) = to_session_single_auth_sender {
-            let result = auth_mux_sender_opt
-                .as_mut()
-                .unwrap()
+        // Both halves exist exactly when the socket listens with auth.
+        if let (Some(to_session_single_auth_sender), Some(auth_mux_sender)) =
+            (to_session_single_auth_sender, auth_mux_sender_opt.as_mut())
+        {
+            let result = auth_mux_sender
                 .send((remote_addr, to_session_single_auth_sender))
                 .await;
             if result.is_err() {
@@ -219,9 +233,8 @@ async fn serve_auth_mux_in(
         // info!("received auth answer from app, for addr: {}, answer: {:?}", addr, answer);
 
         let mut map = map.lock().await;
-        if let Some((Some(_), _)) = map.get(&addr) {
+        if let Some((Some(sender), _)) = map.remove(&addr) {
             // info!("auth answer sender exists for: {}", addr);
-            let sender = map.remove(&addr).unwrap().0.unwrap();
             // info!("sending auth answer to session: {}", addr);
             if sender.send(answer).is_err() {
                 warn!("Unable to send auth to session");
@@ -249,11 +262,8 @@ async fn serve_auth_mux_out(
         // info!("received auth answer sender, for addr: {}", addr);
 
         let mut map = map.lock().await;
-        if let Some((_, Some(_))) = map.get(&addr) {
+        if let Some((_, Some(answer))) = map.remove(&addr) {
             // info!("auth answer exists for: {}", addr);
-            let (_, Some(answer)) = map.remove(&addr).unwrap() else {
-                panic!("shouldn't be possible");
-            };
             // info!("sending auth answer to session: {}", addr);
             if sender.send(answer).is_err() {
                 warn!("Unable to send auth to session");
@@ -529,10 +539,11 @@ async fn serve(
 
         // handle auth
         if success && !is_options {
-            if let Some(from_client_auth_sender) = from_client_auth_sender {
+            // Both halves exist exactly when the socket listens with auth.
+            if let (Some(from_client_auth_sender), Some(to_session_auth_receiver)) =
+                (from_client_auth_sender, to_session_single_auth_receiver)
+            {
                 success = false;
-
-                let to_session_auth_receiver = to_session_single_auth_receiver.unwrap();
 
                 // check auth
                 if let Some(auth_string) = auth_string {
@@ -609,14 +620,17 @@ async fn serve(
                         }}",
                         );
 
-                        let response = Response::builder()
+                        let Ok(response) = Response::builder()
                             .header(header::CONTENT_TYPE, "application/json")
                             .header(
                                 header::ACCESS_CONTROL_ALLOW_ORIGIN,
                                 HeaderValue::from_static("*"),
                             )
                             .body(body)
-                            .expect("could not combine sdp response with id token");
+                        else {
+                            warn!("Unable to build the session response for {remote_addr}");
+                            return;
+                        };
 
                         let mut out = response_header_to_vec(&response);
                         out.extend_from_slice(response.body().as_bytes());
@@ -640,11 +654,14 @@ async fn serve(
                     Some(bytes) => base64::encode(bytes),
                     None => String::new(),
                 };
-                let response = Response::builder()
+                let Ok(response) = Response::builder()
                     .status(401)
                     .header(header::CONTENT_LENGTH, reject_body.len())
                     .body(reject_body)
-                    .expect("could not build 401 response");
+                else {
+                    warn!("Unable to build the 401 response for {remote_addr}");
+                    return;
+                };
 
                 let mut out = response_header_to_vec(&response);
                 out.extend_from_slice(response.body().as_bytes());
@@ -673,7 +690,7 @@ async fn serve(
     // drift); malformed framing still gets the generic 404.
     if !success {
         if fingerprint_mismatch {
-            let mismatch = Response::builder()
+            let Ok(mismatch) = Response::builder()
                 .status(PROTOCOL_MISMATCH_STATUS)
                 .header(header::CONTENT_LENGTH, 0)
                 .header(
@@ -681,7 +698,10 @@ async fn serve(
                     HeaderValue::from_static("*"),
                 )
                 .body(Vec::<u8>::new())
-                .expect("could not build protocol-mismatch response");
+            else {
+                warn!("Unable to build the mismatch response for {remote_addr}");
+                return;
+            };
             let out = response_header_to_vec(&mismatch);
             if stream.write_all(&out).await.is_err() {
                 warn!("Error writing mismatch response to {remote_addr}");
@@ -752,21 +772,10 @@ impl<R: AsyncBufRead + Unpin> Stream for RequestBuffer<'_, R> {
 }
 
 fn response_header_to_vec<T>(r: &Response<T>) -> Vec<u8> {
-    let v = Vec::with_capacity(120);
-    let mut c = std::io::Cursor::new(v);
-    write_response_header(r, &mut c).expect("unable to write response header to stream");
-    c.into_inner()
-}
-
-fn write_response_header<T>(
-    r: &Response<T>,
-    mut io: impl std::io::Write,
-) -> std::io::Result<usize> {
-    let mut len = 0;
+    let mut out = Vec::with_capacity(120);
     macro_rules! w {
         ($x:expr) => {
-            io.write_all($x)?;
-            len += $x.len();
+            out.extend_from_slice($x);
         };
     }
 
@@ -789,7 +798,7 @@ fn write_response_header<T>(
     }
 
     w!(b"\r\n");
-    Ok(len)
+    out
 }
 
 #[cfg(test)]

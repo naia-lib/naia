@@ -62,12 +62,8 @@ impl ServerAddrs {
 impl Default for ServerAddrs {
     fn default() -> Self {
         Self::new(
-            "127.0.0.1:14191"
-                .parse()
-                .expect("could not parse HTTP address/port"),
-            "127.0.0.1:14192"
-                .parse()
-                .expect("could not parse WebRTC data address/port"),
+            SocketAddr::from(([127, 0, 0, 1], 14191)),
+            SocketAddr::from(([127, 0, 0, 1], 14192)),
             "http://127.0.0.1:14192",
         )
     }

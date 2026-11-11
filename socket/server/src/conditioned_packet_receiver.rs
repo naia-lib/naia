@@ -48,13 +48,15 @@ impl ConditionedPacketReceiver {
     ///
     /// # Panics
     ///
-    /// Panics if the time queue reports an item but yields none, or the
-    /// stored payload slot is empty after storing a payload (both
-    /// unreachable: the slot is filled immediately above).
+    /// Panics once the poll counter exhausts `u64`.
     // `Err` is currently unreachable, but callers branch on it so a
     // persistently-failing channel cannot trap a drain loop; keep the
     // signature fallible.
     #[allow(clippy::unnecessary_wraps)]
+    #[expect(
+        clippy::expect_used,
+        reason = "a u64 poll counter cannot exhaust; a wrapped counter would misorder delayed packets"
+    )]
     pub fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, NaiaServerSocketError> {
         self.poll = self
             .poll
@@ -80,10 +82,8 @@ impl ConditionedPacketReceiver {
                     }
                 }
             }
-            if self.poll_queue.has_due(self.poll) {
-                let (address, payload) = self.poll_queue.pop_due(self.poll).unwrap();
-                self.last_payload = Some(payload);
-                return Ok(Some((address, self.last_payload.as_ref().unwrap())));
+            if let Some((address, payload)) = self.poll_queue.pop_due(self.poll) {
+                return Ok(Some((address, self.last_payload.insert(payload))));
             }
             return Ok(None);
         }
@@ -103,12 +103,9 @@ impl ConditionedPacketReceiver {
         }
 
         let now = Instant::now();
-        if self.time_queue.has_item(&now) {
-            let (address, payload) = self.time_queue.pop_item(&now).unwrap();
-            self.last_payload = Some(payload);
-            Ok(Some((address, self.last_payload.as_ref().unwrap())))
-        } else {
-            Ok(None)
+        match self.time_queue.pop_item(&now) {
+            Some((address, payload)) => Ok(Some((address, self.last_payload.insert(payload)))),
+            None => Ok(None),
         }
     }
 }

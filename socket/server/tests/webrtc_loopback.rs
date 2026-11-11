@@ -70,6 +70,10 @@ fn session_url(session_port: u16) -> String {
 /// so the sensor pins srflx/relay ABSENCE over a non-vacuous SDP capture.
 /// Exits when `stop` is set; the
 /// accept loop is nonblocking so the thread always joins on shutdown.
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn start_session_proxy(
     real_session_port: u16,
     proxy_port: u16,
@@ -140,6 +144,10 @@ fn read_http_message(stream: &mut TcpStream) -> Option<(Vec<u8>, Vec<u8>)> {
     Some((head, body))
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn forward_one(mut client: TcpStream, real_session_port: u16, captured: &Arc<Mutex<Vec<Vec<u8>>>>) {
     let (head, body) = match read_http_message(&mut client) {
         Some(m) => m,
@@ -167,6 +175,10 @@ fn forward_one(mut client: TcpStream, real_session_port: u16, captured: &Arc<Mut
 }
 
 /// Accept every incoming auth request with a fresh identity token.
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn accept_next(auth_receiver: &mut AuthReceiver, auth_sender: &AuthSender, deadline: Instant) {
     while Instant::now() < deadline {
         match auth_receiver.receive() {
