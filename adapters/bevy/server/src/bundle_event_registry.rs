@@ -36,11 +36,10 @@ impl BundleEventRegistry {
 
         // add components to map
         for kind in components.iter() {
-            if !self.components_to_bundle_ids.contains_key(kind) {
-                self.components_to_bundle_ids.insert(*kind, HashSet::new());
-            }
-            let bundle_ids = self.components_to_bundle_ids.get_mut(kind).unwrap();
-            bundle_ids.insert(bundle_id);
+            self.components_to_bundle_ids
+                .entry(*kind)
+                .or_default()
+                .insert(bundle_id);
         }
 
         // add bundle to map
@@ -58,6 +57,10 @@ impl BundleEventRegistry {
         self.bundle_events_sent.clear();
     }
 
+    #[expect(
+        clippy::unwrap_used,
+        reason = "every bundle id in components_to_bundle_ids is registered in bundles"
+    )]
     pub(crate) fn process_inserts(
         &mut self,
         world: &mut World,
@@ -93,12 +96,10 @@ impl BundleEventRegistry {
                     bundle_info.handler.send_event(world, *user_key, *entity);
 
                     // mark as sent
-                    if !self.bundle_events_sent.contains_key(bundle_id) {
-                        self.bundle_events_sent.insert(*bundle_id, HashSet::new());
-                    }
-
-                    let bundle_events_sent = self.bundle_events_sent.get_mut(bundle_id).unwrap();
-                    bundle_events_sent.insert(*entity);
+                    self.bundle_events_sent
+                        .entry(*bundle_id)
+                        .or_default()
+                        .insert(*entity);
                 }
             }
         }

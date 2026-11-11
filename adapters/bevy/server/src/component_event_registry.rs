@@ -42,9 +42,7 @@ impl ComponentEventRegistry {
     /// Bevy component and bundle events into `world`.
     pub fn receive_events(&mut self, world: &mut World, events: &mut naia_server::Events<Entity>) {
         // Insert Component Event
-        if events.has_inserts() {
-            let inserts = events.take_inserts().unwrap();
-
+        if let Some(inserts) = events.take_inserts() {
             self.bundle_registry.pre_process();
 
             for (kind, entities) in inserts {
@@ -62,8 +60,7 @@ impl ComponentEventRegistry {
         }
 
         // Update Component Event
-        if events.has_updates() {
-            let updates = events.take_updates().unwrap();
+        if let Some(updates) = events.take_updates() {
             for (kind, entities) in updates {
                 if let Some(handler) = self.component_handlers.get_mut(&kind) {
                     handler.handle_updates(world, entities);
@@ -74,8 +71,7 @@ impl ComponentEventRegistry {
         }
 
         // Remove Component Event
-        if events.has_removes() {
-            let removes = events.take_removes().unwrap();
+        if let Some(removes) = events.take_removes() {
             for (kind, entities) in removes {
                 if let Some(handler) = self.component_handlers.get_mut(&kind) {
                     handler.handle_removes(world, entities);
@@ -151,6 +147,10 @@ impl<R: Replicate> ComponentEventHandler for ComponentEventHandlerImpl<R> {
         }
     }
 
+    #[expect(
+        clippy::unwrap_used,
+        reason = "the handler for R is handed only R components"
+    )]
     fn handle_removes(
         &mut self,
         world: &mut World,

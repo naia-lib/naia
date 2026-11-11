@@ -95,6 +95,10 @@ struct BevyHarness {
 }
 
 impl BevyHarness {
+    #[expect(
+        clippy::expect_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn new() -> Self {
         let server_addr = FAKE_SERVER_ADDR.parse().expect("addr");
         let hub = LocalTransportHub::new(server_addr);
@@ -224,6 +228,10 @@ impl BevyHarness {
         self.server_app.update();
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn server_spawn_position(&mut self) -> Entity {
         let out: Arc<Mutex<Option<Entity>>> = Arc::new(Mutex::new(None));
         let out_clone = out.clone();

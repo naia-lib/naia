@@ -231,6 +231,10 @@ pub trait ServerCommandsExt {
 }
 
 impl<'w, 's> ServerCommandsExt for Commands<'w, 's> {
+    #[expect(
+        clippy::expect_used,
+        reason = "the WorldOpCommand closure is queued once and runs once"
+    )]
     fn replicate_resource<R: ReplicatedResource>(&mut self, value: R) {
         let value_cell = parking_lot::Mutex::new(Some(value));
         self.queue(WorldOpCommand::new(move |world| {
@@ -239,6 +243,10 @@ impl<'w, 's> ServerCommandsExt for Commands<'w, 's> {
         }));
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "the WorldOpCommand closure is queued once and runs once"
+    )]
     fn replicate_resource_static<R: ReplicatedResource>(&mut self, value: R) {
         let value_cell = parking_lot::Mutex::new(Some(value));
         self.queue(WorldOpCommand::new(move |world| {

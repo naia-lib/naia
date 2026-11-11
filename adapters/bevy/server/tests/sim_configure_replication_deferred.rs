@@ -92,6 +92,10 @@ type Observables = (
     bool,
 );
 
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn read_observables(
     sim_handle: CoordHandle<Entity>,
     recv: RecvHandle<Entity>,

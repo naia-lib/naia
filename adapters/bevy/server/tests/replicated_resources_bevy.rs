@@ -140,6 +140,10 @@ struct BevyHarness {
 }
 
 impl BevyHarness {
+    #[expect(
+        clippy::expect_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn new() -> Self {
         let server_addr = FAKE_SERVER_ADDR.parse().expect("addr");
         let hub = LocalTransportHub::new(server_addr);
@@ -236,6 +240,10 @@ impl BevyHarness {
         }
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn server_inserts_score(&mut self, value: TestScore) {
         // Build a one-shot system that calls `commands.replicate_resource`,
         // run it explicitly, then advance the schedule once so the
@@ -256,6 +264,10 @@ impl BevyHarness {
         self.server_app.update();
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn server_removes_score(&mut self) {
         let id = self
             .server_app

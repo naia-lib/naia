@@ -49,6 +49,10 @@ fn protocol() -> naia_shared::Protocol {
     bevy_proto.into()
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn handles_listening(addr: &str) -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
     use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
 

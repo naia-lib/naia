@@ -208,6 +208,10 @@ impl BevyHarness {
         Self::new_inner(server_addr_str, false)
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn new_inner(server_addr_str: &str, give_mode: bool) -> Self {
         let server_addr = server_addr_str.parse().expect("addr");
         let hub = LocalTransportHub::new(server_addr);
