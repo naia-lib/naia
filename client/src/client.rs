@@ -3215,7 +3215,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .base
             .send
             .world_manager
-            .debug_remote_channel_diagnostic(remote_entity)
+            .debug_remote_channel_diagnostic(*remote_entity)
     }
 
     #[cfg(feature = "e2e_debug")]
@@ -3230,7 +3230,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .base
             .send
             .world_manager
-            .debug_remote_channel_snapshot(remote_entity)
+            .debug_remote_channel_snapshot(*remote_entity)
     }
 
     fn process_entity_events<W: WorldMutType<E>>(
