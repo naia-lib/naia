@@ -149,7 +149,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
 
         // handle connects
         for user_key in main_events.read::<ConnectEvent>() {
+            // A user that connected and was removed in the same receive has
+            // no address left to hand the world; it never becomes a world user.
             let Some(user_address) = self.main.user_address(user_key) else {
+                log::warn!("connect event for {user_key:?}, which no longer has an address");
                 continue;
             };
             self.world.receive_user(user_key, user_address);
@@ -207,7 +210,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         let mut main_events = self.main.receive();
 
         for user_key in main_events.read::<ConnectEvent>() {
+            // A user that connected and was removed in the same receive has
+            // no address left to hand the world; it never becomes a world user.
             let Some(user_address) = self.main.user_address(user_key) else {
+                log::warn!("connect event for {user_key:?}, which no longer has an address");
                 continue;
             };
             self.world.receive_user(user_key, user_address);
