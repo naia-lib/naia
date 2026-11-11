@@ -164,6 +164,10 @@ impl<T> From<&mut Events<Entity>> for MessageEvents<T> {
 impl<T> MessageEvents<T> {
     /// Returns every message of type `M` received on channel `C` this
     /// frame, downcast from their boxed form. Empty if none arrived.
+    #[expect(
+        clippy::unwrap_used,
+        reason = "messages are stored under their own MessageKind, so the downcast to M holds"
+    )]
     pub fn read<C: Channel, M: Message>(&self) -> Vec<M> {
         let mut output = Vec::new();
 
@@ -208,6 +212,10 @@ impl<T> RequestEvents<T> {
     /// Returns every request of type `Q` received on channel `C` this
     /// frame, each paired with the key to send its response. Empty if none
     /// arrived.
+    #[expect(
+        clippy::unwrap_used,
+        reason = "requests are stored under their own MessageKind, so the downcast to Q holds"
+    )]
     pub fn read<C: Channel, Q: Request>(&self) -> Vec<(ResponseSendKey<Q::Response>, Q)> {
         let mut output = Vec::new();
 
