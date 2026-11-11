@@ -3203,14 +3203,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.io.server_addr().expect("connection not established!")
     }
 
+    /// e2e_debug: lifecycle state and auth-receiver diagnostic of one remote entity channel.
     #[cfg(feature = "e2e_debug")]
     pub fn debug_remote_channel_diagnostic(
         &self,
         remote_entity: &naia_shared::RemoteEntity,
     ) -> Option<naia_shared::DebugChannelDiagnostic> {
-        let Some(connection) = self.server_connection.as_ref() else {
-            return None;
-        };
+        let connection = self.server_connection.as_ref()?;
         connection
             .base
             .send
@@ -3218,14 +3217,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .debug_remote_channel_diagnostic(*remote_entity)
     }
 
+    /// e2e_debug: buffered-message snapshot of one remote entity channel.
     #[cfg(feature = "e2e_debug")]
     pub fn debug_remote_channel_snapshot(
         &self,
         remote_entity: &naia_shared::RemoteEntity,
     ) -> Option<naia_shared::DebugChannelSnapshot> {
-        let Some(connection) = self.server_connection.as_ref() else {
-            return None;
-        };
+        let connection = self.server_connection.as_ref()?;
         connection
             .base
             .send
