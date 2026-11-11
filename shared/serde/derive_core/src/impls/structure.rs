@@ -195,8 +195,13 @@ pub fn derive_serde_struct(
     let mut de_body = quote! {};
     let mut bit_length_body = quote! {};
 
-    for field in &struct_.fields {
-        let field_name = field.ident.as_ref().expect("expected field to have a name");
+    // Only named structs reach here (see `derive_serde_common`), and every
+    // named field carries an ident, so `filter_map` drops nothing.
+    for field_name in struct_
+        .fields
+        .iter()
+        .filter_map(|field| field.ident.as_ref())
+    {
         ser_body = quote! {
             #ser_body
             self.#field_name.ser(writer);

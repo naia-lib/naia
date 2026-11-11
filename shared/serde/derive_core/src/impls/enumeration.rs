@@ -179,26 +179,18 @@ fn get_ser_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
                 }
             }
             Fields::Named(fields) => {
+                // Named fields always carry an ident, so `filter_map` drops nothing.
                 let names: Vec<&Ident> = fields
                     .named
                     .iter()
-                    .map(|field| {
-                        field
-                            .ident
-                            .as_ref()
-                            .expect("expected field to have a name.")
-                    })
+                    .filter_map(|field| field.ident.as_ref())
                     .collect();
                 let left = quote! { Self::#variant_name{ #(#names),* } };
                 let mut right = quote! {
                     let index = UnsignedInteger::<#bits_needed>::new(#variant_index);
                     index.ser(writer);
                 };
-                for field in fields.named.iter() {
-                    let field_name = field
-                        .ident
-                        .as_ref()
-                        .expect("expected field to have a name.");
+                for field_name in &names {
                     right = quote! {
                         #right
                         #field_name.ser(writer);
@@ -261,11 +253,8 @@ fn get_de_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
             }
             Fields::Named(fields) => {
                 let mut base = quote! {};
-                for field in fields.named.iter() {
-                    let field_name = field
-                        .ident
-                        .as_ref()
-                        .expect("expected field to have a name.");
+                // Named fields always carry an ident, so `filter_map` drops nothing.
+                for field_name in fields.named.iter().filter_map(|field| field.ident.as_ref()) {
                     base = quote! {
                         #base
                         #field_name: Serde::de(reader)?,
@@ -320,25 +309,17 @@ fn get_bit_length_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
                 }
             }
             Fields::Named(fields) => {
+                // Named fields always carry an ident, so `filter_map` drops nothing.
                 let names: Vec<&Ident> = fields
                     .named
                     .iter()
-                    .map(|field| {
-                        field
-                            .ident
-                            .as_ref()
-                            .expect("expected field to have a name.")
-                    })
+                    .filter_map(|field| field.ident.as_ref())
                     .collect();
                 let left = quote! { Self::#variant_name{ #(#names),* } };
                 let mut right = quote! {
                     output += <UnsignedInteger::<#bits_needed> as ConstBitLength>::const_bit_length();
                 };
-                for field in fields.named.iter() {
-                    let field_name = field
-                        .ident
-                        .as_ref()
-                        .expect("expected field to have a name.");
+                for field_name in &names {
                     right = quote! {
                         #right
                         output += #field_name.bit_length();
