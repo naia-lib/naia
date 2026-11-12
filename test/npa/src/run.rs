@@ -60,7 +60,6 @@ struct StepEntry<W> {
 //   - Step<W> = fn pointer → Send + Sync
 //   - String    → Send + Sync
 //   - Regex     → Send + Sync
-#[allow(dead_code)]
 fn _assert_step_entry_sync<W>() {
     fn require_sync<T: Sync>() {}
     require_sync::<StepEntry<W>>();

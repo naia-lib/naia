@@ -42,7 +42,6 @@ fn adapter_manifest() -> PathBuf {
 }
 
 /// Helper: Run a cargo command and capture output
-#[allow(dead_code)]
 fn run_cargo(args: &[&str], cwd: &PathBuf) -> Output {
     Command::new("cargo")
         .args(args)
