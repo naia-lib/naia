@@ -28,7 +28,10 @@ pub struct App {
 }
 
 impl App {
-    #[allow(clippy::should_implement_trait)]
+    #[expect(
+        clippy::should_implement_trait,
+        reason = "this protocol operation has different semantics from the standard trait"
+    )]
     pub fn default() -> Self {
         info!("Basic Naia Client Demo started");
 
