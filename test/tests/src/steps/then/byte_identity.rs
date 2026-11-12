@@ -55,7 +55,9 @@ impl DirectScopeRun {
 
         let mut server = Server::new(mode, &ServerConfig::default(), protocol());
         let server_socket = ServerSocket::new(LocalServerSocket::new(hub.clone()), None);
-        server.listen(server_socket).expect("server listener must bind");
+        server
+            .listen(server_socket)
+            .expect("server listener must bind");
 
         let (client_addr, auth_req_tx, auth_resp_rx, client_data_tx, client_data_rx) =
             hub.register_client();
