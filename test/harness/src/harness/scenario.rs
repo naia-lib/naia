@@ -1337,7 +1337,7 @@ impl Scenario {
     /// Returns the socket along with handles to identity_token, rejection_code, and client_addr
     #[expect(
         clippy::type_complexity,
-        reason = "the channel carries an address, payload and transport error as one typed event"
+        reason = "the socket factory returns the socket and shared authentication observations for the scenario"
     )]
     fn create_client_socket(
         &self,
