@@ -152,7 +152,8 @@ impl DataChannel {
             &ice_server_config,
             &JsValue::from("urls"),
             &JsValue::from(&ice_server_config_urls),
-        );
+        )
+        .expect("fresh ICE server object accepts its urls property");
 
         let ice_server_config_list = Array::new();
         ice_server_config_list.push(&ice_server_config);
