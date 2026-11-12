@@ -1,12 +1,3 @@
-#![allow(
-    unused_imports,
-    unused_variables,
-    unused_must_use,
-    unused_mut,
-    dead_code,
-    for_loops_over_fallibles
-)]
-
 use std::time::Duration;
 
 use naia_client::{ClientConfig, JitterBufferType, Publicity};

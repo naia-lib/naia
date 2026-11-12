@@ -30,8 +30,6 @@
 //! pong-receipt time so the send-half reads from the atomic without
 //! touching `recv_user_connections`.
 
-#![allow(unused_imports)]
-
 use std::time::{Duration, Instant};
 
 use naia_client::{ClientConfig, JitterBufferType};
@@ -52,7 +50,6 @@ use _helpers::client_connect;
 /// `unsafe impl Send` blocks that the previous `Arc<Mutex<InternalWorldServer>>`
 /// design needed. Those substates now carry no unsafe impls of their own
 /// either, so this whole chain is compiler-proven.
-#[allow(dead_code)]
 fn _assert_handles_send_safe() {
     fn assert_send<T: Send>() {}
     // Per `InternalWorldServer<E>` callers in the bevy adapter, `E` is `Entity`,

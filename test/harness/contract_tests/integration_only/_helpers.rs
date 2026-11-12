@@ -1,11 +1,3 @@
-#![allow(
-    unused_imports,
-    unused_variables,
-    unused_must_use,
-    unused_mut,
-    dead_code,
-    for_loops_over_fallibles
-)]
 use naia_client::{ClientConfig, JitterBufferType};
 use naia_server::RoomKey;
 use naia_shared::Protocol;
@@ -25,7 +17,6 @@ use std::time::Duration;
 /// - `jitter_buffer = Bypass` for immediate packet processing
 ///
 /// Use this instead of `ClientConfig::default()` in all tests.
-#[allow(clippy::field_reassign_with_default)]
 pub fn test_client_config() -> ClientConfig {
     let mut config = ClientConfig::default();
     config.send_handshake_interval = Duration::from_millis(0);
@@ -50,7 +41,6 @@ pub fn test_client_config() -> ClientConfig {
 ///     expect_client_connected(ctx, client_key)
 /// });
 /// ```
-#[allow(dead_code)]
 pub fn server_and_client_connected(ctx: &mut ExpectCtx<'_>, client_key: ClientKey) -> Option<()> {
     let connected = ctx.client(client_key, |c| c.connection_status().is_connected());
     let user_exists = ctx.server(|s| s.user_exists(&client_key));
@@ -68,7 +58,6 @@ pub fn server_and_client_connected(ctx: &mut ExpectCtx<'_>, client_key: ClientKe
 ///     expect_client_disconnected(ctx, client_key)
 /// });
 /// ```
-#[allow(dead_code)]
 pub fn server_and_client_disconnected(
     ctx: &mut ExpectCtx<'_>,
     client_key: ClientKey,

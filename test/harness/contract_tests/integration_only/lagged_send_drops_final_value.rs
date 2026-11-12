@@ -35,8 +35,6 @@
 //! at the FREEZE point, so each tick's plan is self-contained and the lagged
 //! transmit reads zero live per-user diff state.
 
-#![allow(unused_imports)]
-
 use std::time::Duration;
 
 use naia_client::{ClientConfig, JitterBufferType};

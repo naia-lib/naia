@@ -1,5 +1,3 @@
-#![allow(unused_imports)]
-
 use naia_client::Publicity;
 use naia_server::{ReplicationConfig, ServerConfig};
 use naia_shared::Protocol;

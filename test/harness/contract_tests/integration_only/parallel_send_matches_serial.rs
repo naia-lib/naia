@@ -18,8 +18,6 @@
 //! thread; `Scenario::tick` additionally guards against the cross-thread clock
 //! footgun (see `Scenario::assert_clock_thread`).
 
-#![allow(unused_imports)]
-
 use std::time::Duration;
 
 use naia_client::{ClientConfig, JitterBufferType};

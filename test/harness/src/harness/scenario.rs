@@ -1335,7 +1335,10 @@ impl Scenario {
 
     /// Create a client socket from the transport hub
     /// Returns the socket along with handles to identity_token, rejection_code, and client_addr
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the channel carries an address, payload and transport error as one typed event"
+    )]
     fn create_client_socket(
         &self,
     ) -> (

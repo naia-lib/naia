@@ -45,8 +45,6 @@
 //! and (b) a `PipelinedServer`-vs-resident comparison harness (G8). That
 //! assertion is a named G8 obligation; it is not silently dropped.
 
-#![allow(unused_imports)]
-
 use naia_demo_world::{Entity as DemoEntity, World as DemoWorld};
 use naia_server::{
     pipeline_actors::SnapshotSender,

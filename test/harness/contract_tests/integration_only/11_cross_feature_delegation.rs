@@ -15,15 +15,6 @@
 //!   client with the named error `AuthorityError::DelegationDisabled` (no
 //!   silent drop, no panic), and replication stays healthy afterwards.
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    unused_must_use,
-    unused_mut,
-    dead_code,
-    for_loops_over_fallibles
-)]
-
 use naia_client::{ClientConfig, JitterBufferType, Publicity};
 use naia_server::{ReplicationConfig, ServerConfig};
 use naia_shared::{AuthorityError, EntityAuthStatus};

@@ -38,8 +38,6 @@
 //! The spike prints both traces (hex) under `--nocapture` and asserts full-packet
 //! byte-identity (envelope + payload) for every case.
 
-#![allow(unused_imports)]
-
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use naia_client::{

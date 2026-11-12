@@ -12,8 +12,6 @@
 //! crate-private `new_connection_pair` access lets us bypass the full
 //! handshake.
 
-#![allow(unused_imports)]
-
 use naia_server::pipeline_actors::{
     self, drain_lifecycle, drain_tick_buffer, spawn_server_handles, RecvLifecycleEvent,
     TickMessageRouter,
@@ -26,7 +24,6 @@ use naia_test_harness::protocol;
 
 /// Compile-time check that the four public Phase A.2 items are exported
 /// from the crate root.
-#[allow(dead_code)]
 fn _phase_a2_exports_compile() {
     // Trait object should be constructible without naia exposing inner
     // generics — the Send + Sync + 'static bound is what the Recv SubApp
