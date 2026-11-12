@@ -40,6 +40,8 @@ cfg_if! {
 
         impl Encoder {
             /// Creates an encoder with the configured compression mode.
+            /// Panics if the local compression configuration cannot initialize zstd.
+            #[expect(clippy::expect_used, reason = "invalid local compression setup is a fatal initialization error")]
             pub fn new(compression_mode: CompressionMode) -> Self {
                 let encoder = match &compression_mode {
                     CompressionMode::Training(sample_size) => {
@@ -62,6 +64,8 @@ cfg_if! {
             }
 
             /// Encodes a packet body, including its compression flag.
+            /// Panics if the initialized local zstd compressor fails.
+            #[expect(clippy::expect_used, reason = "local compressor failure is fatal under the existing infallible encode API")]
             pub fn encode(&mut self, payload: &[u8]) -> &[u8] {
                 match &mut self.encoder {
                     EncoderType::DictionaryTrainer(trainer) => {
@@ -119,6 +123,9 @@ cfg_if! {
                 }
             }
 
+            /// Records training samples and writes the configured local dictionary artifact.
+            /// Panics if local dictionary training or writing dictionary.txt fails.
+            #[expect(clippy::expect_used, reason = "local dictionary generation is a fail-fast operator operation")]
             pub fn record_bytes(&mut self, bytes: &[u8]) {
                 if self.training_complete {
                     return;

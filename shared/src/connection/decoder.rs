@@ -37,6 +37,8 @@ cfg_if! {
             /// Creates a decoder with the configured compression mode.
             // Local-only: the constructor takes locally built config, never
             // wire bytes; a failing zstd handle is a local init error.
+            /// Panics if the local compression configuration cannot initialize zstd.
+            #[expect(clippy::expect_used, reason = "invalid local compression setup is a fatal initialization error")]
             pub fn new(compression_mode: CompressionMode) -> Self {
                 let decoder = match &compression_mode {
                     CompressionMode::Training(_) => None,
