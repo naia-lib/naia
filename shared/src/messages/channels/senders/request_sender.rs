@@ -145,7 +145,7 @@ impl RequestOrResponse {
 
     #[expect(
         clippy::wrong_self_convention,
-        reason = "the operation constructs protocol data using mutable connection state"
+        reason = "the existing conversion API consumes the payload or copies its connection-local ID"
     )]
     pub(crate) fn to_id_and_bytes(
         self,
@@ -225,7 +225,7 @@ impl LocalRequestId {
     /// Wraps `self` as a `LocalRequestOrResponseId::Request`.
     #[expect(
         clippy::wrong_self_convention,
-        reason = "the operation constructs protocol data using mutable connection state"
+        reason = "the existing conversion API consumes the payload or copies its connection-local ID"
     )]
     #[must_use]
     pub fn to_req_res_id(&self) -> LocalRequestOrResponseId {
@@ -261,7 +261,7 @@ impl LocalResponseId {
     /// Wraps `self` as a `LocalRequestOrResponseId::Response`.
     #[expect(
         clippy::wrong_self_convention,
-        reason = "the operation constructs protocol data using mutable connection state"
+        reason = "the existing conversion API consumes the payload or copies its connection-local ID"
     )]
     #[must_use]
     pub fn to_req_res_id(&self) -> LocalRequestOrResponseId {

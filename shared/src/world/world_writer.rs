@@ -1513,7 +1513,6 @@ impl WorldWriter {
 /// actually produces.
 #[cfg(test)]
 mod delegated_send_guard_tests {
-    #![cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     use std::{
         collections::{HashMap, HashSet},
         net::SocketAddr,
@@ -1897,7 +1896,6 @@ mod delegated_send_guard_tests {
     /// transmit). The send path must drop it as `LocalMappingGone`, not
     /// abort the worker in `global_entity_to_owned_entity().unwrap()`.
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn a_queued_update_is_dropped_when_the_local_mapping_is_gone() {
@@ -1970,7 +1968,6 @@ mod delegated_send_guard_tests {
     /// writable authority status reaches serialization as before. `TripwireWorld`
     /// panicking here is the proof that it got there -- the guard did NOT drop it.
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     #[should_panic(expected = "serialization must not be reached")]
@@ -1981,7 +1978,6 @@ mod delegated_send_guard_tests {
     /// On the server every auth status is writable, so the guard is a no-op there
     /// and must never drop a server-side update.
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     #[should_panic(expected = "serialization must not be reached")]
@@ -2139,7 +2135,6 @@ mod delegated_send_guard_tests {
     /// reaches the second -- and the second entry is still sitting in the list
     /// at the end, which is what this asserts.
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn every_queued_entity_is_written_and_retired() {
@@ -2162,7 +2157,6 @@ mod delegated_send_guard_tests {
     /// of the entry, not left queued to be retried forever on every subsequent
     /// packet.
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn a_vanished_component_is_retired_alongside_the_live_one() {
@@ -2356,7 +2350,6 @@ mod delegated_send_guard_tests {
     /// silently reverts to one ECS read and one serialize per user, with no test
     /// and no error to say so.
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn a_user_independent_component_is_written_through_the_wire_cache() {
@@ -2378,7 +2371,6 @@ mod delegated_send_guard_tests {
     /// has to retire the stale entry rather than leave it queued to be retried
     /// on every packet forever.
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn path_a_retires_a_component_that_vanished_before_transmit() {
@@ -2469,7 +2461,6 @@ mod delegated_send_guard_tests {
     /// -- so inverting it turns the single most common event in the whole send
     /// loop, a full packet, into a production crash on the server path.
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn an_overflowing_cached_update_spills_when_something_was_written() {
@@ -2492,7 +2483,6 @@ mod delegated_send_guard_tests {
     /// update means it can never be sent, so the writer must say so loudly
     /// rather than spin on it forever.
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     #[should_panic(expected = "Blocking overflow detected")]
@@ -2588,7 +2578,6 @@ mod delegated_send_guard_tests {
     /// server. Inverting its guard crashes the server on an ordinary full
     /// packet, exactly as on PATH A.
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn an_overflowing_snapshot_update_spills_when_something_was_written() {
@@ -2609,7 +2598,6 @@ mod delegated_send_guard_tests {
 
     /// The other direction on PATH B.
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     #[should_panic(expected = "Blocking overflow detected")]
@@ -2694,7 +2682,6 @@ mod delegated_send_guard_tests {
     /// completely different reason and tests nothing. The `bits_written` check
     /// is what keeps this test honest if the header encoding ever grows.
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn an_overflowing_update_spills_to_the_next_packet_when_something_was_written() {
@@ -2718,7 +2705,6 @@ mod delegated_send_guard_tests {
     /// packet, so the writer panics with a diagnostic naming the component
     /// rather than silently spinning forever on an update it can never send.
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     #[should_panic(expected = "Blocking overflow detected")]

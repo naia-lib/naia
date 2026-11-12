@@ -93,7 +93,6 @@ cfg_if! {
 
 /// Spawn/despawn lifecycle state of a remote entity channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "e2e_debug", allow(dead_code))]
 pub enum EntityChannelState {
     /// Entity has not yet been spawned (or has been despawned).
     Despawned,

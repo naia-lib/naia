@@ -613,7 +613,6 @@ impl<T: Serde> DelegatedProperty<T> {
 
 #[cfg(test)]
 mod delegated_write_auth_tests {
-    #![cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     //! Root 2 of the delegated-authority family found by the Cyberlith NPA
     //! promotion gate: a dirty update queued while a host held authority can
     //! reach `send_packets` after that authority is gone, and
@@ -674,7 +673,6 @@ mod delegated_write_auth_tests {
 
     /// The server is never gated, so the guard costs it nothing.
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn the_server_can_always_write() {
@@ -722,7 +720,6 @@ mod delegated_write_auth_tests {
     /// contract so a future caller added without a gate fails here, in naia's
     /// own suite, rather than downstream.
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn mirroring_without_the_right_to_mutate_is_a_loud_contract_violation() {
@@ -764,7 +761,6 @@ mod delegated_write_auth_tests {
     /// guard, the `write` panic and the `mutate` panic all read these three
     /// predicates; if a row moves, every audit conclusion above is void.
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn the_client_authority_table_is_what_the_audit_assumed() {
@@ -791,7 +787,6 @@ mod delegated_write_auth_tests {
 
 #[cfg(test)]
 mod property_state_machine_tests {
-    #![cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     //! `Property` is a five-state machine — Local, HostOwned, RemoteOwned,
     //! RemotePublic, Delegated — and almost every method is a `match` over
     //! those five in which one or two arms do the work and the rest `panic!`.
@@ -1077,7 +1072,6 @@ mod property_state_machine_tests {
     }
 
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn a_delegated_property_leaves_delegation_only_by_becoming_host_owned() {
@@ -1261,7 +1255,6 @@ mod property_state_machine_tests {
     }
 
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn every_state_that_may_write_emits_the_value_it_holds() {
@@ -1271,7 +1264,6 @@ mod property_state_machine_tests {
     }
 
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn every_state_that_may_read_takes_the_value_on() {

@@ -1252,7 +1252,6 @@ impl LocalRelation {
 
 #[cfg(test)]
 mod delegated_auth_tests {
-    #![cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     //! Regression coverage for the delegated-authority invariant family found by
     //! the Cyberlith NPA promotion gate (two roots, one bug shape: an authority
     //! predicate checked at one moment being relied on at another).
@@ -1298,7 +1297,6 @@ mod delegated_auth_tests {
     /// The exact panic the NPA repro hits: a second client receives a remote
     /// update for a delegated entity it does not own (`Available`).
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn applies_a_remote_update_when_readable_but_not_mutable() {
@@ -1323,7 +1321,6 @@ mod delegated_auth_tests {
     }
 
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn applies_a_remote_clear_when_readable_but_not_mutable() {
@@ -1346,7 +1343,6 @@ mod delegated_auth_tests {
     /// It must still fire when the host *can* mutate, or a client that owns the
     /// entity would silently stop propagating remote updates.
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn still_notifies_the_mutator_when_the_host_can_mutate() {
@@ -1397,7 +1393,6 @@ mod delegated_auth_tests {
     /// This test pins the contract on all three entry points at once, so a
     /// caller added without a gate fails in naia's own suite.
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn the_relation_mutators_refuse_a_client_that_may_not_mutate() {
@@ -1872,7 +1867,6 @@ mod relation_state_machine_tests {
     // -- write / bit_length ------------------------------------------------
 
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn a_writable_property_reverses_the_entity_onto_the_wire() {
@@ -1895,7 +1889,6 @@ mod relation_state_machine_tests {
     }
 
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn an_empty_or_unresolvable_property_writes_a_bare_absence_flag() {
@@ -1934,7 +1927,6 @@ mod relation_state_machine_tests {
     }
 
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn bit_length_matches_the_bits_actually_written() {
@@ -2230,7 +2222,6 @@ mod relation_state_machine_tests {
     }
 
     #[cfg(feature = "entity_delegation")]
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     #[cfg(feature = "entity_delegation")]
     #[test]
     fn reading_into_a_delegated_property_keeps_it_delegated_and_covers_its_three_cases() {
