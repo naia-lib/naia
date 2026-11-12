@@ -135,7 +135,6 @@ impl DataChannel {
     /// the bounded early-post wait passes with a candidate in hand, and wires
     /// up inbound message/identity routing. Returns a closer that can tear
     /// this attempt's peer and channel down on retry.
-    #[allow(unused_must_use)]
     #[expect(
         clippy::expect_used,
         reason = "browser invariants: every page has a window, XMLHttpRequest and timers; a base64 header is always valid; FindAddrFunc is never borrowed across a callback"
