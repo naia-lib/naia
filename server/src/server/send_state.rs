@@ -2257,7 +2257,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     ///    re-queues a `ScopeToggled(user, entity, true)` so the entity
     ///    enters scope next tick. Same behavior here — push onto
     ///    `scope_change_queue` for the next tick's drain.
-    #[allow(clippy::too_many_lines)]
     pub(crate) fn apply_resource_scope_for_user<W: WorldRefType<E>>(
         &mut self,
         world: &W,
@@ -2912,7 +2911,6 @@ where
     }
 }
 
-#[allow(dead_code)]
 fn _assert_send_state_send<E: Copy + Eq + Hash + Send + Sync + 'static>() {
     fn require_send<T: Send>() {}
     require_send::<SendState<E>>();

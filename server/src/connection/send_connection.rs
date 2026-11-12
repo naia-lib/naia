@@ -65,7 +65,6 @@ cfg_if! {
     if #[cfg(feature = "e2e_debug")] {
         use std::sync::atomic::Ordering;
         use naia_shared::EntityAuthStatus;
-        use crate::server::world_server::SERVER_TX_FRAMES;
     }
 }
 
@@ -259,7 +258,10 @@ impl SendConnection {
     /// response / world events from the inbound packet buffer. The recv-side
     /// tick-buffer read happens at the call site (recv map lookup) before
     /// this method runs.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the transport operation carries independently typed protocol and world state"
+    )]
     pub fn process_packets<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         message_kinds: &MessageKinds,
@@ -331,7 +333,10 @@ impl SendConnection {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the transport operation carries independently typed protocol and world state"
+    )]
     #[expect(
         clippy::expect_used,
         reason = "a poisoned GlobalDiffHandler lock means a writer panicked mid-update; replicating from it would corrupt every peer"
@@ -469,7 +474,10 @@ impl SendConnection {
     /// on the next pass, exactly like the bandwidth-deferred case.
     ///
     /// This is a pacing bound, not a wire change: no bytes are packed differently.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the transport operation carries independently typed protocol and world state"
+    )]
     pub fn build_all_packets<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
         channel_kinds: &ChannelKinds,
@@ -543,7 +551,10 @@ impl SendConnection {
         (packets, any_built, command_evidence)
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the transport operation carries independently typed protocol and world state"
+    )]
     fn build_one_packet<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
         refused_on_bandwidth: &mut bool,
@@ -617,7 +628,10 @@ impl SendConnection {
     /// `Connection::read_packet`: it decodes the message/world section
     /// using the send-side message manager. Tick-buffer reads are
     /// handled at the call site (in the matching `RecvConnection`).
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the transport operation carries independently typed protocol and world state"
+    )]
     pub fn read_data_section(
         &mut self,
         channel_kinds: &ChannelKinds,

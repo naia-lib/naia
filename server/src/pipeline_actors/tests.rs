@@ -22,7 +22,6 @@ use std::sync::Arc;
 #[cfg(workers_active)]
 use std::time::{Duration, Instant};
 
-#[allow(unused_imports)]
 use naia_shared::DisconnectReason;
 use naia_shared::{BigMapKey, GlobalEntitySpawner, Protocol};
 

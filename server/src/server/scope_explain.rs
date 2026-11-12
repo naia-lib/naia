@@ -134,7 +134,10 @@ fn sorted(rooms: impl Iterator<Item = RoomKey>) -> Vec<RoomKey> {
 /// arguments are the ones `user_scope_has_entity_impl` takes; the rest are
 /// the coord room store, the coord staging queue and the shared change
 /// queue. Mutates nothing. Panics on an unregistered entity, as `has` does.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the transport operation carries independently typed protocol and world state"
+)]
 pub(crate) fn scope_explain_impl<E: Copy + Eq + Hash + Send + Sync>(
     shared: &ServerShared<E>,
     entity_scope_map: &EntityScopeMap,

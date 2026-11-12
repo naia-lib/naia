@@ -10,7 +10,6 @@
 //! to avoid collision with the existing `server::pipeline_handles` module
 //! that defines [`RecvHandle`] / [`SendHandle`].
 
-#[allow(missing_docs)]
 mod event_receiver;
 mod handles;
 mod orchestration;

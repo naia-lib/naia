@@ -175,11 +175,6 @@ impl Historian {
     // (no float/int conversions exist); the lookback inputs are small
     // in practice and the wrapping tick arithmetic below must keep its
     // exact `as`-cast bit behavior.
-    #[allow(
-        clippy::cast_precision_loss,
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss
-    )]
     pub fn snapshot_at_time_ago_ms(
         &self,
         time_ago_ms: u32,

@@ -68,7 +68,6 @@ impl TimeManager {
     // NOTE (clippy float casts): sub-millisecond tick intervals truncate
     // here by design and are always non-negative (tick grid stays on whole
     // millis); no float-to-int conversion API exists on this toolchain.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn recv_server_tick(&mut self, now: &Instant) -> bool {
         let time_since_tick_ms = self.last_tick_instant.elapsed(now).as_secs_f32() * 1000.0;
 
@@ -140,7 +139,6 @@ impl TimeManager {
     // below serialize into ping packets, so their `as i128` bit behavior
     // is load-bearing for byte-identity; no float-to-int conversion API
     // exists on this toolchain to express the same conversion.
-    #[allow(clippy::cast_possible_truncation)]
     pub(crate) fn process_ping(&self, reader: &mut BitReader) -> Result<BitWriter, SerdeErr> {
         let server_received_time = self.game_time_now();
 

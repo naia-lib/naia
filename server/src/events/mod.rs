@@ -1,4 +1,7 @@
-#[allow(clippy::module_inception)]
+#[expect(
+    clippy::module_inception,
+    reason = "the module keeps the public API name used by existing callers"
+)]
 pub(crate) mod events;
 pub(crate) mod main_events;
 pub(crate) mod tick_events;

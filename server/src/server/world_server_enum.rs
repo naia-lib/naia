@@ -81,7 +81,10 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync + 'static> {
 // Both variants are large by construction -- they *are* the server engine.
 // Exactly one is built per process, so boxing would only add an indirection
 // on every dispatched call to save a one-time allocation difference.
-#[allow(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "variants retain their protocol data inline without another allocation"
+)]
 enum WorldServerImpl<E: Copy + Eq + Hash + Send + Sync + 'static> {
     Resident(InternalWorldServer<E>),
     Pipelined(PipelinedWorldServer<E>),

@@ -849,7 +849,6 @@ fn worker_park_checkpoint<H>(park: &ParkControl, lease: &mut HandleLease<'_, H>)
 /// the caller can satisfy the lifetime; the lint's `Option<&PacketReadiness>`
 /// suggestion does not compile here. The body only needs shared access.
 #[cfg_attr(not(workers_active), allow(unused_variables))]
-#[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(
     workers_active,
     expect(

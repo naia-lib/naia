@@ -1,5 +1,8 @@
 pub mod bandwidth_monitor;
-#[allow(clippy::module_inception)]
+#[expect(
+    clippy::module_inception,
+    reason = "the module keeps the public API name used by existing callers"
+)]
 pub mod connection;
 pub mod io;
 pub mod recv_connection;

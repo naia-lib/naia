@@ -188,7 +188,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
     // The argument list mirrors the fields carved out of
     // `InternalWorldServer::new`; grouping them into a params struct would
     // just move the same list one level out.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the transport operation carries independently typed protocol and world state"
+    )]
     pub fn new(
         server_config: ServerConfig,
         channel_kinds: ChannelKinds,
