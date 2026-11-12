@@ -174,7 +174,7 @@ impl FragmentedMessage {
 
     #[expect(
         clippy::wrong_self_convention,
-        reason = "the operation constructs protocol data using mutable connection state"
+        reason = "the consuming conversion preserves the existing fragment payload API"
     )]
     pub(crate) fn to_payload(self) -> Box<[u8]> {
         self.bytes

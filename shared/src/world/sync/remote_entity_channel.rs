@@ -397,6 +397,7 @@ impl RemoteEntityChannel {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn get_state(&self) -> EntityChannelState {
         self.state
     }

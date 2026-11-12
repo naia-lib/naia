@@ -25,6 +25,7 @@ impl<T> SequenceBuffer<T> {
     }
 
     /// Returns the most recently stored sequence number.
+    #[cfg(test)]
     pub fn sequence_num(&self) -> SequenceNumber {
         self.sequence_num
     }
