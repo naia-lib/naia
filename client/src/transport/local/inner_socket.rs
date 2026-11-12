@@ -25,7 +25,7 @@ impl LocalClientSocket {
     /// This is used when multiple clients need to connect to the same server
     #[expect(
         clippy::too_many_arguments,
-        reason = "the transport operation carries independently typed protocol and world state"
+        reason = "the socket constructor takes the independent auth and data channel endpoints plus the shared address, identity-token and rejection-code cells"
     )]
     pub fn new_with_tokens(
         _client_addr: SocketAddr,
