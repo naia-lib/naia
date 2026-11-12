@@ -337,7 +337,7 @@ pub fn translate_world_events<T: Send + Sync + 'static>(world: &mut World) {
 pub fn send_packets_init<T: Send + Sync + 'static>(world: &mut World) {
     #[expect(
         clippy::type_complexity,
-        reason = "the channel carries an address, payload and transport error as one typed event"
+        reason = "the Bevy system state pairs the tick event buffer with its reader cursor"
     )]
     let tick_event_state: SystemState<(
         Res<Messages<bevy_events::ClientTickEvent<T>>>,
