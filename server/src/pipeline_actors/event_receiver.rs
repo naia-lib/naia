@@ -65,18 +65,25 @@ use super::handles::CoordHandle;
 // payloads `apply_receive_output_pipeline` writes.
 // ────────────────────────────────────────────────────────────────────
 
+/// A user completed the connection handshake.
 #[derive(Clone, Debug)]
 pub struct RecvConnectEvent {
+    /// User associated with this event.
     pub user_key: UserKey,
 }
 
+/// A user disconnected from the server.
 #[derive(Clone, Debug)]
 pub struct RecvDisconnectEvent {
+    /// User associated with this event.
     pub user_key: UserKey,
+    /// Remote address of the disconnected user.
     pub address: SocketAddr,
+    /// Reason the connection ended.
     pub reason: DisconnectReason,
 }
 
+/// A transport or protocol error observed while receiving.
 #[derive(Clone, Debug)]
 pub struct RecvErrorEvent {
     /// Stringified `NaiaServerError` — the error variants carry
@@ -85,30 +92,43 @@ pub struct RecvErrorEvent {
     pub error: String,
 }
 
+/// A server tick observed while receiving.
 #[derive(Clone, Copy, Debug)]
-pub struct RecvTickEvent(pub Tick);
+pub struct RecvTickEvent(#[doc = "The observed server tick."] pub Tick);
 
+/// A user spawned a client-owned entity.
 #[derive(Clone, Debug)]
 pub struct RecvSpawnEntityEvent<E> {
+    /// User associated with this event.
     pub user_key: UserKey,
+    /// Entity associated with this event.
     pub entity: E,
 }
 
+/// A user despawned an entity.
 #[derive(Clone, Debug)]
 pub struct RecvDespawnEntityEvent<E> {
+    /// User associated with this event.
     pub user_key: UserKey,
+    /// Entity associated with this event.
     pub entity: E,
 }
 
+/// A user published an entity to the server.
 #[derive(Clone, Debug)]
 pub struct RecvPublishEntityEvent<E> {
+    /// User associated with this event.
     pub user_key: UserKey,
+    /// Entity associated with this event.
     pub entity: E,
 }
 
+/// A user unpublished an entity.
 #[derive(Clone, Debug)]
 pub struct RecvUnpublishEntityEvent<E> {
+    /// User associated with this event.
     pub user_key: UserKey,
+    /// Entity associated with this event.
     pub entity: E,
 }
 
