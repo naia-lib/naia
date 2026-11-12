@@ -187,7 +187,10 @@ impl WorldData {
     }
 
     /// Returns the registered `ComponentAccess` for `component_kind`, if any.
-    #[allow(clippy::borrowed_box)]
+    #[expect(
+        clippy::borrowed_box,
+        reason = "the reflection API passes the erased component container by reference"
+    )]
     pub fn component_access(
         &self,
         component_kind: &ComponentKind,

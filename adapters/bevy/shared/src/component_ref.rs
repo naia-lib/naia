@@ -14,8 +14,7 @@ pub struct ComponentDynRef<'a, T>(
 
 impl<'a, R: Replicate> ReplicaDynRefTrait for ComponentDynRef<'a, R> {
     fn to_dyn_ref(&self) -> &dyn Replicate {
-        #![allow(suspicious_double_ref_op)]
-        self.0.deref()
+        self.0
     }
 }
 
