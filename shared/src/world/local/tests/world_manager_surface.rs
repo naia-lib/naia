@@ -414,7 +414,7 @@ fn the_dense_queries_agree_with_the_keyed_ones_when_nothing_is_registered() {
 /// `insert_sent_command_packet` did not run first -- so a dropped record is
 /// observable as that panic.
 #[test]
-#[should_panic(expected = "called `Option::unwrap()` on a `None` value")]
+#[should_panic(expected = "record_command_written requires insert_sent_command_packet")]
 fn collecting_messages_retires_command_packets_past_the_ttl() {
     let mut fx = Fixture::server();
     let sent_at = Instant::now();
