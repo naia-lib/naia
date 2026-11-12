@@ -9,7 +9,7 @@ use async_dup::Arc;
 use futures_core::Stream;
 use futures_util::{pin_mut, select, FutureExt};
 use http::{header, HeaderValue, Response};
-use log::{error, info, warn};
+use log::{info, warn};
 use smol::{
     io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader, Lines},
     lock::Mutex,
