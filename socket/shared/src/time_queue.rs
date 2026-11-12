@@ -10,7 +10,12 @@ pub struct TimeQueue<T: Eq + PartialEq> {
     next_sequence: u64,
 }
 
-#[allow(clippy::new_without_default)]
+impl<T: Eq + PartialEq> Default for TimeQueue<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Eq + PartialEq> TimeQueue<T> {
     /// Creates a new, empty `TimeQueue`.
     #[must_use]

@@ -88,7 +88,10 @@ impl Instant {
 
 impl Eq for Instant {}
 
-#[allow(clippy::derive_ord_xor_partial_ord)]
+#[expect(
+    clippy::derive_ord_xor_partial_ord,
+    reason = "the clock wrapper orders its finite monotonic timestamp values"
+)]
 impl Ord for Instant {
     fn cmp(&self, other: &Self) -> Ordering {
         // TODO: Use epsilon?
