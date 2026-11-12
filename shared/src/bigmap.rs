@@ -84,7 +84,7 @@ impl<K: BigMapKey, V> BigMap<K, V> {
     /// Returns an iterator over `(K, &V)` pairs in arbitrary order.
     #[expect(
         clippy::type_complexity,
-        reason = "the channel carries an address, payload and transport error as one typed event"
+        reason = "the iterator converts internal u64 keys into the public typed key without allocation"
     )]
     pub fn iter<'a>(&'a self) -> Map<Iter<'a, u64, V>, fn((&'a u64, &'a V)) -> (K, &'a V)> {
         self.inner
@@ -95,7 +95,7 @@ impl<K: BigMapKey, V> BigMap<K, V> {
     /// Returns a mutable iterator over `(K, &mut V)` pairs in arbitrary order.
     #[expect(
         clippy::type_complexity,
-        reason = "the channel carries an address, payload and transport error as one typed event"
+        reason = "the iterator converts internal u64 keys into the public typed key without allocation"
     )]
     pub fn iter_mut<'a>(
         &'a mut self,
