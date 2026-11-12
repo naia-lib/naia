@@ -341,7 +341,10 @@ pub fn connect_client(ctx: &mut TestWorldMut) {
 ///     }));
 /// })));
 /// ```
-#[allow(clippy::type_complexity)]
+#[expect(
+    clippy::type_complexity,
+    reason = "the channel carries an address, payload and transport error as one typed event"
+)]
 pub fn connect_named_client(
     ctx: &mut TestWorldMut,
     client_name: &str,

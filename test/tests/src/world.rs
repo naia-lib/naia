@@ -311,7 +311,6 @@ impl<'a> TestWorldRef<'a> {
     }
 
     /// Get access to the underlying ExpectCtx.
-    #[allow(clippy::mut_from_ref)]
     fn ctx(&self) -> &mut ExpectCtx<'a> {
         // SAFETY: `TestWorldRef` is created from a `&mut ExpectCtx<'a>` inside
         // `assert_then()`'s polling closure and never escapes that closure. The
