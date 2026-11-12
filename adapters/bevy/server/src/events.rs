@@ -37,7 +37,10 @@ pub struct ErrorEvent(pub NaiaServerError);
 // TickEventReader
 #[derive(Resource)]
 pub(crate) struct CachedTickEventsState {
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the channel carries an address, payload and transport error as one typed event"
+    )]
     pub(crate) event_state: SystemState<(
         Res<'static, Messages<TickEvent>>,
         bevy_ecs::system::Local<'static, MessageCursor<TickEvent>>,

@@ -62,7 +62,10 @@ pub struct PendingScopeAuthorityOps(pub Vec<PipelineScopeAuthorityOp>);
 use crate::Replicate;
 
 #[derive(Resource)]
-#[allow(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "variants retain their protocol data inline without another allocation"
+)]
 pub(crate) enum ServerImpl {
     Full(NaiaServer<Entity>),
     WorldOnly(NaiaWorldServer<Entity>),
@@ -947,7 +950,6 @@ impl<'w> Server<'w> {
     /// Build the per-stage timing hooks for the pipeline runtime. Empty
     /// (zero-overhead) unless the `pipeline_timing` bench feature is on.
     fn pipeline_timing_hooks() -> naia_server::pipeline_actors::RuntimeTimingHooks {
-        #[allow(unused_mut)]
         let mut timing = naia_server::pipeline_actors::RuntimeTimingHooks::default();
         #[cfg(feature = "pipeline_timing")]
         {
