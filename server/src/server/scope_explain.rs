@@ -136,7 +136,7 @@ fn sorted(rooms: impl Iterator<Item = RoomKey>) -> Vec<RoomKey> {
 /// queue. Mutates nothing. Panics on an unregistered entity, as `has` does.
 #[expect(
     clippy::too_many_arguments,
-    reason = "the transport operation carries independently typed protocol and world state"
+    reason = "the scope explanation reads the scope registries, room and user stores, and pending ledger ops alongside the user and entity keys"
 )]
 pub(crate) fn scope_explain_impl<E: Copy + Eq + Hash + Send + Sync>(
     shared: &ServerShared<E>,
