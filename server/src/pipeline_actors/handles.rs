@@ -177,7 +177,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         self.state.user_store.len()
     }
 
-    /// Number of fully-connected users.
+    /// Number of `user_store` entries, the same set as `user_keys`; this includes users still
+    /// mid-handshake, unlike `InternalWorldServer::user_count`, which counts live send connections.
     #[must_use]
     pub fn user_count(&self) -> usize {
         self.user_keys().len()

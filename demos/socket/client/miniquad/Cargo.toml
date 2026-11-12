@@ -17,3 +17,5 @@ path = "src/main.rs"
 naia-socket-client-demo-app = { path = "../app", features = [ "mquad" ] }
 cfg-if = { version = "1.0" }
 miniquad = { version = "0.3", features = ["log-impl"] }
+[lints]
+workspace = true

@@ -94,7 +94,7 @@ impl Named for Box<dyn Message> {
         Self: Sized,
     {
         // This is unreachable since Box<dyn Message> is not Sized
-        unimplemented!("protocol_name() is not available for Box<dyn Message>")
+        panic!("protocol_name() is not available for Box<dyn Message>")
     }
 }
 

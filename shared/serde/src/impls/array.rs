@@ -36,14 +36,13 @@ impl<T: Serde, const N: usize> Serde for [T; N] {
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        unsafe {
-            let mut to = std::mem::MaybeUninit::<[T; N]>::uninit();
-            let top: *mut T = &mut to as *mut std::mem::MaybeUninit<[T; N]> as *mut T;
-            for c in 0..N {
-                top.add(c).write(Serde::de(reader)?);
-            }
-            Ok(to.assume_init())
+        let mut items = Vec::with_capacity(N);
+        for _ in 0..N {
+            items.push(Serde::de(reader)?);
         }
+        // Exactly N items were pushed, so the conversion cannot fail; a
+        // failed decode above has already dropped the items read so far.
+        items.try_into().map_err(|_| SerdeErr {})
     }
 
     fn bit_length(&self) -> u32 {

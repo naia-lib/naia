@@ -856,7 +856,7 @@ impl<'w> Server<'w> {
     }
 
     pub(crate) fn entity_authority_status(&self, _entity: &Entity) -> Option<EntityAuthStatus> {
-        todo!("entity_authority_status requires world access; use ServerImpl directly in exclusive systems")
+        panic!("entity_authority_status requires world access; use ServerImpl directly in exclusive systems")
     }
 
     // ====================================================================

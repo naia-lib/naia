@@ -33,3 +33,6 @@ rand = { version = "0.8" }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "0.3"
+
+[lints]
+workspace = true

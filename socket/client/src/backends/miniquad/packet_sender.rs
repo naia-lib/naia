@@ -20,8 +20,9 @@ impl PacketSender {
     }
 
     /// Send a Packet to the Server
+    #[expect(unsafe_code, reason = "miniquad JS bridge FFI call")]
     pub fn send(&self, payload: &[u8]) -> Result<(), NaiaClientSocketError> {
-        // Safety: naia_create_u8_array and naia_send are extern "C" FFI functions provided
+        // SAFETY: naia_create_u8_array and naia_send are extern "C" FFI functions provided
         // by the miniquad JavaScript bridge. wasm32 is single-threaded; the
         // JS object handle is accessed without aliasing. The pointer passed to
         // naia_create_u8_array is valid for the duration of the call (payload is borrowed).
@@ -50,14 +51,16 @@ impl PacketSender {
     }
 
     /// Returns whether this socket's JS connection is currently open
+    #[expect(unsafe_code, reason = "miniquad JS bridge FFI call")]
     pub fn connected(&self) -> bool {
-        // Safety: naia_is_connected() is a read-only FFI call into the JS bridge; no preconditions.
+        // SAFETY: naia_is_connected() is a read-only FFI call into the JS bridge; no preconditions.
         unsafe { naia_is_connected(self.socket_id) }
     }
 
     /// Closes this socket's JS connection and frees its table slot
+    #[expect(unsafe_code, reason = "miniquad JS bridge FFI call")]
     pub fn disconnect(&mut self) {
-        // Safety: naia_disconnect() is an FFI call with no return value or preconditions.
+        // SAFETY: naia_disconnect() is an FFI call with no return value or preconditions.
         // Freeing the slot drops this socket's queued state; other sockets'
         // slots are untouched.
         unsafe {

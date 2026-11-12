@@ -42,3 +42,5 @@ async-channel = { version = "2" }
 futures-channel = { version = "0.3" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+[lints]
+workspace = true

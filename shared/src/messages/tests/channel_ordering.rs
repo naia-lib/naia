@@ -43,7 +43,7 @@ impl Message for StubMessage {
     where
         Self: Sized,
     {
-        unimplemented!("not used in tests")
+        panic!("not used in tests")
     }
     fn bit_length(
         &self,

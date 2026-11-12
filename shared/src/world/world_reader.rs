@@ -95,16 +95,8 @@ impl WorldReader {
                 // Count when Spawn message KIND is recognized on wire (before routing)
                 #[cfg(feature = "e2e_debug")]
                 {
-                    extern "Rust" {
-                        fn client_saw_spawn_increment();
-                    }
-                    // Safety: client_saw_spawn_increment is defined by the naia-tests harness
-                    // when compiled with feature = "e2e_debug". It atomically increments a
-                    // counter and has no preconditions. The e2e_debug feature is never enabled
-                    // in production builds.
-                    unsafe {
-                        client_saw_spawn_increment();
-                    }
+                    crate::diagnostic_counters::CLIENT_SAW_SPAWN
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
 
                 // read remote entity
@@ -263,14 +255,8 @@ impl WorldReader {
                 // Count when SetAuthority message KIND is recognized on wire (before entity mapping)
                 #[cfg(feature = "e2e_debug")]
                 {
-                    extern "Rust" {
-                        fn client_saw_set_auth_wire_increment();
-                    }
-                    // Safety: same as client_saw_spawn_increment above — atomic counter defined
-                    // by the test harness; no preconditions; e2e_debug is never active in prod.
-                    unsafe {
-                        client_saw_set_auth_wire_increment();
-                    }
+                    crate::diagnostic_counters::CLIENT_SAW_SET_AUTH_WIRE
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
 
                 // read subcommand id

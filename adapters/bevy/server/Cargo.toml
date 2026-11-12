@@ -68,3 +68,5 @@ naia-client = { path = "../../../client", features = ["transport_local", "test_t
 naia-shared = { path = "../../../shared", features = ["transport_local", "test_time", "test_utils"] }
 naia-test-harness = { path = "../../../test/harness" }
 parking_lot = "0.12"
+[lints]
+workspace = true

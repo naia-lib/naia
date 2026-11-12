@@ -131,6 +131,18 @@ In Debug mode (when `debug_assertions` are enabled or equivalent feature flag), 
 - Warnings MUST NOT affect observable behavior
 - Warnings MAY be used for debugging but not for correctness
 
+The optional `naia-client/e2e_debug` feature MUST enable the shared
+diagnostics it exposes, including channel snapshots and tracing. A consumer
+MUST NOT need to enable `naia-shared/e2e_debug` separately to compile the
+client's diagnostic APIs. The client library's impact-selected diagnostic
+feature test command checks this feature closure without workspace feature
+unification.
+
+The shared debug feature MUST also link and run independently of the client crate.
+Shared receive counters are owned by `naia-shared` and re-exported by the client,
+so observing the existing client counter API counts the same atomic values without
+requiring externally linked diagnostic symbols.
+
 ---
 
 ## 2) Determinism Requirements

@@ -23,3 +23,6 @@ bevy_ecs         = { version = "0.19", default-features = false }
 cfg-if           = { version = "1.0" }
 naia-bevy-server = { version = "0.25", path = "../server", optional = true }
 naia-bevy-client = { version = "0.25", path = "../client", optional = true }
+
+[lints]
+workspace = true

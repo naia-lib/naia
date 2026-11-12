@@ -13,3 +13,5 @@ naia-demo-world = { path = "../../demo_utils/demo_world" }
 naia-macroquad-demo-shared = { path = "../shared" }
 log = { version = "0.4" }
 simple_logger = { version = "4.0", default-features = false, features = ["timestamps"] }
+[lints]
+workspace = true

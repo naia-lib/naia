@@ -7,8 +7,8 @@ edition = "2021"
 publish = false
 description = "loom concurrency model-checking tests for Naia"
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
+[lints]
+workspace = true
 
 [dependencies]
 loom = "0.7"

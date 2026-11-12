@@ -28,7 +28,6 @@ use crate::{
     },
     events::{world_events::WorldEvents, TickEvents},
     request::{GlobalRequestManager, GlobalResponseManager, ResponseSendOutcome},
-    room::Room,
     server::scope_checks_cache::ScopeChecksCache,
     transport::{PacketReceiver, PacketSender},
     world::{
@@ -378,14 +377,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     /// Registers a newly-accepted user so the world server can track their scope (adapter use only).
     pub fn receive_user(&mut self, user_key: UserKey, user_addr: SocketAddr) {
-        self.sim_handle
-            .state
-            .user_store
-            .insert(user_key, WorldUser::new(user_addr));
-        self.sim_handle
-            .state
-            .user_store
-            .register_disconnected(user_addr, user_key);
+        self.sim_handle.receive_user(user_key, user_addr);
         // Auto-include of Replicated Resources happens in
         // `finalize_connection` — that's the point at which a Connection
         // exists in `user_connections` (required by `apply_scope_for_user`
@@ -1590,12 +1582,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// `R` is not currently inserted.
     #[must_use]
     pub fn resource_entity<R: ReplicatedComponent>(&self) -> Option<E> {
-        let global_entity = self.sim_handle.state.resource_registry.entity_for::<R>()?;
-        self.shared
-            .global_entity_map
-            .read()
-            .global_entity_to_entity(global_entity)
-            .ok()
+        self.sim_handle.resource_entity::<R>()
     }
 
     /// O(1): is `world_entity` a hidden resource entity?
@@ -1609,17 +1596,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// True iff a resource of type `R` is currently inserted.
     #[must_use]
     pub fn has_resource<R: ReplicatedComponent>(&self) -> bool {
-        self.sim_handle
-            .state
-            .resource_registry
-            .entity_for::<R>()
-            .is_some()
+        self.sim_handle.has_resource::<R>()
     }
 
     /// Number of currently-inserted resources.
     #[must_use]
     pub fn resources_count(&self) -> usize {
-        self.sim_handle.state.resource_registry.len()
+        self.sim_handle.resources_count()
     }
 
     /// Read-only handle to the per-resource priority state.
@@ -1649,8 +1632,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// configured for delegation.
     #[must_use]
     pub fn resource_authority_status<R: ReplicatedComponent>(&self) -> Option<EntityAuthStatus> {
-        let entity = self.resource_entity::<R>()?;
-        self.entity_authority_status(&entity)
+        self.sim_handle.resource_authority_status::<R>()
     }
 
     /// Iterate over the hidden entities of all currently-inserted resources.
@@ -2322,12 +2304,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// Get the number of Users currently connected
     #[must_use]
     pub fn users_count(&self) -> usize {
-        self.sim_handle.state.user_store.len()
+        self.sim_handle.users_count()
     }
 
     /// Returns the number of users that have fully connected (handshake complete).
     #[must_use]
     pub fn user_count(&self) -> usize {
+        // Counts users with a live send connection (this engine's `user_keys`),
+        // not every `user_store` entry as `CoordHandle::user_count` does.
         self.user_keys().len()
     }
 
@@ -2364,7 +2348,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// thread's read target (`send.global_priority`) is a clone refreshed
     /// at the top of `send_all_packets`.
     pub fn global_entity_priority(&self, entity: E) -> EntityPriorityRef<'_, E> {
-        self.sim_handle.state.global_priority_mirror.get_ref(entity)
+        self.sim_handle.global_entity_priority(entity)
     }
 
     /// Mutable handle to the sender-wide (global) priority state for `entity`.
@@ -2374,7 +2358,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// step at the top of the next `send_all_packets` carries the change
     /// over to `send.global_priority` via the wholesale publish-on-read clone.
     pub fn global_entity_priority_mut(&mut self, entity: E) -> EntityPriorityMut<'_, E> {
-        self.sim_handle.state.global_priority_mirror.get_mut(entity)
+        self.sim_handle.global_entity_priority_mut(entity)
     }
 
     /// Read-only handle to the per-user priority state for `entity` on the
@@ -2432,15 +2416,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// which can be used to add users/entities to the room or retrieve its
     /// key
     pub fn create_room(&'_ mut self) -> RoomMut<'_, E> {
-        let new_room = Room::new();
-        let room_key = self.sim_handle.state.room_store.insert(new_room);
+        let room_key = self.sim_handle.create_room();
         RoomMut::new(self, room_key)
     }
 
     /// Returns whether or not a Room exists for the given `RoomKey`
     #[must_use]
     pub fn room_exists(&self, room_key: &RoomKey) -> bool {
-        self.sim_handle.state.room_store.contains(*room_key)
+        self.sim_handle.room_exists(room_key)
     }
 
     /// Retrieves an `RoomMut` that exposes read and write operations for the
@@ -2467,19 +2450,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// Return a list of all the Server's Rooms' keys
     #[must_use]
     pub fn room_keys(&self) -> Vec<RoomKey> {
-        self.sim_handle.state.room_store.keys()
+        self.sim_handle.room_keys()
     }
 
     /// Get a count of how many Rooms currently exist
     #[must_use]
     pub fn rooms_count(&self) -> usize {
-        self.sim_handle.state.room_store.len()
+        self.sim_handle.rooms_count()
     }
 
     /// Returns the total number of rooms that currently exist.
     #[must_use]
     pub fn room_count(&self) -> usize {
-        self.room_keys().len()
+        self.sim_handle.room_count()
     }
 
     // Bandwidth monitoring
@@ -2589,7 +2572,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// been enabled via `enable_historian()`.
     #[must_use]
     pub fn historian(&self) -> Option<&crate::historian::Historian> {
-        self.sim_handle.state.historian.as_ref()
+        self.sim_handle.historian()
     }
 
     /// Returns a snapshot of per-connection diagnostics for the given user.
@@ -3816,18 +3799,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// Deletes the Room associated with a given `RoomKey` on the Server.
     /// Returns true if the Room existed.
     pub(crate) fn room_destroy(&mut self, room_key: RoomKey) -> bool {
-        let (existed, room_change_opt) = {
-            let entity_map = self.shared.global_entity_map.read();
-            self.sim_handle.state.room_store.destroy(
-                room_key,
-                &mut self.sim_handle.state.user_store,
-                &*entity_map,
-            )
-        };
-        if let Some(room_change) = room_change_opt {
-            let mut q = self.shared.scope_change_queue.lock();
-            q.push_back(ScopeChange::RoomChange(room_change));
-        }
+        let existed = self.sim_handle.room_destroy(&room_key);
         self.send
             .state
             .apply_pending_room_changes(&self.shared.scope_change_queue);
@@ -3839,10 +3811,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// Returns whether or not an User is currently in a specific Room, given
     /// their keys.
     pub(crate) fn room_has_user(&self, room_key: RoomKey, user_key: UserKey) -> bool {
-        self.sim_handle
-            .state
-            .room_store
-            .has_user(room_key, user_key)
+        self.sim_handle.room_has_user(room_key, user_key)
     }
 
     /// Add an User to a Room, given the appropriate `RoomKey` & `UserKey`
@@ -3853,20 +3822,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         {
             SERVER_ROOM_MOVE_CALLED.fetch_add(1, Ordering::Relaxed);
         }
-        let (legacy_change, room_change) = {
-            let entity_map = self.shared.global_entity_map.read();
-            self.sim_handle.state.room_store.add_user(
-                room_key,
-                user_key,
-                &mut self.sim_handle.state.user_store,
-                &*entity_map,
-            )
-        };
-        {
-            let mut q = self.shared.scope_change_queue.lock();
-            q.push_back(legacy_change);
-            q.push_back(ScopeChange::RoomChange(room_change));
-        }
+        self.sim_handle.room_add_user(room_key, user_key);
         self.send
             .state
             .apply_pending_room_changes(&self.shared.scope_change_queue);
@@ -3878,16 +3834,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         {
             SERVER_ROOM_MOVE_CALLED.fetch_add(1, Ordering::Relaxed);
         }
-        let (legacy_change, room_change) = self.sim_handle.state.room_store.remove_user::<E>(
-            room_key,
-            user_key,
-            &mut self.sim_handle.state.user_store,
-        );
-        {
-            let mut q = self.shared.scope_change_queue.lock();
-            q.push_back(legacy_change);
-            q.push_back(ScopeChange::RoomChange(room_change));
-        }
+        self.sim_handle.room_remove_user(room_key, user_key);
         self.send
             .state
             .apply_pending_room_changes(&self.shared.scope_change_queue);
@@ -3895,12 +3842,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     /// Get a count of Users in a given Room
     pub(crate) fn room_users_count(&self, room_key: RoomKey) -> usize {
-        self.sim_handle.state.room_store.users_count(room_key)
+        self.sim_handle.room_users_count(&room_key)
     }
 
     /// Returns an iterator of the [`UserKey`] for Users that belong in the Room
     pub(crate) fn room_user_keys(&self, room_key: RoomKey) -> impl Iterator<Item = &UserKey> {
-        self.sim_handle.state.room_store.user_keys_iter(room_key)
+        self.sim_handle.room_user_keys(&room_key)
     }
 
     pub(crate) fn room_entities(&self, room_key: RoomKey) -> impl Iterator<Item = &GlobalEntity> {
@@ -3943,18 +3890,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// Entities will only ever be in-scope for Users which are in a Room with
     /// them.
     pub(crate) fn room_add_entity(&mut self, room_key: RoomKey, world_entity: &E) {
-        let pair_opt = {
-            let entity_map = self.shared.global_entity_map.read();
-            self.sim_handle
-                .state
-                .room_store
-                .add_entity(room_key, world_entity, &*entity_map)
-        };
-        if let Some((legacy_change, room_change)) = pair_opt {
-            let mut q = self.shared.scope_change_queue.lock();
-            q.push_back(legacy_change);
-            q.push_back(ScopeChange::RoomChange(room_change));
-        }
+        self.sim_handle.room_add_entity(&room_key, world_entity);
         self.send
             .state
             .apply_pending_room_changes(&self.shared.scope_change_queue);
@@ -3962,18 +3898,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     /// Remove an Entity from a Room, associated with the given `RoomKey`
     pub(crate) fn room_remove_entity(&mut self, room_key: RoomKey, world_entity: &E) {
-        let pair_opt = {
-            let entity_map = self.shared.global_entity_map.read();
-            self.sim_handle
-                .state
-                .room_store
-                .remove_entity(room_key, world_entity, &*entity_map)
-        };
-        if let Some((legacy_change, room_change)) = pair_opt {
-            let mut q = self.shared.scope_change_queue.lock();
-            q.push_back(legacy_change);
-            q.push_back(ScopeChange::RoomChange(room_change));
-        }
+        self.sim_handle.room_remove_entity(&room_key, world_entity);
         self.send
             .state
             .apply_pending_room_changes(&self.shared.scope_change_queue);
@@ -3981,7 +3906,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     /// Get a count of Entities in a given Room
     pub(crate) fn room_entities_count(&self, room_key: RoomKey) -> usize {
-        self.sim_handle.state.room_store.entities_count(room_key)
+        self.sim_handle.room_entities_count(&room_key)
     }
 
     // Private methods
@@ -5261,32 +5186,32 @@ mod forbidden_entity_event_tests {
 
     impl WorldMutType<u64> for StubWorld {
         fn spawn_entity(&mut self) -> u64 {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn local_duplicate_entity(&mut self, _world_entity: &u64) -> u64 {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn local_duplicate_components(&mut self, _mutable_entity: &u64, _immutable_entity: &u64) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn despawn_entity(&mut self, _world_entity: &u64) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_kinds(&mut self, _world_entity: &u64) -> Vec<ComponentKind> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_mut<'a, R: ReplicatedComponent>(
             &'a mut self,
             _world_entity: &u64,
         ) -> Option<ReplicaMutWrapper<'a, R>> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_mut_of_kind<'a>(
             &'a mut self,
             _world_entity: &u64,
             _component_kind: ComponentKind,
         ) -> Option<ReplicaDynMutWrapper<'a>> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_apply_update(
             &mut self,
@@ -5295,7 +5220,7 @@ mod forbidden_entity_event_tests {
             _component_kind: ComponentKind,
             _update: PendingComponentUpdate,
         ) -> Result<(), SerdeErr> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_apply_field_update(
             &mut self,
@@ -5304,10 +5229,10 @@ mod forbidden_entity_event_tests {
             _component_kind: ComponentKind,
             _update: ComponentFieldUpdate,
         ) -> Result<(), SerdeErr> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn mirror_entities(&mut self, _mutable_entity: &u64, _immutable_entity: &u64) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn mirror_components(
             &mut self,
@@ -5315,31 +5240,31 @@ mod forbidden_entity_event_tests {
             _immutable_entity: &u64,
             _component_kind: ComponentKind,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn insert_component<R: ReplicatedComponent>(
             &mut self,
             _world_entity: &u64,
             _component_ref: R,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn insert_boxed_component(
             &mut self,
             _world_entity: &u64,
             _boxed_component: Box<dyn Replicate>,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn remove_component<R: ReplicatedComponent>(&mut self, _world_entity: &u64) -> Option<R> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn remove_component_of_kind(
             &mut self,
             _world_entity: &u64,
             _component_kind: ComponentKind,
         ) -> Option<Box<dyn Replicate>> {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn entity_publish(
             &mut self,
@@ -5348,7 +5273,7 @@ mod forbidden_entity_event_tests {
             _global_world_manager: &dyn GlobalWorldManagerType,
             _world_entity: &u64,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_publish(
             &mut self,
@@ -5358,13 +5283,13 @@ mod forbidden_entity_event_tests {
             _world_entity: &u64,
             _component_kind: ComponentKind,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn entity_unpublish(&mut self, _world_entity: &u64) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_unpublish(&mut self, _world_entity: &u64, _component_kind: ComponentKind) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn entity_enable_delegation(
             &mut self,
@@ -5373,7 +5298,7 @@ mod forbidden_entity_event_tests {
             _global_world_manager: &dyn GlobalWorldManagerType,
             _world_entity: &u64,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_enable_delegation(
             &mut self,
@@ -5383,17 +5308,17 @@ mod forbidden_entity_event_tests {
             _world_entity: &u64,
             _component_kind: ComponentKind,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn entity_disable_delegation(&mut self, _world_entity: &u64) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
         fn component_disable_delegation(
             &mut self,
             _world_entity: &u64,
             _component_kind: ComponentKind,
         ) {
-            unimplemented!()
+            panic!("stub world: not reachable in this test")
         }
     }
 

@@ -33,7 +33,9 @@ use crate::{NaiaServerError, RecvHandle, SendHandle, ServerConfig};
 
 // PF1 worker-test imports only (see the `workers_active` gate on the tests).
 #[cfg(workers_active)]
-use super::runtime::{recv_worker_loop, ParkControl, RuntimeTimingHooks};
+use super::runtime::{recv_worker_loop, send_worker_loop, ParkControl, RuntimeTimingHooks};
+#[cfg(workers_active)]
+use super::SnapshotSender;
 use super::{
     drain_lifecycle, drain_tick_buffer, spawn_server_handles, CoordHandle, PipelinedWorldServer,
     RecvLifecycleEvent,
@@ -2414,5 +2416,149 @@ fn recv_worker_exits_on_closed_readiness() {
     assert!(
         exited,
         "recv worker did not exit on closed transport readiness — spinning into an undrained queue (PF1-B)"
+    );
+}
+
+/// Transmit counter for the nydus-y2e send-worker test, via `record_send`.
+#[cfg(workers_active)]
+static SEND_WORKER_TRANSMITS: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(workers_active)]
+fn count_send_worker_transmit(_: u64) {
+    SEND_WORKER_TRANSMITS.fetch_add(1, Ordering::SeqCst);
+}
+
+/// nydus-y2e measure 1: the recv worker owns its handle between park windows,
+/// so an idle run with no park takes NO slot lock per receive iteration. The
+/// pre-fix worker claimed and re-deposited the handle through `try_lock` twice
+/// per iteration (2 acquisitions per receive); the lease deposits only at the
+/// park checkpoint and on exit, so an unparked run acquires the slot lock at
+/// most twice in total (claim at spawn, deposit at shutdown). The iteration
+/// counter proves the worker really looped (no vacuous pass).
+// Active worker only: see `recv_worker_skips_empty_outputs`.
+#[cfg(workers_active)]
+#[test]
+fn recv_worker_takes_no_slot_lock_per_iteration() {
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+    let (_sim, mut recv, _send) =
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
+    let (keepalive_tx, pr) = crate::transport::PacketChannel::unbounded();
+    recv.state.recv_io.load(pr);
+
+    let recv_slot = Arc::new(parking_lot::Mutex::new(Some(recv)));
+    let (out_tx, _out_rx) = crossbeam_channel::unbounded::<ReceiveOutput<u64>>();
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let park = Arc::new(ParkControl::new());
+    let test_panic = Arc::new(AtomicBool::new(false));
+    RECV_WORKER_ITERATIONS.store(0, Ordering::SeqCst);
+    let timing = RuntimeTimingHooks {
+        record_recv: Some(count_recv_worker_iteration),
+        record_send: None,
+        record_barrier: None,
+    };
+
+    let t_slot = Arc::clone(&recv_slot);
+    let t_shutdown = Arc::clone(&shutdown);
+    let t_park = Arc::clone(&park);
+    let t_panic = Arc::clone(&test_panic);
+    let worker = std::thread::spawn(move || {
+        recv_worker_loop(
+            &t_slot,
+            &out_tx,
+            &t_shutdown,
+            &t_park,
+            None,
+            &timing,
+            &t_panic,
+        );
+    });
+    std::thread::sleep(Duration::from_millis(300));
+    shutdown.store(true, Ordering::SeqCst);
+    park.wake().notify();
+    worker.join().expect("recv worker thread panicked");
+    drop(keepalive_tx);
+
+    let iters = RECV_WORKER_ITERATIONS.load(Ordering::SeqCst);
+    assert!(
+        iters > 100,
+        "precondition: worker must have iterated (only {iters}) — otherwise this test is vacuous"
+    );
+    let locks = park.slot_locks.load(Ordering::Relaxed);
+    assert!(
+        locks <= 2,
+        "recv worker took {locks} slot locks over {iters} receive iterations; the handle is the worker's between parks (nydus-y2e)"
+    );
+    assert!(
+        recv_slot.lock().is_some(),
+        "the handle must be back in its slot after the worker exits"
+    );
+}
+
+/// nydus-y2e measure 2: an idle send worker wakes ZERO times when nothing is
+/// published, not parked and not shut down (pre-fix: a 100µs `wait_for` poll,
+/// ~10,000 wakeups/s). Liveness is kept: two publishes after the idle window
+/// transmit the lagged job promptly, and shutdown ends the worker.
+// Active worker only: see `recv_worker_skips_empty_outputs`.
+#[cfg(workers_active)]
+#[test]
+fn send_worker_idles_without_wakeups_and_wakes_on_publish() {
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+    let (_sim, _recv, send) =
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
+
+    let send_slot = Arc::new(parking_lot::Mutex::new(Some(send)));
+    let (snap_tx, snap_rx) = SnapshotSender::<u64>::pair();
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let park = Arc::new(ParkControl::new());
+    let test_panic = Arc::new(AtomicBool::new(false));
+    // Done by `new_armed` in production; this test drives the loop directly.
+    snap_rx.attach_wake(park.wake());
+    SEND_WORKER_TRANSMITS.store(0, Ordering::SeqCst);
+    let timing = RuntimeTimingHooks {
+        record_recv: None,
+        record_send: Some(count_send_worker_transmit),
+        record_barrier: None,
+    };
+
+    let t_slot = Arc::clone(&send_slot);
+    let t_shutdown = Arc::clone(&shutdown);
+    let t_park = Arc::clone(&park);
+    let t_panic = Arc::clone(&test_panic);
+    let worker = std::thread::spawn(move || {
+        send_worker_loop(&t_slot, &snap_rx, &t_shutdown, &t_park, &timing, &t_panic);
+    });
+
+    std::thread::sleep(Duration::from_millis(300));
+    let idle = park.send_idle_wakeups.load(Ordering::Relaxed);
+
+    // Liveness: the first publish is buffered (one-tick lag), the second
+    // transmits the first.
+    snap_tx.send(naia_shared::SnapshotWorld::<u64>::new());
+    snap_tx.send(naia_shared::SnapshotWorld::<u64>::new());
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while SEND_WORKER_TRANSMITS.load(Ordering::SeqCst) == 0 && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let transmits = SEND_WORKER_TRANSMITS.load(Ordering::SeqCst);
+
+    shutdown.store(true, Ordering::SeqCst);
+    park.wake().notify();
+    worker.join().expect("send worker thread panicked");
+
+    assert!(
+        transmits >= 1,
+        "send worker never woke for a published job (transmits={transmits})"
+    );
+    assert_eq!(
+        idle, 0,
+        "send worker woke {idle} times in 300 ms with nothing to do (nydus-y2e)"
+    );
+    assert!(
+        send_slot.lock().is_some(),
+        "the handle must be back in its slot after the worker exits"
     );
 }

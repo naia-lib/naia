@@ -13,3 +13,5 @@ mquad = [ "naia-shared/mquad" ]
 
 [dependencies]
 naia-shared = { path = "../../../shared" }
+[lints]
+workspace = true

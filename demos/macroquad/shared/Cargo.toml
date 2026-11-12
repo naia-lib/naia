@@ -13,3 +13,5 @@ publish = false
 naia-shared = { path = "../../../shared", features = ["mquad"] }
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }
+[lints]
+workspace = true

@@ -28,3 +28,5 @@ cfg-if = { version = "1.0" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { version = "0.2", features = [ "serde-serialize" ] }
+[lints]
+workspace = true

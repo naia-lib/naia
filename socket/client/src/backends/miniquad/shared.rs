@@ -1,8 +1,12 @@
+#[expect(
+    unsafe_code,
+    reason = "no_mangle entry point the miniquad JS bridge calls by name"
+)]
 #[no_mangle]
 pub extern "C" fn naia_socket_crate_version() -> u32 {
-    let major = dbg!(env!("CARGO_PKG_VERSION_MAJOR").parse::<u32>().unwrap());
+    let major = env!("CARGO_PKG_VERSION_MAJOR").parse::<u32>().unwrap();
     let minor = env!("CARGO_PKG_VERSION_MINOR").parse::<u32>().unwrap();
-    let patch = dbg!(env!("CARGO_PKG_VERSION_PATCH").parse::<u32>().unwrap());
+    let patch = env!("CARGO_PKG_VERSION_PATCH").parse::<u32>().unwrap();
 
     (major << 24) + (minor << 16) + patch
 }
@@ -28,12 +32,16 @@ pub static mut SOCKET_TABLE: Option<SocketTable> = None;
 
 /// The live table, if a socket has been connected yet.
 ///
-/// Safety: the borrow is created fresh on each call, used transiently
+/// SAFETY: the borrow is created fresh on each call, used transiently
 /// within the caller's access, and dropped before the next one begins.
 /// SOCKET_TABLE is only touched from the same wasm32 thread -- the JS
 /// bridge callbacks and the socket handles -- and wasm32 is
 /// single-threaded, so no two borrows ever alias. None of the callback
 /// functions re-enter.
+#[expect(
+    unsafe_code,
+    reason = "single-threaded wasm32 access to the static socket table"
+)]
 pub(crate) fn table_mut() -> Option<&'static mut SocketTable> {
     let table = &raw mut SOCKET_TABLE;
     unsafe { (*table).as_mut() }
@@ -42,8 +50,12 @@ pub(crate) fn table_mut() -> Option<&'static mut SocketTable> {
 /// Opens a fresh per-socket slot and returns its id, to be passed as the
 /// first argument of `naia_connect` so the JS bridge files its connection
 /// record -- and every later callback -- under the same id.
+#[expect(
+    unsafe_code,
+    reason = "single-threaded wasm32 access to the static socket table"
+)]
 pub fn alloc_socket() -> u32 {
-    // Safety: SOCKET_TABLE is written here and subsequently only accessed
+    // SAFETY: SOCKET_TABLE is written here and subsequently only accessed
     // from the same wasm32 thread via the JS bridge callbacks and the
     // socket handles. wasm32 is single-threaded, so this is safe.
     let table = &raw mut SOCKET_TABLE;
@@ -80,6 +92,10 @@ extern "C" {
 }
 
 // Rust methods
+#[expect(
+    unsafe_code,
+    reason = "no_mangle entry point the miniquad JS bridge calls by name"
+)]
 #[no_mangle]
 pub extern "C" fn receive_id(socket_id: u32, id_token: JsObject) {
     let mut id_token_string = String::new();
@@ -109,6 +125,10 @@ pub extern "C" fn receive_id(socket_id: u32, id_token: JsObject) {
 /// base64-encoded reason message. Called by `naia_socket.js` only when the
 /// session POST completes with a non-200 status; network-level failures (no
 /// status at all) keep going to `error`/`ERROR_QUEUE` as generic errors.
+#[expect(
+    unsafe_code,
+    reason = "no_mangle entry point the miniquad JS bridge calls by name"
+)]
 #[no_mangle]
 pub extern "C" fn receive_auth_error(socket_id: u32, status: JsObject, body: JsObject) {
     let mut status_string = String::new();
@@ -128,6 +148,10 @@ pub extern "C" fn receive_auth_error(socket_id: u32, status: JsObject, body: JsO
     }
 }
 
+#[expect(
+    unsafe_code,
+    reason = "no_mangle entry point the miniquad JS bridge calls by name"
+)]
 #[no_mangle]
 pub extern "C" fn receive(socket_id: u32, message: JsObject) {
     let mut message_string = Vec::<u8>::new();
@@ -143,6 +167,10 @@ pub extern "C" fn receive(socket_id: u32, message: JsObject) {
     }
 }
 
+#[expect(
+    unsafe_code,
+    reason = "no_mangle entry point the miniquad JS bridge calls by name"
+)]
 #[no_mangle]
 pub extern "C" fn error(socket_id: u32, error: JsObject) {
     let mut error_string = String::new();
@@ -156,6 +184,10 @@ pub extern "C" fn error(socket_id: u32, error: JsObject) {
     }
 }
 
+#[expect(
+    unsafe_code,
+    reason = "no_mangle entry point the miniquad JS bridge calls by name"
+)]
 #[no_mangle]
 pub extern "C" fn receive_candidate(socket_id: u32, candidate_js: JsObject) {
     let mut candidate_str = String::new();
@@ -183,8 +215,9 @@ impl JsObject {
 pub struct JsObjectWeak(u32);
 
 impl Drop for JsObject {
+    #[expect(unsafe_code, reason = "miniquad JS bridge FFI call")]
     fn drop(&mut self) {
-        // Safety: self.0 is a valid JS object handle issued by the JS bridge. Calling
+        // SAFETY: self.0 is a valid JS object handle issued by the JS bridge. Calling
         // naia_free_object once on drop is the correct ownership protocol for JsObject.
         unsafe {
             naia_free_object(self.weak());
@@ -193,14 +226,16 @@ impl Drop for JsObject {
 }
 
 impl JsObject {
+    #[expect(unsafe_code, reason = "miniquad JS bridge FFI call")]
     pub fn string(string: &str) -> JsObject {
-        // Safety: string.as_ptr() is valid for string.len() bytes for the duration of this call.
+        // SAFETY: string.as_ptr() is valid for string.len() bytes for the duration of this call.
         // naia_create_string copies the bytes into a JS string and returns a new handle.
         unsafe { naia_create_string(string.as_ptr() as _, string.len() as _) }
     }
 
+    #[expect(unsafe_code, reason = "miniquad JS bridge FFI call")]
     pub fn to_string(&self, buf: &mut String) {
-        // Safety: naia_string_length returns the byte length of the JS string; we reserve at
+        // SAFETY: naia_string_length returns the byte length of the JS string; we reserve at
         // least that many bytes in buf before calling naia_unwrap_to_str. set_len is sound
         // because naia_unwrap_to_str writes exactly len valid UTF-8 bytes into the buffer.
         let len = unsafe { naia_string_length(self.weak()) };
@@ -212,7 +247,11 @@ impl JsObject {
         unsafe { naia_unwrap_to_str(self.weak(), buf.as_mut_vec().as_mut_ptr(), len) };
     }
 
+    #[expect(unsafe_code, reason = "miniquad JS bridge FFI call")]
     pub fn to_u8_array(&self, buf: &mut Vec<u8>) {
+        // SAFETY: as in `to_string`: the buffer is reserved to the length the
+        // bridge reports, and `naia_unwrap_to_u8_array` writes exactly `len`
+        // bytes into it before any read.
         let len = unsafe { naia_u8_array_length(self.weak()) };
 
         if len as usize > buf.len() {

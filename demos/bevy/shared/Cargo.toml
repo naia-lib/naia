@@ -13,3 +13,6 @@ publish = false
 naia-bevy-shared = { path = "../../../adapters/bevy/shared" }
 naia-shared = { path = "../../../shared" }
 bevy_ecs = { version = "0.19", default-features=false}
+
+[lints]
+workspace = true

@@ -252,9 +252,11 @@ pub use world::snapshot_world::{SendPlan, SendUpdateEvents, SnapshotWorld};
 pub use world::sync::auth_channel::EntityAuthChannelState;
 pub use world::sync::authority_error::AuthorityError;
 pub use world::sync::host_entity_channel::HostEntityChannel;
-#[cfg(feature = "e2e_debug")]
-pub use world::sync::remote_entity_channel::EntityChannelState;
 pub use world::sync::remote_entity_channel::RemoteEntityChannel;
+#[cfg(feature = "e2e_debug")]
+pub use world::sync::remote_entity_channel::{
+    DebugChannelDiagnostic, DebugChannelSnapshot, EntityChannelState,
+};
 pub use world::update::atomic_bit_set::AtomicBitSet;
 pub use world::update::component_update::{ComponentFieldUpdate, PendingComponentUpdate};
 pub use world::update::connection_visibility_bitset::ConnectionVisibilityBitset;
@@ -276,3 +278,7 @@ pub use wrapping_number::{
     sequence_equal_or_greater_than, sequence_equal_or_less_than, sequence_greater_than,
     sequence_less_than, wrapping_diff,
 };
+
+/// Atomic diagnostics shared with the client debug API.
+#[cfg(feature = "e2e_debug")]
+pub mod diagnostic_counters;

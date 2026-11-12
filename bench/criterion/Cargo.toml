@@ -39,3 +39,6 @@ naia-demo-world = { path = "../../demos/demo_utils/demo_world" }
 parking_lot = "0.12"
 bevy_ecs = { version = "0.19", default-features = false }
 zstd = "0.13"
+
+[lints]
+workspace = true
