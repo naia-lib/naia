@@ -126,7 +126,6 @@ mod schema_tests {
     /// field path, exactly as every generated `WireSchema` impl does.
     /// Never constructed — only described — so the field is appeal-proofed
     /// against dead-code lint.
-    #[allow(dead_code)]
     struct Chain {
         next: Box<Chain>,
     }

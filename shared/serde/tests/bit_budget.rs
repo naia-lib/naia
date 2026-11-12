@@ -377,7 +377,6 @@ fn const_bit_length_agrees_with_bit_length_for_fixed_types() {
 // Compile-time witness that fixed-width number types implement
 // `ConstBitLength`. The variable-width forms are correctly missing this
 // impl — uncommenting the third line would fail to compile.
-#[allow(dead_code)]
 fn _const_bit_length_only_on_fixed() {
     fn requires_const<T: ConstBitLength>() {}
     requires_const::<UnsignedInteger<8>>();

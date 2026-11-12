@@ -59,8 +59,7 @@ mod tests {
         let mut writer = BitWriter::new();
 
         let in_1 = (true, -7532, "Hello tuple!".to_string(), Some(5));
-        #[allow(unused_parens)]
-        let in_2 = (5);
+        let in_2 = 5;
         let in_3 = (true, false, true, None, 4815, "Tuples tuples..".to_string());
         let in_4 = (332, "Goodbye tuple...".to_string());
 

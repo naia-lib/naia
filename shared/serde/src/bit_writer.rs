@@ -40,9 +40,14 @@ pub struct BitWriter {
     max_bits: u32,
 }
 
+impl Default for BitWriter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BitWriter {
     /// Creates a writer capped at [`MTU_SIZE_BITS`].
-    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             scratch: 0,

@@ -10,9 +10,14 @@ pub struct FileBitWriter {
     buffer: Vec<u8>,
 }
 
+impl Default for FileBitWriter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FileBitWriter {
     /// Creates an empty writer.
-    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             scratch: 0,
