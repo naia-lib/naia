@@ -49,7 +49,6 @@ pub fn derive_wire_schema_tuple_struct(
 
 /// Shared entry: emits `impl Serde` (historical) plus `impl WireSchema` from
 /// the same shape, so the two can never drift.
-#[allow(clippy::format_push_string)]
 pub fn derive_serde_tuple_struct(
     struct_: &DataStruct,
     struct_name: &Ident,

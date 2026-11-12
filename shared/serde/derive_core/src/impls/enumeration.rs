@@ -123,7 +123,6 @@ pub fn derive_wire_schema_enum(
 
 /// Shared entry: emits `impl Serde` (historical) plus `impl WireSchema` from
 /// the same shape, so the two can never drift.
-#[allow(clippy::format_push_string)]
 pub fn derive_serde_enum(
     enum_: &DataEnum,
     enum_name: &Ident,

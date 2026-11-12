@@ -184,7 +184,6 @@ pub fn derive_wire_schema_struct(
 /// Shared entry: emits `impl Serde` (historical) plus `impl WireSchema` from
 /// the same shape, so the two can never drift. Both come from the one parsed
 /// `DeriveInput` the caller hands over.
-#[allow(clippy::format_push_string)]
 pub fn derive_serde_struct(
     struct_: &DataStruct,
     struct_name: &Ident,
