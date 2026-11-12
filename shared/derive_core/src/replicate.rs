@@ -43,10 +43,6 @@ pub struct NonReplicatedProperty {
 }
 
 /// One field of a `Replicate` derive input, classified by its declared type.
-#[expect(
-    clippy::large_enum_variant,
-    reason = "derive input variants retain their parsed syntax inline without another allocation"
-)]
 pub enum Property {
     /// A `Property<T>` field.
     Normal(NormalProperty),
@@ -1508,7 +1504,7 @@ fn get_max_bit_length_method(properties: &[Property]) -> TokenStream {
 
     quote! {
         fn max_bit_length() -> u32 where Self: Sized {
-                        let mut output: u32 = 0;
+            let mut output: u32 = 0;
             #terms
             output
         }
