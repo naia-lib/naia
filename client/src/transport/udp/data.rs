@@ -38,6 +38,12 @@ impl Socket {
     ///
     /// **Not suitable for untrusted networks** — see the type-level security
     /// note above.
+    /// Panics if local socket discovery, binding or nonblocking setup fails.
+    #[expect(
+        clippy::expect_used,
+        clippy::unwrap_used,
+        reason = "this infallible constructor treats local socket setup failure as fatal"
+    )]
     pub fn new(server_session_url: &str, config: Option<LinkConditionerConfig>) -> Self {
         let data_addr_cell = AddrCell::default();
         let auth_io = Arc::new(Mutex::new(AuthIo::new(

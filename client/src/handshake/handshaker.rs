@@ -410,18 +410,14 @@ impl HandshakeManager {
     #[cfg(feature = "transport_udp")]
     fn recv_challenge_response(&mut self, reader: &mut BitReader) {
         if self.connection_state == HandshakeState::AwaitingChallengeResponse {
-            let timestamp_result = Timestamp::de(reader);
-            if timestamp_result.is_err() {
+            let Ok(timestamp) = Timestamp::de(reader) else {
                 return;
-            }
-            let timestamp = timestamp_result.unwrap();
+            };
 
             if self.pre_connection_timestamp == timestamp {
-                let digest_bytes_result = Vec::<u8>::de(reader);
-                if digest_bytes_result.is_err() {
+                let Ok(digest_bytes) = Vec::<u8>::de(reader) else {
                     return;
-                }
-                let digest_bytes = digest_bytes_result.unwrap();
+                };
                 self.pre_connection_digest = Some(digest_bytes);
 
                 self.connection_state = HandshakeState::AwaitingValidateResponse;
@@ -508,6 +504,10 @@ impl HandshakeManager {
     }
 
     #[cfg(feature = "transport_udp")]
+    #[expect(
+        clippy::unwrap_used,
+        reason = "validate requests are written only after a challenge digest was accepted"
+    )]
     fn write_signed_timestamp(&self, writer: &mut BitWriter) {
         self.pre_connection_timestamp.ser(writer);
         let digest: &Vec<u8> = self.pre_connection_digest.as_ref().unwrap();
