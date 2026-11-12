@@ -284,7 +284,6 @@ struct SessionRequest {
 /// `Content-Length` -- yields `None` so the caller can answer 404 and drop the
 /// connection. None of it may panic: `serve` runs one task per incoming
 /// connection, and a panic there takes the whole server process down.
-#[allow(clippy::too_many_lines)]
 async fn read_session_request<R: AsyncRead + Unpin>(
     reader: R,
     rtc_url_paths: &RtcUrlPaths,
@@ -427,7 +426,6 @@ fn fingerprint_is_acceptable(protocol_id: Option<&str>, expected: &str, is_optio
 }
 
 /// Reads a request from the client and sends it a response.
-#[allow(clippy::too_many_lines)]
 async fn serve(
     mut session_endpoint: SessionEndpoint,
     mut stream: Arc<Async<TcpStream>>,

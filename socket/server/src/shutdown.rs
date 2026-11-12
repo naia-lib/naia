@@ -16,7 +16,6 @@ use futures_channel::oneshot;
 /// returned handle. The senders are never sent on; their only job is to die
 /// with the last handle, which resolves every paired wait.
 pub struct ShutdownSignal {
-    #[allow(dead_code)]
     senders: Vec<oneshot::Sender<()>>,
 }
 

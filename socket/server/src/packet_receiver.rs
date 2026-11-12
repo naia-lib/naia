@@ -31,7 +31,10 @@ impl PacketReceiver {
     }
 
     /// Creates a `PacketReceiver`, conditioned or not depending on the config
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the channel carries an address, payload and transport error as one typed event"
+    )]
     #[must_use]
     pub fn new(
         channel_receiver: Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
@@ -63,19 +66,24 @@ impl PacketReceiver {
 /// Used to receive packets from the Server Socket
 #[derive(Clone)]
 pub struct PlainPacketReceiver {
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the channel carries an address, payload and transport error as one typed event"
+    )]
     channel_receiver: Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
     last_payload: Option<Box<[u8]>>,
     // Shared shutdown trigger for the listen that created this handle: the
     // last handle drop ends the background tasks (naia-lib/naia#92).
     // Retained, never read.
-    #[allow(dead_code)]
     shutdown: Option<Arc<ShutdownSignal>>,
 }
 
 impl PlainPacketReceiver {
     /// Creates a new `PlainPacketReceiver`
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the channel carries an address, payload and transport error as one typed event"
+    )]
     #[must_use]
     pub fn new(
         channel_receiver: Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
@@ -91,7 +99,6 @@ impl PlainPacketReceiver {
     // `Err` is currently unreachable, but callers branch on it so a
     // persistently-failing channel cannot trap a drain loop; keep the
     // signature fallible.
-    #[allow(clippy::unnecessary_wraps)]
     pub fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, NaiaServerSocketError> {
         match self.channel_receiver.try_recv() {
             Ok(result) => match result {

@@ -11,7 +11,6 @@ pub struct PacketSender {
     // Shared shutdown trigger for the listen that created this handle: the
     // last handle drop ends the background tasks (naia-lib/naia#92).
     // Retained, never read.
-    #[allow(dead_code)]
     shutdown: Option<Arc<ShutdownSignal>>,
 }
 

@@ -11,7 +11,10 @@ use super::{error::NaiaServerSocketError, shutdown::ShutdownSignal};
 /// Used to receive packets from the Server Socket
 #[derive(Clone)]
 pub struct ConditionedPacketReceiver {
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the channel carries an address, payload and transport error as one typed event"
+    )]
     channel_receiver: Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
     link_conditioner_config: LinkConditionerConfig,
     time_queue: TimeQueue<(SocketAddr, Box<[u8]>)>,
@@ -21,13 +24,15 @@ pub struct ConditionedPacketReceiver {
     // Shared shutdown trigger for the listen that created this handle: the
     // last handle drop ends the background tasks (naia-lib/naia#92).
     // Retained, never read. Set via PacketReceiver::with_shutdown.
-    #[allow(dead_code)]
     pub(crate) shutdown: Option<Arc<ShutdownSignal>>,
 }
 
 impl ConditionedPacketReceiver {
     /// Creates a new `ConditionedPacketReceiver`
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the channel carries an address, payload and transport error as one typed event"
+    )]
     #[must_use]
     pub fn new(
         channel_receiver: Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
@@ -52,7 +57,6 @@ impl ConditionedPacketReceiver {
     // `Err` is currently unreachable, but callers branch on it so a
     // persistently-failing channel cannot trap a drain loop; keep the
     // signature fallible.
-    #[allow(clippy::unnecessary_wraps)]
     #[expect(
         clippy::expect_used,
         reason = "a u64 poll counter cannot exhaust; a wrapped counter would misorder delayed packets"
