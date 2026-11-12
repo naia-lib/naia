@@ -343,7 +343,7 @@ pub fn connect_client(ctx: &mut TestWorldMut) {
 /// ```
 #[expect(
     clippy::type_complexity,
-    reason = "the channel carries an address, payload and transport error as one typed event"
+    reason = "the optional callback configures a newly created scenario client before connecting"
 )]
 pub fn connect_named_client(
     ctx: &mut TestWorldMut,
