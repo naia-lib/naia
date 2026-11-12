@@ -9,7 +9,7 @@ struct TestMarker;
 // One parameter per generated alias is exactly what this compile test asserts.
 #[expect(
     clippy::too_many_arguments,
-    reason = "the transport operation carries independently typed protocol and world state"
+    reason = "one argument per generated alias verifies that all aliases resolve for the marker"
 )]
 fn _assert_aliases(
     _c: TestMarkerClient,
