@@ -12,12 +12,14 @@ pub fn sync_clientside_sprites(
     client: Client<Main>,
     mut query: Query<(&Position, &mut Interp, &mut Transform), With<Predicted>>,
 ) {
+    let Some(interp_amount) = client.client_interpolation() else {
+        return;
+    };
     for (position, mut interp, mut transform) in query.iter_mut() {
         if *position.x != interp.next_x as i16 || *position.y != interp.next_y as i16 {
             interp.next_position(*position.x, *position.y);
         }
 
-        let interp_amount = client.client_interpolation().unwrap();
         interp.interpolate(interp_amount);
         transform.translation.x = interp.interp_x;
         transform.translation.y = interp.interp_y;
@@ -28,12 +30,14 @@ pub fn sync_serverside_sprites(
     client: Client<Main>,
     mut query: Query<(&Position, &mut Interp, &mut Transform), With<Confirmed>>,
 ) {
+    let Some(interp_amount) = client.server_interpolation() else {
+        return;
+    };
     for (position, mut interp, mut transform) in query.iter_mut() {
         if *position.x != interp.next_x as i16 || *position.y != interp.next_y as i16 {
             interp.next_position(*position.x, *position.y);
         }
 
-        let interp_amount = client.server_interpolation().unwrap();
         interp.interpolate(interp_amount);
         transform.translation.x = interp.interp_x;
         transform.translation.y = interp.interp_y;

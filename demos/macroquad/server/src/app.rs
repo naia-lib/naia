@@ -1,4 +1,4 @@
-use std::{collections::HashMap, thread::sleep, time::Duration};
+use std::{collections::HashMap, net::SocketAddr, thread::sleep, time::Duration};
 
 use naia_server::{
     shared::{Instant, Random},
@@ -34,13 +34,9 @@ impl App {
         let protocol = protocol();
 
         let server_addresses = webrtc::ServerAddrs::new(
-            "127.0.0.1:14191"
-                .parse()
-                .expect("could not parse Signaling address/port"),
+            SocketAddr::from(([127, 0, 0, 1], 14191)),
             // IP Address to listen on for UDP WebRTC data channels
-            "127.0.0.1:14192"
-                .parse()
-                .expect("could not parse WebRTC data address/port"),
+            SocketAddr::from(([127, 0, 0, 1], 14192)),
             // The public WebRTC IP address to advertise
             "http://127.0.0.1:14192",
         );
@@ -139,9 +135,12 @@ impl App {
             // TODO: eventually would like to do this like:
             // self.server.entity_property(assigment_message).set(&entity_id);
 
-            self.server
+            if let Err(err) = self
+                .server
                 .send_message::<EntityAssignmentChannel, _>(&user_key, &assignment_message)
-                .unwrap();
+            {
+                warn!("could not send the entity assignment to {user_key:?}: {err}");
+            }
         }
 
         // Disconnect Events

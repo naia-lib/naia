@@ -284,6 +284,10 @@ impl Plugin {
 }
 
 impl PluginType for Plugin {
+    #[expect(
+        clippy::unwrap_used,
+        reason = "Plugin::build runs once and is the only taker of the config"
+    )]
     fn build(&self, app: &mut App) {
         let mut config = self.config.lock().deref_mut().take().unwrap();
 

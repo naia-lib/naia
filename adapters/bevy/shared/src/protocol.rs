@@ -48,6 +48,10 @@ impl Protocol {
 
     /// Takes the `WorldData` out of this `Protocol`. Panics if called more
     /// than once.
+    #[expect(
+        clippy::expect_used,
+        reason = "taking the WorldData twice is API misuse"
+    )]
     pub fn take_world_data(&mut self) -> WorldData {
         self.world_data.take().expect("should only call this once")
     }
@@ -129,6 +133,10 @@ impl Protocol {
     /// `ProtocolServerExt::add_component` call this internally; direct callers
     /// should prefer one of those tier-specific extensions so event installers
     /// are wired in at the same time.
+    #[expect(
+        clippy::expect_used,
+        reason = "registering a component after take_world_data is API misuse"
+    )]
     pub fn register_component<C: Replicate + Component<Mutability = Mutable>>(
         &mut self,
     ) -> &mut Self {
@@ -160,6 +168,10 @@ impl Protocol {
     /// and additionally marks the kind in `resource_kinds` so the
     /// client/server mirror systems recognize incoming resource
     /// components.
+    #[expect(
+        clippy::expect_used,
+        reason = "registering a resource after take_world_data is API misuse"
+    )]
     pub fn add_resource<R: crate::ReplicatedResource>(&mut self) -> &mut Self {
         // Component-side registration (also populates world_data).
         self.register_component::<R>();

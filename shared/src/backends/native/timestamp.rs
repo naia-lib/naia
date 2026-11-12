@@ -10,6 +10,10 @@ impl Timestamp {
     ///
     /// Panics if the expected value is missing: timing error!.
     #[must_use]
+    #[expect(
+        clippy::expect_used,
+        reason = "documented panic: a host clock before the Unix epoch is a misconfigured host"
+    )]
     pub fn now() -> u64 {
         SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)

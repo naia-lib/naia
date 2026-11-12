@@ -46,9 +46,10 @@ impl LocalServerReceiver {
     #[doc(hidden)]
     pub fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, ServerRecvError> {
         if let Some((client_addr, bytes)) = self.hub.try_recv_data() {
-            self.last_payload = Some((client_addr, bytes.into_boxed_slice()));
-            let (addr, payload) = self.last_payload.as_ref().unwrap();
-            Ok(Some((*addr, payload.as_ref())))
+            let (addr, payload) = &*self
+                .last_payload
+                .insert((client_addr, bytes.into_boxed_slice()));
+            Ok(Some((*addr, &payload[..])))
         } else {
             self.last_payload = None;
             Ok(None)

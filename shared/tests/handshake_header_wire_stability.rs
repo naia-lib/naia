@@ -21,6 +21,10 @@ fn ser_bytes(value: &HandshakeHeader) -> Vec<u8> {
     writer.to_bytes().into_vec()
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn round_trip(header: &HandshakeHeader) {
     let bytes = ser_bytes(header);
     let mut reader = BitReader::new(&bytes);

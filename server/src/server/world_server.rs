@@ -4,7 +4,7 @@ use std::{
     hash::Hash,
     net::SocketAddr,
     panic,
-    sync::Arc,
+    sync::{Arc, RwLock},
     time::Duration,
 };
 
@@ -14,12 +14,12 @@ use naia_shared::{
     malformed_drop_warn, AppliedCause, AuthorityError, BigMapKey, Channel, ChannelKind,
     ComponentKind, ConnectionStats, Coverage, DisconnectReason, EntityAndGlobalEntityConverter,
     EntityAuthStatus, EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef,
-    FrozenGlobalDirty, GlobalDirtyBitset, GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner,
-    GlobalPriorityState, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType,
-    Instant, LocalEntityAndGlobalEntityConverter, Message, MessageContainer, Protocol, Replicate,
-    ReplicatedComponent, Request, ResourceAlreadyExists, ResourceRegistry, Response,
-    ResponseReceiveKey, ResponseSendKey, SendPlan, SharedGlobalWorldManager, Tick, WorldMutType,
-    WorldRefType,
+    FrozenGlobalDirty, GlobalDiffHandler, GlobalDirtyBitset, GlobalEntity, GlobalEntityIndex,
+    GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId, GlobalResponseId,
+    GlobalWorldManagerType, HostType, Instant, LocalEntityAndGlobalEntityConverter, Message,
+    MessageContainer, Protocol, Replicate, ReplicatedComponent, Request, ResourceAlreadyExists,
+    ResourceRegistry, Response, ResponseReceiveKey, ResponseSendKey, SendPlan,
+    SharedGlobalWorldManager, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -1076,10 +1076,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .state
             .global_request_manager
             .destroy_request_id(request_id)?;
-        let response: S = Box::<dyn Any + 'static>::downcast::<S>(container.to_boxed_any())
-            .ok()
-            .map(|boxed_s| *boxed_s)
-            .unwrap();
+        let response = *Box::<dyn Any + 'static>::downcast::<S>(container.to_boxed_any()).ok()?;
         Some((user_key, response))
     }
     /// Drains and returns all tick-buffered messages sent by clients for the given tick.
@@ -1507,8 +1504,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// after insertion (no diff-tracking on the wire). Pass `false` for
     /// resources whose fields are updated over time (delta-tracked).
     ///
-    /// Errors with `ResourceAlreadyExists` if `R` was already inserted.
-    /// The world remains unchanged on error.
+    /// Errors with `ResourceAlreadyExists` if already inserted (world unchanged); panics if the entity just spawned is missing from the global map (naia bug).
+    #[expect(clippy::expect_used, reason = "spawn_entity_inner registers it")]
     pub fn insert_resource<W: WorldMutType<E>, R: ReplicatedComponent>(
         &mut self,
         mut world: W,
@@ -1674,14 +1671,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .entity_replication_config(global_entity)
     }
 
-    /// This is used only for Bevy adapter crates, do not use otherwise!
+    /// Adapter-crates-only API.
     pub fn entity_take_authority(&mut self, world_entity: &E) -> Result<(), AuthorityError> {
         let global_entity = self
             .shared
             .global_entity_map
             .read()
             .entity_to_global_entity(world_entity)
-            .unwrap();
+            .map_err(|_| AuthorityError::NotDelegated)?;
         let result = self
             .shared
             .global_world_manager
@@ -1796,7 +1793,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         }
     }
 
-    /// Applies a new [`ReplicationConfig`] to an entity, changing its visibility and authority model.
+    /// Applies a new [`ReplicationConfig`] to an entity; panics if `world_entity` isn't already replicating with intact records (host-API misuse).
+    #[expect(clippy::unwrap_used, reason = "host-API misuse: not yet replicating")]
     pub fn configure_entity_replication<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
@@ -1930,7 +1928,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .entity_set_scope_exit(global_entity, config.scope_exit);
     }
 
-    /// This is used only for Bevy adapter crates, do not use otherwise!
+    /// Adapter-crates-only API.
     pub fn entity_give_authority(
         &mut self,
         origin_user: &UserKey,
@@ -1941,7 +1939,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .global_entity_map
             .read()
             .entity_to_global_entity(world_entity)
-            .unwrap();
+            .map_err(|_| AuthorityError::NotDelegated)?;
 
         // Per contract [entity-authority-12] ("server give_authority
         // requires scope"): the target user must be able to see the
@@ -2046,7 +2044,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .global_entity_map
             .read()
             .entity_to_global_entity(world_entity)
-            .unwrap();
+            .map_err(|_| AuthorityError::NotDelegated)?;
 
         if !self.user_scope_has_entity(requester_user, world_entity) {
             return Err(AuthorityError::NotInScope);
@@ -2132,7 +2130,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         self.sim_handle.entity_authority_status(world_entity)
     }
 
-    /// This is used only for Bevy adapter crates, do not use otherwise!
+    /// Adapter-crates-only API.
     pub fn entity_release_authority(
         &mut self,
         origin_user: Option<UserKey>,
@@ -2144,7 +2142,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .global_entity_map
             .read()
             .entity_to_global_entity(world_entity)
-            .unwrap();
+            .map_err(|_| AuthorityError::NotDelegated)?;
         let result = self
             .shared
             .global_world_manager
@@ -2802,6 +2800,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .set_despawn_on_next_exit(user_key, global_entity);
     }
 
+    #[expect(clippy::unwrap_used, reason = "caller holds a registered entity")]
     pub(crate) fn user_scope_set_entity(
         &mut self,
         user_key: UserKey,
@@ -2952,7 +2951,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         }
     }
 
-    /// Registers a component insertion in the replication layer without touching the world (adapter use only).
+    /// Registers a component insertion in the replication layer (adapter use only); panics if `world_entity` is not registered.
+    #[expect(clippy::unwrap_used, reason = "caller holds a registered entity")]
     pub fn insert_component_worldless(&mut self, world_entity: &E, component: &mut dyn Replicate) {
         let component_kind = component.kind();
 
@@ -3065,7 +3065,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         world.remove_component::<R>(world_entity)
     }
 
-    /// Removes a component from the replication layer without touching the world (adapter use only).
+    /// Removes a component from the replication layer (adapter use only); panics if `world_entity` is not registered.
+    #[expect(clippy::unwrap_used, reason = "caller holds a registered entity")]
     pub fn remove_component_worldless(&mut self, world_entity: &E, component_kind: &ComponentKind) {
         let global_entity = self
             .shared
@@ -3730,12 +3731,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
         // Clean up all user data
         for room_key in user.room_keys() {
-            self.sim_handle
-                .state
-                .room_store
-                .get_mut(*room_key)
-                .unwrap()
-                .unsubscribe_user(user_key);
+            if let Some(room) = self.sim_handle.state.room_store.get_mut(*room_key) {
+                room.unsubscribe_user(user_key);
+            }
             // Mirror the room→user removal into the scope-checks cache —
             // this path bypasses `room_remove_user`.
             self.send
@@ -3983,6 +3981,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         self.process_entity_events(world, user_key, entity_events);
     }
 
+    #[expect(clippy::unwrap_used, reason = "lookups validated upstream; see body")]
     fn process_entity_events<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
@@ -4489,14 +4488,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                     continue;
                 }
 
-                let entity_idx = {
-                    let guard = diff_handler_arc
-                        .read()
-                        .expect("GlobalDiffHandler lock poisoned");
-                    guard
-                        .entity_to_global_idx(removed_global_entity)
-                        .unwrap_or(GlobalEntityIndex::INVALID)
-                };
+                let entity_idx = Self::diff_idx(&diff_handler_arc, removed_global_entity);
 
                 // Same exit policy as every other route ([scope-exit-09]):
                 // the entity's own `ScopeExit`, unless a one-shot
@@ -4666,14 +4658,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         {
                             continue;
                         }
-                        let entity_idx = {
-                            let guard = diff_handler_arc
-                                .read()
-                                .expect("GlobalDiffHandler lock poisoned");
-                            guard
-                                .entity_to_global_idx(*global_entity)
-                                .unwrap_or(GlobalEntityIndex::INVALID)
-                        };
+                        let entity_idx = Self::diff_idx(&diff_handler_arc, *global_entity);
                         let scope_exit = self
                             .shared
                             .global_world_manager
@@ -4784,9 +4769,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// Returns `GlobalEntityIndex::INVALID` if the entity is not yet registered.
     fn entity_global_idx(&self, global_entity: GlobalEntity) -> GlobalEntityIndex {
         let handler = self.shared.global_world_manager.read().diff_handler();
-        let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
-        guard
-            .entity_to_global_idx(global_entity)
+        Self::diff_idx(&handler, global_entity)
+    }
+
+    /// Shared diff-handler lookup for `entity_global_idx` and the scope-exit loops below.
+    #[expect(clippy::expect_used, reason = "diff handler lock: writer panicked")]
+    fn diff_idx(h: &RwLock<GlobalDiffHandler>, e: GlobalEntity) -> GlobalEntityIndex {
+        h.read()
+            .expect("GlobalDiffHandler lock poisoned")
+            .entity_to_global_idx(e)
             .unwrap_or(GlobalEntityIndex::INVALID)
     }
 
@@ -4893,6 +4884,7 @@ cfg_if! {
 
         /// Panics if the user (or their send connection) does not exist — matches
         /// the resident `local_entities` contract.
+        #[expect(clippy::expect_used, reason = "local_entities misuse contract")]
         pub(crate) fn local_entities_impl(
             user_store: &UserStore,
             send_user_connections: &std::collections::HashMap<std::net::SocketAddr, crate::connection::SendConnection>,
@@ -5057,11 +5049,14 @@ pub(crate) fn user_scope_has_entity_impl<E: Copy + Eq + Hash + Send + Sync>(
     user_key: UserKey,
     world_entity: &E,
 ) -> bool {
-    let global_entity = shared
+    let Ok(global_entity) = shared
         .global_entity_map
         .read()
         .entity_to_global_entity(world_entity)
-        .unwrap();
+    else {
+        // Unregistered entity is trivially not in any user's scope.
+        return false;
+    };
 
     // Check if entity has Private replication config
     let is_private = if let Some(config) = shared

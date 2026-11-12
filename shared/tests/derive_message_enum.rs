@@ -29,6 +29,10 @@ fn protocol() -> Protocol {
 }
 
 /// Writes each message, then reads them all back in order out of one bit stream.
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn round_trip(messages: Vec<TestEnumMessage>) -> Vec<TestEnumMessage> {
     let protocol = protocol();
     let message_kinds = &protocol.message_kinds;

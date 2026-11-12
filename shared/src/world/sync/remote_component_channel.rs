@@ -127,7 +127,10 @@ impl RemoteComponentChannel {
                 self.set_inserted(false, id);
             }
 
-            let (id, (tick, insert)) = self.buffered_messages.pop_front().unwrap();
+            // The loop just peeked this entry.
+            let Some((id, (tick, insert))) = self.buffered_messages.pop_front() else {
+                break;
+            };
             if insert {
                 self.incoming_messages
                     .push_back((id, tick, EntityMessageType::InsertComponent));

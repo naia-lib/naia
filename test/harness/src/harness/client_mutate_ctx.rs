@@ -24,6 +24,10 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
 
     /// Spawn a client entity, configure it, wait for server registration, return EntityKey
     /// Synchronous: waits for server to have entity before returning
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: a failure must fail the calling test"
+    )]
     pub fn spawn<F>(&mut self, f: F) -> EntityKey
     where
         F: for<'b> FnOnce(ClientEntityMut<'b, WorldMut<'b>>),
@@ -76,6 +80,10 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
     /// Marks the entity as static via `spawn_static_entity` so no diff-tracking
     /// occurs after construction. Components must be inserted inside the closure
     /// `f`; inserting after this method returns panics.
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness: a failure must fail the calling test"
+    )]
     pub fn spawn_static<F>(&mut self, f: F) -> EntityKey
     where
         F: for<'b> FnOnce(ClientEntityMut<'b, WorldMut<'b>>),

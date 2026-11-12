@@ -1,6 +1,6 @@
 use std::{
     net::SocketAddr,
-    sync::{Arc, RwLock},
+    sync::{Arc, PoisonError, RwLock},
 };
 
 use naia_shared::transport::local::ClientServerAddr;
@@ -30,12 +30,12 @@ impl LocalAddrCell {
     }
 
     pub(crate) fn set(&self, addr: SocketAddr) {
-        let mut cell = self.cell.write().unwrap();
+        let mut cell = self.cell.write().unwrap_or_else(PoisonError::into_inner);
         cell.0 = ClientServerAddr::Found(addr);
     }
 
     pub(crate) fn get(&self) -> ClientServerAddr {
-        let cell = self.cell.read().unwrap();
+        let cell = self.cell.read().unwrap_or_else(PoisonError::into_inner);
         cell.0.clone()
     }
 

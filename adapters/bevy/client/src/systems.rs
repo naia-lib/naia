@@ -36,6 +36,10 @@ use crate::{
     events::CachedClientTickEventsState, ServerOwned,
 };
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "the naia client plugin registers every resource this system reads"
+)]
 pub fn world_to_host_sync<T: Send + Sync + 'static>(world: &mut World) {
     let host_id = TypeId::of::<T>();
 
@@ -135,6 +139,10 @@ pub fn process_packets<T: Send + Sync + 'static>(world: &mut World) {
     });
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "the naia client plugin registers every resource this system reads"
+)]
 pub fn translate_world_events<T: Send + Sync + 'static>(world: &mut World) {
     world.resource_scope(|world, mut client: Mut<ClientWrapper<T>>| {
         // Receive Events
@@ -337,6 +345,10 @@ pub fn send_packets_init<T: Send + Sync + 'static>(world: &mut World) {
     });
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "the naia client plugin registers every resource this system reads"
+)]
 pub fn send_packets<T: Send + Sync + 'static>(world: &mut World) {
     world.resource_scope(|world, mut client: Mut<ClientWrapper<T>>| {
         // if disconnected, always send

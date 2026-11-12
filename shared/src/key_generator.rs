@@ -69,7 +69,7 @@ impl<K: From<I> + Into<I> + Copy, I: KeyInt> KeyGenerator<K, I> {
     ///
     /// # Panics
     ///
-    /// Panics if a value expected to be present is missing.
+    /// Panics if the key width `I` is exhausted (all keys are in use).
     pub fn generate(&mut self) -> K {
         let now = Instant::now();
 
@@ -78,8 +78,9 @@ impl<K: From<I> + Into<I> + Copy, I: KeyInt> KeyGenerator<K, I> {
             if instant.elapsed(&now) < self.recycle_timeout {
                 break;
             }
-            let (key, _) = self.recycling_keys.pop_front().unwrap();
-            self.recycled_keys.push_back(key);
+            if let Some((key, _)) = self.recycling_keys.pop_front() {
+                self.recycled_keys.push_back(key);
+            }
         }
 
         // Check whether we can return a recycled key

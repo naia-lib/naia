@@ -325,14 +325,14 @@ impl ComponentKinds {
     /// net-ID space and `HashMap` iteration order never leaks into the
     /// result.
     ///
-    ///
-    /// # Panics
-    ///
-    /// Panics if the expected value is missing: `ComponentKinds` net-ID space must be dense.
     /// # Panics
     ///
     /// Panics if the expected value is missing: `ComponentKinds` net-ID space must be dense.
     #[must_use]
+    #[expect(
+        clippy::expect_used,
+        reason = "net-IDs are dense registration ordinals; a gap is a registry bug and must stop loudly"
+    )]
     pub fn schema_fact_entries(&self) -> Vec<(NetId, ComponentFacts)> {
         let mut output = Vec::with_capacity(self.current_net_id as usize);
         for net_id in 0..self.current_net_id {
@@ -412,6 +412,10 @@ impl ComponentKinds {
     ///
     /// Panics if the expected value is missing: Must properly initialize Component with Protocol via `add_component()` function!.
     #[must_use]
+    #[expect(
+        clippy::expect_used,
+        reason = "naming an unregistered component kind is protocol misuse and must stop loudly"
+    )]
     pub fn kind_to_name(&self, component_kind: ComponentKind) -> String {
         self.kind_map
             .get(&component_kind)
@@ -431,6 +435,10 @@ impl ComponentKinds {
         self.net_id_map.get(&net_id).copied().ok_or(SerdeErr)
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "naming an unregistered component kind is protocol misuse and must stop loudly"
+    )]
     fn kind_to_net_id(&self, component_kind: ComponentKind) -> NetId {
         self.kind_map
             .get(&component_kind)
@@ -450,6 +458,10 @@ impl ComponentKinds {
             .map(|(net_id, _, _)| *net_id)
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "naming an unregistered component kind is protocol misuse and must stop loudly"
+    )]
     fn kind_to_builder(&self, component_kind: ComponentKind) -> &dyn ReplicateBuilder {
         self.kind_map
             .get(&component_kind)
@@ -488,6 +500,10 @@ impl ComponentKinds {
     ///
     /// Panics if the expected value is missing: `ComponentKinds` net-ID space must be dense.
     #[must_use]
+    #[expect(
+        clippy::expect_used,
+        reason = "net-IDs are dense registration ordinals; a gap is a registry bug and must stop loudly"
+    )]
     pub fn schema_entries(&self) -> Vec<(NetId, String)> {
         let mut output = Vec::with_capacity(self.current_net_id as usize);
         for net_id in 0..self.current_net_id {

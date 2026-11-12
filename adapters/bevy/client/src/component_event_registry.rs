@@ -47,9 +47,7 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
         events: &mut naia_client::Events<Entity>,
     ) {
         // Insert Component Event
-        if events.has_inserts() {
-            let inserts = events.take_inserts().unwrap();
-
+        if let Some(inserts) = events.take_inserts() {
             self.bundle_registry.pre_process();
 
             for (kind, ticked_entities) in inserts {
@@ -78,8 +76,7 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
         }
 
         // Update Component Event
-        if events.has_updates() {
-            let updates = events.take_updates().unwrap();
+        if let Some(updates) = events.take_updates() {
             for (kind, entities) in updates {
                 let Some(handler) = self.component_handlers.get_mut(&kind) else {
                     trace!("No update event handler for ComponentKind: {:?}", kind);
@@ -90,8 +87,7 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
         }
 
         // Remove Component Event
-        if events.has_removes() {
-            let removes = events.take_removes().unwrap();
+        if let Some(removes) = events.take_removes() {
             for (kind, ticked_entities) in removes {
                 let Some(handler) = self.component_handlers.get_mut(&kind) else {
                     trace!("No remove event handler for ComponentKind: {:?}", kind);
@@ -166,6 +162,10 @@ impl<T: Send + Sync + 'static, R: Replicate> ComponentEventHandler
         }
     }
 
+    #[expect(
+        clippy::unwrap_used,
+        reason = "the handler for R is handed only R components"
+    )]
     fn handle_removes(
         &mut self,
         world: &mut World,

@@ -292,7 +292,10 @@ impl RemoteEntityChannel {
                     self.buffered_messages.pop_front_until_and_excluding(id);
 
                     // Pop the SpawnWithComponents message itself
-                    let (bundle_id, (tick, msg)) = self.buffered_messages.pop_front().unwrap();
+                    // The loop just peeked this entry.
+                    let Some((bundle_id, (tick, msg))) = self.buffered_messages.pop_front() else {
+                        break;
+                    };
                     let kinds = match msg {
                         EntityMessage::SpawnWithComponents((), kinds) => kinds,
                         _ => unreachable!(),
@@ -346,8 +349,14 @@ impl RemoteEntityChannel {
                 }
                 EntityMessageType::InsertComponent | EntityMessageType::RemoveComponent => {
 
-                    let (id, (tick, msg)) = self.buffered_messages.pop_front().unwrap();
-                    let component_kind = msg.component_kind().unwrap();
+                    // The loop just peeked this entry.
+                    let Some((id, (tick, msg))) = self.buffered_messages.pop_front() else {
+                        break;
+                    };
+                    // Insert and Remove always carry their component kind.
+                    let Some(component_kind) = msg.component_kind() else {
+                        continue;
+                    };
                     let component_channel = self.component_channels
                         .entry(component_kind)
                         .or_insert_with(RemoteComponentChannel::new);
@@ -359,7 +368,10 @@ impl RemoteEntityChannel {
                 EntityMessageType::EnableDelegation | EntityMessageType::DisableDelegation |
                 EntityMessageType::ReleaseAuthority | // NOTE: This should be possible because a client might want to release authority right after enabling delegation
                 EntityMessageType::SetAuthority => {
-                    let (id, (tick, msg)) = self.buffered_messages.pop_front().unwrap();
+                    // The loop just peeked this entry.
+                    let Some((id, (tick, msg))) = self.buffered_messages.pop_front() else {
+                        break;
+                    };
                     // info!("EntityChannelReceiver::process_messages(id={}, msgType={:?})", id, msg.get_type());
 
                     self.auth_channel.receiver_receive_message(Some(self.state), id, tick, msg);
@@ -380,8 +392,9 @@ impl RemoteEntityChannel {
     }
 
     fn pop_front_into_outgoing(&mut self) {
-        let (id, (tick, msg)) = self.buffered_messages.pop_front().unwrap();
-        self.incoming_messages.push((id, tick, msg));
+        if let Some((id, (tick, msg))) = self.buffered_messages.pop_front() {
+            self.incoming_messages.push((id, tick, msg));
+        }
     }
 
     #[allow(dead_code)] // used in migration unit tests

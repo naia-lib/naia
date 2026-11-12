@@ -127,6 +127,10 @@ impl ChannelKinds {
     ///
     /// Panics if the expected value is missing: could not find `ChannelKind` for given Channel. Make sure Channel struct has `#[derive(Channel)]` on it!.
     #[must_use]
+    #[expect(
+        clippy::expect_used,
+        reason = "registration invariant: Channel must be registered via add_channel()"
+    )]
     pub fn channel(&self, kind: &ChannelKind) -> ChannelSettings {
         let (_, settings, _) = self.kind_map.get(kind).expect("could not find ChannelKind for given Channel. Make sure Channel struct has `#[derive(Channel)]` on it!");
         settings.clone()
@@ -141,6 +145,10 @@ impl ChannelKinds {
         self.net_id_map.get(&net_id).copied().ok_or(SerdeErr)
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "registration invariant: Channel must be registered via add_channel()"
+    )]
     pub(crate) fn kind_to_net_id(&self, channel_kind: &ChannelKind) -> NetId {
         self.kind_map
             .get(channel_kind)
@@ -176,6 +184,10 @@ impl ChannelKinds {
     ///
     /// Panics if the expected value is missing: `ChannelKinds` net-ID space must be dense.
     #[must_use]
+    #[expect(
+        clippy::expect_used,
+        reason = "net-ID space is dense by construction; a gap is a broken invariant"
+    )]
     pub fn schema_entries(&self) -> Vec<(NetId, String, Vec<u8>)> {
         let mut output = Vec::with_capacity(self.current_net_id as usize);
         for net_id in 0..self.current_net_id {

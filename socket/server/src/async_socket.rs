@@ -24,6 +24,10 @@ pub struct Socket {
 
 impl Socket {
     /// Returns a new `ServerSocket`, listening at the given socket address
+    ///
+    /// # Errors
+    ///
+    /// Returns the bind error when the WebRTC data socket cannot listen.
     pub fn listen(
         server_addrs: ServerAddrs,
         config: SocketConfig,
@@ -31,13 +35,13 @@ impl Socket {
         to_session_all_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, AuthResponse)>>,
         expected_protocol_id: String,
         session_shutdown: crate::shutdown::ShutdownWait,
-    ) -> Self {
+    ) -> Result<Self, IoError> {
         let (to_client_sender, to_client_receiver) = smol::channel::unbounded();
 
         let rtc_server = RtcServer::new(
             server_addrs.webrtc_listen_addr,
             url_to_socket_addr(&parse_server_url(&server_addrs.public_webrtc_url)),
-        );
+        )?;
 
         let socket = Socket {
             rtc_server,
@@ -55,13 +59,13 @@ impl Socket {
             session_shutdown,
         );
 
-        socket
+        Ok(socket)
     }
 
     pub async fn receive(&mut self) -> Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError> {
         enum Next {
             FromClientMessage(Result<(SocketAddr, Box<[u8]>), IoError>),
-            ToClientMessage((SocketAddr, Box<[u8]>)),
+            ToClientMessage(Result<(SocketAddr, Box<[u8]>), smol::channel::RecvError>),
         }
 
         loop {
@@ -85,9 +89,7 @@ impl Socket {
                         )
                     }
                     to_client_message = to_client_receiver_next => {
-                        Next::ToClientMessage(
-                            to_client_message.expect("to server message receiver closed")
-                        )
+                        Next::ToClientMessage(to_client_message)
                     }
                 }
             };
@@ -101,7 +103,12 @@ impl Socket {
                         return Err(NaiaServerSocketError::Wrapped(Box::new(err)));
                     }
                 },
-                Next::ToClientMessage((address, payload)) => {
+                // Unreachable while this Socket holds its own sender, but a
+                // closed channel is an error to report, not a panic.
+                Next::ToClientMessage(Err(err)) => {
+                    return Err(NaiaServerSocketError::Wrapped(Box::new(err)));
+                }
+                Next::ToClientMessage(Ok((address, payload))) => {
                     if (self
                         .rtc_server
                         .send(&payload, MessageType::Binary, &address)
@@ -125,11 +132,8 @@ struct RtcServer {
 }
 
 impl RtcServer {
-    pub fn new(listen_addr: SocketAddr, public_address: SocketAddr) -> RtcServer {
-        let inner = InnerRtcServer::new(SmolRuntime, listen_addr, public_address)
-            .expect("could not start RTC server");
-
-        Self { inner }
+    pub fn new(listen_addr: SocketAddr, public_address: SocketAddr) -> Result<RtcServer, IoError> {
+        InnerRtcServer::new(SmolRuntime, listen_addr, public_address).map(|inner| Self { inner })
     }
 
     pub fn session_endpoint(&self) -> SessionEndpoint {

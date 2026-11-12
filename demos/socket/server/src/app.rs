@@ -1,4 +1,4 @@
-use std::{thread::sleep, time::Duration};
+use std::{net::SocketAddr, thread::sleep, time::Duration};
 
 use naia_server_socket::shared::IdentityToken;
 use naia_server_socket::{
@@ -19,13 +19,9 @@ impl App {
         info!("Naia Server Socket Demo started");
 
         let server_address = ServerAddrs::new(
-            "127.0.0.1:14191"
-                .parse()
-                .expect("could not parse Session address/port"),
+            SocketAddr::from(([127, 0, 0, 1], 14191)),
             // IP Address to listen on for UDP WebRTC data channels
-            "127.0.0.1:14192"
-                .parse()
-                .expect("could not parse WebRTC data address/port"),
+            SocketAddr::from(([127, 0, 0, 1], 14192)),
             // The public WebRTC IP address to advertise
             "http://127.0.0.1:14192",
         );

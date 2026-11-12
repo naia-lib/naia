@@ -305,11 +305,10 @@ impl UserDiffHandler {
         entity: GlobalEntity,
         component_kind: ComponentKind,
     ) -> DiffMask {
-        let (entity_idx, kind_bit) = self
-            .entity_kind_to_key
-            .get(&(entity, component_kind))
-            .copied()
-            .expect("Should not call this unless we're sure there's a receiver");
+        let Some(&(entity_idx, kind_bit)) = self.entity_kind_to_key.get(&(entity, component_kind))
+        else {
+            panic!("Should not call this unless we're sure there's a receiver");
+        };
         let slot = self.slot(entity_idx, kind_bit);
         let Some(Some(receiver)) = self.receivers_dense.get(slot) else {
             panic!("Should not call this unless we're sure there's a receiver");
@@ -437,11 +436,10 @@ impl UserDiffHandler {
         component_kind: ComponentKind,
         other_mask: &DiffMask,
     ) {
-        let (entity_idx, kind_bit) = self
-            .entity_kind_to_key
-            .get(&(entity, component_kind))
-            .copied()
-            .expect("Should not call this unless we're sure there's a receiver");
+        let Some(&(entity_idx, kind_bit)) = self.entity_kind_to_key.get(&(entity, component_kind))
+        else {
+            panic!("Should not call this unless we're sure there's a receiver");
+        };
         let slot = self.slot(entity_idx, kind_bit);
         let Some(Some(receiver)) = self.receivers_dense.get(slot) else {
             panic!("Should not call this unless we're sure there's a receiver");
@@ -455,11 +453,10 @@ impl UserDiffHandler {
     ///
     /// Panics if no receiver is registered for (`entity`, `component_kind`).
     pub fn clear_diff_mask(&self, entity: GlobalEntity, component_kind: ComponentKind) {
-        let (entity_idx, kind_bit) = self
-            .entity_kind_to_key
-            .get(&(entity, component_kind))
-            .copied()
-            .expect("Should not call this unless we're sure there's a receiver");
+        let Some(&(entity_idx, kind_bit)) = self.entity_kind_to_key.get(&(entity, component_kind))
+        else {
+            panic!("Should not call this unless we're sure there's a receiver");
+        };
         let slot = self.slot(entity_idx, kind_bit);
         let Some(Some(receiver)) = self.receivers_dense.get(slot) else {
             panic!("Should not call this unless we're sure there's a receiver");

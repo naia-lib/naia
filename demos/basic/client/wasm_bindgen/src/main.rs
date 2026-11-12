@@ -12,13 +12,13 @@ cfg_if! {
 
         use app_loop::start_loop;
 
-        fn main() {
+        fn main() -> Result<(), log::SetLoggerError> {
             simple_logger::SimpleLogger::new()
                 .with_level(log::LevelFilter::Info)
-                .init()
-                .expect("A logger was already initialized");
+                .init()?;
 
             start_loop(App::default());
+            Ok(())
         }
     }
 }

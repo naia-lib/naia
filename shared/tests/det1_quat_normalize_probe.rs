@@ -748,6 +748,10 @@ const GOLDEN_QPROBE_HEX: &str = concat!(
     "0000000000000000",
 );
 
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn hex_to_bytes(h: &str) -> Vec<u8> {
     let d: Vec<u8> = (0..h.len())
         .step_by(2)

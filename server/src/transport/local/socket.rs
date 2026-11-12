@@ -36,6 +36,14 @@ impl From<Socket> for Box<dyn TransportSocket> {
 }
 
 impl TransportSocket for Socket {
+    /// # Panics
+    /// Panics if called a second time on the same `Socket`: `listen` takes
+    /// the inner server socket by value. Caller-ordering invariant on the
+    /// embedding application, never reachable from peer input.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: listen() must only be called once per Socket"
+    )]
     fn listen(self: Box<Self>, expected_protocol_id: ProtocolId) -> ListenResult {
         let Socket { inner, config } = *self;
         let local = inner.expect("server socket already taken");

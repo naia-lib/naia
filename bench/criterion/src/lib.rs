@@ -214,6 +214,10 @@ pub struct BenchWorld {
 
 impl BenchWorld {
     #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::expect_used,
+        reason = "FAKE_SERVER_ADDR is a socket-address literal; a parse failure is a naia bug"
+    )]
     fn new(
         user_count: usize,
         entity_count: usize,
@@ -269,7 +273,7 @@ impl BenchWorld {
 
         // Run until all clients connected and room created
         let mut connected_user_keys: Vec<UserKey> = Vec::new();
-        let mut room_key: Option<RoomKey> = None;
+        let room_key = server.create_room().key();
 
         for _ in 0..SETUP_TIMEOUT {
             advance_tick(&hub, &mut server, &mut server_world, &mut clients, tick_ms);
@@ -288,12 +292,7 @@ impl BenchWorld {
             // Handle new connections
             for user_key in events.read::<ConnectEvent>() {
                 connected_user_keys.push(user_key);
-                if room_key.is_none() {
-                    room_key = Some(server.create_room().key());
-                }
-                server
-                    .room_mut(room_key.as_ref().unwrap())
-                    .add_user(&user_key);
+                server.room_mut(&room_key).add_user(&user_key);
             }
 
             for (client, _) in &mut clients {
@@ -312,8 +311,6 @@ impl BenchWorld {
             user_count,
             connected_user_keys.len()
         );
-
-        let room_key = room_key.expect("no room created — connection failed");
 
         // Spawn static entities (IDs from static pool — no diff-tracking after initial replication)
         let mut server_entities: Vec<BenchEntity> = Vec::new();
@@ -985,6 +982,10 @@ impl BenchWorld {
 
     /// Insert a delta-tracked `BenchResource` with initial value 0.
     /// Panics if a resource of this type is already present.
+    #[expect(
+        clippy::expect_used,
+        reason = "documented panic: inserting a second BenchResource is caller misuse"
+    )]
     pub fn insert_resource(&mut self) {
         self.server
             .insert_resource(self.server_world.proxy_mut(), BenchResource::new(0), false)

@@ -29,6 +29,14 @@ impl ServerAuthIo {
         }
     }
 
+    /// # Panics
+    /// Panics if the fixed, header-free mismatch response fails to build,
+    /// which cannot happen for a static status with no caller-supplied
+    /// header values; this is a naia-side invariant, not peer input.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: a static-status, header-free response cannot fail to build"
+    )]
     fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, ServerRecvError> {
         let Some((client_addr, request_bytes)) = self.hub.try_recv_auth_request() else {
             return Ok(None);
@@ -63,7 +71,7 @@ impl ServerAuthIo {
             let response = http::Response::builder()
                 .status(PROTOCOL_MISMATCH_STATUS)
                 .body(Vec::new())
-                .unwrap();
+                .expect("a static-status, header-free response cannot fail to build");
             let response_bytes = naia_shared::transport::response_to_bytes(response);
             let _ = self.hub.send_auth_response(&client_addr, response_bytes);
             return Ok(None);
@@ -96,6 +104,14 @@ impl ServerAuthIo {
         Ok(Some((client_addr, &self.buffer[..len])))
     }
 
+    /// # Panics
+    /// Panics if the fixed-status response fails to build, which cannot
+    /// happen for a static status with no caller-supplied header values;
+    /// this is a naia-side invariant, not peer input.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: a static-status, header-free response cannot fail to build"
+    )]
     fn accept(
         &mut self,
         address: &SocketAddr,
@@ -110,7 +126,7 @@ impl ServerAuthIo {
         let response = http::Response::builder()
             .status(200)
             .body(response_body.into_bytes())
-            .unwrap();
+            .expect("a static-status, header-free response cannot fail to build");
 
         let response_bytes = naia_shared::transport::response_to_bytes(response);
 
@@ -122,6 +138,14 @@ impl ServerAuthIo {
         Ok(())
     }
 
+    /// # Panics
+    /// Panics if the fixed-status response fails to build, which cannot
+    /// happen for a static status with no caller-supplied header values;
+    /// this is a naia-side invariant, not peer input.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: a static-status, header-free response cannot fail to build"
+    )]
     fn reject(
         &mut self,
         address: &SocketAddr,
@@ -133,7 +157,10 @@ impl ServerAuthIo {
             Some(bytes) => base64::encode(bytes).into_bytes(),
             None => Vec::new(),
         };
-        let response = http::Response::builder().status(401).body(body).unwrap();
+        let response = http::Response::builder()
+            .status(401)
+            .body(body)
+            .expect("a static-status, header-free response cannot fail to build");
 
         let response_bytes = naia_shared::transport::response_to_bytes(response);
 
@@ -295,7 +322,8 @@ mod local_auth_fingerprint_tests {
             let response_bytes = auth_resp_rx
                 .try_recv()
                 .expect("a mismatching peer must get a prompt answer, not a silent drop");
-            let response = bytes_to_response(&response_bytes);
+            let response = bytes_to_response(&response_bytes)
+                .expect("the server answers with a well-formed response");
             assert_eq!(
                 response.status().as_u16(),
                 PROTOCOL_MISMATCH_STATUS,
@@ -390,7 +418,8 @@ mod local_auth_fingerprint_tests {
         let response_bytes = auth_resp_rx
             .try_recv()
             .expect("a mismatching peer must get a prompt answer, not a silent drop");
-        let response = bytes_to_response(&response_bytes);
+        let response = bytes_to_response(&response_bytes)
+            .expect("the server answers with a well-formed response");
         assert_eq!(
             response.status().as_u16(),
             PROTOCOL_MISMATCH_STATUS,

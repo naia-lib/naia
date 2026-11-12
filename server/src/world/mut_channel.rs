@@ -31,6 +31,14 @@ impl MutChannelData {
 }
 
 impl MutChannelType for MutChannelData {
+    /// # Panics
+    /// Panics if `address_opt` is `None`. The server side of this channel
+    /// is always built per-user-address; a missing address is a naia-side
+    /// invariant violation, never reachable from peer input.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: server always calls this with an address"
+    )]
     fn new_receiver(&mut self, address_opt: &Option<SocketAddr>) -> Option<MutReceiver> {
         let address = address_opt.expect("cannot initialize receiver without address");
         if let Some(&idx) = self.receiver_index.get(&address) {

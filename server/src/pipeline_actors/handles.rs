@@ -662,6 +662,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// Wire-byte-identical to `InternalWorldServer::configure_entity_replication`
     /// once both drains have run. The existing `InternalWorldServer` method is
     /// unchanged for backward compat.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: has_entity(global_entity) guarantees owner/config are Some"
+    )]
     pub fn configure_entity_replication(
         &mut self,
         world_entity: &E,
@@ -674,19 +678,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         };
         use crate::server::scope_change::ScopeChange;
 
-        let global_entity = self
+        const NOT_REPLICATING_MSG: &str = "Entity is not yet replicating. Be sure to call `enable_replication` or `spawn_entity` on the Server, before configuring replication.";
+
+        let global_entity = match self
             .shared
             .global_entity_map
             .read()
             .entity_to_global_entity(world_entity)
-            .unwrap();
+        {
+            Ok(global_entity) => global_entity,
+            Err(_) => panic!("{NOT_REPLICATING_MSG}"),
+        };
         if !self
             .shared
             .global_world_manager
             .read()
             .has_entity(global_entity)
         {
-            panic!("Entity is not yet replicating. Be sure to call `enable_replication` or `spawn_entity` on the Server, before configuring replication.");
+            panic!("{NOT_REPLICATING_MSG}");
         }
 
         // --- Read PRE-transition state (read-before-write capture) ---
@@ -695,7 +704,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             .global_world_manager
             .read()
             .entity_owner(global_entity)
-            .unwrap();
+            .expect("invariant: has_entity(global_entity) is true, so entity_owner must be Some");
         let server_owned: bool = entity_owner.is_server();
         let client_owned: bool = entity_owner.is_client();
         // Mirror the legacy `client_origin` derivation (world_server.rs:1448).
@@ -710,7 +719,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             .global_world_manager
             .read()
             .entity_replication_config(global_entity)
-            .unwrap();
+            .expect(
+                "invariant: has_entity(global_entity) is true, so entity_replication_config must be Some",
+            );
         if prev_config == config {
             // Fully identical — no-op (matches legacy early return).
             return;

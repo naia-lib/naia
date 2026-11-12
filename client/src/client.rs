@@ -1005,6 +1005,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Returns `Some(response)` once the server replies, or `None` if the
     /// response has not yet arrived or the key is invalid. The key is
     /// invalidated after a successful receive.
+    #[expect(clippy::unwrap_used, reason = "stored by send_request; type matches")]
     pub fn receive_response<S: Response>(
         &mut self,
         response_key: &ResponseReceiveKey<S>,
@@ -1069,6 +1070,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// [`RequestPoll::TimedOut`] means the request's deadline passed with
     /// no response (messaging-24 t2) — likewise terminal, but told apart
     /// so the application can distinguish expiry from cancellation.
+    #[expect(clippy::expect_used, clippy::unwrap_used, reason = "Ready holds S")]
     pub fn poll_request<S: Response>(
         &mut self,
         response_key: &ResponseReceiveKey<S>,
@@ -1232,7 +1234,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         let component_kinds = self
             .global_world_manager
             .component_kinds(&global_entity)
-            .unwrap();
+            .unwrap_or_default();
         connection.base.send.world_manager.host_init_entity(
             global_entity,
             component_kinds,
@@ -1405,7 +1407,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         let global_entity = self
             .global_entity_map
             .entity_to_global_entity(world_entity)
-            .unwrap();
+            .ok()?;
         self.global_world_manager
             .entity_replication_config(&global_entity)
     }
@@ -1437,15 +1439,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         config: Publicity,
     ) {
         self.check_client_authoritative_allowed();
-        let global_entity = self
-            .global_entity_map
-            .entity_to_global_entity(world_entity)
-            .unwrap();
+        let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity) else {
+            panic!("entity not found in global map");
+        };
         assert!(self.global_world_manager.has_entity(&global_entity), "Entity is not yet replicating. Be sure to call `enable_replication` or `spawn_entity` on the Client, before configuring replication.");
-        let entity_owner = self
-            .global_world_manager
-            .entity_owner(&global_entity)
-            .unwrap();
+        let Some(entity_owner) = self.global_world_manager.entity_owner(&global_entity) else {
+            panic!("entity does not exist");
+        };
         let server_owned = entity_owner.is_server();
         assert!(
             !server_owned,
@@ -1460,7 +1460,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         let prev_config = self
             .global_world_manager
             .entity_replication_config(&global_entity)
-            .unwrap();
+            .unwrap_or_else(|| panic!("entity does not exist"));
         if prev_config == config {
             // Already in the desired state, no-op
             return;
@@ -1568,10 +1568,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     pub fn entity_request_authority(&mut self, world_entity: &E) -> Result<(), AuthorityError> {
         self.check_client_authoritative_allowed();
 
-        let global_entity = self
-            .global_entity_map
-            .entity_to_global_entity(world_entity)
-            .unwrap();
+        let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity) else {
+            panic!("entity not found in global map");
+        };
 
         // 1. Set local authority status for Entity
         let result = self
@@ -1607,10 +1606,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     pub fn entity_release_authority(&mut self, world_entity: &E) -> Result<(), AuthorityError> {
         self.check_client_authoritative_allowed();
 
-        let global_entity = self
-            .global_entity_map
-            .entity_to_global_entity(world_entity)
-            .unwrap();
+        let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity) else {
+            panic!("entity not found in global map");
+        };
 
         // 1. Set local authority status for Entity
         let result = self
@@ -2015,10 +2013,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     pub fn insert_component_worldless(&mut self, world_entity: &E, component: &mut dyn Replicate) {
         let component_kind = component.kind();
 
-        let global_entity = self
-            .global_entity_map
-            .entity_to_global_entity(world_entity)
-            .unwrap();
+        let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity) else {
+            panic!("entity not found in global map");
+        };
 
         // When authority is granted for a previously-remote delegated entity
         // (server calls give_authority while the entity is already in scope),
@@ -2119,6 +2116,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// requests, responses and lifecycle events are not drained. Messages that
     /// reference entities still obey the receiver's entity waitlist, so they may
     /// remain unavailable until a later world apply resolves those references.
+    #[expect(clippy::unwrap_used, reason = "checked kind matches above")]
     pub fn take_received_messages_of_kind<C: Channel, M: Message>(&mut self) -> Vec<M> {
         let mut output: Vec<M> = self
             .incoming_world_events
@@ -2178,10 +2176,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// The Bevy adapter calls this when the component has already been removed
     /// from the ECS world.
     pub fn remove_component_worldless(&mut self, world_entity: &E, component_kind: &ComponentKind) {
-        let global_entity = self
-            .global_entity_map
-            .entity_to_global_entity(world_entity)
-            .unwrap();
+        let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity) else {
+            panic!("entity not found in global map");
+        };
 
         // Only relay through the outgoing pipeline if the entity is client-created
         // (i.e. tracked in the local/host world manager). For server-created entities
@@ -2374,6 +2371,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // The entity continues normal replication as undelegated.
     }
 
+    #[expect(clippy::unwrap_used, reason = "only for a delegated, live entity")]
     pub(crate) fn entity_update_authority(
         &mut self,
         global_entity: &GlobalEntity,
@@ -3198,8 +3196,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.handshake_first_inbound_logged = false;
     }
 
+    #[expect(clippy::expect_used, reason = "only while tearing down connection")]
     fn server_address_unwrapped(&self) -> SocketAddr {
-        // NOTE: may panic if the connection is not yet established!
         self.io.server_addr().expect("connection not established!")
     }
 
@@ -3231,6 +3229,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .debug_remote_channel_snapshot(*remote_entity)
     }
 
+    #[expect(clippy::unwrap_used, reason = "naia-shared emits only mapped entities")]
     fn process_entity_events<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
@@ -3794,6 +3793,7 @@ cfg_if! {
             ///
             /// # Panics
             /// Panics if not connected to server
+            #[expect(clippy::expect_used, reason = "calling before connect() is caller misuse")]
             pub fn local_entities(&self) -> Vec<LocalEntity> {
                 let connection = self
                     .server_connection

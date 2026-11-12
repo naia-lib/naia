@@ -114,8 +114,7 @@ impl TickBufferSender {
                 // full `PacketIndex` wrap ago that was never acknowledged; this packet
                 // reuses the index, so drop it rather than append to it.
                 self.packet_to_channel_map.remove(&packet_index);
-                self.packet_to_channel_map.entry(packet_index).or_default();
-                let channel_list = self.packet_to_channel_map.get_mut(&packet_index).unwrap();
+                let channel_list = self.packet_to_channel_map.entry(packet_index).or_default();
                 channel_list.push((*channel_kind, message_indices));
             }
 

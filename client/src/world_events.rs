@@ -343,14 +343,13 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     }
 
     pub(crate) fn push_message(&mut self, channel_kind: &ChannelKind, message: MessageContainer) {
-        if !self.messages.contains_key(channel_kind) {
-            self.messages.insert(*channel_kind, HashMap::new());
-        }
-        let channel_map = self.messages.get_mut(channel_kind).unwrap();
-
         let message_kind: MessageKind = message.kind();
-        channel_map.entry(message_kind).or_default();
-        let list = channel_map.get_mut(&message_kind).unwrap();
+        let list = self
+            .messages
+            .entry(*channel_kind)
+            .or_default()
+            .entry(message_kind)
+            .or_default();
         list.push(message);
         self.empty = false;
     }
@@ -361,14 +360,13 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         global_response_id: GlobalResponseId,
         request: MessageContainer,
     ) {
-        if !self.requests.contains_key(channel_kind) {
-            self.requests.insert(*channel_kind, HashMap::new());
-        }
-        let channel_map = self.requests.get_mut(channel_kind).unwrap();
-
         let message_kind: MessageKind = request.kind();
-        channel_map.entry(message_kind).or_default();
-        let list = channel_map.get_mut(&message_kind).unwrap();
+        let list = self
+            .requests
+            .entry(*channel_kind)
+            .or_default()
+            .entry(message_kind)
+            .or_default();
         list.push((global_response_id, request));
 
         self.empty = false;
@@ -469,8 +467,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         component_kind: ComponentKind,
         command_id: Option<CommandId>,
     ) {
-        self.inserts.entry(component_kind).or_default();
-        let list = self.inserts.get_mut(&component_kind).unwrap();
+        let list = self.inserts.entry(component_kind).or_default();
         list.push((tick, world_entity));
         self.note_applied(
             CauseKind::Insert,
@@ -495,8 +492,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         component_kind: ComponentKind,
         command_id: Option<CommandId>,
     ) {
-        self.updates.entry(component_kind).or_default();
-        let list = self.updates.get_mut(&component_kind).unwrap();
+        let list = self.updates.entry(component_kind).or_default();
         list.push((tick, world_entity));
         self.note_applied(
             CauseKind::Update,
@@ -523,8 +519,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
             tick,
             command_id,
         );
-        self.removes.entry(component_kind).or_default();
-        let list = self.removes.get_mut(&component_kind).unwrap();
+        let list = self.removes.entry(component_kind).or_default();
         list.push((tick, world_entity, component));
         self.lifecycle.push(LifecycleOrder {
             tick,
@@ -661,6 +656,10 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, M: Message> WorldEvent<E>
 {
     type Iter = IntoIter<M>;
 
+    #[expect(
+        clippy::unwrap_used,
+        reason = "boxed_list is keyed by MessageKind::of::<M>(), so every entry is always an M"
+    )]
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let channel_kind: ChannelKind = ChannelKind::of::<C>();
         if let Some(channel_map) = events.messages.get_mut(&channel_kind) {
@@ -700,6 +699,10 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, Q: Request> WorldEvent<E>
 {
     type Iter = IntoIter<(ResponseSendKey<Q::Response>, Q)>;
 
+    #[expect(
+        clippy::unwrap_used,
+        reason = "requests is keyed by MessageKind::of::<Q>(), so every entry is always a Q"
+    )]
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let channel_kind: ChannelKind = ChannelKind::of::<C>();
         let Some(channel_map) = events.requests.get_mut(&channel_kind) else {
@@ -887,6 +890,10 @@ pub struct RemoveComponentEvent<C: Replicate> {
 impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> WorldEvent<E> for RemoveComponentEvent<C> {
     type Iter = IntoIter<(Tick, E, C)>;
 
+    #[expect(
+        clippy::unwrap_used,
+        reason = "boxed_list is keyed by ComponentKind::of::<C>(), so every entry is always a C"
+    )]
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let component_kind: ComponentKind = ComponentKind::of::<C>();
         if let Some(boxed_list) = events.removes.remove(&component_kind) {

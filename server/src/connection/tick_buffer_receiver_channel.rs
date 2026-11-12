@@ -27,7 +27,14 @@ impl TickBufferReceiverChannel {
     }
 
     /// Directly insert a message into the tick buffer (test_utils only)
+    /// # Panics
+    /// Panics if `TickBufferSettings::message_capacity` exceeds `u16::MAX`.
+    /// That value is embedding-application configuration, never peer input.
     #[cfg(feature = "test_utils")]
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: message_capacity is app config, not peer input"
+    )]
     pub fn inject_message(
         &mut self,
         host_tick: &Tick,
@@ -72,6 +79,13 @@ impl TickBufferReceiverChannel {
 
     /// Given incoming packet data, read transmitted Message and store
     /// them to be returned to the application
+    /// # Panics
+    /// Panics if `TickBufferSettings::message_capacity` exceeds `u16::MAX`.
+    /// That value is embedding-application configuration, never peer input.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: message_capacity is app config, not peer input"
+    )]
     fn read_message(
         &mut self,
         message_kinds: &MessageKinds,

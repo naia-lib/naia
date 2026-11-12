@@ -94,6 +94,10 @@ pub fn server_and_client_disconnected(
 /// Note: `send_handshake_interval` is always set to 0 for immediate handshake in tests.
 ///
 /// Returns the ClientKey for the connected client.
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 pub fn client_connect(
     scenario: &mut Scenario,
     room_key: &RoomKey,

@@ -50,6 +50,10 @@ impl HostEntityChannel {
     /// # Panics
     ///
     /// Panics when the invalid state is reached: These should be handled by the Engine, not the `EntityChannelSender`.
+    #[expect(
+        clippy::expect_used,
+        reason = "Insert and Remove commands always carry their component kind"
+    )]
     pub fn send_command(&mut self, command: EntityCommand) {
         // Flush any reserved auth-channel command first so it lands at
         // subcommand_id=0 ahead of `command`. No-op if none reserved.
@@ -65,7 +69,9 @@ impl HostEntityChannel {
                 panic!("These should be handled by the Engine, not the EntityChannelSender");
             }
             EntityMessageType::InsertComponent => {
-                let component_kind = command.component_kind().unwrap();
+                let component_kind = command
+                    .component_kind()
+                    .expect("component commands carry a component kind");
                 assert!(
                     !self.component_channels.contains(&component_kind),
                     "Cannot insert a component that already exists in the entity channel"
@@ -74,7 +80,9 @@ impl HostEntityChannel {
                 self.outgoing_commands.push(command);
             }
             EntityMessageType::RemoveComponent => {
-                let component_kind = command.component_kind().unwrap();
+                let component_kind = command
+                    .component_kind()
+                    .expect("component commands carry a component kind");
                 assert!(
                     self.component_channels.contains(&component_kind),
                     "Cannot remove a component that does not exist in the entity channel"
@@ -136,7 +144,10 @@ impl HostEntityChannel {
                 | EntityMessageType::ReleaseAuthority
                 | EntityMessageType::EnableDelegationResponse
                 | EntityMessageType::MigrateResponse => {
-                    let (id, (tick, msg)) = self.buffered_messages.pop_front().unwrap();
+                    // The loop just peeked this entry.
+                    let Some((id, (tick, msg))) = self.buffered_messages.pop_front() else {
+                        break;
+                    };
 
                     // info!("EntityChannelSender::process_messages(id={}, msgType={:?})", id, msg.get_type());
 

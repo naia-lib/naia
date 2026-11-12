@@ -3,7 +3,7 @@ use std::default::Default;
 use bevy::{
     color::LinearRgba,
     ecs::message::Messages,
-    log::info,
+    log::{info, warn},
     prelude::{
         Color as BevyColor, Commands, Mesh2d, MeshMaterial2d, Query, Res, ResMut, Sprite,
         Transform, Vec2,
@@ -97,7 +97,10 @@ pub fn message_events(
         for message in events.read::<EntityAssignmentChannel, EntityAssignment>() {
             let assign = message.assign;
 
-            let entity = message.entity.get(&client).unwrap();
+            let Some(entity) = message.entity.get(&client) else {
+                warn!("entity assignment names an entity this client does not have");
+                continue;
+            };
             if assign {
                 info!("gave ownership of entity");
 

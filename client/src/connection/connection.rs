@@ -42,6 +42,10 @@ pub struct Connection {
 }
 
 impl Connection {
+    #[expect(
+        clippy::unwrap_used,
+        reason = "entity came from this same global_world_manager, so it always has component_kinds"
+    )]
     pub fn new(
         connection_config: &ConnectionConfig,
         channel_kinds: &ChannelKinds,

@@ -99,14 +99,14 @@ impl ResourceKinds {
     /// missing there is a broken registration invariant, not a remote input,
     /// and panics.
     ///
-    ///
-    /// # Panics
-    ///
-    /// Panics if the expected value is missing: every Replicated Resource must be registered as a component first.
     /// # Panics
     ///
     /// Panics if the expected value is missing: every Replicated Resource must be registered as a component first.
     #[must_use]
+    #[expect(
+        clippy::expect_used,
+        reason = "a Replicated Resource is registered as a component first; a missing net-ID is a registration bug"
+    )]
     pub fn member_net_ids(&self, components: &ComponentKinds) -> Vec<u16> {
         let mut ids: Vec<u16> = self
             .kinds

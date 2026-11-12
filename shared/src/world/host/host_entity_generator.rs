@@ -78,7 +78,10 @@ impl HostEntityGenerator {
             if timeout.elapsed(&now) < self.reserved_host_entity_ttl {
                 break;
             }
-            let (_, global_entity) = self.reserved_host_entities_ttls.pop_front().unwrap();
+            // The loop just peeked this entry.
+            let Some((_, global_entity)) = self.reserved_host_entities_ttls.pop_front() else {
+                break;
+            };
             let Some(_) = self.reserved_host_entities.remove(&global_entity) else {
                 panic!("Reserved Entity does not exist!");
             };
@@ -109,9 +112,9 @@ impl HostEntityGenerator {
         entity_map: &mut LocalEntityMap,
         global_entity: GlobalEntity,
     ) {
-        let record = entity_map
-            .remove_by_global_entity(global_entity)
-            .expect("Attempting to despawn entity which does not exist!");
+        let Some(record) = entity_map.remove_by_global_entity(global_entity) else {
+            panic!("Attempting to despawn entity which does not exist!");
+        };
         if record.is_host_owned() {
             let host_entity = record.host_entity();
             if host_entity.is_static() {
@@ -154,12 +157,12 @@ impl HostEntityGenerator {
         entity_map: &mut LocalEntityMap,
         remote_entity: RemoteEntity,
     ) -> GlobalEntity {
-        let global_entity = *(entity_map
-            .global_entity_from_remote(remote_entity)
-            .expect("Attempting to despawn entity which does not exist!"));
-        let record = entity_map
-            .remove_by_global_entity(global_entity)
-            .expect("Attempting to despawn entity which does not exist!");
+        let Some(&global_entity) = entity_map.global_entity_from_remote(remote_entity) else {
+            panic!("Attempting to despawn entity which does not exist!");
+        };
+        let Some(record) = entity_map.remove_by_global_entity(global_entity) else {
+            panic!("Attempting to despawn entity which does not exist!");
+        };
         if record.is_host_owned() {
             let host_entity = record.host_entity();
             if host_entity.is_static() {

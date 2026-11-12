@@ -33,6 +33,10 @@ impl FragmentReceiver {
         }
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "local invariant: is_fragment() above already confirmed the concrete type"
+    )]
     pub(crate) fn receive(
         &mut self,
         message_kinds: &MessageKinds,
@@ -111,7 +115,11 @@ impl FragmentReceiver {
 
         // Complete. Every index is distinct and below `total`, so the sequence
         // covers 0..total exactly and reassembles in index order.
-        let entry = self.map.remove(&fragment_id).unwrap();
+        let Some(entry) = self.map.remove(&fragment_id) else {
+            // Unreachable: `entry` above came from this same `fragment_id` via
+            // `self.map.entry(...)` and nothing removed it in between.
+            return None;
+        };
         let first_message_index = entry.first_message_index;
         let mut payloads = entry.payloads;
         let mut concat_list: Vec<u8> = Vec::new();

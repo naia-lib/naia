@@ -51,6 +51,10 @@ fn build_driving_app() -> App {
     app
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn local_socket(addr: &str) -> Box<dyn transport::Socket> {
     let hub = LocalTransportHub::new(addr.parse().unwrap());
     Box::new(Socket::new(LocalServerSocket::new(hub), None))

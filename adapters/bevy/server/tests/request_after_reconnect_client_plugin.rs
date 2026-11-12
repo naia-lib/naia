@@ -193,6 +193,10 @@ fn translate_on(world: &mut bevy_ecs::world::World) {
     });
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn tick(rig: &mut Rig) {
     TestClock::advance(16);
     rig.hub.process_time_queues();
@@ -265,6 +269,10 @@ fn tick(rig: &mut Rig) {
     rig.server.send_all_packets(&rig.server_world.proxy());
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn rig() -> Rig {
     // Simulated clock lives on the driving thread only (mirrors
     // Scenario::new). Pool threads that execute bevy systems see a frozen
@@ -369,6 +377,10 @@ fn answer_pending(rig: &mut Rig, want: &str) {
 /// Queue a request and wait up to `bound` ticks for its response, answering
 /// server-side inline. Returns on success; panics with wire evidence on
 /// expiry (the e2e's waiter shape).
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn request_response_within(
     rig: &mut Rig,
     query: &str,

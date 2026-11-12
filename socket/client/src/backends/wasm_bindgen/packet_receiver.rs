@@ -1,6 +1,6 @@
 use std::{
     collections::VecDeque,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, PoisonError},
 };
 
 use crate::{error::NaiaClientSocketError, server_addr::ServerAddr};
@@ -33,12 +33,12 @@ impl PlainPacketReceiver {
         match self
             .message_queue
             .lock()
-            .expect("This should never happen, message_queue should always be available in a single-threaded context")
+            .unwrap_or_else(PoisonError::into_inner)
             .pop_front()
         {
             Some(payload) => {
-                self.last_payload = Some(payload);
-                Ok(Some(self.last_payload.as_ref().unwrap()))
+                let payload = self.last_payload.insert(payload);
+                Ok(Some(&payload[..]))
             }
             None => Ok(None),
         }

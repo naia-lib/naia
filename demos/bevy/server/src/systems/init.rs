@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    net::SocketAddr,
+};
 
 use bevy_ecs::system::Commands;
 use bevy_log::info;
@@ -12,13 +15,9 @@ pub fn init(mut commands: Commands, mut server: Server) {
 
     // Naia Server initialization
     let server_addresses = webrtc::ServerAddrs::new(
-        "127.0.0.1:14191"
-            .parse()
-            .expect("could not parse Signaling address/port"),
+        SocketAddr::from(([127, 0, 0, 1], 14191)),
         // IP Address to listen on for UDP WebRTC data channels
-        "127.0.0.1:14192"
-            .parse()
-            .expect("could not parse WebRTC data address/port"),
+        SocketAddr::from(([127, 0, 0, 1], 14192)),
         // The public WebRTC IP address to advertise
         "http://127.0.0.1:14192",
     );

@@ -120,6 +120,10 @@ impl MessageEvents {
     }
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "messages are stored under their own MessageKind, so the downcast to M holds"
+)]
 fn convert_messages<M: Message>(
     boxed_list: &Vec<(UserKey, MessageContainer)>,
 ) -> Vec<(UserKey, M)> {
@@ -154,6 +158,10 @@ impl<E: Hash + Copy + Eq + Sync + Send> From<&mut Events<E>> for RequestEvents {
 impl RequestEvents {
     /// Every request of type `Q` received on channel `C`, with the sending
     /// [`UserKey`] and the [`ResponseSendKey`] for its response.
+    #[expect(
+        clippy::unwrap_used,
+        reason = "requests are stored under their own MessageKind, so the downcast to Q holds"
+    )]
     pub fn read<C: Channel, Q: Request>(&self) -> Vec<(UserKey, ResponseSendKey<Q::Response>, Q)> {
         let channel_kind = ChannelKind::of::<C>();
         let Some(request_map) = self.inner.get(&channel_kind) else {

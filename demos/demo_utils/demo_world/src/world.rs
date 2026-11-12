@@ -320,6 +320,10 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         }
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "publish runs only on entities the host has mapped"
+    )]
     fn component_publish(
         &mut self,
         component_kinds: &ComponentKinds,
@@ -330,7 +334,9 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     ) {
         if let Some(component_map) = self.world.entities.get_mut(world_entity) {
             if let Some(component) = component_map.get_mut(&component_kind) {
-                let global_entity = converter.entity_to_global_entity(world_entity).unwrap();
+                let global_entity = converter
+                    .entity_to_global_entity(world_entity)
+                    .expect("a published entity is mapped to a global entity");
                 let diff_mask_size = component.diff_mask_size();
                 let mutator = global_world_manager.register_component(
                     component_kinds,

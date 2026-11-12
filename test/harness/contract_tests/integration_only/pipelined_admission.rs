@@ -24,6 +24,10 @@ struct Client {
 }
 
 impl Client {
+    #[expect(
+        clippy::unwrap_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn request_connect(&self) {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
@@ -33,6 +37,10 @@ impl Client {
             .unwrap();
     }
 
+    #[expect(
+        clippy::unwrap_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn heartbeat(&self) {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::Heartbeat, 0, 0, 0).ser(&mut writer);
@@ -41,6 +49,10 @@ impl Client {
             .unwrap();
     }
 
+    #[expect(
+        clippy::unwrap_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn take_connect_responses(&self) -> usize {
         self.incoming
             .try_iter()
@@ -62,6 +74,10 @@ struct Admission {
 }
 
 impl Admission {
+    #[expect(
+        clippy::unwrap_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn new() -> Self {
         let hub = LocalTransportHub::new("127.0.0.1:54490".parse().unwrap());
         hub.enable_packet_recording();
@@ -83,6 +99,10 @@ impl Admission {
         }
     }
 
+    #[expect(
+        clippy::unwrap_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn receive(&mut self, expected_packets: usize) -> Vec<UserKey> {
         let mut outputs = Vec::new();
         self.server
@@ -115,6 +135,10 @@ impl Admission {
         connected
     }
 
+    #[expect(
+        clippy::unwrap_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn assert_connection(&self, user_key: &UserKey, address: &SocketAddr, ready: bool) {
         assert_eq!(self.server.user_connection_ready(user_key), ready);
         let recv_slot = self.server.recv_slot();

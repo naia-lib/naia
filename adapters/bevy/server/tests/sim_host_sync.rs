@@ -71,6 +71,10 @@ fn next_addr() -> String {
 /// is true (the drain short-circuits otherwise, matching the legacy
 /// `world_to_host_sync` guard). Loads the io exactly like
 /// `send_scope_changes_drain.rs::handles_listening`.
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn handles() -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
     use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
 

@@ -104,6 +104,12 @@ impl Io {
         id_result
     }
 
+    /// # Panics
+    /// Panics if called before `Client.connect()` has loaded a packet sender.
+    #[expect(
+        clippy::expect_used,
+        reason = "calling before Client.connect() is caller misuse, not peer input"
+    )]
     pub fn send_packet(&mut self, packet: OutgoingPacket) -> Result<(), NaiaClientError> {
         // get payload
         let mut payload = packet.slice();
@@ -125,6 +131,12 @@ impl Io {
             .map_err(|_| NaiaClientError::SendError)
     }
 
+    /// # Panics
+    /// Panics if called before `Client.connect()` has loaded a packet receiver.
+    #[expect(
+        clippy::expect_used,
+        reason = "calling before Client.connect() is caller misuse, not peer input"
+    )]
     pub fn recv_reader(&'_ mut self) -> Result<Option<BitReader<'_>>, NaiaClientError> {
         let receive_result = self
             .packet_receiver
@@ -182,6 +194,12 @@ impl Io {
         }
     }
 
+    /// # Panics
+    /// Panics if `ClientConfig.connection.bandwidth_measure_duration` was not set.
+    #[expect(
+        clippy::expect_used,
+        reason = "calling without enabling bandwidth monitoring is caller misuse, not peer input"
+    )]
     pub fn outgoing_bandwidth(&self) -> f32 {
         self.outgoing_bandwidth_monitor
             .as_ref()
@@ -189,6 +207,12 @@ impl Io {
             .bandwidth()
     }
 
+    /// # Panics
+    /// Panics if `ClientConfig.connection.bandwidth_measure_duration` was not set.
+    #[expect(
+        clippy::expect_used,
+        reason = "calling without enabling bandwidth monitoring is caller misuse, not peer input"
+    )]
     pub fn incoming_bandwidth(&self) -> f32 {
         self.incoming_bandwidth_monitor
             .as_ref()

@@ -26,6 +26,10 @@ use crate::test_protocol::{protocol, Auth, Position};
 
 /// Connect one client through the full handshake, add to the scenario's last
 /// room, and return its key. Trace capture must be enabled by the caller.
+#[expect(
+    clippy::expect_used,
+    reason = "test harness: a failure must fail the calling test"
+)]
 fn connect_one_client(scenario: &mut Scenario) -> crate::harness::ClientKey {
     let cfg = ClientConfig {
         send_handshake_interval: Duration::from_millis(0),
@@ -201,6 +205,10 @@ pub fn contract07_component_update() -> Trace {
 /// Captures the wire packets for: delegated entity scope entry (Available
 /// status delivered) + client authority request + server authority grant
 /// (Granted status delivered). Representative of the delegation path.
+#[expect(
+    clippy::expect_used,
+    reason = "test harness: a failure must fail the calling test"
+)]
 pub fn contract10_delegation_grant() -> Trace {
     let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     scenario.server_start(ServerConfig::default(), protocol());

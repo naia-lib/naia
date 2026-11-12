@@ -483,6 +483,10 @@ struct DirectScopeRun {
 }
 
 impl DirectScopeRun {
+    #[expect(
+        clippy::unwrap_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn new(mode: ServerMode) -> Self {
         TestClock::init(0);
         let server_addr: SocketAddr = "127.0.0.1:54590".parse().unwrap();
@@ -606,6 +610,10 @@ impl DirectScopeRun {
             .collect()
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn resource_trace(mut self) -> Vec<Vec<u8>> {
         let _user_key = self.connect();
         self.hub.enable_packet_recording();
@@ -681,6 +689,10 @@ impl DirectScopeRun {
             .collect()
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn authority_trace(mut self) -> Vec<Vec<u8>> {
         let user_key = self.connect();
         let entity = self.setup_scoped_entity(&user_key);
@@ -718,6 +730,10 @@ impl DirectScopeRun {
             .collect()
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn message_trace(mut self) -> Vec<Vec<u8>> {
         let user_key = self.connect();
         let room_key = self.server.create_room().key();

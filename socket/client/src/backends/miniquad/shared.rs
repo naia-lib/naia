@@ -2,6 +2,10 @@
     unsafe_code,
     reason = "no_mangle entry point the miniquad JS bridge calls by name"
 )]
+#[expect(
+    clippy::unwrap_used,
+    reason = "Cargo sets every CARGO_PKG_VERSION_* part to a decimal integer"
+)]
 #[no_mangle]
 pub extern "C" fn naia_socket_crate_version() -> u32 {
     let major = env!("CARGO_PKG_VERSION_MAJOR").parse::<u32>().unwrap();

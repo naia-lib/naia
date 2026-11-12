@@ -77,6 +77,10 @@ impl log::Log for &'static CapturingLogger {
     fn enabled(&self, metadata: &log::Metadata) -> bool {
         metadata.level() <= log::Level::Warn
     }
+    #[expect(
+        clippy::unwrap_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn log(&self, record: &log::Record) {
         if record.level() <= log::Level::Warn {
             self.warnings
@@ -99,6 +103,10 @@ fn install_logger() -> &'static CapturingLogger {
 
 /// Server half: auth-accept (token match) + echo, polled on a thread until `stop`.
 /// Echoes every received payload back verbatim and counts echoes.
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn run_server(signal_addr: &str, data_addr: &str, stop: Arc<AtomicBool>, echoes: Arc<AtomicU32>) {
     let server_addrs = ServerAddrs::new(
         signal_addr.parse().expect("bad session addr"),
@@ -108,6 +116,10 @@ fn run_server(signal_addr: &str, data_addr: &str, stop: Arc<AtomicBool>, echoes:
     run_server_with_addrs(server_addrs, stop, echoes)
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn run_server_with_addrs(server_addrs: ServerAddrs, stop: Arc<AtomicBool>, echoes: Arc<AtomicU32>) {
     let (auth_sender, mut auth_receiver, packet_sender, mut packet_receiver) =
         ServerSocket::listen_with_auth(&server_addrs, &SocketConfig::new(None, None), PROTOCOL_ID);
@@ -163,6 +175,10 @@ fn spawn_server(signal_addr: &'static str, data_addr: &'static str) -> ServerHan
 }
 
 impl ServerHandle {
+    #[expect(
+        clippy::expect_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn shutdown(self) -> u32 {
         self.stop.store(true, Ordering::Relaxed);
         self.thread.join().expect("server thread panicked");
@@ -172,6 +188,10 @@ impl ServerHandle {
 
 /// Connects a client and waits for the accepted id token; asserts the data
 /// addr resolved. Returns the io halves for the caller to drive.
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 async fn connect_client(
     signal_addr: &str,
     token: &str,
@@ -204,6 +224,10 @@ async fn connect_client(
 }
 
 /// Sends each payload and asserts it is echoed back verbatim.
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 async fn echo_rounds(io: &mut webrtc_unreliable_client::SocketIo, payloads: &[Vec<u8>]) {
     for (i, payload) in payloads.iter().enumerate() {
         io.to_server_sender
@@ -223,6 +247,10 @@ async fn echo_rounds(io: &mut webrtc_unreliable_client::SocketIo, payloads: &[Ve
     }
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn report_warnings(logger: &CapturingLogger, label: &str, elapsed: Duration) {
     let warnings = logger.warnings.lock().unwrap();
     println!(
@@ -242,6 +270,11 @@ fn report_warnings(logger: &CapturingLogger, label: &str, elapsed: Duration) {
 /// so this is what forces the transport-corrective paths (DTLS handshake
 /// flight retransmission, STUN ping retries, SCTP SACK gap handling /
 /// forward-TSN) to actually run.
+#[expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 async fn run_lossy_proxy(listen: &str, server: &str) {
     let sock = std::sync::Arc::new(
         async_net::UdpSocket::bind(listen)
@@ -478,6 +511,10 @@ fn loopback_large_payloads_round_trip() {
     report_warnings(logger, "large-payloads", started.elapsed());
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn count_oversize_rejections(logger: &CapturingLogger) -> usize {
     logger
         .warnings

@@ -35,6 +35,10 @@ fn bits_written_by_ser<T: Serde>(value: &T) -> u32 {
 /// Roundtrip a value through a full `BitWriter` + `BitReader` and assert
 /// it decodes equal. Returns the number of bits the writer actually
 /// emitted, so callers can compare against `bit_length`.
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failed decode must fail the calling test"
+)]
 fn round_trip<T: Serde + std::fmt::Debug + PartialEq>(value: &T) -> u32 {
     let mut writer = BitWriter::with_max_capacity();
     value.ser(&mut writer);

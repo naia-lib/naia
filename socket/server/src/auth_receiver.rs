@@ -26,11 +26,6 @@ impl AuthReceiver {
     }
 
     /// Receives an Auth message from the Server Socket
-    ///
-    /// # Panics
-    ///
-    /// Panics if the stored payload slot is empty after storing a payload
-    /// (unreachable: the slot is filled immediately above).
     // `Err` is currently unreachable, but the drain loop in `main_server`
     // branches on it so a persistently-failing auth channel cannot trap it;
     // keep the signature fallible.
@@ -38,10 +33,7 @@ impl AuthReceiver {
     pub fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, NaiaServerSocketError> {
         match self.channel_receiver.try_recv() {
             Ok(result) => match result {
-                Ok((address, payload)) => {
-                    self.last_payload = Some(payload);
-                    Ok(Some((address, self.last_payload.as_ref().unwrap())))
-                }
+                Ok((address, payload)) => Ok(Some((address, self.last_payload.insert(payload)))),
                 Err(_) => Ok(None),
             },
             Err(_) => Ok(None),

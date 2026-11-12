@@ -37,8 +37,7 @@ impl PacketSender {
             let uarray: Uint8Array = payload.into();
             self.message_port
                 .post_message(&uarray)
-                .expect("Failed to send message");
-            Ok(())
+                .map_err(|_| NaiaClientSocketError::SendError)
         } else {
             Err(NaiaClientSocketError::SendError)
         }

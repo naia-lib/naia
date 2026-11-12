@@ -332,6 +332,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
     /// re-deposited the handles into their slots before calling this.
     ///
     /// Panics if called in a non-`Armed` state.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: Armed state guarantees these slots are Some; thread spawn failure is unrecoverable"
+    )]
     pub fn spawn_workers(&self, recv_readiness: Option<PacketReadiness>) {
         assert_eq!(
             self.state(),
@@ -461,6 +465,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
     /// not-yet-parked worker thread has *finished* — the live workers are all
     /// parked and the rest are gone. A subsequent [`Self::propagate_panic_if_any`]
     /// surfaces the captured payload.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: worker/thread counts never approach u32::MAX"
+    )]
     pub fn park_workers(&self) {
         if self.state() != RuntimeState::Running {
             return;
@@ -505,7 +513,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
                 .wait_for(&mut g, Duration::from_millis(5));
         }
         if let (Some(f), Some(t)) = (self.timing.record_barrier, t_barrier) {
-            f(u64::try_from(t.elapsed().as_nanos()).expect("elapsed nanos fit in u64"));
+            f(u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX));
         }
     }
 
@@ -552,6 +560,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
     /// parked worker has observed `park=false` and left the checkpoint
     /// (`parked_count` back to 0). This is what makes the next `park_workers()`
     /// safe — it cannot set `park=true` while a worker is still mid-resume.
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: worker/thread counts never approach u32::MAX"
+    )]
     pub fn unpark_workers(&self) {
         if self.state() != RuntimeState::Running {
             return;
@@ -838,6 +850,13 @@ fn worker_park_checkpoint<H>(park: &ParkControl, lease: &mut HandleLease<'_, H>)
 /// suggestion does not compile here. The body only needs shared access.
 #[cfg_attr(not(workers_active), allow(unused_variables))]
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(
+    workers_active,
+    expect(
+        clippy::expect_used,
+        reason = "held_mut is read only after reclaim returned true, which guarantees the handle"
+    )
+)]
 pub(crate) fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
     recv_slot: &Arc<Mutex<Option<RecvHandle<E>>>>,
     out_tx: &Sender<ReceiveOutput<E>>,
@@ -899,7 +918,7 @@ pub(crate) fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
             let t_recv = timing.record_recv.map(|_| std::time::Instant::now());
             let output = recv.receive();
             if let (Some(f), Some(t)) = (timing.record_recv, t_recv) {
-                f(u64::try_from(t.elapsed().as_nanos()).expect("elapsed nanos fit in u64"));
+                f(u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX));
             }
 
             // Skip empty outputs (PF1-A): an idle `receive()` still builds a
@@ -989,6 +1008,13 @@ fn transmit_job<E: Copy + Eq + Hash + Send + Sync + 'static>(
 /// service**: the consumer drives the send synchronously inside its park window,
 /// so `snap_rx` / `send_slot` are unused here.
 #[cfg_attr(not(workers_active), allow(unused_variables))]
+#[cfg_attr(
+    workers_active,
+    expect(
+        clippy::expect_used,
+        reason = "held_mut is read only after reclaim returned true, which guarantees the handle"
+    )
+)]
 pub(crate) fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
     send_slot: &Arc<Mutex<Option<SendHandle<E>>>>,
     snap_rx: &SnapshotReceiver<E>,
@@ -1103,7 +1129,7 @@ pub(crate) fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
                 let t_send = timing.record_send.map(|_| std::time::Instant::now());
                 transmit_job(lease.held_mut().expect("reclaim returned true"), job);
                 if let (Some(f), Some(t)) = (timing.record_send, t_send) {
-                    f(u64::try_from(t.elapsed().as_nanos()).expect("elapsed nanos fit in u64"));
+                    f(u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX));
                 }
             } else if held_job.is_none() {
                 // Nothing published and nothing buffered: sleep unbounded until

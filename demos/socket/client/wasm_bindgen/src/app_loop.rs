@@ -15,6 +15,11 @@ cfg_if! {
         use wasm_bindgen::prelude::*;
         use wasm_bindgen::JsCast;
 
+        #[expect(
+            clippy::unwrap_used,
+            clippy::expect_used,
+            reason = "every browser page has a window and timers; the loop closure is stored before either timeout fires"
+        )]
         pub fn start_loop(app: App) {
             fn set_timeout(f: &Closure<dyn FnMut()>, duration: i32) {
                 web_sys::window().unwrap()

@@ -215,10 +215,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
         global_response_id: GlobalResponseId,
         request: MessageContainer,
     ) {
-        if !self.requests.contains_key(channel_kind) {
-            self.requests.insert(*channel_kind, HashMap::new());
-        }
-        let channel_map = self.requests.get_mut(channel_kind).unwrap();
+        let channel_map = self.requests.entry(*channel_kind).or_default();
         let request_type_id = request.kind();
         let list = channel_map.entry(request_type_id).or_default();
         list.push((user_key, global_response_id, request));
@@ -275,10 +272,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
         world_entity: &E,
         component_kind: &ComponentKind,
     ) {
-        if !self.inserts.contains_key(component_kind) {
-            self.inserts.insert(*component_kind, Vec::new());
-        }
-        let list = self.inserts.get_mut(component_kind).unwrap();
+        let list = self.inserts.entry(*component_kind).or_default();
         list.push((user_key, *world_entity));
         self.empty = false;
     }
@@ -315,10 +309,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
         world_entity: &E,
         component_kind: &ComponentKind,
     ) {
-        if !self.updates.contains_key(component_kind) {
-            self.updates.insert(*component_kind, Vec::new());
-        }
-        let list = self.updates.get_mut(component_kind).unwrap();
+        let list = self.updates.entry(*component_kind).or_default();
         list.push((user_key, *world_entity));
         self.empty = false;
     }
@@ -440,6 +431,14 @@ pub(crate) fn read_channel_messages<C: Channel, M: Message>(
     Vec::new()
 }
 
+/// # Panics
+/// Panics if a `message` was stored under a `MessageKind` that does not
+/// match `M`. The storage map is keyed by `MessageKind::of::<M>()` on
+/// insert, so a mismatch is a naia-side bookkeeping bug, never peer input.
+#[expect(
+    clippy::unwrap_used,
+    reason = "internal invariant: message is stored keyed by its own MessageKind"
+)]
 pub(crate) fn read_messages<M: Message>(
     messages: Vec<(UserKey, MessageContainer)>,
 ) -> Vec<(UserKey, M)> {
@@ -462,10 +461,7 @@ pub(crate) fn push_message_impl(
     channel_kind: &ChannelKind,
     message: MessageContainer,
 ) {
-    if !messages.contains_key(channel_kind) {
-        messages.insert(*channel_kind, HashMap::new());
-    }
-    let channel_map = messages.get_mut(channel_kind).unwrap();
+    let channel_map = messages.entry(*channel_kind).or_default();
     let message_type_id = message.kind();
     let list = channel_map.entry(message_type_id).or_default();
     list.push((user_key, message));
@@ -482,6 +478,14 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, Q: Request> WorldEvent<E>
 {
     type Iter = IntoIter<(UserKey, ResponseSendKey<Q::Response>, Q)>;
 
+    /// # Panics
+    /// Panics if a `request` was stored under a `MessageKind` that does not
+    /// match `Q`. The storage map is keyed by `MessageKind::of::<Q>()` on
+    /// insert, so a mismatch is a naia-side bookkeeping bug, never peer input.
+    #[expect(
+        clippy::unwrap_used,
+        reason = "internal invariant: request is stored keyed by its own MessageKind"
+    )]
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
         let channel_kind: ChannelKind = ChannelKind::of::<C>();
         let Some(channel_map) = events.requests.get_mut(&channel_kind) else {
@@ -699,6 +703,15 @@ pub struct RemoveComponentEvent<C: Replicate> {
 impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> WorldEvent<E> for RemoveComponentEvent<C> {
     type Iter = IntoIter<(UserKey, E, C)>;
 
+    /// # Panics
+    /// Panics if a removed component was stored under a `ComponentKind` that
+    /// does not match `C`. The storage map is keyed by
+    /// `ComponentKind::of::<C>()` on insert, so a mismatch is a naia-side
+    /// bookkeeping bug, never peer input.
+    #[expect(
+        clippy::unwrap_used,
+        reason = "internal invariant: component is stored keyed by its own ComponentKind"
+    )]
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
         let component_kind: ComponentKind = ComponentKind::of::<C>();
         if let Some(boxed_list) = events.removes.remove(&component_kind) {

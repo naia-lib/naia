@@ -23,6 +23,10 @@ struct DynRefDowncast<'a, R: Replicate> {
     _phantom: PhantomData<R>,
 }
 impl<'a, R: Replicate> ReplicaRefTrait<R> for DynRefDowncast<'a, R> {
+    #[expect(
+        clippy::expect_used,
+        reason = "a DynRefDowncast is built only for the kind of R"
+    )]
     fn to_ref(&self) -> &R {
         (*self.inner)
             .to_any()
@@ -37,6 +41,10 @@ struct DynMutDowncast<'a, R: Replicate> {
     _phantom: PhantomData<R>,
 }
 impl<'a, R: Replicate> ReplicaRefTrait<R> for DynMutDowncast<'a, R> {
+    #[expect(
+        clippy::expect_used,
+        reason = "a DynMutDowncast is built only for the kind of R"
+    )]
     fn to_ref(&self) -> &R {
         (*self.inner)
             .to_any()
@@ -45,6 +53,10 @@ impl<'a, R: Replicate> ReplicaRefTrait<R> for DynMutDowncast<'a, R> {
     }
 }
 impl<'a, R: Replicate> ReplicaMutTrait<R> for DynMutDowncast<'a, R> {
+    #[expect(
+        clippy::expect_used,
+        reason = "a DynMutDowncast is built only for the kind of R"
+    )]
     fn to_mut(&mut self) -> &mut R {
         (*self.inner)
             .to_any_mut()
@@ -265,6 +277,10 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         self.world.despawn(*entity);
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "bevy gives every component in an archetype info and a type id"
+    )]
     fn component_kinds(&mut self, entity: &Entity) -> Vec<ComponentKind> {
         let mut kinds = Vec::new();
 
@@ -396,6 +412,10 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
             });
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "the component removed under kind R is an R"
+    )]
     fn remove_component<R: ReplicatedComponent>(&mut self, entity: &Entity) -> Option<R> {
         let kind = ComponentKind::of::<R>();
         let boxed = self.remove_component_of_kind(entity, kind)?;
@@ -600,6 +620,10 @@ fn component_of_kind<'a>(
     component_access.component(world, entity)
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "a missing WorldData resource means the naia plugin was never added; setup misuse"
+)]
 fn world_data(world: &World) -> &WorldData {
     world
         .get_resource::<WorldData>()
@@ -624,6 +648,10 @@ fn component_mut_of_kind_raw<'a>(
 #[expect(
     unsafe_code,
     reason = "resource access through UnsafeWorldCell under an exclusive &mut World"
+)]
+#[expect(
+    clippy::expect_used,
+    reason = "a missing WorldData resource means the naia plugin was never added; setup misuse"
 )]
 fn world_data_unchecked_mut(world: &'_ mut World) -> Mut<'_, WorldData> {
     // SAFETY: We have exclusive access via &mut World. as_unsafe_world_cell() is used here

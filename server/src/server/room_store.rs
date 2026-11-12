@@ -203,8 +203,7 @@ impl RoomStore {
     ) -> (bool, Option<RoomChange<E>>) {
         let removed_entities = self.remove_all_entities(room_key, entity_map);
 
-        if self.rooms.contains_key(&room_key) {
-            let room = self.rooms.remove(&room_key).unwrap();
+        if let Some(room) = self.rooms.remove(&room_key) {
             for user_key in room.user_keys() {
                 if let Some(user) = user_store.get_mut(*user_key) {
                     user.uncache_room(room_key);
@@ -224,6 +223,15 @@ impl RoomStore {
 
     /// Add `world_entity` to `room_key`. Mutates rooms only.
     /// Returns None if room missing; otherwise (legacy `ScopeChange`, `RoomChange`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `world_entity` is not tracked in `entity_map`: callers only
+    /// reach this with a world `Entity` the host has already spawned.
+    #[expect(
+        clippy::unwrap_used,
+        reason = "invariant: caller only passes a world_entity already tracked in entity_map"
+    )]
     pub(crate) fn add_entity<E: Copy + Eq + Hash + Send + Sync>(
         &mut self,
         room_key: RoomKey,
@@ -257,6 +265,15 @@ impl RoomStore {
 
     /// Remove `world_entity` from `room_key`. Mutates rooms only.
     /// Returns None if room or entity not found; otherwise (legacy, `RoomChange`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `world_entity` is not tracked in `entity_map`: callers only
+    /// reach this with a world `Entity` the host has already spawned.
+    #[expect(
+        clippy::unwrap_used,
+        reason = "invariant: caller only passes a world_entity already tracked in entity_map"
+    )]
     pub(crate) fn remove_entity<E: Copy + Eq + Hash + Send + Sync>(
         &mut self,
         room_key: RoomKey,

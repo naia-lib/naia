@@ -34,21 +34,14 @@ impl<P> OrderedIds<P> {
     // }
 
     pub fn push_back(&mut self, message_index: MessageIndex, item: P) {
-        let mut current_index = self.inner.len();
-
-        loop {
-            if current_index == 0 {
-                self.inner.push_front((message_index, item));
-                return;
-            }
-
-            current_index -= 1;
-
-            let (old_index, _) = self.inner.get(current_index).unwrap();
-            if sequence_less_than(*old_index, message_index) {
-                self.inner.insert(current_index + 1, (message_index, item));
-                return;
-            }
+        // Insert after the newest entry older than `message_index`, or at the front.
+        match self
+            .inner
+            .iter()
+            .rposition(|(old_index, _)| sequence_less_than(*old_index, message_index))
+        {
+            Some(older) => self.inner.insert(older + 1, (message_index, item)),
+            None => self.inner.push_front((message_index, item)),
         }
     }
 

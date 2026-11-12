@@ -332,6 +332,10 @@ impl SendConnection {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::expect_used,
+        reason = "a poisoned GlobalDiffHandler lock means a writer panicked mid-update; replicating from it would corrupt every peer"
+    )]
     fn write_packet<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
         channel_kinds: &ChannelKinds,
@@ -577,10 +581,7 @@ impl SendConnection {
         // client's receive ceiling. An idle world must still supply that tick.
         let needs_tick_boundary = self.last_data_tick != Some(time_manager.current_tick());
         if has_events || has_messages || needs_tick_boundary {
-            if !self
-                .base
-                .can_spend_bandwidth(u32::try_from(MTU_SIZE_BYTES).expect("MTU size fits in u32"))
-            {
+            if !self.base.can_spend_bandwidth(MTU_SIZE_BYTES as u32) {
                 self.base.record_bandwidth_deferred();
                 *refused_on_bandwidth = true;
                 return None;
@@ -599,9 +600,9 @@ impl SendConnection {
                 snapshot_map,
             );
             let packet = writer.to_packet();
-            self.base.spend_bandwidth(
-                u32::try_from(packet.slice().len()).expect("packet length fits in u32"),
-            );
+            // Packet length is bounded by MTU_SIZE_BYTES, always far below
+            // u32::MAX, so this cast is lossless in practice.
+            self.base.spend_bandwidth(packet.slice().len() as u32);
             return Some((packet, command_evidence));
         }
 
@@ -687,6 +688,10 @@ mod quiet_data_tests {
     }
 
     impl Link {
+        #[expect(
+            clippy::unwrap_used,
+            reason = "test helper: a failure must fail the calling test"
+        )]
         fn new() -> Self {
             TestClock::init(0);
             let config = ServerConfig::default();
@@ -736,6 +741,10 @@ mod quiet_data_tests {
         }
     }
 
+    #[expect(
+        clippy::unwrap_used,
+        reason = "test helper: a failure must fail the calling test"
+    )]
     fn assert_empty_data(packet: &naia_shared::OutgoingPacket, tick: Tick) {
         let mut reader = naia_shared::BitReader::new(packet.slice());
         assert_eq!(

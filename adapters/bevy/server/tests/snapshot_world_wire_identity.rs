@@ -280,6 +280,10 @@ fn multi_entity_multi_component_parity() {
 /// production wire-emission path goes through the dyn vtable
 /// (`ReplicaDynRefWrapper` → `dyn Replicate::write`). Asserting byte
 /// equality on this path pins the actual emission contract.
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn serialize_via_dyn_write(
     view: &impl WorldRefType<Entity>,
     entity: Entity,

@@ -33,14 +33,13 @@ impl ShutdownWait {
     }
 }
 
-/// Builds one shared signal plus one wait per background task.
-pub fn shutdown_set(task_count: usize) -> (Arc<ShutdownSignal>, Vec<ShutdownWait>) {
-    let mut senders = Vec::with_capacity(task_count);
-    let mut waits = Vec::with_capacity(task_count);
-    for _ in 0..task_count {
+/// Builds one shared signal plus one wait per background task (`TASKS` of them).
+pub fn shutdown_set<const TASKS: usize>() -> (Arc<ShutdownSignal>, [ShutdownWait; TASKS]) {
+    let mut senders = Vec::with_capacity(TASKS);
+    let waits = std::array::from_fn(|_| {
         let (sender, receiver) = oneshot::channel();
         senders.push(sender);
-        waits.push(ShutdownWait { receiver });
-    }
+        ShutdownWait { receiver }
+    });
     (Arc::new(ShutdownSignal { senders }), waits)
 }

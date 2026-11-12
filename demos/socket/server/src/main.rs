@@ -7,11 +7,8 @@ use simple_logger::SimpleLogger;
 mod app;
 use app::App;
 
-fn main() {
-    SimpleLogger::new()
-        .with_level(LevelFilter::Info)
-        .init()
-        .expect("A logger was already initialized");
+fn main() -> Result<(), log::SetLoggerError> {
+    SimpleLogger::new().with_level(LevelFilter::Info).init()?;
 
     let mut app = App::new();
     loop {

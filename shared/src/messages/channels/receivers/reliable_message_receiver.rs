@@ -135,6 +135,10 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         }
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "local invariant: is_request_or_response() above already confirmed the concrete type"
+    )]
     fn receive_message(
         &mut self,
         message_kinds: &MessageKinds,
@@ -147,7 +151,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             let request_or_response_container = message_container
                 .to_boxed_any()
                 .downcast::<RequestOrResponse>()
-                .unwrap();
+                .expect("message reported itself as a request/response");
             let (local_id, wire_nonce, request_bytes) =
                 request_or_response_container.to_id_and_bytes();
             let mut reader = BitReader::new(&request_bytes);

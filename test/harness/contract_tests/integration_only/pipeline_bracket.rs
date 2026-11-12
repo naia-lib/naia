@@ -63,6 +63,10 @@ fn listening_server() -> PipelinedServer<DemoEntity> {
     listening_server_at(FAKE_SERVER_ADDR)
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn listening_server_at(addr: &str) -> PipelinedServer<DemoEntity> {
     let mut server: PipelinedServer<DemoEntity> =
         PipelinedServer::new(ServerConfig::default(), protocol());

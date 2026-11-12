@@ -41,8 +41,8 @@ fn run(u: usize, n: usize, immutable: bool) {
         steady_tick_times.push(steady_sum / 3.0);
     }
     let label = if immutable { "imm" } else { "mut" };
-    first_tick_times.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    steady_tick_times.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    first_tick_times.sort_by(f64::total_cmp);
+    steady_tick_times.sort_by(f64::total_cmp);
     println!(
         "U={u:>2} N={n:>5} {label} | build_avg={:>6.1}ms first_tick_median={:>7.2}ms steady_tick_median={:>7.3}ms",
         t_builds / 5.0,

@@ -65,6 +65,10 @@ fn build_app() -> App {
 /// `WorldServer::is_listening` returns true — `drain_host_sync_into_pipeline`
 /// skips drain otherwise (matching the production `world_to_host_sync`
 /// guard).
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn build_handles_listening(
     addr: &str,
 ) -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {

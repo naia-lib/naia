@@ -666,6 +666,10 @@ fn authority_releases_when_holder_goes_out_of_scope() {
 /// still active; rejoining shows E again. The explicit-route last-call-wins
 /// tail lives in `manual_include_exclude_last_call_wins` (both engines: the
 /// monolithic bridge drains the scope ledger (D7) for Pipelined driving).
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn manual_include_needs_shared_room(mode: naia_server::ServerMode) {
     let mut scenario = Scenario::new(mode);
     let test_protocol = protocol();
@@ -785,6 +789,10 @@ fn pipelined_manual_include_needs_shared_room() {
 /// The include/exclude bits stage through the scope ledger, which the
 /// monolithic bridge drains (D7) for the harness's Pipelined driving, so this
 /// runs on both engines.
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn manual_include_exclude_last_call_wins(mode: naia_server::ServerMode) {
     let mut scenario = Scenario::new(mode);
     let test_protocol = protocol();
@@ -1248,6 +1256,10 @@ fn entering_scope_mid_lifetime_yields_consistent_snapshot() {
 // ============================================================================
 
 /// Spawns a `Persist` entity in `room`, included in every listed user's scope.
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn spawn_persisting_entity(
     scenario: &mut Scenario,
     room_key: &RoomKey,
@@ -1302,6 +1314,10 @@ fn holds_for(
 /// Given a `ScopeExit::Persist` entity visible to U; when the override is armed
 /// and the entity is excluded; then U's client despawns it rather than keeping
 /// it paused in the networked entity pool.
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn armed_override_despawns_a_persisted_entity_on_scope_exit(mode: naia_server::ServerMode) {
     let mut scenario = Scenario::new(mode);
     let test_protocol = protocol();
@@ -1338,6 +1354,10 @@ fn armed_override_despawns_a_persisted_entity_on_scope_exit(mode: naia_server::S
 ///
 /// Given the same entity and the same exclusion but no override; then the
 /// default `Persist` policy still holds — the ordinary path is untouched.
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn an_unarmed_user_keeps_the_default_persist_policy(mode: naia_server::ServerMode) {
     let mut scenario = Scenario::new(mode);
     let test_protocol = protocol();
@@ -1376,6 +1396,10 @@ fn an_unarmed_user_keeps_the_default_persist_policy(mode: naia_server::ServerMod
 ///
 /// Given two users both seeing the same persisted entity; when only U is armed;
 /// then U despawns and V stays paused-and-present.
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn the_override_is_scoped_to_one_user_not_the_entity(mode: naia_server::ServerMode) {
     let mut scenario = Scenario::new(mode);
     let test_protocol = protocol();
@@ -1434,6 +1458,10 @@ fn the_override_is_scoped_to_one_user_not_the_entity(mode: naia_server::ServerMo
 /// Given an override that has fired; when the entity re-enters scope and later
 /// exits again; then that second exit follows the entity's own `Persist` policy
 /// — a stale revocation cannot replay.
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn re_entry_clears_the_override_so_the_next_exit_persists_again(mode: naia_server::ServerMode) {
     let mut scenario = Scenario::new(mode);
     let test_protocol = protocol();
@@ -1490,6 +1518,10 @@ fn re_entry_clears_the_override_so_the_next_exit_persists_again(mode: naia_serve
 ///
 /// The leg observes continued presence across the churn (10.t1's consumption
 /// half); the first firing is 10.t1's firing half.
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn repeated_churn_after_a_fired_override_never_despawns_again(mode: naia_server::ServerMode) {
     let mut scenario = Scenario::new(mode);
     let test_protocol = protocol();
@@ -1551,6 +1583,10 @@ fn repeated_churn_after_a_fired_override_never_despawns_again(mode: naia_server:
 ///
 /// Models the team switch: entity revoked on the A→B switch, re-seeded on the
 /// B→A switch, and the re-seed must not thrash (no spurious despawn afterwards).
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn the_a_to_b_to_a_round_trip_re_seeds_without_thrash(mode: naia_server::ServerMode) {
     let mut scenario = Scenario::new(mode);
     let test_protocol = protocol();
@@ -1610,6 +1646,10 @@ fn the_a_to_b_to_a_round_trip_re_seeds_without_thrash(mode: naia_server::ServerM
 /// may have left by a route that does not consult `ScopeExit` at all. Re-entry
 /// is what closes the cycle: the *next* exit after an inclusion must follow the
 /// entity's own policy, never the stranded override.
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn an_override_stranded_across_a_re_entry_is_disarmed_by_the_inclusion(
     mode: naia_server::ServerMode,
 ) {
@@ -1720,6 +1760,10 @@ fn resident_an_override_stranded_across_a_re_entry_is_disarmed_by_the_inclusion(
 // despawned a `Persist` entity on the Resident engine.
 // ---------------------------------------------------------------------------
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn a_persist_entity_removed_from_its_room_is_kept_on_the_client(mode: naia_server::ServerMode) {
     let mut scenario = Scenario::new(mode);
     let test_protocol = protocol();
@@ -1763,6 +1807,10 @@ fn a_persist_entity_removed_from_its_room_is_kept_on_the_client(mode: naia_serve
     );
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn a_persist_user_removed_from_its_room_keeps_the_entity(mode: naia_server::ServerMode) {
     let mut scenario = Scenario::new(mode);
     let test_protocol = protocol();
@@ -1805,6 +1853,10 @@ fn a_persist_user_removed_from_its_room_keeps_the_entity(mode: naia_server::Serv
     );
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn an_armed_override_fires_on_the_entity_room_route(mode: naia_server::ServerMode) {
     let mut scenario = Scenario::new(mode);
     let test_protocol = protocol();
@@ -1856,6 +1908,10 @@ fn an_armed_override_fires_on_the_entity_room_route(mode: naia_server::ServerMod
     );
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn an_armed_override_fires_on_the_user_room_route(mode: naia_server::ServerMode) {
     let mut scenario = Scenario::new(mode);
     let test_protocol = protocol();
@@ -1957,6 +2013,10 @@ fn pipelined_an_armed_override_fires_on_the_user_room_route() {
 /// Connects a client into an empty room, fills a second room with `N`
 /// entities, moves the client into it, and returns the order the client
 /// spawned them in.
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn room_join_spawn_order(mode: naia_server::ServerMode) -> Vec<EntityKey> {
     const N: usize = 8;
     let mut scenario = Scenario::new(mode);

@@ -149,7 +149,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntitySpawner<E> for GlobalEntityM
     }
 
     fn despawn_by_world(&mut self, world_entity: &E) {
-        let global_entity = self.entity_to_global_map.remove(world_entity).unwrap();
+        let Some(global_entity) = self.entity_to_global_map.remove(world_entity) else {
+            panic!("World entity does not exist in the entity to global map");
+        };
         self.global_to_entity_map.remove(&global_entity);
     }
 

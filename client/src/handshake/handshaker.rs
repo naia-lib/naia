@@ -216,14 +216,12 @@ impl Handshaker for HandshakeManager {
 
     // Call this regularly so handshake manager can process incoming requests
     fn recv(&mut self, reader: &mut BitReader) -> Option<HandshakeResult> {
-        let header_result = StandardHeader::de(reader);
-        if header_result.is_err() {
+        let Ok(header) = StandardHeader::de(reader) else {
             // [transport-04]: undecodable header bytes are dropped; Debug
             // warns, Prod is silent.
             malformed_drop_warn("Client Error: cannot read malformed packet".to_string());
             return None;
-        }
-        let header = header_result.unwrap();
+        };
         match header.packet_type {
             PacketType::Handshake => {
                 self.watch.recv_handshake += 1;
@@ -302,7 +300,13 @@ impl Handshaker for HandshakeManager {
     }
 
     // Write a disconnect packet
+    // Panics if called before the identity token is set; callers only reach
+    // this once Client::is_connected() is true, which implies it already is.
     #[cfg(not(feature = "transport_udp"))]
+    #[expect(
+        clippy::unwrap_used,
+        reason = "called only once connected, by which point identity_token is always set"
+    )]
     fn write_disconnect(&self) -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);

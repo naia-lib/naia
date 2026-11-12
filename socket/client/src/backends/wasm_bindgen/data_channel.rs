@@ -74,6 +74,10 @@ impl DataChannel {
     /// Builds a `DataChannel` for one connection attempt, parsing the
     /// session URL and capturing the config's ICE servers. Does not start
     /// signaling; call [`Self::start`] for that.
+    #[expect(
+        clippy::expect_used,
+        reason = "MessageChannel construction cannot fail in a browser page"
+    )]
     pub fn new(
         config: &SocketConfig,
         server_session_url: &str,
@@ -114,6 +118,10 @@ impl DataChannel {
 
     /// Registers the callback invoked once the server's data-channel address
     /// is resolved.
+    #[expect(
+        clippy::expect_used,
+        reason = "FindAddrFunc is borrowed only for the length of one call, never across a callback"
+    )]
     pub fn on_find_addr(&mut self, func: Box<dyn FnMut(SocketAddr)>) {
         self.find_addr_func
             .as_ref()
@@ -128,6 +136,10 @@ impl DataChannel {
     /// up inbound message/identity routing. Returns a closer that can tear
     /// this attempt's peer and channel down on retry.
     #[allow(unused_must_use)]
+    #[expect(
+        clippy::expect_used,
+        reason = "browser invariants: every page has a window, XMLHttpRequest and timers; a base64 header is always valid; FindAddrFunc is never borrowed across a callback"
+    )]
     pub fn start(&self) -> WasmPeerCloser {
         // Set up Ice Servers from the socket config (defaults to Google's
         // public STUN; override via `SocketConfig.ice_servers`)
@@ -213,9 +225,17 @@ impl DataChannel {
                         // Consumer headers first, then naia's fingerprint header,
                         // which `stamp_protocol_id_header` already placed last.
                         for (key, value) in &auth_headers_3 {
-                            request
-                                .set_request_header(key, value)
-                                .expect("Failed to set request header");
+                            if request.set_request_header(key, value).is_err() {
+                                // 400 is client-side, like the 504 below.
+                                id_sender_3.send_error(
+                                    400,
+                                    base64::encode(format!(
+                                        "the browser refused auth header {key}: \
+                                         session offer never posted"
+                                    )),
+                                );
+                                return;
+                            }
                         }
 
                         let request_2 = request.clone();
@@ -225,7 +245,13 @@ impl DataChannel {
                         let id_sender_4 = id_sender_3.clone();
                         let request_func: Box<dyn FnMut(ProgressEvent)> = Box::new(
                             move |_: ProgressEvent| {
-                                let status = request_2.status().unwrap();
+                                let Ok(status) = request_2.status() else {
+                                    id_sender_4.send_error(
+                                        502,
+                                        base64::encode("session POST status unreadable"),
+                                    );
+                                    return;
+                                };
                                 warn!("naia: session POST status {}", status);
                                 if status != 200 {
                                     // A rejection may carry a base64-encoded
@@ -242,11 +268,21 @@ impl DataChannel {
                                     return;
                                 }
                                 {
-                                    let response_string =
-                                        request_2.response_text().unwrap().unwrap();
-
-                                    let session_response: JsSessionResponse =
-                                        get_session_response(response_string.as_str());
+                                    // A malformed answer is a rejection the
+                                    // application can read, never a panic.
+                                    let Some(session_response) = request_2
+                                        .response_text()
+                                        .ok()
+                                        .flatten()
+                                        .as_deref()
+                                        .and_then(get_session_response)
+                                    else {
+                                        id_sender_4.send_error(
+                                            502,
+                                            base64::encode("session answer is malformed"),
+                                        );
+                                        return;
+                                    };
 
                                     // Length only, never the value: the token
                                     // is an opaque secret after this hop.
@@ -294,8 +330,12 @@ impl DataChannel {
                                             candidate_init_dict.set_sdp_mid(Some(
                                                 session_response.candidate.sdp_mid.as_str(),
                                             ));
-                                            let candidate: RtcIceCandidate =
-                                                RtcIceCandidate::new(&candidate_init_dict).unwrap();
+                                            let Ok(candidate) =
+                                                RtcIceCandidate::new(&candidate_init_dict)
+                                            else {
+                                                warn!("naia: server ICE candidate rejected by the browser");
+                                                return;
+                                            };
 
                                             let peer_add_success_func: Box<dyn FnMut(JsValue)> =
                                                 Box::new(move |_: JsValue| {
@@ -399,9 +439,14 @@ impl DataChannel {
                                 if *settled.borrow() {
                                     return;
                                 }
+                                // Still unsettled on a miss, so the gathering
+                                // timeout reports it.
+                                let Some(local_description) = peer.local_description() else {
+                                    return;
+                                };
                                 *settled.borrow_mut() = true;
                                 window.clear_timeout_with_handle(timeout_handle);
-                                let offer_sdp = peer.local_description().unwrap().sdp();
+                                let offer_sdp = local_description.sdp();
                                 // warn!: the served console shows warn-and-above
                                 // only; this is one line per connection attempt.
                                 warn!("naia: session POST send");
@@ -536,10 +581,14 @@ impl DataChannel {
                             let mut body = vec![0; uarray.length() as usize];
                             uarray.copy_to(&mut body[..]);
 
+                            // The channel is unreliable: a refused send drops
+                            // this datagram like any other loss.
                             if channel_2.ready_state() == RtcDataChannelState::Open {
-                                channel_2
-                                    .send_with_u8_array(&body.into_boxed_slice())
-                                    .unwrap();
+                                if let Err(err) =
+                                    channel_2.send_with_u8_array(&body.into_boxed_slice())
+                                {
+                                    warn!("naia: datachannel send refused: {err:?}");
+                                }
                             }
                         }
                     });
@@ -577,26 +626,26 @@ pub struct JsSessionResponse {
     pub candidate: SessionCandidate,
 }
 
-fn get_session_response(input: &str) -> JsSessionResponse {
-    let json_obj: JsonValue = input.parse().unwrap();
+/// Parses the server's session answer; `None` names a malformed answer.
+fn get_session_response(input: &str) -> Option<JsSessionResponse> {
+    let json_obj: JsonValue = input.parse().ok()?;
 
     let sdp_opt: Option<&String> = json_obj["sdp"]["answer"]["sdp"].get();
-    let sdp: String = sdp_opt.unwrap().clone();
+    let sdp: String = sdp_opt?.clone();
 
     let candidate_opt: Option<&String> = json_obj["sdp"]["candidate"]["candidate"].get();
-    let candidate: String = candidate_opt.unwrap().clone();
+    let candidate: String = candidate_opt?.clone();
 
     let sdp_m_line_index_opt: Option<&f64> = json_obj["sdp"]["candidate"]["sdpMLineIndex"].get();
-    let sdp_m_line_index: u16 = *(sdp_m_line_index_opt.unwrap()) as u16;
+    let sdp_m_line_index: u16 = *sdp_m_line_index_opt? as u16;
 
     let sdp_mid_opt: Option<&String> = json_obj["sdp"]["candidate"]["sdpMid"].get();
-    let sdp_mid: String = sdp_mid_opt.unwrap().clone();
+    let sdp_mid: String = sdp_mid_opt?.clone();
 
     let id_token_opt: Option<&String> = json_obj["id"].get();
-    let id_token: IdentityToken =
-        IdentityToken::from_signaling_string(id_token_opt.unwrap()).unwrap();
+    let id_token: IdentityToken = IdentityToken::from_signaling_string(id_token_opt?)?;
 
-    JsSessionResponse {
+    Some(JsSessionResponse {
         id_token,
         answer: SessionAnswer { sdp },
         candidate: SessionCandidate {
@@ -604,5 +653,5 @@ fn get_session_response(input: &str) -> JsSessionResponse {
             sdp_m_line_index,
             sdp_mid,
         },
-    }
+    })
 }

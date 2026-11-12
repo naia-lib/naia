@@ -29,6 +29,10 @@ fn test_client_config() -> ClientConfig {
 /// Bring up server, connect one client. Returns the connected client_key.
 /// Mirrors the `client_connect` helper in legacy_tests/_helpers.rs but
 /// inlined here so this file is self-contained.
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn server_with_one_client(scenario: &mut Scenario) -> ClientKey {
     let test_protocol = protocol();
     scenario.server_start(ServerConfig::default(), test_protocol.clone());

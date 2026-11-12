@@ -65,7 +65,9 @@ impl HostEngine {
             EntityMessageType::Despawn => {
                 // A client with Granted authority may send a Despawn for a server-created entity.
                 // Despawn is terminal — no per-entity channel ordering needed; push directly.
-                let host_entity = msg.entity().unwrap();
+                let Some(host_entity) = msg.entity() else {
+                    return;
+                };
                 if self.entity_channels.remove(&host_entity).is_some() {
                     self.incoming_events.push((tick, msg));
                 } else {
@@ -79,7 +81,10 @@ impl HostEngine {
             _ => {}
         }
 
-        let host_entity = msg.entity().unwrap();
+        // Only `Noop` carries no entity, and it returned above.
+        let Some(host_entity) = msg.entity() else {
+            return;
+        };
 
         let Some(entity_channel) = self.entity_channels.get_mut(&host_entity) else {
             // Discard messages for unknown entities — this can happen with reordered or stale
@@ -94,6 +99,10 @@ impl HostEngine {
 
     /// Main entry point - validates command and returns it if valid
     /// This mirrors `ReceiverEngine.accept_message()` but for outgoing commands
+    #[expect(
+        clippy::expect_used,
+        reason = "local commands only name entities this connection already maps"
+    )]
     pub(crate) fn send_command(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -102,7 +111,7 @@ impl HostEngine {
         let global_entity = command.entity();
         let host_entity = converter
             .global_entity_to_host_entity(global_entity)
-            .unwrap();
+            .expect("a local command names an entity with a host entity");
 
         // info!("HostEngine::send_command(global entity={:?}, host_entity={:?}, command={:?})", global_entity, host_entity, command.get_type());
 
@@ -139,11 +148,9 @@ impl HostEngine {
             }
             EntityMessageType::Despawn => {
                 assert!(
-                    self.entity_channels.contains_key(&host_entity),
+                    self.entity_channels.remove(&host_entity).is_some(),
                     "Cannot despawn an entity that does not exist in the engine"
                 );
-                // Remove the entity channel
-                self.entity_channels.remove(&host_entity).unwrap();
                 self.outgoing_commands.push(command);
                 return;
             }
@@ -166,6 +173,10 @@ impl HostEngine {
     ///
     /// Panics if the host entity has no entity channel yet (the
     /// caller must have already migrated/spawned the host entity).
+    #[expect(
+        clippy::expect_used,
+        reason = "local commands only name entities this connection already maps"
+    )]
     pub(crate) fn reserve_first_command(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -174,7 +185,7 @@ impl HostEngine {
         let global_entity = command.entity();
         let host_entity = converter
             .global_entity_to_host_entity(global_entity)
-            .unwrap();
+            .expect("a local command names an entity with a host entity");
         let Some(entity_channel) = self.entity_channels.get_mut(&host_entity) else {
             panic!(
                 "HostEngine::reserve_first_command: no entity channel for host_entity={:?} \
@@ -190,6 +201,10 @@ impl HostEngine {
         entity_channel.drain_outgoing_messages_into(&mut self.outgoing_commands);
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "removing a channel that does not exist is a migration bug and must stop loudly"
+    )]
     pub(crate) fn remove_entity_channel(&mut self, entity: HostEntity) -> HostEntityChannel {
         self.entity_channels
             .remove(&entity)

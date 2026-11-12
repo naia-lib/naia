@@ -84,6 +84,10 @@ pub fn emit_initial_component_inserts(world: &mut World) {
     });
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "the naia server plugin registers every resource this system reads"
+)]
 pub fn world_to_host_sync(world: &mut World) {
     world.resource_scope(|world, mut server: Mut<ServerImpl>| {
         if !server.is_listening() {
@@ -180,6 +184,10 @@ pub fn process_packets(world: &mut World) {
     });
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "the naia server plugin registers every resource this system reads"
+)]
 pub fn translate_world_events(world: &mut World) {
     world.resource_scope(|world, mut server: Mut<ServerImpl>| {
         if !server.is_listening() {
@@ -353,6 +361,10 @@ pub fn send_packets_init(world: &mut World) {
     });
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "the naia server plugin registers every resource this system reads"
+)]
 pub fn send_packets(world: &mut World) {
     world.resource_scope(|world, mut server: Mut<ServerImpl>| {
         if !server.is_listening() {

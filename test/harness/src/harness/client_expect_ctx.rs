@@ -184,6 +184,10 @@ impl<'a> ClientExpectCtx<'a> {
 
     /// Read messages from a specific channel
     /// Returns an iterator over messages of type M received on channel C
+    #[expect(
+        clippy::expect_used,
+        reason = "messages are stored and downcast under the same type M"
+    )]
     pub fn read_message<C: naia_shared::Channel, M: naia_shared::Message>(
         &mut self,
     ) -> impl Iterator<Item = M> {
@@ -207,6 +211,10 @@ impl<'a> ClientExpectCtx<'a> {
 
     /// Read requests from a specific channel
     /// Returns an iterator over (ResponseId, Request) tuples received on channel C
+    #[expect(
+        clippy::expect_used,
+        reason = "requests are stored and downcast under the same type Q"
+    )]
     pub fn read_request<C: naia_shared::Channel, Q: naia_shared::Request>(
         &mut self,
     ) -> impl Iterator<Item = (naia_shared::GlobalResponseId, Q)> {

@@ -50,6 +50,14 @@ impl BandwidthMonitor {
         self.total_monitor.bandwidth()
     }
 
+    /// # Panics
+    /// Panics if `address` has no registered client monitor. Callers must
+    /// `create_client` for an address before querying its bandwidth; this is
+    /// a naia-side invariant, never reachable from peer input.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: caller must create_client before querying bandwidth"
+    )]
     pub fn client_bandwidth(&self, address: &SocketAddr) -> f32 {
         self.client_monitors
             .get(address)

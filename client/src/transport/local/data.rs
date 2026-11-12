@@ -64,7 +64,7 @@ impl LocalClientReceiver {
             Ok(payload) => {
                 debug!("[CLIENT_RX] Received packet: {} bytes", payload.len());
                 self.last_payload = Some(payload.into_boxed_slice());
-                Ok(Some(self.last_payload.as_ref().unwrap().as_ref()))
+                Ok(self.last_payload.as_deref())
             }
             Err(_) => {
                 self.last_payload = None;

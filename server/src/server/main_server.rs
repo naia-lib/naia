@@ -169,6 +169,10 @@ impl MainServer {
 
     /// Accepts an incoming Client User, allowing them to establish a connection
     /// with the Server
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: listen() sets auth_io before any AuthEvent can fire"
+    )]
     pub fn accept_connection(&mut self, user_key: &UserKey) {
         let Some(user) = self.users.get_mut(user_key) else {
             warn!("unknown user is finalizing connection...");
@@ -223,6 +227,10 @@ impl MainServer {
 
     /// Rejects an incoming Client User, optionally handing them an
     /// already-serialized message explaining why (naia-lib/naia#133).
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: listen() sets auth_io before any AuthEvent can fire"
+    )]
     pub fn reject_connection_with_payload(&mut self, user_key: &UserKey, payload: Option<&[u8]>) {
         if let Some(user) = self.users.get_mut(user_key) {
             let Some(auth_addr) = user.take_auth_address() else {
@@ -408,11 +416,6 @@ impl MainServer {
     }
 
     /// Drain inbound auth requests into user records and auth events.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a just-inserted user record is missing, which cannot
-    /// happen single-threaded between insert and lookup.
     fn drain_auth_events(&mut self) {
         // receive auth events
         //
@@ -443,8 +446,13 @@ impl MainServer {
                             continue;
                         }
 
-                        // create new user
-                        let user_key = self.users.insert(MainUser::new(auth_addr));
+                        // create new user; an auto-accepted user has its auth
+                        // address consumed before the record is stored
+                        let mut user = MainUser::new(auth_addr);
+                        if !self.require_auth {
+                            let _ = user.take_auth_address();
+                        }
+                        let user_key = self.users.insert(user);
                         self.pending_auth_users.insert(user_key);
 
                         if self.require_auth {
@@ -463,8 +471,6 @@ impl MainServer {
                             self.incoming_events.push_auth(user_key, auth_message);
                         } else {
                             // auto-accept: no ServerAuthEvent; generate token and send immediately
-                            let user = self.users.get_mut(&user_key).expect("user just inserted");
-                            let _ = user.take_auth_address(); // consume the auth address
                             let identity_token = naia_shared::IdentityToken::generate();
                             self.handshake_manager.authenticate_user(
                                 &identity_token,

@@ -42,6 +42,10 @@ impl TransportSocket for Socket {
     /// HTTP request here to hang a header on. The fingerprint is still checked
     /// for this path, by the data socket's first-packet comparison, which is
     /// unchanged.
+    #[expect(
+        clippy::expect_used,
+        reason = "Socket::connect* consumes inner exactly once; a Some->None flip is a naia bug"
+    )]
     fn connect(
         self: Box<Self>,
         _protocol_id: ProtocolId,
@@ -70,6 +74,10 @@ impl TransportSocket for Socket {
         )
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "Socket::connect* consumes inner exactly once; a Some->None flip is a naia bug"
+    )]
     fn connect_with_auth(
         self: Box<Self>,
         protocol_id: ProtocolId,
@@ -99,6 +107,10 @@ impl TransportSocket for Socket {
         )
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "Socket::connect* consumes inner exactly once; a Some->None flip is a naia bug"
+    )]
     fn connect_with_auth_headers(
         self: Box<Self>,
         protocol_id: ProtocolId,
@@ -129,6 +141,10 @@ impl TransportSocket for Socket {
         )
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "Socket::connect* consumes inner exactly once; a Some->None flip is a naia bug"
+    )]
     fn connect_with_auth_and_headers(
         self: Box<Self>,
         protocol_id: ProtocolId,

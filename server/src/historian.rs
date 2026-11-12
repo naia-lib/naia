@@ -190,8 +190,8 @@ impl Historian {
             return None;
         }
         let ticks_ago = (time_ago_ms as f32 / tick_duration_ms).round() as u32;
-        let ticks_ago_u16 =
-            u16::try_from(ticks_ago % 65_536).expect("remainder below 2^16 fits in u16");
+        // `% 65_536` bounds the remainder below 2^16, so this cast is lossless.
+        let ticks_ago_u16 = (ticks_ago % 65_536) as u16;
         let target_tick = current_tick.wrapping_sub(ticks_ago_u16);
         // Try exact match first, then fall back to nearest available.
         if let Some(snap) = self.snapshot_at_tick(target_tick) {

@@ -1,5 +1,5 @@
 #[cfg(feature = "entity_delegation")]
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, PoisonError, RwLock};
 
 use crate::{
     world::delegation::entity_auth_status::{EntityAuthStatus, HostEntityAuthStatus},
@@ -45,7 +45,9 @@ impl EntityAuthChannel {
             .data
             .as_ref()
             .read()
-            .expect("Lock on AuthStatus is held by current thread.");
+            // The guarded value is one status word, so a poisoned lock
+            // still holds a whole, readable status.
+            .unwrap_or_else(PoisonError::into_inner);
         data.auth_status()
     }
 
@@ -55,7 +57,9 @@ impl EntityAuthChannel {
             .data
             .as_ref()
             .write()
-            .expect("Lock on AuthStatus is held by current thread.");
+            // The guarded value is one status word, so a poisoned lock
+            // still holds a whole, readable status.
+            .unwrap_or_else(PoisonError::into_inner);
         data.set_auth_status(auth_status);
     }
 }

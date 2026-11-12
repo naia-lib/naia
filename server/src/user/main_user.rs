@@ -31,8 +31,16 @@ impl MainUser {
         self.data_addr.is_some()
     }
 
-    /// Returns the data-channel socket address; panics if not yet assigned.
+    /// Returns the data-channel socket address.
+    ///
+    /// # Panics
+    /// Panics if the handshake has not yet completed (`has_address()` is
+    /// `false`). Caller-ordering invariant on the embedding application.
     #[must_use]
+    #[expect(
+        clippy::unwrap_used,
+        reason = "internal invariant: caller must check has_address() first"
+    )]
     pub fn address(&self) -> SocketAddr {
         self.data_addr.unwrap()
     }
@@ -81,8 +89,17 @@ impl<'s> MainUserRef<'s> {
         self.key
     }
 
-    /// Returns the user's socket address; panics if the user is no longer connected.
+    /// Returns the user's socket address.
+    ///
+    /// # Panics
+    /// Panics if the user is no longer connected. A `MainUserRef` is only
+    /// ever handed out for a currently-connected user, so this is a
+    /// naia-side invariant, never reachable from peer input.
     #[must_use]
+    #[expect(
+        clippy::unwrap_used,
+        reason = "internal invariant: a MainUserRef names a currently-connected user"
+    )]
     pub fn address(&self) -> SocketAddr {
         self.server.user_address(self.key).unwrap()
     }

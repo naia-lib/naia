@@ -48,6 +48,10 @@ mod bevy_events {
 /// it. The implementation mirrors `translate_world_events` from
 /// `systems.rs` but works from a pre-collected `ReceiveOutput` instead
 /// of re-locking the server.
+#[expect(
+    clippy::unwrap_used,
+    reason = "the naia server bevy plugin registers every Messages<T> resource this fn writes to"
+)]
 pub fn apply_receive_output(
     world: &mut World,
     server: &mut ServerImpl,
@@ -237,6 +241,10 @@ pub fn apply_receive_output(
 ///
 /// Cyberlith's `GameCell::update` calls this from its cross-half block
 /// after `apply_recv_to_world` populates `output.world_events`.
+#[expect(
+    clippy::unwrap_used,
+    reason = "the naia server bevy plugin registers every Messages<T> resource this fn writes to"
+)]
 pub fn apply_receive_output_pipeline(
     world: &mut World,
     sim_handle: &WorldServer<Entity>,
@@ -493,6 +501,10 @@ pub fn apply_receive_output_pipeline_with_event_receiver(
 /// `entity_world: None` collapses to the single-world behavior,
 /// byte-identical to [`apply_receive_output_pipeline_with_event_receiver`].
 /// `EventReceiver` pushes are unchanged in both modes.
+#[expect(
+    clippy::unwrap_used,
+    reason = "the naia server bevy plugin registers every Messages<T> resource this fn writes to"
+)]
 pub fn apply_receive_output_pipeline_with_event_receiver_split(
     world: &mut World,
     entity_world: Option<&mut World>,

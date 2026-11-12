@@ -10,6 +10,10 @@ use naia_serde::{
 };
 use proptest::prelude::*;
 
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failed decode must fail the calling test"
+)]
 fn roundtrip<T: Serde + PartialEq + std::fmt::Debug>(value: &T) -> T {
     let mut writer = BitWriter::with_max_capacity();
     value.ser(&mut writer);

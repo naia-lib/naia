@@ -28,8 +28,8 @@ impl PlainPacketReceiver {
         if let Some(table) = table_mut() {
             if let Some(state) = table.get_mut(SocketId(self.socket_id)) {
                 if let Some(message) = state.message_queue.pop_front() {
-                    self.last_payload = Some(message);
-                    return Ok(Some(self.last_payload.as_ref().unwrap()));
+                    let payload = self.last_payload.insert(message);
+                    return Ok(Some(&payload[..]));
                 }
 
                 if let Some(error) = state.error_queue.pop_front() {

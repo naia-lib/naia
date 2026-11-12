@@ -887,17 +887,18 @@ fn get_enum_variants(data_enum: &DataEnum) -> Vec<EnumVariant> {
             let (fields, style) = match &variant.fields {
                 Fields::Unit => (vec![], VariantStyle::Unit),
                 Fields::Named(named) => {
+                    // Named fields always carry an ident, so `filter_map` drops nothing.
                     let fields = named
                         .named
                         .iter()
-                        .map(|f| {
-                            let fname = f.ident.clone().expect("named field has ident");
+                        .filter_map(|f| {
+                            let fname = f.ident.clone()?;
                             let kind = if is_entity_property_type(&f.ty) {
                                 FieldKind::EntityProperty
                             } else {
                                 FieldKind::Normal(Box::new(f.ty.clone()))
                             };
-                            EnumVariantField { name: fname, kind }
+                            Some(EnumVariantField { name: fname, kind })
                         })
                         .collect();
                     (fields, VariantStyle::Named)

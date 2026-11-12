@@ -489,13 +489,18 @@ impl HostWorldManager {
                     // Client receives MigrateResponse from server telling it to migrate
                     // a client-created delegated entity from HostEntity to RemoteEntity
 
-                    // Look up the global entity from the client's HostEntity
-                    let global_entity = *local_entity_map.global_entity_from_host(client_host_entity)
-                        .expect("Host entity not found in local entity map during MigrateResponse processing");
+                    // Look up the global entity from the client's HostEntity. The
+                    // message is remote input: one naming an entity this client
+                    // no longer maps is dropped, as the Despawn arm does.
+                    let Some(global_entity) =
+                        local_entity_map.global_entity_from_host(client_host_entity)
+                    else {
+                        continue;
+                    };
 
                     // Create event for the client to process the migration
                     self.incoming_events.push(EntityEvent::MigrateResponse(
-                        global_entity,
+                        *global_entity,
                         new_remote_entity,
                     ));
                 }

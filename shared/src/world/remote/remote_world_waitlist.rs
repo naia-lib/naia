@@ -268,13 +268,10 @@ impl RemoteWorldWaitlist {
                         (tick, remote_entity, component_kind, waiting_field_update),
                     );
                     let component_field_key = (remote_entity, component_kind);
-                    self.update_waitlist_map
-                        .entry(component_field_key)
-                        .or_default();
                     let handle_map = self
                         .update_waitlist_map
-                        .get_mut(&component_field_key)
-                        .unwrap();
+                        .entry(component_field_key)
+                        .or_default();
                     if let Some(old_handle) = handle_map.get(&field_id) {
                         self.update_waitlist_store.remove(handle);
                         self.entity_waitlist.remove_waiting_handle(*old_handle);
@@ -352,6 +349,10 @@ impl RemoteWorldWaitlist {
         output
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "remote_entity/global_entity here were queued ready-to-apply by this waitlist itself; a resolution miss is a bookkeeping bug, not peer input"
+    )]
     pub(crate) fn process_waitlist_updates<
         E: Copy + Eq + Hash + Send + Sync,
         W: WorldMutType<E>,
@@ -384,10 +385,10 @@ impl RemoteWorldWaitlist {
 
                 let global_entity = local_converter
                     .remote_entity_to_global_entity(remote_entity)
-                    .unwrap();
+                    .expect("remote_entity was queued ready-to-apply by this waitlist");
                 let world_entity = world_converter
                     .global_entity_to_entity(global_entity)
-                    .unwrap();
+                    .expect("global_entity resolved above must have a live world entity");
 
                 if world
                     .component_apply_field_update(

@@ -63,6 +63,10 @@ fn build_app() -> App {
     app
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn build_handles_listening(
     addr: &str,
 ) -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {

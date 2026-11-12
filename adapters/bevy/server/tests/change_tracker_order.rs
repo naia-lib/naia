@@ -86,6 +86,10 @@ fn build_app_with_custom_schedule() -> App {
 /// Spawns one entity carrying every registered component under `HostOwned`,
 /// runs `Update` once, and drains the `HostSyncEvent::Insert` kinds in the
 /// order the tracker systems wrote them.
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: a failure must fail the calling test"
+)]
 fn insert_kind_sequence(app: &mut App) -> Vec<ComponentKind> {
     app.world_mut().spawn((
         HostOwned::new::<Singleton>(),

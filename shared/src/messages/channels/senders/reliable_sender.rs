@@ -114,10 +114,6 @@ impl<P: Send + Sync> ReliableSender<P> {
     }
 
     /// Acknowledges delivery of `message_index`, removing it from the retransmit buffer and returning the message.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a value expected to be present is missing.
     // Called when a message has been delivered
     // If this message has never been delivered before, will clear from the outgoing
     // buffer and return the message previously there
@@ -137,8 +133,10 @@ impl<P: Send + Sync> ReliableSender<P> {
             }
 
             if found {
-                // replace found message with nothing
-                let container = self.sending_messages.get_mut(index).unwrap();
+                // replace found message with nothing. `index` was just returned
+                // Some from `.get` above with no mutation between, so it is
+                // still in bounds.
+                let container = self.sending_messages.get_mut(index)?;
                 let output = container.take();
 
                 self.cleanup_sent_messages();

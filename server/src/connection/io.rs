@@ -92,6 +92,13 @@ impl RecvIo {
         self.packet_receiver.as_ref().and_then(|r| r.readiness())
     }
 
+    /// # Panics
+    /// Panics if called before `Server.listen()`. This is a caller-ordering
+    /// invariant on the embedding application, never reachable from peer input.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: caller must call Server.listen() first"
+    )]
     pub fn recv_reader(&mut self) -> Result<Option<(SocketAddr, OwnedBitReader)>, NaiaServerError> {
         let receive_result = self
             .packet_receiver
@@ -126,6 +133,13 @@ impl RecvIo {
         self.incoming_bandwidth_monitor.is_some()
     }
 
+    /// # Panics
+    /// Panics unless `enable_bandwidth_monitor()` was called first. Caller
+    /// ordering invariant on the embedding application, never peer-reachable.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: caller must enable_bandwidth_monitor() first"
+    )]
     pub fn register_client(&mut self, address: &SocketAddr) {
         self.incoming_bandwidth_monitor
             .as_mut()
@@ -133,6 +147,13 @@ impl RecvIo {
             .create_client(address);
     }
 
+    /// # Panics
+    /// Panics unless `enable_bandwidth_monitor()` was called first. Caller
+    /// ordering invariant on the embedding application, never peer-reachable.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: caller must enable_bandwidth_monitor() first"
+    )]
     pub fn deregister_client(&mut self, address: &SocketAddr) {
         self.incoming_bandwidth_monitor
             .as_mut()
@@ -146,6 +167,13 @@ impl RecvIo {
         }
     }
 
+    /// # Panics
+    /// Panics unless `enable_bandwidth_monitor()` was called first. Caller
+    /// ordering invariant on the embedding application, never peer-reachable.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: caller must enable_bandwidth_monitor() first"
+    )]
     pub fn incoming_bandwidth_total(&self) -> f32 {
         self.incoming_bandwidth_monitor
             .as_ref()
@@ -153,6 +181,14 @@ impl RecvIo {
             .total_bandwidth()
     }
 
+    /// # Panics
+    /// Panics unless `enable_bandwidth_monitor()` was called first, or if
+    /// `address` has no registered client monitor. Caller ordering invariant,
+    /// never peer-reachable.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: caller must enable_bandwidth_monitor() first"
+    )]
     pub fn incoming_bandwidth_from_client(&self, address: &SocketAddr) -> f32 {
         self.incoming_bandwidth_monitor
             .as_ref()
@@ -174,14 +210,27 @@ impl SendIo {
         self.packet_sender.is_some()
     }
 
+    /// # Panics
+    /// Panics if called before `Server.listen()`. Caller-ordering invariant
+    /// on the embedding application, never reachable from peer input.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: caller must call Server.listen() first"
+    )]
     pub fn sender_cloned(&self) -> Box<dyn PacketSender> {
-        assert!(
-            self.packet_sender.is_some(),
-            "Cannot call Server.sender_cloned() until you call Server.listen()!"
-        );
-        self.packet_sender.as_ref().unwrap().clone()
+        self.packet_sender
+            .as_ref()
+            .expect("Cannot call Server.sender_cloned() until you call Server.listen()!")
+            .clone()
     }
 
+    /// # Panics
+    /// Panics if called before `Server.listen()`. Caller-ordering invariant
+    /// on the embedding application, never reachable from peer input.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: caller must call Server.listen() first"
+    )]
     pub fn send_packet(
         &mut self,
         address: &SocketAddr,
@@ -212,6 +261,13 @@ impl SendIo {
         self.outgoing_bandwidth_monitor.is_some()
     }
 
+    /// # Panics
+    /// Panics unless `enable_bandwidth_monitor()` was called first. Caller
+    /// ordering invariant on the embedding application, never peer-reachable.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: caller must enable_bandwidth_monitor() first"
+    )]
     pub fn register_client(&mut self, address: &SocketAddr) {
         self.outgoing_bandwidth_monitor
             .as_mut()
@@ -219,6 +275,13 @@ impl SendIo {
             .create_client(address);
     }
 
+    /// # Panics
+    /// Panics unless `enable_bandwidth_monitor()` was called first. Caller
+    /// ordering invariant on the embedding application, never peer-reachable.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: caller must enable_bandwidth_monitor() first"
+    )]
     pub fn deregister_client(&mut self, address: &SocketAddr) {
         self.outgoing_bandwidth_monitor
             .as_mut()
@@ -245,6 +308,13 @@ impl SendIo {
         self.outgoing_bytes_this_tick
     }
 
+    /// # Panics
+    /// Panics unless `enable_bandwidth_monitor()` was called first. Caller
+    /// ordering invariant on the embedding application, never peer-reachable.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: caller must enable_bandwidth_monitor() first"
+    )]
     pub fn outgoing_bandwidth_total(&self) -> f32 {
         self.outgoing_bandwidth_monitor
             .as_ref()
@@ -252,6 +322,14 @@ impl SendIo {
             .total_bandwidth()
     }
 
+    /// # Panics
+    /// Panics unless `enable_bandwidth_monitor()` was called first, or if
+    /// `address` has no registered client monitor. Caller ordering invariant,
+    /// never peer-reachable.
+    #[expect(
+        clippy::expect_used,
+        reason = "internal invariant: caller must enable_bandwidth_monitor() first"
+    )]
     pub fn outgoing_bandwidth_to_client(&self, address: &SocketAddr) -> f32 {
         self.outgoing_bandwidth_monitor
             .as_ref()
