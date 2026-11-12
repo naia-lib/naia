@@ -24,6 +24,10 @@ impl<K: Eq + Hash + Clone, V: Clone> CacheMap<K, V> {
         self.map.get(key)
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "caller must establish key presence before unchecked access"
+    )]
     pub fn get_unchecked(&self, key: &K) -> &V {
         self.map
             .get(key)
@@ -33,7 +37,9 @@ impl<K: Eq + Hash + Clone, V: Clone> CacheMap<K, V> {
     pub fn insert(&mut self, key: K, value: V) {
         if self.keys.len() == self.keys.capacity() {
             // need to make room for other keys
-            let popped_key = self.keys.pop_front().unwrap();
+            let Some(popped_key) = self.keys.pop_front() else {
+                panic!("full cache must contain an eviction key");
+            };
             self.map.remove(&popped_key);
         }
 

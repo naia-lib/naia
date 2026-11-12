@@ -46,6 +46,12 @@ impl Socket {
     ///
     /// **Not suitable for untrusted networks** — see the type-level security
     /// note above.
+    /// Panics if local socket discovery, binding or nonblocking setup fails.
+    #[expect(
+        clippy::expect_used,
+        clippy::unwrap_used,
+        reason = "this infallible constructor treats local socket setup failure as fatal"
+    )]
     pub fn new(server_addrs: &ServerAddrs, config: Option<LinkConditionerConfig>) -> Self {
         let auth_socket = TcpListener::bind(server_addrs.auth_listen_addr).unwrap();
         auth_socket
@@ -320,10 +326,9 @@ impl AuthIo {
                 HeaderReadState::Complete => {}
             }
 
-            let pending = self
-                .pending_reads
-                .remove(&addr)
-                .expect("just read from this entry");
+            let Some(pending) = self.pending_reads.remove(&addr) else {
+                panic!("completed pending read must still exist");
+            };
 
             let Some(auth_bytes) = decode_auth_request(&pending.bytes, &self.expected_protocol_id)
             else {
@@ -627,12 +632,8 @@ impl ServerAddrs {
 impl Default for ServerAddrs {
     fn default() -> Self {
         Self::new(
-            "127.0.0.1:14191"
-                .parse()
-                .expect("could not parse HTTP address/port"),
-            "127.0.0.1:14192"
-                .parse()
-                .expect("could not parse UDP data address/port"),
+            SocketAddr::from(([127, 0, 0, 1], 14191)),
+            SocketAddr::from(([127, 0, 0, 1], 14192)),
             "http://127.0.0.1:14192",
         )
     }
@@ -672,7 +673,7 @@ fn url_to_addr(url: &Url) -> SocketAddr {
                 panic!("{SOCKET_PARSE_FAIL_STR}: {url}");
             }
 
-            *addr_list.first().expect(SOCKET_PARSE_FAIL_STR)
+            addr_list[0]
         }
         Err(err) => {
             panic!("URL -> SocketAddr parse fails for {url}: {err:?}");

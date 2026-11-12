@@ -399,6 +399,10 @@ impl HandshakeManager {
     ///
     /// Panics if the address was never validated, which the validation
     /// step guarantees.
+    #[expect(
+        clippy::expect_used,
+        reason = "connection finalization follows the address validation step"
+    )]
     fn handle_connect_request(
         &mut self,
         address: &SocketAddr,
@@ -420,6 +424,13 @@ impl HandshakeManager {
         }
     }
 
+    #[cfg_attr(
+        feature = "transport_udp",
+        expect(
+            clippy::unwrap_used,
+            reason = "system randomness failure prevents secure handshake initialization"
+        )
+    )]
     pub fn new(protocol_id: ProtocolId, identity_token_ttl: Duration) -> Self {
         #[cfg(feature = "transport_udp")]
         let connection_hash_key =
@@ -586,18 +597,10 @@ impl HandshakeManager {
     #[cfg(feature = "transport_udp")]
     fn timestamp_validate(&self, reader: &mut BitReader) -> Option<Timestamp> {
         // Read timestamp
-        let timestamp_result = Timestamp::de(reader);
-        if timestamp_result.is_err() {
-            return None;
-        }
-        let timestamp = timestamp_result.unwrap();
+        let timestamp = Timestamp::de(reader).ok()?;
 
         // Read digest
-        let digest_bytes_result = Vec::<u8>::de(reader);
-        if digest_bytes_result.is_err() {
-            return None;
-        }
-        let digest_bytes = digest_bytes_result.unwrap();
+        let digest_bytes = Vec::<u8>::de(reader).ok()?;
 
         // Verify that timestamp hash has been written by this server instance
         let validation_result = hmac::verify(
