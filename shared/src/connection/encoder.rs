@@ -35,6 +35,7 @@ cfg_if! {
         // therefore never observe or mutate the context, so sharing it across
         // threads is sound. Needed because the Bevy adapters hold io state in
         // ECS resources, which must be `Send + Sync`.
+        #[expect(unsafe_code, reason = "zstd context is accessed only through exclusive mutable access")]
         unsafe impl Sync for Encoder {}
 
         impl Encoder {
