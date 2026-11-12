@@ -16,7 +16,7 @@ use futures_channel::oneshot;
 /// returned handle. The senders are never sent on; their only job is to die
 /// with the last handle, which resolves every paired wait.
 pub struct ShutdownSignal {
-    senders: Vec<oneshot::Sender<()>>,
+    _senders: Vec<oneshot::Sender<()>>,
 }
 
 /// One background task's shutdown wait. Resolves when the last handle drops
@@ -40,5 +40,5 @@ pub fn shutdown_set<const TASKS: usize>() -> (Arc<ShutdownSignal>, [ShutdownWait
         senders.push(sender);
         ShutdownWait { receiver }
     });
-    (Arc::new(ShutdownSignal { senders }), waits)
+    (Arc::new(ShutdownSignal { _senders: senders }), waits)
 }
