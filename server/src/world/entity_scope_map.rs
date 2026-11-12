@@ -77,6 +77,7 @@ impl EntityScopeMap {
     ///
     /// The read surface of the override ledger; the engine itself only ever
     /// consumes (`take_`) or disarms (`clear_`), so this is used by tests.
+    #[cfg(test)]
     pub fn has_despawn_on_next_exit(&self, user_key: UserKey, entity: GlobalEntity) -> bool {
         self.despawn_on_next_exit.contains(&(user_key, entity))
     }
