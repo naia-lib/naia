@@ -70,8 +70,6 @@ impl ServerAuthHandler {
             Some(AuthOwner::Server | AuthOwner::Client(_)) => true,
         }
     }
-
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn client_request_authority(
         &mut self,
         entity: GlobalEntity,
@@ -106,8 +104,6 @@ impl ServerAuthHandler {
             Err(AuthorityError::NotAvailable)
         }
     }
-
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn client_release_authority(
         &mut self,
         entity: GlobalEntity,
@@ -145,7 +141,6 @@ impl ServerAuthHandler {
     /// Returns the previous owner so callers can fan out the
     /// appropriate auth-status changes (e.g. emit `AuthLost` to the
     /// previous holder).
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn server_give_authority_to_client(
         &mut self,
         entity: GlobalEntity,
@@ -177,8 +172,6 @@ impl ServerAuthHandler {
             .set_auth_status(entity, EntityAuthStatus::Denied);
         Ok(previous_owner)
     }
-
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn server_take_authority(
         &mut self,
         entity: GlobalEntity,
@@ -200,8 +193,6 @@ impl ServerAuthHandler {
 
         Ok(previous_owner)
     }
-
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     fn release_all_authority(&mut self, entity: GlobalEntity, owner: AuthOwner) -> bool {
         if owner == AuthOwner::None {
             // no change was made

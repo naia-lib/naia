@@ -242,8 +242,6 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
         self.unpublishes.push((user_key, *world_entity));
         self.empty = false;
     }
-
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn push_delegate(&mut self, user_key: UserKey, world_entity: &E) {
         self.delegates.push((user_key, *world_entity));
         self.empty = false;
@@ -255,7 +253,6 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     }
 
     /// Emit when the server rejects a client's authority request (slot already held).
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn push_auth_denied(&mut self, user_key: UserKey, world_entity: &E) {
         self.auth_denials.push((user_key, *world_entity));
         self.empty = false;

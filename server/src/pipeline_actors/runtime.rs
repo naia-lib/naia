@@ -90,7 +90,6 @@ pub(crate) struct ParkControl {
     /// under active workers; the send worker `swap`s it back to `false` once it
     /// has drained. Ignored on the `not(workers_active)` path (no worker
     /// threads → nothing to flush). See `park_workers_flushing`.
-    #[cfg_attr(not(workers_active), allow(dead_code))]
     flush: AtomicBool,
     /// Number of workers currently parked. Main waits until this hits the
     /// worker count in [`PipelineRuntime::park_workers`].
@@ -138,7 +137,6 @@ pub(crate) struct ParkControl {
     /// [`Self::ping_control`]. The `not(workers_active)` path uses the
     /// [`WorkerWake`] and ignores this.
     control_tx: smol::channel::Sender<()>,
-    #[cfg_attr(not(workers_active), allow(dead_code))]
     control_rx: smol::channel::Receiver<()>,
     /// Measure (nydus-y2e): slot-lock acquisitions by the workers' leases. The
     /// card's DONE WHEN is 2 per receive iteration to 0.
@@ -146,7 +144,6 @@ pub(crate) struct ParkControl {
     pub(crate) slot_locks: std::sync::atomic::AtomicU64,
     /// Measure (nydus-y2e): send-worker wakeups that found no job, no park and
     /// no shutdown. DONE WHEN: 0 while idle.
-    #[cfg_attr(not(workers_active), allow(dead_code))]
     #[cfg(any(test, feature = "test_time"))]
     pub(crate) send_idle_wakeups: std::sync::atomic::AtomicU64,
 }
@@ -708,7 +705,6 @@ impl WorkerWake {
     /// Sleep at most `bound` while `idle()` is true (one wait; the caller's
     /// loop re-evaluates). For the recv worker on a poll-only transport, which
     /// has to re-poll the socket, and for the degenerate no-handle wait.
-    #[cfg_attr(not(workers_active), allow(dead_code))]
     pub(crate) fn wait_while_for(&self, idle: impl FnOnce() -> bool, bound: Duration) {
         let mut g = self.mu.lock();
         if idle() {
@@ -749,7 +745,6 @@ pub(crate) struct HandleLease<'a, H> {
 
 impl<'a, H> HandleLease<'a, H> {
     /// A lease that holds nothing yet; the first checkpoint reclaims.
-    #[cfg_attr(not(any(test, feature = "test_time")), allow(unused_variables))]
     pub(crate) fn unclaimed(slot: &'a Arc<Mutex<Option<H>>>, park: &'a ParkControl) -> Self {
         Self {
             held: None,
@@ -774,7 +769,6 @@ impl<'a, H> HandleLease<'a, H> {
     }
 
     /// Take the handle back from the slot. `true` when the lease now holds it.
-    #[cfg_attr(not(workers_active), allow(dead_code))]
     pub(crate) fn reclaim(&mut self) -> bool {
         if self.held.is_none() {
             self.count_slot_lock();
@@ -784,7 +778,6 @@ impl<'a, H> HandleLease<'a, H> {
     }
 
     /// The held handle, if any.
-    #[cfg_attr(not(workers_active), allow(dead_code))]
     pub(crate) fn held_mut(&mut self) -> Option<&mut H> {
         self.held.as_mut()
     }
@@ -848,7 +841,6 @@ fn worker_park_checkpoint<H>(park: &ParkControl, lease: &mut HandleLease<'_, H>)
 /// `spawn_workers` moves it into the `'static` worker thread, so no borrow of
 /// the caller can satisfy the lifetime; the lint's `Option<&PacketReadiness>`
 /// suggestion does not compile here. The body only needs shared access.
-#[cfg_attr(not(workers_active), allow(unused_variables))]
 #[cfg_attr(
     workers_active,
     expect(
@@ -1006,7 +998,6 @@ fn transmit_job<E: Copy + Eq + Hash + Send + Sync + 'static>(
 /// In `not(workers_active)` (deterministic) mode this worker is a **pure parking
 /// service**: the consumer drives the send synchronously inside its park window,
 /// so `snap_rx` / `send_slot` are unused here.
-#[cfg_attr(not(workers_active), allow(unused_variables))]
 #[cfg_attr(
     workers_active,
     expect(

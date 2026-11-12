@@ -2032,8 +2032,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
         Ok(())
     }
-
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     fn entity_handle_client_request_authority(
         &mut self,
         requester_user: UserKey,
@@ -2093,7 +2091,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     /// Sends `SetAuthority(Denied)` to a single user, resolving that user's
     /// pending `Requested` state after a refused authority request.
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     fn notify_user_auth_denied(&mut self, user_key: UserKey, global_entity: GlobalEntity) {
         let Some(user) = self.sim_handle.state.user_store.get(user_key) else {
             return;
@@ -2114,8 +2111,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .world_manager
             .host_send_set_auth(global_entity, EntityAuthStatus::Denied);
     }
-
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     fn entity_enable_delegation_response(_user_key: UserKey, _global_entity: GlobalEntity) {
         // EnableDelegationResponse does NOT send SetAuthority messages.
         // Enabling delegation establishes the delegated-mode baseline as Available (AuthNone) for clients.
@@ -3267,8 +3262,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             }
         }
     }
-
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn entity_enable_delegation<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
