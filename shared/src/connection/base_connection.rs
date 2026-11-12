@@ -299,7 +299,10 @@ impl BaseSendConnection {
     }
 
     /// Serializes messages and world events into `writer` for the outgoing packet at `packet_index`.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the transport operation carries independently typed protocol and world state"
+    )]
     pub fn write_packet<E: Copy + Eq + Hash + Sync + Send, W: WorldRefType<E>>(
         &mut self,
         channel_kinds: &ChannelKinds,
@@ -487,7 +490,10 @@ impl BaseConnection {
         )
     }
     /// Write pipeline: see [`BaseSendConnection::write_packet`].
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the transport operation carries independently typed protocol and world state"
+    )]
     pub fn write_packet<E: Copy + Eq + Hash + Sync + Send, W: WorldRefType<E>>(
         &mut self,
         channel_kinds: &ChannelKinds,

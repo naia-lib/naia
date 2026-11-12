@@ -162,7 +162,6 @@ impl EntityAuthMutator {
     // DelegationDisabled`), and builds without delegation never drive these
     // paths with delegated entities.
     #[cfg(not(feature = "entity_delegation"))]
-    #[allow(dead_code)]
     pub(crate) fn set_auth_status(&self, _auth_status: EntityAuthStatus) {}
 }
 

@@ -172,7 +172,10 @@ impl FragmentedMessage {
         self.total
     }
 
-    #[allow(clippy::wrong_self_convention)]
+    #[expect(
+        clippy::wrong_self_convention,
+        reason = "the operation constructs protocol data using mutable connection state"
+    )]
     pub(crate) fn to_payload(self) -> Box<[u8]> {
         self.bytes
     }

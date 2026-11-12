@@ -68,7 +68,10 @@ impl RemoteWorldWaitlist {
 
     /// Eight params mirror the waitlist enqueue context 1:1; bundling them
     /// would churn the insert path's call sites for style alone.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the transport operation carries independently typed protocol and world state"
+    )]
     pub(crate) fn waitlist_queue_entity(
         &mut self,
         in_scope_entities: &dyn InScopeEntities<RemoteEntity>,

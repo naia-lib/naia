@@ -14,12 +14,10 @@ use crate::{
 };
 
 /// Test component types for migration testing
-#[allow(dead_code)]
 struct Position {
     x: f32,
     y: f32,
 }
-#[allow(dead_code)]
 struct Velocity {
     x: f32,
     y: f32,

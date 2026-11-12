@@ -100,7 +100,10 @@ impl NonceAllocator {
     /// Named `next`, not `next_nonce`: it is public API called from the
     /// client and server request paths, and it returns `Result`, so it
     /// cannot implement `Iterator`.
-    #[allow(clippy::should_implement_trait)]
+    #[expect(
+        clippy::should_implement_trait,
+        reason = "this protocol operation has different semantics from the standard trait"
+    )]
     pub fn next(&mut self) -> Result<ConnectionRequestNonce, NonceExhaustion> {
         if self.exhausted {
             return Err(NonceExhaustion);

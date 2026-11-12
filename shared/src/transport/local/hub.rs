@@ -242,7 +242,10 @@ impl LocalTransportHub {
 
     /// Send auth response to a specific client
     /// Returns Err(()) if traffic is paused (packets are dropped)
-    #[allow(clippy::result_unit_err)]
+    #[expect(
+        clippy::result_unit_err,
+        reason = "the local transport reports channel closure without additional error data"
+    )]
     pub fn send_auth_response(&self, client_addr: &SocketAddr, bytes: Vec<u8>) -> Result<(), ()> {
         let paused = *self.traffic_paused.lock(); // Single check
         if paused {
@@ -261,7 +264,10 @@ impl LocalTransportHub {
     /// Returns Err(()) if traffic is paused (packets are dropped)
     /// Applies link conditioning if configured
     /// Also processes time queues to deliver any ready packets
-    #[allow(clippy::result_unit_err)]
+    #[expect(
+        clippy::result_unit_err,
+        reason = "the local transport reports channel closure without additional error data"
+    )]
     pub fn send_data(&self, client_addr: &SocketAddr, bytes: Vec<u8>) -> Result<(), ()> {
         let paused = *self.traffic_paused.lock(); // Single check
         if paused {

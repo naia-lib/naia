@@ -812,7 +812,10 @@ fn wbucket(v: &mut Vec<u8>, tag: u8, tick: u16, ov: u8, count: u16) {
 }
 /// Writes one qprobe01 record. `optics` bundles the (pre, norm, post) quaternion
 /// words so the writer stays under the argument-count limit.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the transport operation carries independently typed protocol and world state"
+)]
 fn wrecord(
     v: &mut Vec<u8>,
     slot: u32,

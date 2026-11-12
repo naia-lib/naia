@@ -143,7 +143,10 @@ impl RequestOrResponse {
         }
     }
 
-    #[allow(clippy::wrong_self_convention)]
+    #[expect(
+        clippy::wrong_self_convention,
+        reason = "the operation constructs protocol data using mutable connection state"
+    )]
     pub(crate) fn to_id_and_bytes(
         self,
     ) -> (LocalRequestOrResponseId, ConnectionRequestNonce, Box<[u8]>) {
@@ -220,7 +223,10 @@ pub struct LocalRequestId {
 
 impl LocalRequestId {
     /// Wraps `self` as a `LocalRequestOrResponseId::Request`.
-    #[allow(clippy::wrong_self_convention)]
+    #[expect(
+        clippy::wrong_self_convention,
+        reason = "the operation constructs protocol data using mutable connection state"
+    )]
     #[must_use]
     pub fn to_req_res_id(&self) -> LocalRequestOrResponseId {
         LocalRequestOrResponseId::Request(*self)
@@ -253,7 +259,10 @@ pub struct LocalResponseId {
 
 impl LocalResponseId {
     /// Wraps `self` as a `LocalRequestOrResponseId::Response`.
-    #[allow(clippy::wrong_self_convention)]
+    #[expect(
+        clippy::wrong_self_convention,
+        reason = "the operation constructs protocol data using mutable connection state"
+    )]
     #[must_use]
     pub fn to_req_res_id(&self) -> LocalRequestOrResponseId {
         LocalRequestOrResponseId::Response(*self)

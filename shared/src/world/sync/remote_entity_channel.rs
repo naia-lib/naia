@@ -397,7 +397,6 @@ impl RemoteEntityChannel {
         }
     }
 
-    #[allow(dead_code)] // used in migration unit tests
     pub(crate) fn get_state(&self) -> EntityChannelState {
         self.state
     }
@@ -491,7 +490,6 @@ impl RemoteEntityChannel {
         self.component_channels.insert(component_kind, comp_channel);
     }
 
-    #[allow(dead_code)] // used in bulletproof migration unit tests
     pub(crate) fn take_incoming_events(&mut self) -> Vec<(MessageIndex, Tick, EntityMessage<()>)> {
         std::mem::take(&mut self.incoming_messages)
     }

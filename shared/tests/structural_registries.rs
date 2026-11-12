@@ -101,7 +101,6 @@ struct Pair {
 // helper-module collision rename); `Clone` comes from the registry derives,
 // `PartialEq` is derived.
 #[derive(PartialEq, Message, Serde)]
-#[allow(dead_code)]
 struct ChainMsg {
     next: Box<ChainMsg>,
 }
@@ -112,7 +111,6 @@ struct ChainMsg {
 // routes the single field through the canonical field path, exactly as
 // generated codec impls do.
 #[derive(Replicate)]
-#[allow(dead_code)]
 struct ChainComp {
     next: Property<Box<ChainComp>>,
 }
@@ -343,7 +341,6 @@ fn generated_replicate_roots_its_descriptor_at_self() {
 
 macro_rules! malformed_component {
     ($name:ident, $builder:ident, $labels:expr, $indices:expr, $entity:expr) => {
-        #[allow(dead_code)]
         struct $name;
         struct $builder;
         impl Named for $name {

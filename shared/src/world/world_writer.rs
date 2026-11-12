@@ -240,7 +240,10 @@ impl WorldWriter {
         *last_id_opt = Some(current_id);
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the transport operation carries independently typed protocol and world state"
+    )]
     pub fn write_into_packet<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         component_kinds: &ComponentKinds,
         now: &Instant,
@@ -288,7 +291,10 @@ impl WorldWriter {
         );
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the transport operation carries independently typed protocol and world state"
+    )]
     fn write_commands<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         component_kinds: &ComponentKinds,
         now: &Instant,
@@ -394,7 +400,10 @@ impl WorldWriter {
         false.ser(writer);
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the transport operation carries independently typed protocol and world state"
+    )]
     #[expect(
         clippy::expect_used,
         reason = "every lookup below resolves a global_entity this host's own command queue already references; a miss is a bookkeeping bug in the host's entity maps, not peer input. The caller also guarantees next_send_commands is non-empty before calling"
@@ -1141,7 +1150,10 @@ impl WorldWriter {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the transport operation carries independently typed protocol and world state"
+    )]
     #[expect(
         clippy::expect_used,
         reason = "entities/components here are host-local send-plan entries already screened by planned_update_drop_reason or an explicit has_component_of_kind check; a miss past that is a bookkeeping bug, not peer input"
@@ -1248,7 +1260,10 @@ impl WorldWriter {
     /// - PATH B (UserDependent): components with `EntityProperty` fields serialize
     ///   per-user local entity IDs. ECS is read once per component per tick into
     ///   `snapshot_map`; all users serialize from the snapshot, not ECS.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the transport operation carries independently typed protocol and world state"
+    )]
     #[expect(
         clippy::expect_used,
         reason = "update writes only name entities and components the host already tracks; a miss is a naia bug"

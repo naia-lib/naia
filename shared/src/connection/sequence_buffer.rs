@@ -25,7 +25,6 @@ impl<T> SequenceBuffer<T> {
     }
 
     /// Returns the most recently stored sequence number.
-    #[allow(dead_code)] // used in unit tests; no production call site needed
     pub fn sequence_num(&self) -> SequenceNumber {
         self.sequence_num
     }
