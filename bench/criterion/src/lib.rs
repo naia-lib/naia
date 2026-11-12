@@ -213,7 +213,10 @@ pub struct BenchWorld {
 }
 
 impl BenchWorld {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the transport operation carries independently typed protocol and world state"
+    )]
     #[expect(
         clippy::expect_used,
         reason = "FAKE_SERVER_ADDR is a socket-address literal; a parse failure is a naia bug"

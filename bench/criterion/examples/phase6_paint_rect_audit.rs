@@ -137,7 +137,6 @@ fn main() {
 }
 
 // Sanity guard: keep cmd_emission_counters reachable.
-#[allow(dead_code)]
 fn _drain(_: std::sync::atomic::AtomicU64) -> u64 {
     cmd_emission_counters::SPAWN_WITH_COMPONENTS.load(Ordering::Relaxed)
 }
