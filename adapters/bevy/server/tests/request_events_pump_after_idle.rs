@@ -150,6 +150,10 @@ fn pumped_requests(app: &mut App) -> Vec<(UserKey, ResponseSendKey<TestResponse>
     clippy::unwrap_used,
     reason = "test helper: a failure must fail the calling test"
 )]
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: listener failure must fail the calling test"
+)]
 fn rig() -> Rig {
     // Simulated clock must be initialized (mirrors Scenario::new); without
     // this mock time never advances and the handshake never completes.

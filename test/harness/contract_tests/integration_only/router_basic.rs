@@ -52,6 +52,10 @@ const FAKE_SERVER_ADDR: &str = "127.0.0.1:54322";
     clippy::unwrap_used,
     reason = "test helper: a failure must fail the calling test"
 )]
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: listener failure must fail the calling test"
+)]
 fn build_pipeline_split() -> (
     naia_server::CoordinatorState<u64>,
     naia_server::RecvHandle<u64>,

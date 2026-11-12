@@ -81,6 +81,10 @@ impl OracleRun {
         clippy::unwrap_used,
         reason = "test helper: a failure must fail the calling test"
     )]
+    #[expect(
+        clippy::expect_used,
+        reason = "test helper: listener failure must fail the calling test"
+    )]
     fn new() -> Self {
         TestClock::init(0);
         let server_addr: SocketAddr = FAKE_SERVER_ADDR.parse().unwrap();

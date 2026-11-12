@@ -32,6 +32,10 @@ struct Link {
 }
 
 impl Link {
+    #[expect(
+        clippy::expect_used,
+        reason = "test helper: listener failure must fail the calling test"
+    )]
     fn new(mode: ServerMode) -> Self {
         TestClock::init(0);
         let hub = LocalTransportHub::new("127.0.0.1:54504".parse().unwrap());

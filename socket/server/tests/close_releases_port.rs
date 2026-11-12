@@ -74,14 +74,14 @@ fn dropping_socket_handles_releases_listen_ports() {
         Socket::listen(&server_addrs, &SocketConfig::default(), PROTOCOL_ID)
             .expect("server listener must bind");
 
-    // The binds happen on detached tasks: wait until both ports are taken.
+    // A successful listen has already bound both ports.
     assert!(
-        wait_for(udp_taken, webrtc_addr, true, Duration::from_secs(30)),
-        "webrtc UDP port was never bound"
+        udp_taken(webrtc_addr),
+        "webrtc UDP port not bound at return"
     );
     assert!(
-        wait_for(tcp_taken, session_addr, true, Duration::from_secs(30)),
-        "session TCP port was never bound"
+        tcp_taken(session_addr),
+        "session TCP port not bound at return"
     );
 
     drop(packet_sender);

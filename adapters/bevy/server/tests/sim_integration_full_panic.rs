@@ -49,6 +49,10 @@ fn local_socket(addr: &str) -> Box<dyn transport::Socket> {
     Box::new(Socket::new(LocalServerSocket::new(hub), None))
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: listener failure must fail the calling test"
+)]
 fn listen_and_start(app: &mut App, addr: &str) {
     Server::pipeline_listen(app.world_mut(), local_socket(addr))
         .expect("server listener must bind");

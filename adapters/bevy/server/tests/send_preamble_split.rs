@@ -36,6 +36,10 @@ fn protocol() -> naia_shared::Protocol {
     clippy::unwrap_used,
     reason = "test helper: a failure must fail the calling test"
 )]
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: listener failure must fail the calling test"
+)]
 fn handles_listening(
     addr: &str,
 ) -> (

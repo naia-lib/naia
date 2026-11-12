@@ -273,6 +273,10 @@ fn tick(rig: &mut Rig) {
     clippy::unwrap_used,
     reason = "test helper: a failure must fail the calling test"
 )]
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: listener failure must fail the calling test"
+)]
 fn rig() -> Rig {
     // Simulated clock lives on the driving thread only (mirrors
     // Scenario::new). Pool threads that execute bevy systems see a frozen

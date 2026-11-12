@@ -78,6 +78,10 @@ impl Admission {
         clippy::unwrap_used,
         reason = "test helper: a failure must fail the calling test"
     )]
+    #[expect(
+        clippy::expect_used,
+        reason = "test helper: listener failure must fail the calling test"
+    )]
     fn new() -> Self {
         let hub = LocalTransportHub::new("127.0.0.1:54490".parse().unwrap());
         hub.enable_packet_recording();

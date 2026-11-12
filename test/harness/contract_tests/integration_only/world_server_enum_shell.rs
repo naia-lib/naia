@@ -19,6 +19,10 @@ use naia_test_harness::protocol;
     clippy::unwrap_used,
     reason = "test helper: a failure must fail the calling test"
 )]
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: listener failure must fail the calling test"
+)]
 fn listening(addr: &str, mut server: WorldServer<DemoEntity>) -> WorldServer<DemoEntity> {
     let hub = LocalTransportHub::new(addr.parse().unwrap());
     let server_socket = ServerSocket::new(LocalServerSocket::new(hub), None);

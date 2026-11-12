@@ -487,6 +487,10 @@ impl DirectScopeRun {
         clippy::unwrap_used,
         reason = "test helper: a failure must fail the calling test"
     )]
+    #[expect(
+        clippy::expect_used,
+        reason = "test helper: listener failure must fail the calling test"
+    )]
     fn new(mode: ServerMode) -> Self {
         TestClock::init(0);
         let server_addr: SocketAddr = "127.0.0.1:54590".parse().unwrap();

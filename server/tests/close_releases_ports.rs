@@ -4,10 +4,7 @@
 
 #![cfg(all(feature = "transport_udp", feature = "transport_webrtc"))]
 
-use std::{
-    net::SocketAddr,
-    time::{Duration, Instant},
-};
+use std::{net::SocketAddr, time::Duration};
 
 use naia_server::transport::{
     udp::{ServerAddrs as UdpAddrs, Socket as UdpSocket},
@@ -53,18 +50,10 @@ fn tcp_taken(addr: SocketAddr) -> bool {
     }
 }
 
-/// The WebRTC socket binds on detached tasks: wait until its ports are
-/// taken (proves the release below is real, not vacuous). The UDP socket
-/// binds synchronously at construction, so no wait is needed there.
-fn wait_until_rtc_bound(rtc: &RtcAddrs) {
-    let start = Instant::now();
-    while start.elapsed() < Duration::from_secs(30) {
-        if tcp_taken(rtc.session_listen_addr) && udp_taken(rtc.webrtc_listen_addr) {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(25));
-    }
-    panic!("webrtc socket never bound its ports");
+/// A successful listen binds both ports before returning.
+fn assert_rtc_bound(rtc: &RtcAddrs) {
+    assert!(tcp_taken(rtc.session_listen_addr));
+    assert!(udp_taken(rtc.webrtc_listen_addr));
 }
 
 type ListenHandles = (
@@ -74,6 +63,10 @@ type ListenHandles = (
     Box<dyn naia_server::transport::PacketReceiver>,
 );
 
+#[expect(
+    clippy::expect_used,
+    reason = "test helper: listener failure must fail the calling test"
+)]
 fn listen_each(udp: &UdpAddrs, rtc: &RtcAddrs) -> (ListenHandles, ListenHandles) {
     let udp_socket = UdpSocket::new(udp, None);
     let boxed_udp: Box<dyn TransportSocket> = Box::new(udp_socket);
@@ -95,7 +88,7 @@ fn closing_each_server_releases_its_ports() {
     let rtc = rtc_addrs();
 
     let (udp_handles, rtc_handles) = listen_each(&udp, &rtc);
-    wait_until_rtc_bound(&rtc);
+    assert_rtc_bound(&rtc);
 
     // Dropping each socket's handles frees that socket's ports.
     drop(udp_handles);
@@ -115,7 +108,7 @@ fn closing_each_server_releases_its_ports() {
     // And each listen rebinds deterministically on the same addresses —
     // full close/reopen cycle with no sleeps past the waits.
     let (udp_handles, rtc_handles) = listen_each(&udp, &rtc);
-    wait_until_rtc_bound(&rtc);
+    assert_rtc_bound(&rtc);
     drop(udp_handles);
     drop(rtc_handles);
     assert!(
