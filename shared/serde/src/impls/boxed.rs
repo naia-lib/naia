@@ -127,6 +127,10 @@ mod schema_tests {
     /// Never constructed — only described — so the field is appeal-proofed
     /// against dead-code lint.
     struct Chain {
+        #[expect(
+            dead_code,
+            reason = "the recursive schema fixture is described without constructing or reading a value"
+        )]
         next: Box<Chain>,
     }
 
