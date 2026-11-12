@@ -490,6 +490,7 @@ impl RemoteEntityChannel {
         self.component_channels.insert(component_kind, comp_channel);
     }
 
+    #[cfg(test)]
     pub(crate) fn take_incoming_events(&mut self) -> Vec<(MessageIndex, Tick, EntityMessage<()>)> {
         std::mem::take(&mut self.incoming_messages)
     }

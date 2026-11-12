@@ -14,14 +14,8 @@ use crate::{
 };
 
 /// Test component types for migration testing
-struct Position {
-    x: f32,
-    y: f32,
-}
-struct Velocity {
-    x: f32,
-    y: f32,
-}
+struct Position;
+struct Velocity;
 
 /// Helper function to create a component kind for testing
 fn component_kind<T: 'static>() -> ComponentKind {

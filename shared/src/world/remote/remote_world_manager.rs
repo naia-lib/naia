@@ -516,12 +516,6 @@ impl RemoteWorldManager {
         }
     }
 
-    /// Eight params mirror the per-message apply context 1:1; bundling them
-    /// would churn the insert path's call sites for style alone.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the transport operation carries independently typed protocol and world state"
-    )]
     fn process_insert<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         params: InsertParams<'_, '_, E, W>,
@@ -560,11 +554,6 @@ impl RemoteWorldManager {
         }
     }
 
-    /// Same shape as `process_insert` above; same reason for the allow.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the transport operation carries independently typed protocol and world state"
-    )]
     #[expect(
         clippy::expect_used,
         reason = "entity is already known-mapped by every caller (InsertComponent arm checks contains_remote_entity; process_waitlist_messages checks remote_entity_to_global_entity) before reaching finish_insert"

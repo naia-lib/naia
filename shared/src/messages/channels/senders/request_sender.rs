@@ -223,10 +223,6 @@ pub struct LocalRequestId {
 
 impl LocalRequestId {
     /// Wraps `self` as a `LocalRequestOrResponseId::Request`.
-    #[expect(
-        clippy::wrong_self_convention,
-        reason = "the existing conversion API consumes the payload or copies its connection-local ID"
-    )]
     #[must_use]
     pub fn to_req_res_id(&self) -> LocalRequestOrResponseId {
         LocalRequestOrResponseId::Request(*self)
@@ -259,10 +255,6 @@ pub struct LocalResponseId {
 
 impl LocalResponseId {
     /// Wraps `self` as a `LocalRequestOrResponseId::Response`.
-    #[expect(
-        clippy::wrong_self_convention,
-        reason = "the existing conversion API consumes the payload or copies its connection-local ID"
-    )]
     #[must_use]
     pub fn to_req_res_id(&self) -> LocalRequestOrResponseId {
         LocalRequestOrResponseId::Response(*self)

@@ -13,17 +13,9 @@ use crate::{
 };
 
 /// Test component types for integration testing
-struct Position {
-    x: f32,
-    y: f32,
-}
-struct Velocity {
-    x: f32,
-    y: f32,
-}
-struct Health {
-    value: u32,
-}
+struct Position;
+struct Velocity;
+struct Health;
 
 /// Helper function to create a component kind for testing
 fn component_kind<T: 'static>() -> ComponentKind {
