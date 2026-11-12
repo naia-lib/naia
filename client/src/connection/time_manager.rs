@@ -58,7 +58,7 @@ pub struct TimeManager {
 impl TimeManager {
     #[expect(
         clippy::too_many_arguments,
-        reason = "the transport operation carries independently typed protocol and world state"
+        reason = "connection initialization supplies the base clock and independently measured server timing statistics"
     )]
     pub fn from_parts(
         ping_interval: Duration,

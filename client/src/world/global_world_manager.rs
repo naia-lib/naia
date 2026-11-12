@@ -373,8 +373,6 @@ impl GlobalWorldManager {
             record.set_owner(EntityOwner::Server);
         }
     }
-
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn entity_disable_delegation(&mut self, global_entity: &GlobalEntity) {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");

@@ -2326,8 +2326,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.global_world_manager
             .entity_enable_delegation(global_entity);
     }
-
-    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn entity_disable_delegation<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
