@@ -335,7 +335,10 @@ pub fn translate_world_events<T: Send + Sync + 'static>(world: &mut World) {
 }
 
 pub fn send_packets_init<T: Send + Sync + 'static>(world: &mut World) {
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the channel carries an address, payload and transport error as one typed event"
+    )]
     let tick_event_state: SystemState<(
         Res<Messages<bevy_events::ClientTickEvent<T>>>,
         bevy_ecs::system::Local<bevy_ecs::message::MessageCursor<bevy_events::ClientTickEvent<T>>>,

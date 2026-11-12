@@ -244,7 +244,10 @@ impl<T> RequestEvents<T> {
 // ClientTickEventReader
 #[derive(Resource)]
 pub(crate) struct CachedClientTickEventsState<T: Send + Sync + 'static> {
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the channel carries an address, payload and transport error as one typed event"
+    )]
     pub(crate) event_state: SystemState<(
         bevy_ecs::system::Res<'static, Messages<ClientTickEvent<T>>>,
         bevy_ecs::system::Local<'static, MessageCursor<ClientTickEvent<T>>>,

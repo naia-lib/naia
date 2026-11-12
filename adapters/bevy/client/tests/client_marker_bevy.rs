@@ -7,7 +7,10 @@ struct TestMarker;
 // Reference a selection of the generated aliases to force the compiler to
 // resolve each one against naia_bevy_client paths.
 // One parameter per generated alias is exactly what this compile test asserts.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the transport operation carries independently typed protocol and world state"
+)]
 fn _assert_aliases(
     _c: TestMarkerClient,
     _conn: TestMarkerConnectEvent,
