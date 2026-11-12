@@ -43,7 +43,10 @@ pub struct NonReplicatedProperty {
 }
 
 /// One field of a `Replicate` derive input, classified by its declared type.
-#[allow(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "variants retain their protocol data inline without another allocation"
+)]
 pub enum Property {
     /// A `Property<T>` field.
     Normal(NormalProperty),
@@ -207,15 +210,15 @@ pub fn replicate_impl(
             use std::{rc::Rc, cell::RefCell, io::Cursor, any::Any, collections::HashSet};
             // `MaxBitsFallback` is only *named* when a property type lacks a
             // static bound; it must still be in scope for the probe to resolve.
-            #[allow(unused_imports)]
-            use #shared_crate_name::{
+                        use #shared_crate_name::{
                 DiffMask, PropertyMutate, PropertyMutator, PendingComponentUpdate,
                 ReplicaDynRef, ReplicaDynMut, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, ComponentKind, Named,
                 BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde, EntityAuthAccessor, RemoteEntity,
                 EntityProperty, GlobalEntity, Replicate, Property, ComponentKinds, ReplicateBuilder, ComponentFieldUpdate,
-                MaxBits, MaxBitsFallback, UNBOUNDED_BIT_LENGTH, WireSchemaContext, wire_schema_field,
+                MaxBits, UNBOUNDED_BIT_LENGTH, WireSchemaContext, wire_schema_field,
                 wire_schema_count, wire_schema_label, WIRE_SCHEMA_DOMAIN, SCHEMA_TAG_STRUCT,
             };
+            use #shared_crate_name::MaxBitsFallback as _;
             use super::*;
 
             #property_enum_definition
@@ -1475,6 +1478,10 @@ fn get_max_bit_length_method(properties: &[Property]) -> TokenStream {
         };
     }
 
+    if !properties.iter().any(|p| matches!(p, Property::Normal(_))) {
+        return quote! { fn max_bit_length() -> u32 where Self: Sized { 0 } };
+    }
+
     let mut terms = quote! {};
     for property in properties.iter() {
         let term = match property {
@@ -1501,8 +1508,7 @@ fn get_max_bit_length_method(properties: &[Property]) -> TokenStream {
 
     quote! {
         fn max_bit_length() -> u32 where Self: Sized {
-            #[allow(unused_mut)]
-            let mut output: u32 = 0;
+                        let mut output: u32 = 0;
             #terms
             output
         }
