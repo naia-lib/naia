@@ -121,3 +121,12 @@ helpers carry no `cargo_targets.uncovered_feature` row: clerc derives feature
 coverage from the legs themselves and refuses such a row for a covered feature
 (`clerc impact verify-map`, 2026-11-10). Nothing here waives a product feature
 or weakens Clippy warnings.
+
+## Testless targets
+
+A Cargo target is not evidence that tests exist. Targets with no test attributes,
+test modules or included test source are explicitly `cargo_targets.unchecked`,
+with a reason, and are absent from test legs, edges and rung membership. They
+retain workspace all-targets Clippy and native compilation coverage. Never add
+a vacuous test or count a zero-test binary as behavioral coverage. New real tests
+must restore that target's test mapping and rung.

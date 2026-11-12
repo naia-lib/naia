@@ -22,20 +22,13 @@ checks = [
     "lint:wasm-client",
     "lint:wasm-mquad",
     "lint:wasm-shared",
-    "test:naia-basic-client-demo-app:naia_basic_client_demo_app",
-    "test:naia-basic-client-demo-wb:naia_basic_client_demo_wb",
-    "test:naia-basic-demo-shared:naia_basic_demo_shared",
     "test:naia-benches:component_kind_wire",
     "test:naia-benches:local_entity_wire",
     "test:naia-benches:many_kinds_no_64_cap",
     "test:naia-benches:naia_benches",
     "test:naia-benches:static_split_bytes",
-    "test:naia-bevy-client-demo:naia_bevy_client_demo",
     "test:naia-bevy-client:client_marker_bevy",
     "test:naia-bevy-client:naia_bevy_client",
-    "test:naia-bevy-demo-shared:naia_bevy_demo_shared",
-    "test:naia-bevy-derive:naia_bevy_derive",
-    "test:naia-bevy-metrics:naia_bevy_metrics",
     "test:naia-bevy-server:apply_receive_output_with_sim_receiver",
     "test:naia-bevy-server:authority_commands_bevy",
     "test:naia-bevy-server:change_tracker_order",
@@ -70,21 +63,13 @@ checks = [
     "test:naia-bevy-server:snapshot_world_wire_identity",
     "test:naia-bevy-shared:derive_flavor_parity",
     "test:naia-bevy-shared:facade_tier_parity",
-    "test:naia-bevy-shared:naia_bevy_shared",
     "test:naia-ci-checks:check_no_escaping_path_deps",
     "test:naia-client-socket:naia_client_socket",
     "test:naia-client:naia_client",
     "test:naia-compile-fail:compile_fail",
-    "test:naia-demo-world:naia_demo_world",
     "test:naia-derive-core:naia_derive_core",
-    "test:naia-derive:naia_derive",
-    "test:naia-empty-world:naia_empty_world",
     "test:naia-ice-gather-sensor:session_proxy",
     "test:naia-loom:naia_loom",
-    "test:naia-macroquad-demo-shared:naia_macroquad_demo_shared",
-    "test:naia-metrics:naia_metrics",
-    "test:naia-serde-derive-core:naia_serde_derive_core",
-    "test:naia-serde-derive:naia_serde_derive",
     "test:naia-serde:bit_budget",
     "test:naia-serde:malformed_input",
     "test:naia-serde:naia_serde",
@@ -115,9 +100,6 @@ checks = [
     "test:naia-shared:reject_reason_wire_stability",
     "test:naia-shared:structural_registries",
     "test:naia-shared:unlabeled_surfaces",
-    "test:naia-socket-client-demo-app:naia_socket_client_demo_app",
-    "test:naia-socket-client-demo-wb:naia_socket_client_demo_wb",
-    "test:naia-socket-demo-shared:naia_socket_demo_shared",
     "test:naia-socket-shared:naia_socket_shared",
     "test:naia-spec-tool:naia-spec-tool",
     "test:naia-test-harness:12_reconnect_cancel",
@@ -160,6 +142,78 @@ prefix = "test"
 # remain enabled because this lib profile does not enable deterministic.
 # Real-port server tests explicitly enable their crate-level transport cfgs.
 # A Cargo target declaration is an inventory entry, never a test-count claim.
+
+[[cargo_targets.unchecked]]
+check = "test:naia-basic-client-demo-app:naia_basic_client_demo_app"
+reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-basic-client-demo-wb:naia_basic_client_demo_wb"
+reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-basic-demo-shared:naia_basic_demo_shared"
+reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-bevy-client-demo:naia_bevy_client_demo"
+reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-bevy-demo-shared:naia_bevy_demo_shared"
+reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-bevy-derive:naia_bevy_derive"
+reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-bevy-metrics:naia_bevy_metrics"
+reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-bevy-shared:naia_bevy_shared"
+reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-demo-world:naia_demo_world"
+reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-derive:naia_derive"
+reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-empty-world:naia_empty_world"
+reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-macroquad-demo-shared:naia_macroquad_demo_shared"
+reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-metrics:naia_metrics"
+reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-serde-derive-core:naia_serde_derive_core"
+reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-serde-derive:naia_serde_derive"
+reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-socket-client-demo-app:naia_socket_client_demo_app"
+reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-socket-client-demo-wb:naia_socket_client_demo_wb"
+reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
+
+[[cargo_targets.unchecked]]
+check = "test:naia-socket-demo-shared:naia_socket_demo_shared"
+reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
 
 [[cargo_targets.unchecked]]
 check = "test:naia-basic-client-demo-mq:naia_basic_client_demo_mq"
@@ -222,18 +276,6 @@ checks = ["lint:wasm-mquad"]
 argv = ["cargo", "clippy", "-p", "naia-socket-shared", "-p", "naia-client-socket", "--target", "wasm32-unknown-unknown", "--features", "mquad", "--keep-going", "--", "-D", "warnings"]
 
 [[leg]]
-checks = ["test:naia-basic-client-demo-app:naia_basic_client_demo_app"]
-argv = ["cargo", "test", "-p", "naia-basic-client-demo-app", "--lib", "--no-fail-fast"]
-
-[[leg]]
-checks = ["test:naia-basic-client-demo-wb:naia_basic_client_demo_wb"]
-argv = ["cargo", "test", "-p", "naia-basic-client-demo-wb", "--bin", "naia_basic_client_demo_wb", "--lib", "--no-fail-fast"]
-
-[[leg]]
-checks = ["test:naia-basic-demo-shared:naia_basic_demo_shared"]
-argv = ["cargo", "test", "-p", "naia-basic-demo-shared", "--lib", "--no-fail-fast"]
-
-[[leg]]
 checks = ["test:naia-benches:component_kind_wire"]
 argv = ["cargo", "test", "-p", "naia-benches", "--test", "component_kind_wire", "--no-fail-fast"]
 
@@ -260,22 +302,6 @@ argv = ["cargo", "test", "-p", "naia-bevy-client", "--test", "client_marker_bevy
 [[leg]]
 checks = ["test:naia-bevy-client:naia_bevy_client"]
 argv = ["cargo", "test", "-p", "naia-bevy-client", "--lib", "--features", "f3_diag,interior_visibility,transport_udp", "--no-fail-fast"]
-
-[[leg]]
-checks = ["test:naia-bevy-client-demo:naia_bevy_client_demo"]
-argv = ["cargo", "test", "-p", "naia-bevy-client-demo", "--bin", "naia_bevy_client_demo", "--lib", "--no-fail-fast"]
-
-[[leg]]
-checks = ["test:naia-bevy-demo-shared:naia_bevy_demo_shared"]
-argv = ["cargo", "test", "-p", "naia-bevy-demo-shared", "--lib", "--no-fail-fast"]
-
-[[leg]]
-checks = ["test:naia-bevy-derive:naia_bevy_derive"]
-argv = ["cargo", "test", "-p", "naia-bevy-derive", "--lib", "--no-fail-fast"]
-
-[[leg]]
-checks = ["test:naia-bevy-metrics:naia_bevy_metrics"]
-argv = ["cargo", "test", "-p", "naia-bevy-metrics", "--lib", "--features", "client,server", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-bevy-server:apply_receive_output_with_sim_receiver"]
@@ -414,10 +440,6 @@ checks = ["test:naia-bevy-shared:facade_tier_parity"]
 argv = ["cargo", "test", "-p", "naia-bevy-shared", "--test", "facade_tier_parity", "--no-fail-fast"]
 
 [[leg]]
-checks = ["test:naia-bevy-shared:naia_bevy_shared"]
-argv = ["cargo", "test", "-p", "naia-bevy-shared", "--lib", "--features", "address_validation,transport_local", "--no-fail-fast"]
-
-[[leg]]
 checks = ["test:naia-ci-checks:check_no_escaping_path_deps"]
 argv = ["cargo", "test", "-p", "naia-ci-checks", "--bin", "check_no_escaping_path_deps", "--no-fail-fast"]
 
@@ -434,20 +456,8 @@ checks = ["test:naia-compile-fail:compile_fail"]
 argv = ["cargo", "test", "-p", "naia-compile-fail", "--test", "compile_fail", "--no-fail-fast"]
 
 [[leg]]
-checks = ["test:naia-demo-world:naia_demo_world"]
-argv = ["cargo", "test", "-p", "naia-demo-world", "--lib", "--no-fail-fast"]
-
-[[leg]]
-checks = ["test:naia-derive:naia_derive"]
-argv = ["cargo", "test", "-p", "naia-derive", "--lib", "--no-fail-fast"]
-
-[[leg]]
 checks = ["test:naia-derive-core:naia_derive_core"]
 argv = ["cargo", "test", "-p", "naia-derive-core", "--lib", "--no-fail-fast"]
-
-[[leg]]
-checks = ["test:naia-empty-world:naia_empty_world"]
-argv = ["cargo", "test", "-p", "naia-empty-world", "--lib", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-ice-gather-sensor:session_proxy"]
@@ -456,14 +466,6 @@ argv = ["cargo", "test", "-p", "naia-ice-gather-sensor", "--bin", "session_proxy
 [[leg]]
 checks = ["test:naia-loom:naia_loom"]
 argv = ["cargo", "test", "-p", "naia-loom", "--lib", "--no-fail-fast"]
-
-[[leg]]
-checks = ["test:naia-macroquad-demo-shared:naia_macroquad_demo_shared"]
-argv = ["cargo", "test", "-p", "naia-macroquad-demo-shared", "--lib", "--no-fail-fast"]
-
-[[leg]]
-checks = ["test:naia-metrics:naia_metrics"]
-argv = ["cargo", "test", "-p", "naia-metrics", "--lib", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-serde:bit_budget"]
@@ -480,14 +482,6 @@ argv = ["cargo", "test", "-p", "naia-serde", "--lib", "--no-fail-fast"]
 [[leg]]
 checks = ["test:naia-serde:serde_roundtrip"]
 argv = ["cargo", "test", "-p", "naia-serde", "--test", "serde_roundtrip", "--no-fail-fast"]
-
-[[leg]]
-checks = ["test:naia-serde-derive:naia_serde_derive"]
-argv = ["cargo", "test", "-p", "naia-serde-derive", "--lib", "--no-fail-fast"]
-
-[[leg]]
-checks = ["test:naia-serde-derive-core:naia_serde_derive_core"]
-argv = ["cargo", "test", "-p", "naia-serde-derive-core", "--lib", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-server:close_releases_ports"]
@@ -592,18 +586,6 @@ argv = ["cargo", "test", "-p", "naia-shared", "--test", "structural_registries",
 [[leg]]
 checks = ["test:naia-shared:unlabeled_surfaces"]
 argv = ["cargo", "test", "-p", "naia-shared", "--test", "unlabeled_surfaces", "--no-fail-fast"]
-
-[[leg]]
-checks = ["test:naia-socket-client-demo-app:naia_socket_client_demo_app"]
-argv = ["cargo", "test", "-p", "naia-socket-client-demo-app", "--lib", "--no-fail-fast"]
-
-[[leg]]
-checks = ["test:naia-socket-client-demo-wb:naia_socket_client_demo_wb"]
-argv = ["cargo", "test", "-p", "naia-socket-client-demo-wb", "--bin", "naia_socket_client_demo_wb", "--lib", "--no-fail-fast"]
-
-[[leg]]
-checks = ["test:naia-socket-demo-shared:naia_socket_demo_shared"]
-argv = ["cargo", "test", "-p", "naia-socket-demo-shared", "--lib", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-socket-shared:naia_socket_shared"]
@@ -738,10 +720,6 @@ name = "naia-basic-client-demo-app"
 paths = ["demos/basic/client/app/"]
 depends_on = ["naia-basic-demo-shared", "naia-client", "naia-demo-world"]
 
-[[edge]]
-from = "demos/basic/client/app/"
-to = "test:naia-basic-client-demo-app:naia_basic_client_demo_app"
-
 [[package]]
 name = "naia-basic-client-demo-mq"
 paths = ["demos/basic/client/miniquad/"]
@@ -756,18 +734,10 @@ name = "naia-basic-client-demo-wb"
 paths = ["demos/basic/client/wasm_bindgen/"]
 depends_on = ["naia-basic-client-demo-app"]
 
-[[edge]]
-from = "demos/basic/client/wasm_bindgen/"
-to = "test:naia-basic-client-demo-wb:naia_basic_client_demo_wb"
-
 [[package]]
 name = "naia-basic-demo-shared"
 paths = ["demos/basic/shared/"]
 depends_on = ["naia-shared"]
-
-[[edge]]
-from = "demos/basic/shared/"
-to = "test:naia-basic-demo-shared:naia_basic_demo_shared"
 
 [[package]]
 name = "naia-basic-server-demo"
@@ -821,36 +791,20 @@ name = "naia-bevy-client-demo"
 paths = ["demos/bevy/client/"]
 depends_on = ["naia-bevy-client", "naia-bevy-demo-shared"]
 
-[[edge]]
-from = "demos/bevy/client/"
-to = "test:naia-bevy-client-demo:naia_bevy_client_demo"
-
 [[package]]
 name = "naia-bevy-demo-shared"
 paths = ["demos/bevy/shared/"]
 depends_on = ["naia-bevy-shared", "naia-shared"]
-
-[[edge]]
-from = "demos/bevy/shared/"
-to = "test:naia-bevy-demo-shared:naia_bevy_demo_shared"
 
 [[package]]
 name = "naia-bevy-derive"
 paths = ["adapters/bevy/derive/"]
 depends_on = ["naia-derive-core", "naia-serde-derive-core"]
 
-[[edge]]
-from = "adapters/bevy/derive/"
-to = "test:naia-bevy-derive:naia_bevy_derive"
-
 [[package]]
 name = "naia-bevy-metrics"
 paths = ["adapters/bevy/metrics/"]
 depends_on = ["naia-bevy-client", "naia-bevy-server", "naia-bevy-shared", "naia-metrics"]
-
-[[edge]]
-from = "adapters/bevy/metrics/"
-to = "test:naia-bevy-metrics:naia_bevy_metrics"
 
 [[package]]
 name = "naia-bevy-server"
@@ -1007,10 +961,6 @@ to = "test:naia-bevy-shared:derive_flavor_parity"
 from = "adapters/bevy/shared/"
 to = "test:naia-bevy-shared:facade_tier_parity"
 
-[[edge]]
-from = "adapters/bevy/shared/"
-to = "test:naia-bevy-shared:naia_bevy_shared"
-
 [[package]]
 name = "naia-ci-checks"
 paths = ["tools/ci/"]
@@ -1052,18 +1002,10 @@ name = "naia-demo-world"
 paths = ["demos/demo_utils/demo_world/"]
 depends_on = ["naia-shared"]
 
-[[edge]]
-from = "demos/demo_utils/demo_world/"
-to = "test:naia-demo-world:naia_demo_world"
-
 [[package]]
 name = "naia-derive"
 paths = ["shared/derive/"]
 depends_on = ["naia-derive-core", "naia-serde-derive"]
-
-[[edge]]
-from = "shared/derive/"
-to = "test:naia-derive:naia_derive"
 
 [[package]]
 name = "naia-derive-core"
@@ -1078,10 +1020,6 @@ to = "test:naia-derive-core:naia_derive_core"
 name = "naia-empty-world"
 paths = ["demos/demo_utils/empty_world/"]
 depends_on = ["naia-shared"]
-
-[[edge]]
-from = "demos/demo_utils/empty_world/"
-to = "test:naia-empty-world:naia_empty_world"
 
 [[package]]
 name = "naia-ice-gather-sensor"
@@ -1115,10 +1053,6 @@ name = "naia-macroquad-demo-shared"
 paths = ["demos/macroquad/shared/"]
 depends_on = ["naia-shared"]
 
-[[edge]]
-from = "demos/macroquad/shared/"
-to = "test:naia-macroquad-demo-shared:naia_macroquad_demo_shared"
-
 [[package]]
 name = "naia-macroquad-server-demo"
 paths = ["demos/macroquad/server/"]
@@ -1132,10 +1066,6 @@ to = "test:naia-macroquad-server-demo:naia-macroquad-server-demo"
 name = "naia-metrics"
 paths = ["metrics/"]
 depends_on = ["naia-shared"]
-
-[[edge]]
-from = "metrics/"
-to = "test:naia-metrics:naia_metrics"
 
 [[package]]
 name = "naia-serde"
@@ -1163,18 +1093,10 @@ name = "naia-serde-derive"
 paths = ["shared/serde/derive/"]
 depends_on = ["naia-serde-derive-core"]
 
-[[edge]]
-from = "shared/serde/derive/"
-to = "test:naia-serde-derive:naia_serde_derive"
-
 [[package]]
 name = "naia-serde-derive-core"
 paths = ["shared/serde/derive_core/"]
 depends_on = []
-
-[[edge]]
-from = "shared/serde/derive_core/"
-to = "test:naia-serde-derive-core:naia_serde_derive_core"
 
 [[package]]
 name = "naia-server"
@@ -1305,10 +1227,6 @@ name = "naia-socket-client-demo-app"
 paths = ["demos/socket/client/app/"]
 depends_on = ["naia-client-socket", "naia-shared", "naia-socket-demo-shared"]
 
-[[edge]]
-from = "demos/socket/client/app/"
-to = "test:naia-socket-client-demo-app:naia_socket_client_demo_app"
-
 [[package]]
 name = "naia-socket-client-demo-mq"
 paths = ["demos/socket/client/miniquad/"]
@@ -1323,18 +1241,10 @@ name = "naia-socket-client-demo-wb"
 paths = ["demos/socket/client/wasm_bindgen/"]
 depends_on = ["naia-socket-client-demo-app"]
 
-[[edge]]
-from = "demos/socket/client/wasm_bindgen/"
-to = "test:naia-socket-client-demo-wb:naia_socket_client_demo_wb"
-
 [[package]]
 name = "naia-socket-demo-shared"
 paths = ["demos/socket/shared/"]
 depends_on = ["naia-socket-shared"]
-
-[[edge]]
-from = "demos/socket/shared/"
-to = "test:naia-socket-demo-shared:naia_socket_demo_shared"
 
 [[package]]
 name = "naia-socket-shared"
@@ -1633,42 +1543,24 @@ budget_minutes = 60
 
 # ---------------------------------------------------------------------------
 # R1 — pure deterministic unit (TESTING.md ladder R1): lib targets whose
-# tests use no clock, thread, or socket. Covers 24 vacuous lib targets
-# (zero #[test] in src, machine-verified) plus naia-serde wire roundtrips,
+# tests use no clock, thread, or socket. Testless targets are explicitly
+# unchecked above and retain static compile coverage. Includes serde roundtrips,
 # naia-server-socket HTTP-parsing tests, and naia-shared applied-cause
 # evidence (all audited pure).
 [[rung]]
 level = 1
 checks = [
-    "test:naia-basic-client-demo-app:naia_basic_client_demo_app",
-    "test:naia-basic-client-demo-wb:naia_basic_client_demo_wb",
-    "test:naia-basic-demo-shared:naia_basic_demo_shared",
     "test:naia-benches:naia_benches",
-    "test:naia-bevy-client-demo:naia_bevy_client_demo",
     "test:naia-bevy-client:naia_bevy_client",
-    "test:naia-bevy-demo-shared:naia_bevy_demo_shared",
-    "test:naia-bevy-derive:naia_bevy_derive",
-    "test:naia-bevy-metrics:naia_bevy_metrics",
     "test:naia-bevy-server:naia_bevy_server",
-    "test:naia-bevy-shared:naia_bevy_shared",
-    "test:naia-demo-world:naia_demo_world",
     "test:naia-derive-core:naia_derive_core",
-    "test:naia-derive:naia_derive",
-    "test:naia-empty-world:naia_empty_world",
     "test:naia-loom:naia_loom",
-    "test:naia-macroquad-demo-shared:naia_macroquad_demo_shared",
-    "test:naia-metrics:naia_metrics",
-    "test:naia-serde-derive-core:naia_serde_derive_core",
-    "test:naia-serde-derive:naia_serde_derive",
     "test:naia-serde:bit_budget",
     "test:naia-serde:malformed_input",
     "test:naia-serde:naia_serde",
     "test:naia-serde:serde_roundtrip",
     "test:naia-server-socket:naia_server_socket",
     "test:naia-shared:applied_cause_evidence",
-    "test:naia-socket-client-demo-app:naia_socket_client_demo_app",
-    "test:naia-socket-client-demo-wb:naia_socket_client_demo_wb",
-    "test:naia-socket-demo-shared:naia_socket_demo_shared",
     "test:naia-test-harness:naia_test_harness",
 ]
 budget_minutes = 30
@@ -1789,3 +1681,8 @@ checks = [
     "test:naia-test-harness:integration_only_06_entity_scopes",
 ]
 budget_minutes = 60
+
+[[root]]
+path = "clippy.toml"
+mode = "fallback"
+reason = "Workspace Clippy policy changes select the full eligible suite."
