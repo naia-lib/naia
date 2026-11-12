@@ -797,7 +797,7 @@ pub struct Normal {
 /// One field of a `Message` derive input, classified by its declared type.
 #[expect(
     clippy::large_enum_variant,
-    reason = "variants retain their protocol data inline without another allocation"
+    reason = "derive input variants retain their parsed syntax inline without another allocation"
 )]
 pub enum Field {
     /// An `EntityProperty` field.

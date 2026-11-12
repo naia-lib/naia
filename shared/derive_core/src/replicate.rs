@@ -45,7 +45,7 @@ pub struct NonReplicatedProperty {
 /// One field of a `Replicate` derive input, classified by its declared type.
 #[expect(
     clippy::large_enum_variant,
-    reason = "variants retain their protocol data inline without another allocation"
+    reason = "derive input variants retain their parsed syntax inline without another allocation"
 )]
 pub enum Property {
     /// A `Property<T>` field.
@@ -210,7 +210,7 @@ pub fn replicate_impl(
             use std::{rc::Rc, cell::RefCell, io::Cursor, any::Any, collections::HashSet};
             // `MaxBitsFallback` is only *named* when a property type lacks a
             // static bound; it must still be in scope for the probe to resolve.
-                        use #shared_crate_name::{
+            use #shared_crate_name::{
                 DiffMask, PropertyMutate, PropertyMutator, PendingComponentUpdate,
                 ReplicaDynRef, ReplicaDynMut, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, ComponentKind, Named,
                 BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde, EntityAuthAccessor, RemoteEntity,
