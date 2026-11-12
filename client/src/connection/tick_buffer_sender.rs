@@ -14,7 +14,7 @@ pub struct TickBufferSender {
     channel_senders: HashMap<ChannelKind, ChannelTickBufferSender>,
     #[expect(
         clippy::type_complexity,
-        reason = "the channel carries an address, payload and transport error as one typed event"
+        reason = "packet acknowledgements index channel-specific tick and message identifiers"
     )]
     packet_to_channel_map: HashMap<PacketIndex, Vec<(ChannelKind, Vec<(Tick, ShortMessageIndex)>)>>,
 }
