@@ -244,8 +244,10 @@ checks = ["lint:fmt"]
 argv = ["clerc", "plan-admin", "verify-fmt-fileset", "--root", "."]
 
 [[leg]]
-checks = ["lint:clippy"]
-argv = ["cargo", "clippy", "--workspace", "--all-targets", "--features", "naia-bevy-client/transport_udp,naia-bevy-client/interior_visibility,naia-bevy-metrics/client,naia-bevy-metrics/server,naia-bevy-server/transport_udp,naia-bevy-server/interior_visibility,naia-bevy-shared/address_validation,naia-bevy-shared/transport_local,naia-client/zstd_support,naia-server/zstd_support", "--keep-going", "--", "-D", "warnings"]
+required_argv = [
+  ["cargo", "clippy", "--locked", "--workspace", "--all-targets", "--keep-going", "--", "-D", "warnings"],
+  ["cargo", "clippy", "--locked", "--workspace", "--all-targets", "--features", "naia-bevy-client/transport_udp,naia-bevy-client/interior_visibility,naia-bevy-metrics/client,naia-bevy-metrics/server,naia-bevy-server/transport_udp,naia-bevy-server/interior_visibility,naia-bevy-shared/address_validation,naia-bevy-shared/transport_local,naia-client/zstd_support,naia-server/zstd_support,naia-client/e2e_debug,naia-server/e2e_debug,naia-server/f3_diag", "--keep-going", "--", "-D", "warnings"],
+]
 
 [[leg]]
 checks = ["lint:native-check"]
@@ -261,19 +263,19 @@ credit_scope = "tree"
 
 [[leg]]
 checks = ["lint:wasm-shared"]
-argv = ["cargo", "check", "-p", "naia-shared", "--target", "wasm32-unknown-unknown", "--features", "wbindgen", "--keep-going"]
+argv = ["cargo", "clippy", "--locked", "-p", "naia-shared", "--target", "wasm32-unknown-unknown", "--features", "wbindgen", "--keep-going", "--", "-D", "warnings"]
 
 [[leg]]
 checks = ["lint:wasm-client"]
-argv = ["cargo", "check", "-p", "naia-client", "--target", "wasm32-unknown-unknown", "--features", "wbindgen", "--keep-going"]
+argv = ["cargo", "clippy", "--locked", "-p", "naia-client", "--target", "wasm32-unknown-unknown", "--features", "wbindgen", "--keep-going", "--", "-D", "warnings"]
 
 [[leg]]
 checks = ["lint:wasm-bevy-client"]
-argv = ["cargo", "check", "-p", "naia-bevy-client", "--target", "wasm32-unknown-unknown", "--keep-going"]
+argv = ["cargo", "clippy", "--locked", "-p", "naia-bevy-client", "--target", "wasm32-unknown-unknown", "--keep-going", "--", "-D", "warnings"]
 
 [[leg]]
 checks = ["lint:wasm-mquad"]
-argv = ["cargo", "clippy", "-p", "naia-socket-shared", "-p", "naia-client-socket", "--target", "wasm32-unknown-unknown", "--features", "mquad", "--keep-going", "--", "-D", "warnings"]
+argv = ["cargo", "clippy", "--locked", "-p", "naia-socket-shared", "-p", "naia-client-socket", "--target", "wasm32-unknown-unknown", "--features", "mquad", "--keep-going", "--", "-D", "warnings"]
 
 [[leg]]
 checks = ["test:naia-benches:component_kind_wire"]

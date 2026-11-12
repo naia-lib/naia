@@ -130,3 +130,11 @@ with a reason, and are absent from test legs, edges and rung membership. They
 retain workspace all-targets Clippy and native compilation coverage. Never add
 a vacuous test or count a zero-test binary as behavioral coverage. New real tests
 must restore that target's test mapping and rung.
+
+The allow-attribute rung runs locked workspace Clippy twice: defaults and the
+maintained transport/visibility/compression feature closure with `e2e_debug`
+and `f3_diag`. Each selected wasm check runs locked Clippy for its existing
+backend and target, denying warnings. This gives the same lint contract to
+native code, generated consumers and browser-only code without lint overrides
+in gate arguments. Every surviving exception is an item-scoped, reasoned
+`expect`; a stale expectation is a failure.
