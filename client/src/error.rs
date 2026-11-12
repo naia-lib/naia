@@ -59,7 +59,6 @@ impl fmt::Display for NaiaClientError {
 
 impl Error for NaiaClientError {}
 
-#[allow(dead_code)]
 fn _assert_error_send_sync() {
     fn require<T: Send + Sync>() {}
     require::<NaiaClientError>();

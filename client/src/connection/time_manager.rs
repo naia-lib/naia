@@ -56,7 +56,10 @@ pub struct TimeManager {
 }
 
 impl TimeManager {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the transport operation carries independently typed protocol and world state"
+    )]
     pub fn from_parts(
         ping_interval: Duration,
         base: BaseTimeManager,

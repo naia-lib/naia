@@ -12,7 +12,10 @@ use crate::{
 
 pub struct TickBufferSender {
     channel_senders: HashMap<ChannelKind, ChannelTickBufferSender>,
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the channel carries an address, payload and transport error as one typed event"
+    )]
     packet_to_channel_map: HashMap<PacketIndex, Vec<(ChannelKind, Vec<(Tick, ShortMessageIndex)>)>>,
 }
 
@@ -61,7 +64,10 @@ impl TickBufferSender {
         false
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the transport operation carries independently typed protocol and world state"
+    )]
     pub fn write_messages(
         &mut self,
         protocol: &Protocol,

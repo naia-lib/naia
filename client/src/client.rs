@@ -2947,10 +2947,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             };
                             BaseTimeManager::send_pong(connection, &mut self.io, ping_index);
                         }
-                        // Not collapsed into a match guard: read_pong mutates the
-                        // reader and the time manager, and a guard that big a side
-                        // effect reads as a pure test at the match head.
-                        #[allow(clippy::collapsible_match)]
+                        #[expect(
+                            clippy::collapsible_match,
+                            reason = "pong decoding mutates the reader and time manager"
+                        )]
                         PacketType::Pong => {
                             if connection.time_manager.read_pong(&mut reader).is_err() {
                                 // Malformed pong: skip this sample. RTT estimation
