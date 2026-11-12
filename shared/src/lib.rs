@@ -278,3 +278,7 @@ pub use wrapping_number::{
     sequence_equal_or_greater_than, sequence_equal_or_less_than, sequence_greater_than,
     sequence_less_than, wrapping_diff,
 };
+
+/// Atomic diagnostics shared with the client debug API.
+#[cfg(feature = "e2e_debug")]
+pub mod diagnostic_counters;

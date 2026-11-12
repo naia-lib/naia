@@ -138,6 +138,11 @@ client's diagnostic APIs. The client library's impact-selected diagnostic
 feature test command checks this feature closure without workspace feature
 unification.
 
+The shared debug feature MUST also link and run independently of the client crate.
+Shared receive counters are owned by `naia-shared` and re-exported by the client,
+so observing the existing client counter API counts the same atomic values without
+requiring externally linked diagnostic symbols.
+
 ---
 
 ## 2) Determinism Requirements

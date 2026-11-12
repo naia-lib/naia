@@ -253,19 +253,8 @@ impl RemoteEntityChannel {
                     self.state = EntityChannelState::Spawned;
                     // Count when Spawn transitions state to Spawned
                     #[cfg(feature = "e2e_debug")]
-                    #[expect(
-                        unsafe_code,
-                        reason = "e2e_debug counter hook resolved by the naia-client test harness"
-                    )]
                     {
-                        extern "Rust" {
-                            fn client_processed_spawn_increment();
-                        }
-                        // Safety: atomic counter defined by the naia-tests harness under
-                        // e2e_debug; no preconditions; never active in production builds.
-                        unsafe {
-                            client_processed_spawn_increment();
-                        }
+                        crate::diagnostic_counters::CLIENT_PROCESSED_SPAWN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     }
                     self.last_epoch_id = Some(id);
                     // clear buffered messages less than or equal to the last spawn id

@@ -96,57 +96,6 @@ mod connection;
 pub mod counters;
 mod error;
 
-/// e2e_debug hook: naia-shared calls this by name to increment `CLIENT_SAW_SET_AUTH_WIRE`.
-#[cfg(feature = "e2e_debug")]
-#[no_mangle]
-#[expect(
-    unsafe_code,
-    reason = "no_mangle e2e_debug hook naia-shared calls by name"
-)]
-pub extern "Rust" fn client_saw_set_auth_wire_increment() {
-    use crate::counters::CLIENT_SAW_SET_AUTH_WIRE;
-    use std::sync::atomic::Ordering;
-    CLIENT_SAW_SET_AUTH_WIRE.fetch_add(1, Ordering::Relaxed);
-}
-
-/// e2e_debug hook: naia-shared calls this by name to increment `CLIENT_SAW_SPAWN`.
-#[cfg(feature = "e2e_debug")]
-#[no_mangle]
-#[expect(
-    unsafe_code,
-    reason = "no_mangle e2e_debug hook naia-shared calls by name"
-)]
-pub extern "Rust" fn client_saw_spawn_increment() {
-    use crate::counters::CLIENT_SAW_SPAWN;
-    use std::sync::atomic::Ordering;
-    CLIENT_SAW_SPAWN.fetch_add(1, Ordering::Relaxed);
-}
-
-/// e2e_debug hook: naia-shared calls this by name to increment `CLIENT_ROUTED_REMOTE_SPAWN`.
-#[cfg(feature = "e2e_debug")]
-#[no_mangle]
-#[expect(
-    unsafe_code,
-    reason = "no_mangle e2e_debug hook naia-shared calls by name"
-)]
-pub extern "Rust" fn client_routed_remote_spawn_increment() {
-    use crate::counters::CLIENT_ROUTED_REMOTE_SPAWN;
-    use std::sync::atomic::Ordering;
-    CLIENT_ROUTED_REMOTE_SPAWN.fetch_add(1, Ordering::Relaxed);
-}
-
-/// e2e_debug hook: naia-shared calls this by name to increment `CLIENT_PROCESSED_SPAWN`.
-#[cfg(feature = "e2e_debug")]
-#[no_mangle]
-#[expect(
-    unsafe_code,
-    reason = "no_mangle e2e_debug hook naia-shared calls by name"
-)]
-pub extern "Rust" fn client_processed_spawn_increment() {
-    use crate::counters::CLIENT_PROCESSED_SPAWN;
-    use std::sync::atomic::Ordering;
-    CLIENT_PROCESSED_SPAWN.fetch_add(1, Ordering::Relaxed);
-}
 mod handshake;
 mod reconnect;
 mod request;

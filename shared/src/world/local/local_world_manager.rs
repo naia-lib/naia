@@ -1187,19 +1187,9 @@ impl LocalWorldManager {
                     let remote_entity = local_entity.take_remote();
                     // Count when Spawn is routed to incoming_remote_messages
                     #[cfg(feature = "e2e_debug")]
-                    #[expect(
-                        unsafe_code,
-                        reason = "e2e_debug counter hook resolved by the naia-client test harness"
-                    )]
                     if incoming_message.get_type() == EntityMessageType::Spawn {
-                        extern "Rust" {
-                            fn client_routed_remote_spawn_increment();
-                        }
-                        // Safety: atomic counter defined by the naia-tests harness under
-                        // e2e_debug; no preconditions; never active in production builds.
-                        unsafe {
-                            client_routed_remote_spawn_increment();
-                        }
+                        crate::diagnostic_counters::CLIENT_ROUTED_REMOTE_SPAWN
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     }
                     incoming_remote_messages.push((
                         id,
