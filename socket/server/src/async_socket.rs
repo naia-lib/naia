@@ -49,8 +49,10 @@ impl Socket {
             to_client_receiver,
         };
 
+        let listener =
+            smol::Async::<std::net::TcpListener>::bind(server_addrs.session_listen_addr)?;
         start_session_server(
-            server_addrs,
+            listener,
             config,
             socket.rtc_server.session_endpoint(),
             from_client_auth_sender,

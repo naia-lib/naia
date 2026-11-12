@@ -73,7 +73,8 @@ fn build_pipeline_split() -> (
                 let mut protocol = protocol();
                 protocol.locked_protocol_id()
             },
-        );
+        )
+        .expect("server listener must bind");
     ws.io_load(packet_sender, packet_receiver);
 
     ws.into_pipeline_handles()

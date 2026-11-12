@@ -58,7 +58,8 @@ fn handles_listening(addr: &str) -> (CoordHandle<Entity>, RecvHandle<Entity>, Se
             let mut protocol = protocol();
             protocol.locked_protocol_id()
         },
-    );
+    )
+    .expect("server listener must bind");
 
     let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
         ws.io_load(ps, pr);

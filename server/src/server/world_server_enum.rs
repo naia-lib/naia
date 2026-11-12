@@ -300,12 +300,16 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     /// Bind the transport socket and begin listening for clients. For the
     /// pipelined variant this reassembles the engine to run `io_load` exactly
     /// as the resident variant does (the worker threads are not yet spawned).
-    pub fn listen<S: Into<Box<dyn crate::transport::Socket>>>(&mut self, socket: S) {
+    pub fn listen<S: Into<Box<dyn crate::transport::Socket>>>(
+        &mut self,
+        socket: S,
+    ) -> std::io::Result<()> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => {
                 let (_auth_tx, _auth_rx, ps, pr) =
-                    crate::transport::Socket::listen(socket.into(), self.protocol_id);
+                    crate::transport::Socket::listen(socket.into(), self.protocol_id)?;
                 ws.io_load(ps, pr);
+                Ok(())
             }
             WorldServerImpl::Pipelined(ps) => ps.listen(socket),
         }

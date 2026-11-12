@@ -275,6 +275,10 @@ impl Scenario {
         self.server.as_ref()
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness local listener must initialize"
+    )]
     pub fn server_start(&mut self, server_config: ServerConfig, protocol: Protocol) {
         if self.server.is_some() {
             panic!("server_start() called multiple times");
@@ -282,11 +286,17 @@ impl Scenario {
 
         let mut server = Server::new(self.server_mode, &server_config, protocol);
         let server_socket = ServerSocket::new(LocalServerSocket::new(self.hub.clone()), None);
-        server.listen(server_socket);
+        server
+            .listen(server_socket)
+            .expect("server listener must bind");
 
         self.server = Some(server);
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "test harness local listener must initialize"
+    )]
     pub fn server_start_with_protocol_id(
         &mut self,
         server_config: ServerConfig,
@@ -300,7 +310,9 @@ impl Scenario {
         let mut server =
             Server::new_with_protocol_id(self.server_mode, &server_config, protocol, protocol_id);
         let server_socket = ServerSocket::new(LocalServerSocket::new(self.hub.clone()), None);
-        server.listen(server_socket);
+        server
+            .listen(server_socket)
+            .expect("server listener must bind");
 
         self.server = Some(server);
     }

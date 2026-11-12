@@ -78,7 +78,8 @@ fn handles_listening(
             let mut protocol = protocol();
             protocol.locked_protocol_id()
         },
-    );
+    )
+    .expect("server listener must bind");
 
     let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
         ws.io_load(ps, pr);

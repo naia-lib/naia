@@ -90,7 +90,9 @@ impl OracleRun {
         // send-prep ACK drain is the first consumer of this tick's recv.
         let mut server = Server::new(ServerMode::Pipelined, &ServerConfig::default(), protocol());
         let server_socket = ServerSocket::new(LocalServerSocket::new(hub.clone()), None);
-        server.listen(server_socket);
+        server
+            .listen(server_socket)
+            .expect("server listener must bind");
 
         let client_config = ClientConfig {
             send_handshake_interval: Duration::from_millis(0),

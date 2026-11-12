@@ -79,7 +79,7 @@ impl From<Socket> for Box<dyn TransportSocket> {
 }
 
 impl TransportSocket for Socket {
-    fn listen(self: Box<Self>, expected_protocol_id: ProtocolId) -> ListenResult {
+    fn listen(self: Box<Self>, expected_protocol_id: ProtocolId) -> std::io::Result<ListenResult> {
         // The session server compares the fingerprint against this hex form
         // while it is still scanning request headers, before the credential is
         // base64-decoded. `naia-server-socket` sits below `naia-shared` in the
@@ -90,12 +90,12 @@ impl TransportSocket for Socket {
                 &self.server_addrs,
                 &self.config,
                 &expected_protocol_id.to_hex(),
-            );
-        (
+            )?;
+        Ok((
             Box::new(inner_auth_sender),
             Box::new(inner_auth_receiver),
             Box::new(inner_packet_sender),
             Box::new(inner_packet_receiver),
-        )
+        ))
     }
 }

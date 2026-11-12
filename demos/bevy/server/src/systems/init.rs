@@ -10,6 +10,10 @@ use naia_bevy_server::{transport::webrtc, Server};
 
 use crate::resources::Global;
 
+#[expect(
+    clippy::expect_used,
+    reason = "demo startup requires its configured server ports"
+)]
 pub fn init(mut commands: Commands, mut server: Server) {
     info!("Naia Bevy Server Demo is running");
 
@@ -22,7 +26,7 @@ pub fn init(mut commands: Commands, mut server: Server) {
         "http://127.0.0.1:14192",
     );
     let socket = webrtc::Socket::new(&server_addresses, server.socket_config());
-    server.listen(socket);
+    server.listen(socket).expect("server listener must bind");
 
     // Create a new, singular room, which will contain Users and Entities that they
     // can receive updates from

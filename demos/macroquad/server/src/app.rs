@@ -28,6 +28,10 @@ pub struct App {
 }
 
 impl App {
+    #[expect(
+        clippy::expect_used,
+        reason = "demo startup requires its configured server ports"
+    )]
     pub fn new() -> Self {
         info!("Naia Macroquad Server Demo started");
 
@@ -44,7 +48,7 @@ impl App {
         let socket = webrtc::Socket::new(&server_addresses, &protocol.socket);
 
         let mut server = Server::new(ServerMode::Resident, &ServerConfig::default(), protocol);
-        server.listen(socket);
+        server.listen(socket).expect("server listener must bind");
 
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from

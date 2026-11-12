@@ -44,7 +44,7 @@ impl TransportSocket for Socket {
         clippy::expect_used,
         reason = "internal invariant: listen() must only be called once per Socket"
     )]
-    fn listen(self: Box<Self>, expected_protocol_id: ProtocolId) -> ListenResult {
+    fn listen(self: Box<Self>, expected_protocol_id: ProtocolId) -> std::io::Result<ListenResult> {
         let Socket { inner, config } = *self;
         let local = inner.expect("server socket already taken");
         let (auth_sender, auth_receiver, sender, receiver) =
@@ -59,12 +59,12 @@ impl TransportSocket for Socket {
             }
         };
 
-        (
+        Ok((
             Box::new(LocalServerTransportAuthSender(auth_sender)),
             Box::new(LocalServerTransportAuthReceiver(auth_receiver)),
             Box::new(LocalServerTransportSender(sender)),
             receiver,
-        )
+        ))
     }
 }
 

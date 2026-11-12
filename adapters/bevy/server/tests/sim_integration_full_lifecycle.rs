@@ -101,7 +101,8 @@ fn pipeline_not_listening_before_listen() {
 #[test]
 fn listen_and_start_binds_pipeline() {
     let mut app = build_app();
-    Server::pipeline_listen(app.world_mut(), local_socket("127.0.0.1:23001"));
+    Server::pipeline_listen(app.world_mut(), local_socket("127.0.0.1:23001"))
+        .expect("server listener must bind");
     Server::pipeline_start(app.world_mut());
     app.update();
     // The pipeline is reachable and reports its current tick (coord in slot).
@@ -115,7 +116,8 @@ fn listen_and_start_binds_pipeline() {
 #[test]
 fn app_drop_joins_worker_threads_cleanly() {
     let mut app = build_app();
-    Server::pipeline_listen(app.world_mut(), local_socket("127.0.0.1:23002"));
+    Server::pipeline_listen(app.world_mut(), local_socket("127.0.0.1:23002"))
+        .expect("server listener must bind");
     Server::pipeline_start(app.world_mut());
     app.update();
     // Drop the App; the pipeline's Drop joins any worker threads.

@@ -122,7 +122,8 @@ fn run_server(signal_addr: &str, data_addr: &str, stop: Arc<AtomicBool>, echoes:
 )]
 fn run_server_with_addrs(server_addrs: ServerAddrs, stop: Arc<AtomicBool>, echoes: Arc<AtomicU32>) {
     let (auth_sender, mut auth_receiver, packet_sender, mut packet_receiver) =
-        ServerSocket::listen_with_auth(&server_addrs, &SocketConfig::new(None, None), PROTOCOL_ID);
+        ServerSocket::listen_with_auth(&server_addrs, &SocketConfig::new(None, None), PROTOCOL_ID)
+            .expect("server listener must bind");
 
     while !stop.load(Ordering::Relaxed) {
         let mut idle = true;

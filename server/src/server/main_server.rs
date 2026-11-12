@@ -115,15 +115,16 @@ impl MainServer {
     /// The transport is handed this server's protocol fingerprint here, and is
     /// responsible for refusing an auth envelope that does not carry a
     /// matching one. See [`AuthReceiver`] for the guarantee that buys.
-    pub fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
+    pub fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) -> std::io::Result<()> {
         let boxed_socket: Box<dyn Socket> = socket.into();
         let (auth_sender, auth_receiver, packet_sender, packet_receiver) =
-            boxed_socket.listen(self.protocol_id);
+            boxed_socket.listen(self.protocol_id)?;
 
         self.recv_io.load(packet_receiver);
         self.send_io.load(packet_sender);
 
         self.auth_io = Some((auth_sender, auth_receiver));
+        Ok(())
     }
 
     /// Returns a cloned handle to the underlying packet sender.
@@ -913,13 +914,13 @@ mod drain_termination_tests {
     }
 
     impl Socket for FailSocket {
-        fn listen(self: Box<Self>, _: ProtocolId) -> ListenResult {
-            (
+        fn listen(self: Box<Self>, _: ProtocolId) -> std::io::Result<ListenResult> {
+            Ok((
                 Box::new(OkAuthSender),
                 Box::new(FailAuthReceiver),
                 Box::new(OkPacketSender),
                 Box::new(FailPacketReceiver),
-            )
+            ))
         }
     }
 
@@ -970,7 +971,7 @@ mod drain_termination_tests {
     #[test]
     fn maintain_socket_terminates_on_persistent_transport_error() {
         let mut server = MainServer::new(&ServerConfig::default(), Protocol::builder().build());
-        server.listen(FailSocket);
+        server.listen(FailSocket).expect("test listener binds");
 
         let server = Arc::new(Mutex::new(server));
         let worker = server.clone();

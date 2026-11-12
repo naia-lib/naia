@@ -43,7 +43,9 @@ impl Link {
             ..ServerConfig::default()
         };
         let mut server = Server::new(mode, &server_config, protocol());
-        server.listen(ServerSocket::new(LocalServerSocket::new(hub.clone()), None));
+        server
+            .listen(ServerSocket::new(LocalServerSocket::new(hub.clone()), None))
+            .expect("server listener must bind");
         let (address, auth_tx, auth_rx, data_tx, data_rx) = hub.register_client();
         let addr_cell = LocalAddrCell::new();
         addr_cell.set_sync(hub.server_addr());

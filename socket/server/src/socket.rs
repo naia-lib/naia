@@ -34,12 +34,14 @@ impl Socket {
     ///
     /// Dropping both returned halves releases the bound ports: the last
     /// handle drop ends the background tasks, which own the sockets.
-    #[must_use]
+    /// # Errors
+    /// Returns the OS error if either the WebRTC UDP port or session TCP port
+    /// cannot bind. Both bind before background tasks start.
     pub fn listen(
         server_addrs: &ServerAddrs,
         config: &SocketConfig,
         expected_protocol_id: &str,
-    ) -> (PacketSender, PacketReceiver) {
+    ) -> std::io::Result<(PacketSender, PacketReceiver)> {
         let (shutdown_signal, [receiver_shutdown, session_shutdown, sender_shutdown]) =
             shutdown_set();
 
@@ -51,27 +53,28 @@ impl Socket {
             expected_protocol_id,
             receiver_shutdown,
             session_shutdown,
-        );
+        )?;
 
-        Self::setup_sender_loop(
+        Ok(Self::setup_sender_loop(
             config,
             from_client_receiver,
             sender_receiver,
             sender_shutdown,
             &shutdown_signal,
-        )
+        ))
     }
     /// Listens on the Socket for incoming communication from Clients
     ///
     /// See [`listen`](Self::listen) for `expected_protocol_id`. Here the
     /// fingerprint comparison happens strictly before the credential is
     /// base64-decoded or handed to the application.
-    #[must_use]
+    /// # Errors
+    /// Returns the OS bind error before starting any background task.
     pub fn listen_with_auth(
         server_addrs: &ServerAddrs,
         config: &SocketConfig,
         expected_protocol_id: &str,
-    ) -> AuthListenResult {
+    ) -> std::io::Result<AuthListenResult> {
         let (from_client_auth_sender, from_client_auth_receiver) = channel::unbounded();
         let (to_session_all_auth_sender, to_session_all_auth_receiver) = channel::unbounded();
         let from_client_auth_sender = Some(from_client_auth_sender);
@@ -88,7 +91,7 @@ impl Socket {
             expected_protocol_id,
             receiver_shutdown,
             session_shutdown,
-        );
+        )?;
 
         let (packet_sender, packet_receiver) = Self::setup_sender_loop(
             config,
@@ -104,7 +107,7 @@ impl Socket {
         // Setup Receiver
         let auth_receiver = AuthReceiver::new(from_client_auth_receiver);
 
-        (auth_sender, auth_receiver, packet_sender, packet_receiver)
+        Ok((auth_sender, auth_receiver, packet_sender, packet_receiver))
     }
 
     /// Explicitly shut down a [`listen`](Self::listen) result: drops both
@@ -145,38 +148,25 @@ impl Socket {
         expected_protocol_id: &str,
         shutdown: ShutdownWait,
         session_shutdown: ShutdownWait,
-    ) -> (ClientMsgReceiver, SenderChannelReceiver) {
+    ) -> std::io::Result<(ClientMsgReceiver, SenderChannelReceiver)> {
         // Set up receiver loop
         let (from_client_sender, from_client_receiver) = channel::unbounded();
         let (sender_sender, sender_receiver) = channel::unbounded();
 
-        let webrtc_listen_addr = server_addrs.webrtc_listen_addr;
         let server_addrs_clone = server_addrs.clone();
         let config_clone = config.clone();
         let expected_protocol_id = expected_protocol_id.to_string();
 
-        executor::spawn(async move {
-            // Create async socket
-            // This task is detached, so a bind failure has no caller to
-            // return to: log it and end the task, which drops `sender_sender`
-            // and so ends the sender loop too.
-            let mut async_socket = match AsyncSocket::listen(
-                server_addrs_clone,
-                config_clone,
-                from_client_auth_sender,
-                to_session_all_auth_receiver,
-                expected_protocol_id,
-                session_shutdown,
-            ) {
-                Ok(async_socket) => async_socket,
-                Err(err) => {
-                    log::error!(
-                        "Unable to bind the WebRTC data socket to {webrtc_listen_addr}: {err}"
-                    );
-                    return;
-                }
-            };
+        let mut async_socket = AsyncSocket::listen(
+            server_addrs_clone,
+            config_clone,
+            from_client_auth_sender,
+            to_session_all_auth_receiver,
+            expected_protocol_id,
+            session_shutdown,
+        )?;
 
+        executor::spawn(async move {
             // A closed channel means the owning Socket was dropped: end this
             // task instead of panicking (this runs on a shared executor).
             if sender_sender.send(async_socket.sender()).await.is_err() {
@@ -203,7 +193,7 @@ impl Socket {
         })
         .detach();
 
-        (from_client_receiver, sender_receiver)
+        Ok((from_client_receiver, sender_receiver))
     }
 
     fn setup_sender_loop(

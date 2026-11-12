@@ -72,7 +72,9 @@ fn listening_server_at(addr: &str) -> PipelinedServer<DemoEntity> {
         PipelinedServer::new(ServerConfig::default(), protocol());
     let hub = LocalTransportHub::new(addr.parse().unwrap());
     let server_socket = ServerSocket::new(LocalServerSocket::new(hub), None);
-    server.listen(server_socket);
+    server
+        .listen(server_socket)
+        .expect("server listener must bind");
     server
 }
 

@@ -243,7 +243,7 @@ impl BevyTestHarness {
                 move |mut server: Server, mut state: ResMut<ServerState>| {
                     let socket =
                         ServerSocket::new(LocalServerSocket::new(hub_for_startup.clone()), None);
-                    server.listen(socket);
+                    server.listen(socket).expect("server listener must bind");
                     let room = server.create_room();
                     state.room_key = Some(room.key());
                 },

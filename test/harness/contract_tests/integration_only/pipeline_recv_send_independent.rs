@@ -291,7 +291,8 @@ fn pipeline_recv_send_threads_overlap() {
                 let mut protocol = protocol();
                 protocol.locked_protocol_id()
             },
-        );
+        )
+        .expect("server listener must bind");
     ws.io_load(packet_sender, packet_receiver);
 
     let (_coord, mut recv_handle, mut send_handle) = ws.into_pipeline_handles();

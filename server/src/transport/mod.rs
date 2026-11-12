@@ -64,7 +64,10 @@ mod inner {
         /// through a setter is what makes that impossible to forget: a
         /// transport cannot be listening without having been told what to
         /// compare against.
-        fn listen(self: Box<Self>, expected_protocol_id: ProtocolId) -> ListenResult;
+        fn listen(
+            self: Box<Self>,
+            expected_protocol_id: ProtocolId,
+        ) -> std::io::Result<ListenResult>;
     }
 
     // Packet

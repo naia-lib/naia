@@ -117,14 +117,17 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     ///
     /// Must be called before [`receive_all_packets`](Server::receive_all_packets).
     /// Calling more than once replaces the previous socket binding.
-    pub fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
-        self.main.listen(socket);
+    /// # Errors
+    /// Returns the transport bind error. On failure, the existing binding is unchanged.
+    pub fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) -> std::io::Result<()> {
+        self.main.listen(socket)?;
 
         // load world io
         let world_io_sender = self.main.sender_cloned();
         let (to_world_sender, world_io_receiver) = PacketChannel::unbounded();
         self.to_world_sender_opt = Some(to_world_sender);
         self.world.io_load(world_io_sender, world_io_receiver);
+        Ok(())
     }
 
     /// Returns `true` if the server is bound and listening for connections.
@@ -1449,5 +1452,53 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     ) -> bool {
         self.world
             .inject_tick_buffer_message::<C, M>(user_key, host_tick, message_tick, message)
+    }
+}
+
+#[cfg(all(test, feature = "transport_webrtc"))]
+mod listen_tests {
+    use std::net::{TcpListener, UdpSocket};
+
+    use super::*;
+    use crate::transport::webrtc;
+
+    #[test]
+    fn occupied_session_port_returns_bind_error_without_listening() {
+        let occupied = TcpListener::bind("127.0.0.1:0").unwrap();
+        let session_addr = occupied.local_addr().unwrap();
+        for mode in [ServerMode::Resident, ServerMode::Pipelined] {
+            let mut server =
+                Server::<u32>::new(mode, &ServerConfig::default(), Protocol::builder().build());
+            let addrs = webrtc::ServerAddrs::new(
+                session_addr,
+                "127.0.0.1:0".parse().unwrap(),
+                "http://127.0.0.1:1",
+            );
+            let error = server
+                .listen(webrtc::Socket::new(&addrs, &SocketConfig::default()))
+                .expect_err("occupied session port must fail before listen returns");
+            assert_eq!(error.kind(), std::io::ErrorKind::AddrInUse);
+            assert!(!server.is_listening());
+        }
+    }
+
+    #[test]
+    fn occupied_webrtc_port_returns_bind_error_without_listening() {
+        let occupied = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let data_addr = occupied.local_addr().unwrap();
+        for mode in [ServerMode::Resident, ServerMode::Pipelined] {
+            let mut server =
+                Server::<u32>::new(mode, &ServerConfig::default(), Protocol::builder().build());
+            let addrs = webrtc::ServerAddrs::new(
+                "127.0.0.1:0".parse().unwrap(),
+                data_addr,
+                &format!("http://{data_addr}"),
+            );
+            let error = server
+                .listen(webrtc::Socket::new(&addrs, &SocketConfig::default()))
+                .expect_err("occupied WebRTC port must fail before listen returns");
+            assert_eq!(error.kind(), std::io::ErrorKind::AddrInUse);
+            assert!(!server.is_listening());
+        }
     }
 }

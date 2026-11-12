@@ -82,7 +82,9 @@ impl Admission {
         let hub = LocalTransportHub::new("127.0.0.1:54490".parse().unwrap());
         hub.enable_packet_recording();
         let mut server = PipelinedWorldServer::new(ServerConfig::default(), protocol());
-        server.listen(Socket::new(LocalServerSocket::new(hub.clone()), None));
+        server
+            .listen(Socket::new(LocalServerSocket::new(hub.clone()), None))
+            .expect("server listener must bind");
         Self {
             server,
             world: World::default(),

@@ -71,7 +71,8 @@ fn dropping_socket_handles_releases_listen_ports() {
     assert!(!udp_taken(webrtc_addr), "webrtc port busy before listen");
 
     let (packet_sender, packet_receiver) =
-        Socket::listen(&server_addrs, &SocketConfig::default(), PROTOCOL_ID);
+        Socket::listen(&server_addrs, &SocketConfig::default(), PROTOCOL_ID)
+            .expect("server listener must bind");
 
     // The binds happen on detached tasks: wait until both ports are taken.
     assert!(
@@ -103,7 +104,8 @@ fn dropping_socket_handles_releases_listen_ports() {
 fn closing_socket_handles_releases_listen_ports() {
     let server_addrs = addrs(CLOSE_SESSION_PORT, CLOSE_WEBRTC_PORT);
 
-    let handles = Socket::listen(&server_addrs, &SocketConfig::default(), PROTOCOL_ID);
+    let handles = Socket::listen(&server_addrs, &SocketConfig::default(), PROTOCOL_ID)
+        .expect("server listener must bind");
 
     assert!(
         Socket::close(handles, &server_addrs, Duration::from_secs(10)),
@@ -111,7 +113,8 @@ fn closing_socket_handles_releases_listen_ports() {
     );
 
     // Immediate rebind proves the release is deterministic, not eventual.
-    let handles = Socket::listen(&server_addrs, &SocketConfig::default(), PROTOCOL_ID);
+    let handles = Socket::listen(&server_addrs, &SocketConfig::default(), PROTOCOL_ID)
+        .expect("server listener must bind");
     assert!(
         Socket::close(handles, &server_addrs, Duration::from_secs(10)),
         "ports not free 10s after second Socket::close (#92)"
@@ -123,14 +126,16 @@ fn closing_socket_handles_releases_listen_ports() {
 fn closing_auth_socket_handles_releases_listen_ports() {
     let server_addrs = addrs(AUTH_SESSION_PORT, AUTH_WEBRTC_PORT);
 
-    let handles = Socket::listen_with_auth(&server_addrs, &SocketConfig::default(), PROTOCOL_ID);
+    let handles = Socket::listen_with_auth(&server_addrs, &SocketConfig::default(), PROTOCOL_ID)
+        .expect("server listener must bind");
 
     assert!(
         Socket::close_with_auth(handles, &server_addrs, Duration::from_secs(10)),
         "ports not free 10s after Socket::close_with_auth (#92)"
     );
 
-    let handles = Socket::listen_with_auth(&server_addrs, &SocketConfig::default(), PROTOCOL_ID);
+    let handles = Socket::listen_with_auth(&server_addrs, &SocketConfig::default(), PROTOCOL_ID)
+        .expect("server listener must bind");
     assert!(
         Socket::close_with_auth(handles, &server_addrs, Duration::from_secs(10)),
         "ports not free 10s after second Socket::close_with_auth (#92)"

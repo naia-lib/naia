@@ -166,7 +166,9 @@ fn rig() -> Rig {
         &ServerConfig::default(),
         test_protocol.clone(),
     );
-    server.listen(ServerSocket::new(LocalServerSocket::new(hub.clone()), None));
+    server
+        .listen(ServerSocket::new(LocalServerSocket::new(hub.clone()), None))
+        .expect("server listener must bind");
 
     let room_key = server.create_room().key();
 

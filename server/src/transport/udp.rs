@@ -83,7 +83,7 @@ impl From<Socket> for Box<dyn TransportSocket> {
 }
 
 impl TransportSocket for Socket {
-    fn listen(self: Box<Self>, expected_protocol_id: ProtocolId) -> ListenResult {
+    fn listen(self: Box<Self>, expected_protocol_id: ProtocolId) -> std::io::Result<ListenResult> {
         let auth_io = Arc::new(Mutex::new(AuthIo::new(
             &self.public_udp_url,
             self.auth_socket,
@@ -105,12 +105,12 @@ impl TransportSocket for Socket {
             }
         };
 
-        (
+        Ok((
             Box::new(auth_sender),
             Box::new(auth_receiver),
             Box::new(packet_sender),
             packet_receiver,
-        )
+        ))
     }
 }
 

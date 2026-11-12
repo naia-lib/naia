@@ -75,7 +75,8 @@ fn local_socket(addr: &str) -> Box<dyn transport::Socket> {
 }
 
 fn listen(app: &mut App, addr: &str) {
-    Server::pipeline_listen(app.world_mut(), local_socket(addr));
+    Server::pipeline_listen(app.world_mut(), local_socket(addr))
+        .expect("server listener must bind");
     Server::pipeline_start(app.world_mut());
     app.update();
     thread::sleep(Duration::from_millis(15));

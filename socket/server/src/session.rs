@@ -22,10 +22,7 @@ use naia_socket_shared::{
     SocketConfig, PROTOCOL_ID_HEADER, PROTOCOL_ID_HEADER_VALUE_LEN, PROTOCOL_MISMATCH_STATUS,
 };
 
-use crate::{
-    executor, server_addrs::ServerAddrs, shutdown::ShutdownWait, AuthResponse,
-    NaiaServerSocketError,
-};
+use crate::{executor, shutdown::ShutdownWait, AuthResponse, NaiaServerSocketError};
 
 /// Caps on what an unauthenticated client may make the session listener buffer.
 ///
@@ -74,7 +71,7 @@ struct RtcUrlPaths {
 }
 
 pub fn start_session_server(
-    server_addrs: ServerAddrs,
+    listener: Async<TcpListener>,
     config: SocketConfig,
     session_endpoint: SessionEndpoint,
     from_client_auth_sender: Option<ClientAuthSender>,
@@ -84,7 +81,7 @@ pub fn start_session_server(
 ) {
     executor::spawn(async move {
         listen(
-            server_addrs,
+            listener,
             config,
             session_endpoint.clone(),
             from_client_auth_sender,
@@ -99,7 +96,7 @@ pub fn start_session_server(
 
 /// Listens for incoming connections and serves them.
 async fn listen(
-    server_addrs: ServerAddrs,
+    listener: Async<TcpListener>,
     config: SocketConfig,
     session_endpoint: SessionEndpoint,
     from_client_auth_sender: Option<ClientAuthSender>,
@@ -110,17 +107,6 @@ async fn listen(
     let rtc_url_paths = RtcUrlPaths {
         post: format!("POST /{}", config.rtc_endpoint_path),
         options: format!("OPTIONS /{}", config.rtc_endpoint_path),
-    };
-    let socket_address = server_addrs.session_listen_addr;
-
-    // This task is detached, so a bind failure has no caller to return to:
-    // log it and end the task (the webrtc task still owns its own port).
-    let listener = match Async::<TcpListener>::bind(socket_address) {
-        Ok(listener) => listener,
-        Err(err) => {
-            error!("Unable to bind the session TCP listener to {socket_address}: {err}");
-            return;
-        }
     };
     match listener.get_ref().local_addr() {
         Ok(local_addr) => info!(

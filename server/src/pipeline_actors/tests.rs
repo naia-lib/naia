@@ -2087,9 +2087,9 @@ impl crate::transport::Socket for SinkSocket {
     fn listen(
         self: Box<Self>,
         _expected_protocol_id: naia_shared::ProtocolId,
-    ) -> crate::transport::ListenResult {
+    ) -> std::io::Result<crate::transport::ListenResult> {
         let (ps, pr) = crate::transport::PacketChannel::unbounded();
-        (Box::new(SinkAuth), Box::new(SinkAuth), ps, pr)
+        Ok((Box::new(SinkAuth), Box::new(SinkAuth), ps, pr))
     }
 }
 
@@ -2130,7 +2130,7 @@ fn split_room_join_spawn_order() -> Vec<u64> {
     proto.lock();
     let protocol = proto.build();
     let mut server = crate::PipelinedWorldServer::<u64>::new(ServerConfig::default(), protocol);
-    server.listen(SinkSocket);
+    server.listen(SinkSocket).expect("test listener binds");
 
     let user_key = UserKey::from_u64(1);
     let user_addr: SocketAddr = "127.0.0.1:9021".parse().unwrap();

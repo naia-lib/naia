@@ -29,7 +29,9 @@ impl Link {
         TestClock::init(0);
         let hub = LocalTransportHub::new("127.0.0.1:54502".parse().unwrap());
         let mut server = Server::new(mode, &ServerConfig::default(), protocol());
-        server.listen(ServerSocket::new(LocalServerSocket::new(hub.clone()), None));
+        server
+            .listen(ServerSocket::new(LocalServerSocket::new(hub.clone()), None))
+            .expect("server listener must bind");
         let (address, auth_tx, auth_rx, data_tx, data_rx) = hub.register_client();
         let addr_cell = LocalAddrCell::new();
         addr_cell.set_sync(hub.server_addr());

@@ -489,7 +489,7 @@ argv = ["cargo", "test", "-p", "naia-server", "--test", "close_releases_ports", 
 
 [[leg]]
 checks = ["test:naia-server:naia_server"]
-argv = ["cargo", "test", "-p", "naia-server", "--lib", "--features", "test_time,test_utils,transport_local,e2e_debug,f3_diag,zstd_support", "--no-fail-fast"]
+argv = ["cargo", "test", "-p", "naia-server", "--lib", "--features", "test_time,test_utils,transport_local,transport_webrtc,e2e_debug,f3_diag,zstd_support", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-server:udp_close_releases_port"]

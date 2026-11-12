@@ -57,7 +57,7 @@
 //! fn init(mut server: Server) {
 //!     // pick a concrete transport: transport::webrtc, transport::udp, transport::local
 //!     let socket: Box<dyn transport::Socket> = todo!();
-//!     server.listen(socket);
+//!     server.listen(socket).expect("server listener must bind");
 //! }
 //!
 //! fn on_connect(mut server: Server, mut events: MessageReader<ConnectEvent>) {
@@ -190,10 +190,13 @@ pub use snapshot_builder::{build_snapshot, build_snapshot_full};
 /// Call `listen` on the naia server resource directly via the App,
 /// before any systems run. Use this when you want to initialize the
 /// server during app construction rather than in a startup system.
-pub fn listen_on_app<S: Into<Box<dyn transport::Socket>>>(app: &mut bevy_app::App, socket: S) {
+pub fn listen_on_app<S: Into<Box<dyn transport::Socket>>>(
+    app: &mut bevy_app::App,
+    socket: S,
+) -> std::io::Result<()> {
     app.world_mut()
         .resource_mut::<server::ServerImpl>()
-        .listen(socket);
+        .listen(socket)
 }
 
 /// Phantom tag type for single-server Bevy apps.

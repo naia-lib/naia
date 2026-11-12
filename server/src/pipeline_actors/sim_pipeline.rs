@@ -385,16 +385,20 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     ///
     /// This is the G2 startup-window entry point. Equivalent to:
     /// ```ignore
-    /// let (_auth_tx, _auth_rx, ps, pr) = socket.into().listen(protocol_id);
+    /// let (_auth_tx, _auth_rx, ps, pr) = socket.into().listen(protocol_id)?;
     /// server.with_monolithic_world_server(|ws| ws.io_load(ps, pr));
     /// ```
     ///
     /// Must be called while workers are not yet spawned (or parked). After
     /// this call the pipeline is ready for `tick()`.
-    pub fn listen<S: Into<Box<dyn crate::transport::Socket>>>(&mut self, socket: S) {
+    pub fn listen<S: Into<Box<dyn crate::transport::Socket>>>(
+        &mut self,
+        socket: S,
+    ) -> std::io::Result<()> {
         let (_auth_tx, _auth_rx, ps, pr) =
-            crate::transport::Socket::listen(socket.into(), self.protocol_id);
+            crate::transport::Socket::listen(socket.into(), self.protocol_id)?;
         self.with_monolithic_world_server(|ws| ws.io_load(ps, pr));
+        Ok(())
     }
 
     /// §2f — the **separate spawn step**: stand up the worker-thread runtime and

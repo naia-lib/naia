@@ -77,7 +77,7 @@ impl ServerImpl {
         Self::WorldOnly(world_only_server)
     }
 
-    pub(crate) fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
+    pub(crate) fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) -> std::io::Result<()> {
         match self {
             Self::Full(server) => server.listen(socket),
             // The enum's `listen` performs the socket split + `io_load`
@@ -321,8 +321,8 @@ impl<'w> Server<'w> {
     //// Connections ////
 
     /// Start listening on `socket`.
-    pub fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
-        self.server_impl.listen(socket);
+    pub fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) -> std::io::Result<()> {
+        self.server_impl.listen(socket)
     }
 
     /// Whether the server is listening.
@@ -960,8 +960,11 @@ impl<'w> Server<'w> {
 
     /// Bind the pipeline's socket (the bind-only startup step). Pair with
     /// [`Self::pipeline_start`], which spawns the worker runtime.
-    pub fn pipeline_listen(world: &mut World, socket: impl Into<Box<dyn Socket>>) {
-        Self::world_only_resource_scope(world, |_world, ws| ws.listen(socket));
+    pub fn pipeline_listen(
+        world: &mut World,
+        socket: impl Into<Box<dyn Socket>>,
+    ) -> std::io::Result<()> {
+        Self::world_only_resource_scope(world, |_world, ws| ws.listen(socket))
     }
 
     /// The separate spawn step: stand up the worker runtime (`Armed →

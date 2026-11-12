@@ -15,6 +15,10 @@ pub struct App {
 }
 
 impl App {
+    #[expect(
+        clippy::expect_used,
+        reason = "demo startup requires its configured server ports"
+    )]
     pub fn new() -> Self {
         info!("Naia Server Socket Demo started");
 
@@ -34,7 +38,7 @@ impl App {
             // built on `naia-server` gets this value computed from its
             // `Protocol`; see `DEMO_PROTOCOL_ID` for why the demos pass a
             // constant instead.
-            Socket::listen_with_auth(&server_address, &shared_config, DEMO_PROTOCOL_ID);
+            Socket::listen_with_auth(&server_address, &shared_config, DEMO_PROTOCOL_ID).expect("server listener must bind");
 
         Self {
             auth_sender,

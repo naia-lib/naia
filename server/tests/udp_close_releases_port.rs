@@ -28,7 +28,9 @@ fn dropping_udp_transport_releases_ports() {
 
     // First bind takes both ports (auth TCP + data UDP).
     let sock = Socket::new(&addrs, None);
-    let handles = Box::new(sock).listen(ProtocolId::new(0x92));
+    let handles = Box::new(sock)
+        .listen(ProtocolId::new(0x92))
+        .expect("server listener must bind");
 
     // Dropping every handle must free them: a second bind on the same
     // addresses succeeds (`Socket::new` unwraps the binds, so a leak

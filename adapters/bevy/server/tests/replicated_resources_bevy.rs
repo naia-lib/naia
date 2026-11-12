@@ -164,7 +164,7 @@ impl BevyHarness {
             .add_systems(Startup, move |mut server: Server| {
                 let socket =
                     ServerSocket::new(LocalServerSocket::new(hub_for_server.clone()), None);
-                server.listen(socket);
+                server.listen(socket).expect("server listener must bind");
                 server.create_room();
             })
             .add_systems(

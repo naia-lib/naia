@@ -240,7 +240,9 @@ impl BenchWorld {
         }
         let mut server: NaiaServer<BenchEntity> =
             NaiaServer::new(ServerMode::Resident, &server_config, protocol.clone());
-        server.listen(ServerSocket::new(LocalServerSocket::new(hub.clone()), None));
+        server
+            .listen(ServerSocket::new(LocalServerSocket::new(hub.clone()), None))
+            .expect("server listener must bind");
 
         let mut server_world = World::default();
 

@@ -69,7 +69,8 @@ fn current_tick(app: &mut App) -> u16 {
 #[test]
 fn adapter_drives_bracket_each_update_without_panic_and_keeps_handles_intact() {
     let mut app = build_driving_app();
-    Server::pipeline_listen(app.world_mut(), local_socket("127.0.0.1:23070"));
+    Server::pipeline_listen(app.world_mut(), local_socket("127.0.0.1:23070"))
+        .expect("server listener must bind");
     Server::pipeline_start(app.world_mut());
 
     // Many `app.update()`s, each one a full park → recv-drain → (no consumer

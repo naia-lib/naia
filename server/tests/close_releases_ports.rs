@@ -80,8 +80,12 @@ fn listen_each(udp: &UdpAddrs, rtc: &RtcAddrs) -> (ListenHandles, ListenHandles)
     let rtc_socket = RtcSocket::new(rtc, &SocketConfig::default());
     let boxed_rtc: Box<dyn TransportSocket> = Box::new(rtc_socket);
     (
-        boxed_udp.listen(ProtocolId::new(0x92)),
-        boxed_rtc.listen(ProtocolId::new(0x92)),
+        boxed_udp
+            .listen(ProtocolId::new(0x92))
+            .expect("server listener must bind"),
+        boxed_rtc
+            .listen(ProtocolId::new(0x92))
+            .expect("server listener must bind"),
     )
 }
 

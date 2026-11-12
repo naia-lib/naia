@@ -203,7 +203,8 @@ fn webrtc_loopback_echo_round_trip() {
     let addrs = addrs(ECHO_SESSION_PORT, ECHO_WEBRTC_PORT);
     let config = SocketConfig::default();
     let (auth_sender, mut auth_receiver, server_sender, mut server_receiver) =
-        ServerSocket::listen_with_auth(&addrs, &config, PROTOCOL_ID);
+        ServerSocket::listen_with_auth(&addrs, &config, PROTOCOL_ID)
+            .expect("server listener must bind");
 
     let captured: Arc<Mutex<Vec<Vec<u8>>>> = Arc::new(Mutex::new(Vec::new()));
     let stop_proxy = Arc::new(AtomicBool::new(false));
@@ -321,7 +322,8 @@ fn webrtc_loopback_echo_round_trip() {
 fn webrtc_loopback_wrong_fingerprint_is_refused() {
     let addrs = addrs(REFUSE_SESSION_PORT, REFUSE_WEBRTC_PORT);
     let config = SocketConfig::default();
-    let (server_sender, server_receiver) = ServerSocket::listen(&addrs, &config, PROTOCOL_ID);
+    let (server_sender, server_receiver) =
+        ServerSocket::listen(&addrs, &config, PROTOCOL_ID).expect("server listener must bind");
 
     let (mut identity, _client_sender, _client_receiver) = ClientSocket::connect(
         &session_url(REFUSE_SESSION_PORT),

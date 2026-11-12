@@ -631,3 +631,17 @@ Summary of test obligations from contracts above:
 - `connection-31.t3`: `ProtocolMismatch` is distinguishable from other rejection reasons
 - `connection-32.t1`: Each wire-relevant change produces different `protocol_id`
 - `connection-33.t1`: Breaking protocol change causes `ProtocolMismatch`
+## Listener startup failures
+
+`connection-35`: `Server::listen`, transport `Socket::listen`, and the Bevy
+listen helpers return `std::io::Result`. WebRTC binds both the data UDP socket
+and the session TCP listener before starting background tasks. If either bind
+fails, the original OS error is returned synchronously; no listener task is
+started and the server's existing listening state is unchanged. A caller may
+correct the address and retry. This replaces the detached-task log-only bind
+failure behavior (nydus-6y6, 2026-11-12).
+
+- `connection-35.t1`: An occupied session TCP port returns `AddrInUse` from
+  `Server::listen` in resident and pipelined modes, without becoming listening.
+- `connection-35.t2`: An occupied WebRTC UDP port returns `AddrInUse` from
+  `Server::listen` in both modes, without becoming listening.
