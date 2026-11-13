@@ -282,6 +282,7 @@ impl EntityRegistry {
     /// Iterate every `EntityKey` known to the registry, regardless of whether
     /// it has a server entity, client entities, or just a record. Used by the
     /// `e2e_debug` auto-dump on `expect_with_ticks_internal` timeout.
+    #[cfg(feature = "e2e_debug")]
     pub fn all_entity_keys(&self) -> impl Iterator<Item = EntityKey> + '_ {
         self.entity_map.keys().copied()
     }

@@ -1,29 +1,14 @@
-use std::time::Duration;
-
-use naia_client::{ClientConfig, JitterBufferType, Publicity as ClientReplicationConfig};
+use naia_client::ClientConfig;
 use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
-use naia_shared::{
-    AuthorityError, ComponentKind, EntityAuthStatus, Protocol, Request, Response, Tick,
-};
+use naia_shared::ComponentKind;
 
 use naia_test_harness::test_protocol::ImmutableSeed;
 use naia_test_harness::{
-    protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
-    ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent, ClientKey, ClientRejectEvent,
-    ClientSpawnEntityEvent, EntityKey, ExpectCtx, ExpectResult, ImmutableLabel, Position, Scenario,
-    ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent, ToTicks, Velocity,
+    protocol, Auth, ClientKey, ClientSpawnEntityEvent, EntityKey, ExpectCtx, ExpectResult,
+    ImmutableLabel, Position, Scenario, Velocity,
 };
 
-// Test protocol types (channels and messages)
-use naia_test_harness::test_protocol::{
-    OrderedChannel, ReliableChannel, RequestResponseChannel, SequencedChannel, TestMessage,
-    TestRequest, TestResponse, TickBufferedChannel, UnorderedChannel, UnreliableChannel,
-};
-
-mod _helpers;
-use _helpers::{
-    client_connect, server_and_client_connected, server_and_client_disconnected, test_client_config,
-};
+use naia_test_harness::test_helpers::{client_connect, test_client_config};
 
 // ============================================================================
 // Entity Scopes Tests

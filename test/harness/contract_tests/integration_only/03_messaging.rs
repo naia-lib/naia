@@ -1,18 +1,14 @@
 use std::time::Duration;
 
-use naia_client::{ClientConfig, JitterBufferType, Publicity as ClientReplicationConfig};
-use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
-use naia_shared::{
-    AuthorityError, EntityAuthStatus, Protocol, Request, RequestPoll, Response, TestClock, Tick,
-};
+use naia_client::ClientConfig;
+use naia_server::ServerConfig;
+use naia_shared::{Protocol, RequestPoll, TestClock};
 
 use naia_test_harness::{
     protocol, protocol_with_large_req_resp, protocol_with_sequenced_unreliable,
-    protocol_with_timeout_req, Auth, ClientConnectEvent, ClientDisconnectEvent,
-    ClientEntityAuthDeniedEvent, ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent,
-    ClientErrorEvent, ClientKey, ClientRejectEvent, EntityCommandMessage, ExpectCtx,
-    LargeTestMessage, LargeTestRequest, LargeTestResponse, LinkConditionerConfig, Position,
-    Scenario, ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent, ToTicks,
+    protocol_with_timeout_req, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientErrorEvent,
+    ClientRejectEvent, EntityCommandMessage, LargeTestMessage, LargeTestRequest, LargeTestResponse,
+    LinkConditionerConfig, Position, Scenario, ServerAuthEvent, ServerConnectEvent, ToTicks,
 };
 
 // Test protocol types (channels and messages)
@@ -22,8 +18,7 @@ use naia_test_harness::test_protocol::{
     TickBufferedChannel, UnorderedChannel, UnreliableChannel,
 };
 
-mod _helpers;
-use _helpers::{
+use naia_test_harness::test_helpers::{
     client_connect, server_and_client_connected, server_and_client_disconnected, test_client_config,
 };
 
@@ -103,8 +98,6 @@ fn messaging_01_user_errors_return_result() {
 /// This test validates resilience to unexpected state transitions as a baseline.
 #[test]
 fn messaging_02_remote_input_no_panic() {
-    use std::panic::{catch_unwind, AssertUnwindSafe};
-
     let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
@@ -174,7 +167,8 @@ fn messaging_02_remote_input_no_panic() {
     // Test: further operations on disconnected client should NOT panic
     scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client| {
-            client.send_message::<ReliableChannel, _>(&TestMessage::new(111));
+            // The result is not asserted: the contract under test is that this does not panic.
+            let _ = client.send_message::<ReliableChannel, _>(&TestMessage::new(111));
         });
     });
 
@@ -854,7 +848,12 @@ fn matched_protocol_id_enables_successful_messaging() {
     // Send a message from client to server to verify channel compatibility
     scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client| {
-            client.send_message::<UnreliableChannel, _>(&TestMessage::new(42));
+            assert!(
+                client
+                    .send_message::<UnreliableChannel, _>(&TestMessage::new(42))
+                    .is_ok(),
+                "send on a connected client must succeed to prove channel compatibility"
+            );
         });
     });
 
@@ -1932,7 +1931,7 @@ fn reliable_point_to_point_request_response() {
     // Verify B does not receive the response
     scenario.expect(|ctx| {
         // B should not have received any messages
-        let b_has_messages = ctx.client(client_b_key, |c| {
+        let b_has_messages = ctx.client(client_b_key, |_c| {
             // Check if B has any messages (should be false)
             false // B should not receive A's response
         });
@@ -2688,7 +2687,7 @@ fn tick_buffered_channel_discards_messages_for_ticks_that_are_too_old() {
 
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
-    let client_a_key = client_connect(
+    client_connect(
         &mut scenario,
         &room_key,
         "Client A",

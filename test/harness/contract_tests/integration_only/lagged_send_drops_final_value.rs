@@ -43,8 +43,7 @@ use naia_shared::{ComponentKind, Replicate, SnapshotWorld, WorldRefType};
 
 use naia_test_harness::{protocol, Auth, ClientKey, EntityKey, Position, Scenario, TestEntity};
 
-mod _helpers;
-use _helpers::client_connect;
+use naia_test_harness::test_helpers::client_connect;
 
 const V1: (f32, f32) = (10.0, 11.0);
 const V2: (f32, f32) = (20.0, 22.0);

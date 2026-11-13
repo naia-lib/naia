@@ -17,8 +17,7 @@ use naia_test_harness::test_protocol::{
     OrderedChannel, RequestResponseChannel, TestRequest, TestResponse,
 };
 
-mod _helpers;
-use _helpers::{
+use naia_test_harness::test_helpers::{
     client_connect, server_and_client_connected, server_and_client_disconnected, test_client_config,
 };
 

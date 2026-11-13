@@ -61,8 +61,7 @@ use naia_test_harness::{
 };
 use parking_lot::Mutex;
 
-mod _helpers;
-use _helpers::client_connect;
+use naia_test_harness::test_helpers::client_connect;
 
 const NUM_ENTITIES: usize = 2;
 

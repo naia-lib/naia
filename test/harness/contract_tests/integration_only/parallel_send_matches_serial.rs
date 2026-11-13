@@ -23,12 +23,9 @@ use std::time::Duration;
 use naia_client::{ClientConfig, JitterBufferType};
 use naia_server::{ReplicationConfig, ServerConfig};
 
-use naia_test_harness::{
-    protocol, Auth, ClientKey, EntityKey, Position, Scenario, ServerAuthEvent, ServerConnectEvent,
-};
+use naia_test_harness::{protocol, Auth, ClientKey, EntityKey, Position, Scenario};
 
-mod _helpers;
-use _helpers::client_connect;
+use naia_test_harness::test_helpers::client_connect;
 
 const NUM_CLIENTS: usize = 8;
 

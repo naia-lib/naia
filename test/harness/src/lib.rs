@@ -1,5 +1,6 @@
 mod harness;
 pub mod scenarios;
+pub mod test_helpers;
 pub mod test_protocol;
 
 pub use harness::{

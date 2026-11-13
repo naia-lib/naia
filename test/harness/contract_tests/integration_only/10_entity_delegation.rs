@@ -1,28 +1,15 @@
 #![cfg(feature = "entity_delegation")]
 
-use std::time::Duration;
-
-use naia_client::{ClientConfig, JitterBufferType, Publicity};
-use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
-use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response, Tick};
+use naia_client::Publicity;
+use naia_server::{ReplicationConfig, ServerConfig};
+use naia_shared::{AuthorityError, EntityAuthStatus};
 
 use naia_test_harness::{
-    protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
-    ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent, ClientKey, ClientRejectEvent,
-    ExpectCtx, Position, Scenario, ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
-    ToTicks,
+    protocol, Auth, ClientEntityAuthDeniedEvent, ClientEntityAuthGrantedEvent,
+    ClientEntityAuthResetEvent, Position, Scenario,
 };
 
-// Test protocol types (channels and messages)
-use naia_test_harness::test_protocol::{
-    OrderedChannel, ReliableChannel, RequestResponseChannel, SequencedChannel, TestMessage,
-    TestRequest, TestResponse, TickBufferedChannel, UnorderedChannel, UnreliableChannel,
-};
-
-mod _helpers;
-use _helpers::{
-    client_connect, server_and_client_connected, server_and_client_disconnected, test_client_config,
-};
+use naia_test_harness::test_helpers::{client_connect, test_client_config};
 
 // ============================================================================
 // Entity Delegation Tests
@@ -2033,7 +2020,12 @@ fn holding_a_client_send_freezes_its_updates_but_also_stalls_the_handshake() {
                 .insert_component(Position::new(4242.0, 0.0));
         });
         ctx.server(|server| {
-            server.entity_mut(&entity_e).unwrap().take_authority();
+            let mut entity_mut = server.entity_mut(&entity_e).unwrap();
+            let authority = entity_mut.take_authority();
+            assert!(
+                authority.is_ok(),
+                "take_authority on a delegated, in-scope entity must succeed"
+            );
         });
     });
 

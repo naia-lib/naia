@@ -38,12 +38,9 @@ use naia_server::{
     SendState, ServerConfig,
 };
 
-use naia_test_harness::{
-    protocol, Auth, ClientKey, EntityKey, Position, Scenario, ServerConnectEvent,
-};
+use naia_test_harness::{protocol, Auth, ClientKey, EntityKey, Position, Scenario};
 
-mod _helpers;
-use _helpers::client_connect;
+use naia_test_harness::test_helpers::client_connect;
 
 /// Compile-time assertion that the new handles inherit `Send` from
 /// their owned substates — the spec explicitly requires dropping the

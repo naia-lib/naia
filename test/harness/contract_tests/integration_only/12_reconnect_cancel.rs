@@ -1,27 +1,15 @@
 use std::time::Duration;
 
-use naia_client::{ClientConfig, JitterBufferType, Publicity};
-use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
+use naia_server::ServerConfig;
 use naia_shared::handshake::RejectReason;
-use naia_shared::{
-    AuthorityError, DisconnectReason, EntityAuthStatus, Protocol, Request, Response, Tick,
-};
+use naia_shared::DisconnectReason;
 
 use naia_test_harness::{
-    protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
-    ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent, ClientKey, ClientRejectEvent,
-    ExpectCtx, Position, Scenario, ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
-    ToTicks,
+    protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientKey, ClientRejectEvent,
+    Scenario, ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
 };
 
-// Test protocol types (channels and messages)
-use naia_test_harness::test_protocol::{
-    OrderedChannel, ReliableChannel, RequestResponseChannel, SequencedChannel, TestMessage,
-    TestRequest, TestResponse, TickBufferedChannel, UnorderedChannel, UnreliableChannel,
-};
-
-mod _helpers;
-use _helpers::{
+use naia_test_harness::test_helpers::{
     client_connect, server_and_client_connected, server_and_client_disconnected, test_client_config,
 };
 
@@ -140,7 +128,7 @@ fn cancel_pending_handshake_then_reconnect_never_panics() {
     let test_protocol = protocol();
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let auth = Auth::new("client", "password");
     let client_key = scenario.client_start(
@@ -202,7 +190,7 @@ fn cancel_during_auth_phase_then_reconnect_settles_connected() {
     let test_protocol = protocol();
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let auth = Auth::new("client", "password");
     let client_key = scenario.client_start(
@@ -427,7 +415,7 @@ fn server_reject_then_reconnect_settles_connected() {
     let test_protocol = protocol();
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let auth = Auth::new("client", "password");
     let client_key = scenario.client_start(

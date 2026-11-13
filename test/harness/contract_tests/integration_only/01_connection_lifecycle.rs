@@ -1,28 +1,19 @@
 use std::time::Duration;
 
-use naia_client::{ClientConfig, JitterBufferType, Publicity};
-use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
-use naia_shared::{
-    AuthorityError, DisconnectReason, EntityAuthStatus, Protocol, Request, Response, Tick,
-};
+use naia_client::{ClientConfig, Publicity};
+use naia_server::ServerConfig;
+use naia_shared::DisconnectReason;
 
 use naia_test_harness::{
-    protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
-    ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent, ClientKey, ClientRejectEvent,
-    ExpectCtx, Position, RejectReason, Scenario, ServerAuthEvent, ServerConnectEvent,
-    ServerDisconnectEvent, ToTicks,
+    protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientKey, ClientRejectEvent,
+    Position, RejectReason, Scenario, ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
 };
 
 // Test protocol types (channels and messages)
-use naia_test_harness::test_protocol::{
-    protocol_with_sequenced_unreliable, OrderedChannel, ReliableChannel, RequestResponseChannel,
-    SequencedChannel, TestMessage, TestRequest, TestResponse, TickBufferedChannel,
-    UnorderedChannel, UnreliableChannel,
-};
+use naia_test_harness::test_protocol::{protocol_with_sequenced_unreliable, TestMessage};
 
-mod _helpers;
-use _helpers::{
-    client_connect, server_and_client_connected, server_and_client_disconnected, test_client_config,
+use naia_test_harness::test_helpers::{
+    client_connect, server_and_client_connected, test_client_config,
 };
 
 // ============================================================================
@@ -176,7 +167,7 @@ fn invalid_credentials_rejected() {
     };
     scenario.server_start(server_config, test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let invalid_auth = Auth::new("invalid_user", "wrong_password");
     let client_a_key = scenario.client_start(
@@ -393,7 +384,7 @@ fn connect_event_ordering_stable() {
         );
 
         // Server: read auth event
-        let auth_client_key = scenario.expect(|ctx| {
+        scenario.expect(|ctx| {
             ctx.server(|server| {
                 if let Some((incoming_client_key, incoming_auth)) =
                     server.read_event::<ServerAuthEvent<Auth>>()
@@ -2302,7 +2293,6 @@ fn protocol_id_verified_before_connect_event() {
         "connection-14a.t1: protocol_id verified before connect event",
         |ctx| {
             let connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
-            let user_exists = ctx.server(|s| s.user_exists(&client_a_key));
             connected.then_some(())
         },
     );

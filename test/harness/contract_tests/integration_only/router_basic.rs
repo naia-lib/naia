@@ -13,8 +13,7 @@
 //! handshake.
 
 use naia_server::pipeline_actors::{
-    self, drain_lifecycle, drain_tick_buffer, spawn_server_handles, RecvLifecycleEvent,
-    TickMessageRouter,
+    drain_lifecycle, drain_tick_buffer, spawn_server_handles, RecvLifecycleEvent, TickMessageRouter,
 };
 use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
 use naia_server::{InternalWorldServer, ServerConfig};

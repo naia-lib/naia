@@ -43,8 +43,9 @@ real `@Scenario` exercising the same `[contract-id]`) once:
   exercises the same observable behaviour the Rust test was asserting.
 
 When all seventeen test files in this directory are gone, delete this
-README and the `contract_tests/` parent directory (`_helpers.rs` is shared
-scaffolding kept until the last carve-out file disappears).
+README and the `contract_tests/` parent directory. The shared connection
+helpers live in `test/harness/src/test_helpers.rs` (the `naia_test_harness::test_helpers`
+module), not in this directory.
 
 ## Current contents (2026-09-30)
 

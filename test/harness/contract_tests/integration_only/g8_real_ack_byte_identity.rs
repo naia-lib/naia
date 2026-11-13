@@ -16,8 +16,7 @@ use naia_test_harness::{
     protocol, Auth, EntityKey, ExpectResult, Position, Scenario, TraceDirection, TracePacket,
 };
 
-mod _helpers;
-use _helpers::client_connect;
+use naia_test_harness::test_helpers::client_connect;
 
 #[derive(Clone, Copy)]
 struct Mutation {

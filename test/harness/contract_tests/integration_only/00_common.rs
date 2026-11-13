@@ -4,17 +4,11 @@
 // Tests organized by contract ID to match specs/contracts/0_common.md
 // ============================================================================
 
-use naia_client::{ClientConfig, Publicity as ClientReplicationConfig};
-use naia_server::{ReplicationConfig, ServerConfig};
-use naia_shared::{EntityAuthStatus, Protocol};
+use naia_server::ServerConfig;
 
-use naia_test_harness::{
-    protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientKey, EntityOwner, ExpectCtx,
-    Position, Scenario, ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
-};
+use naia_test_harness::{protocol, Auth, Position, Scenario};
 
-mod _helpers;
-use _helpers::{client_connect, test_client_config};
+use naia_test_harness::test_helpers::{client_connect, test_client_config};
 
 // ============================================================================
 // [common-01] — User-initiated misuse returns Result::Err

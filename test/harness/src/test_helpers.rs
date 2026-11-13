@@ -1,9 +1,7 @@
+use crate::{Auth, ClientKey, ExpectCtx, Scenario, ServerAuthEvent, ServerConnectEvent};
 use naia_client::{ClientConfig, JitterBufferType};
 use naia_server::RoomKey;
 use naia_shared::Protocol;
-use naia_test_harness::{
-    Auth, ClientKey, ExpectCtx, Scenario, ServerAuthEvent, ServerConnectEvent,
-};
 use std::time::Duration;
 
 // ============================================================================
@@ -18,9 +16,11 @@ use std::time::Duration;
 ///
 /// Use this instead of `ClientConfig::default()` in all tests.
 pub fn test_client_config() -> ClientConfig {
-    let mut config = ClientConfig::default();
-    config.send_handshake_interval = Duration::from_millis(0);
-    config.jitter_buffer = JitterBufferType::Bypass;
+    let mut config = ClientConfig {
+        send_handshake_interval: Duration::from_millis(0),
+        jitter_buffer: JitterBufferType::Bypass,
+        ..Default::default()
+    };
     // Enable bandwidth monitoring for observability tests (contract observability-02)
     config.connection.bandwidth_measure_duration = Some(Duration::from_secs(1));
     config

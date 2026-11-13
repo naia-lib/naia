@@ -15,14 +15,15 @@
 //!   client with the named error `AuthorityError::DelegationDisabled` (no
 //!   silent drop, no panic), and replication stays healthy afterwards.
 
-use naia_client::{ClientConfig, JitterBufferType, Publicity};
 use naia_server::{ReplicationConfig, ServerConfig};
-use naia_shared::{AuthorityError, EntityAuthStatus};
+#[cfg(not(feature = "entity_delegation"))]
+use naia_shared::AuthorityError;
+#[cfg(feature = "entity_delegation")]
+use naia_shared::EntityAuthStatus;
 
-use naia_test_harness::{protocol, Auth, ClientKey, ExpectCtx, Position, Scenario, ToTicks};
+use naia_test_harness::{protocol, Auth, ClientKey, Position, Scenario};
 
-mod _helpers;
-use _helpers::{client_connect, test_client_config};
+use naia_test_harness::test_helpers::{client_connect, test_client_config};
 
 #[expect(
     clippy::unwrap_used,

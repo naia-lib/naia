@@ -10,8 +10,7 @@ use naia_test_harness::{
     protocol, Auth, ExpectCtx, LargeTestMessage, LinkConditionerConfig, Scenario,
 };
 
-mod _helpers;
-use _helpers::{client_connect, test_client_config};
+use naia_test_harness::test_helpers::{client_connect, test_client_config};
 
 // ============================================================================
 // [transport-03] — Oversize outbound packet attempt returns Err
