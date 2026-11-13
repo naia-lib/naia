@@ -84,6 +84,12 @@ path = "contract_tests/integration_only/10_entity_delegation.rs"
 name = "integration_only_11_cross_feature_delegation"
 path = "contract_tests/integration_only/11_cross_feature_delegation.rs"
 
+# The OFF arm of the same file, run as its own check (clerc resolves a check id
+# to a cargo test target). Empty under default features, so the ON arm is not run twice.
+[[test]]
+name = "integration_only_11_cross_feature_delegation_no_default_features"
+path = "contract_tests/integration_only/11_cross_feature_delegation_no_default_features.rs"
+
 [[test]]
 name = "parallel_send_matches_serial"
 path = "contract_tests/integration_only/parallel_send_matches_serial.rs"

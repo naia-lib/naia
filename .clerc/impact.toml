@@ -116,6 +116,7 @@ checks = [
     "test:naia-test-harness:integration_only_09_entity_ownership",
     "test:naia-test-harness:integration_only_10_entity_delegation",
     "test:naia-test-harness:integration_only_11_cross_feature_delegation",
+    "test:naia-test-harness:integration_only_11_cross_feature_delegation_no_default_features",
     "test:naia-test-harness:lagged_send_drops_final_value",
     "test:naia-test-harness:naia_test_harness",
     "test:naia-test-harness:parallel_send_matches_serial",
@@ -653,6 +654,10 @@ argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "integration_only_
 [[leg]]
 checks = ["test:naia-test-harness:integration_only_11_cross_feature_delegation"]
 argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "integration_only_11_cross_feature_delegation", "--no-fail-fast"]
+
+[[leg]]
+checks = ["test:naia-test-harness:integration_only_11_cross_feature_delegation_no_default_features"]
+argv = ["cargo", "test", "-p", "naia-test-harness", "--test", "integration_only_11_cross_feature_delegation_no_default_features", "--no-default-features", "--no-fail-fast"]
 
 [[leg]]
 checks = ["test:naia-test-harness:lagged_send_drops_final_value"]
@@ -1330,6 +1335,10 @@ to = "test:naia-test-harness:integration_only_11_cross_feature_delegation"
 
 [[edge]]
 from = "test/harness/"
+to = "test:naia-test-harness:integration_only_11_cross_feature_delegation_no_default_features"
+
+[[edge]]
+from = "test/harness/"
 to = "test:naia-test-harness:lagged_send_drops_final_value"
 
 [[edge]]
@@ -1652,6 +1661,7 @@ checks = [
     "test:naia-test-harness:integration_only_09_entity_ownership",
     "test:naia-test-harness:integration_only_10_entity_delegation",
     "test:naia-test-harness:integration_only_11_cross_feature_delegation",
+    "test:naia-test-harness:integration_only_11_cross_feature_delegation_no_default_features",
     "test:naia-test-harness:lagged_send_drops_final_value",
     "test:naia-test-harness:parallel_send_matches_serial",
     "test:naia-test-harness:pipeline_bracket",
