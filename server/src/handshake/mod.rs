@@ -57,11 +57,13 @@ pub enum HandshakeAction {
     SendPacket(OutgoingPacket),
     /// Used by the simple (non-UDP) handshaker to forward unrecognized packets.
     /// Only constructed when `transport_udp` is disabled.
+    #[cfg(not(feature = "transport_udp"))]
     ForwardPacket,
     /// Disconnect the user (for verified disconnect requests)
     DisconnectUser(UserKey),
     /// Reject the identify and delete the never-connected user, so a failed
     /// handshake leaves no half-connected state ([connection-24]). Only
     /// constructed when `transport_udp` is disabled.
+    #[cfg(not(feature = "transport_udp"))]
     RejectUser(UserKey, OutgoingPacket),
 }

@@ -133,10 +133,15 @@ fn sorted(rooms: impl Iterator<Item = RoomKey>) -> Vec<RoomKey> {
 /// Builds the [`ScopeExplain`] for `(user_key, world_entity)`. The send-side
 /// arguments are the ones `user_scope_has_entity_impl` takes; the rest are
 /// the coord room store, the coord staging queue and the shared change
-/// queue. Mutates nothing. Panics on an unregistered entity, as `has` does.
+/// queue. Mutates nothing. Panics on an unregistered entity, unlike `has`,
+/// which reports `false` for one.
 #[expect(
     clippy::too_many_arguments,
     reason = "the scope explanation reads the scope registries, room and user stores, and pending ledger ops alongside the user and entity keys"
+)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "fail-loud by design: an explanation cannot describe an entity that has no global id"
 )]
 pub(crate) fn scope_explain_impl<E: Copy + Eq + Hash + Send + Sync>(
     shared: &ServerShared<E>,

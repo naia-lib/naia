@@ -628,10 +628,6 @@ impl SendConnection {
     /// `Connection::read_packet`: it decodes the message/world section
     /// using the send-side message manager. Tick-buffer reads are
     /// handled at the call site (in the matching `RecvConnection`).
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the transport operation carries independently typed protocol and world state"
-    )]
     pub fn read_data_section(
         &mut self,
         channel_kinds: &ChannelKinds,

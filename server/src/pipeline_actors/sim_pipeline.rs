@@ -1816,6 +1816,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// including the coord-staged scope ops not yet drained in D7. Same
     /// slot-lock as `has`; fail-loud if the send handle is not parked.
     #[cfg(feature = "e2e_debug")]
+    #[expect(
+        clippy::expect_used,
+        reason = "invariant: caller reads between receive() and send(), guaranteeing send_slot is populated"
+    )]
     pub fn user_scope_explain_ref(
         &self,
         user_key: &UserKey,

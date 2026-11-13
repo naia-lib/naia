@@ -88,8 +88,9 @@ pub(crate) struct ParkControl {
     /// snapshot straight to io BEFORE parking. A test/harness barrier
     /// (`park_workers_flushing`) that makes snapshot delivery deterministic
     /// under active workers; the send worker `swap`s it back to `false` once it
-    /// has drained. Ignored on the `not(workers_active)` path (no worker
-    /// threads → nothing to flush). See `park_workers_flushing`.
+    /// has drained. Exists only on the `workers_active` path (no worker threads
+    /// → nothing to flush on `not(workers_active)`). See `park_workers_flushing`.
+    #[cfg(workers_active)]
     flush: AtomicBool,
     /// Number of workers currently parked. Main waits until this hits the
     /// worker count in [`PipelineRuntime::park_workers`].
@@ -137,6 +138,9 @@ pub(crate) struct ParkControl {
     /// [`Self::ping_control`]. The `not(workers_active)` path uses the
     /// [`WorkerWake`] and ignores this.
     control_tx: smol::channel::Sender<()>,
+    /// Read only by the `workers_active` recv worker's idle wait; the
+    /// `not(workers_active)` build drops it at construction.
+    #[cfg(workers_active)]
     control_rx: smol::channel::Receiver<()>,
     /// Measure (nydus-y2e): slot-lock acquisitions by the workers' leases. The
     /// card's DONE WHEN is 2 per receive iteration to 0.
@@ -144,7 +148,7 @@ pub(crate) struct ParkControl {
     pub(crate) slot_locks: std::sync::atomic::AtomicU64,
     /// Measure (nydus-y2e): send-worker wakeups that found no job, no park and
     /// no shutdown. DONE WHEN: 0 while idle.
-    #[cfg(any(test, feature = "test_time"))]
+    #[cfg(all(workers_active, any(test, feature = "test_time")))]
     pub(crate) send_idle_wakeups: std::sync::atomic::AtomicU64,
 }
 
@@ -152,8 +156,11 @@ impl ParkControl {
     pub(crate) fn new() -> Self {
         // bounded(1) ⇒ coalescing: at most one pending wake token.
         let (control_tx, control_rx) = smol::channel::bounded(1);
+        #[cfg(not(workers_active))]
+        drop(control_rx);
         Self {
             park: AtomicBool::new(false),
+            #[cfg(workers_active)]
             flush: AtomicBool::new(false),
             parked_count: Mutex::new(0),
             parked_cv: parking_lot::Condvar::new(),
@@ -161,10 +168,11 @@ impl ParkControl {
             resumed_cv: parking_lot::Condvar::new(),
             wake: Arc::new(WorkerWake::new()),
             control_tx,
+            #[cfg(workers_active)]
             control_rx,
             #[cfg(any(test, feature = "test_time"))]
             slot_locks: std::sync::atomic::AtomicU64::new(0),
-            #[cfg(any(test, feature = "test_time"))]
+            #[cfg(all(workers_active, any(test, feature = "test_time")))]
             send_idle_wakeups: std::sync::atomic::AtomicU64::new(0),
         }
     }
@@ -350,6 +358,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
         let shutdown_recv = Arc::clone(&self.shutdown);
         let park_recv = Arc::clone(&self.park);
         let panic_recv = Arc::clone(&self.panic_slot);
+        #[cfg(workers_active)]
         let timing_recv = self.timing;
         #[cfg(any(test, feature = "test_time"))]
         let test_panic_recv = Arc::clone(&self.test_panic_request);
@@ -370,6 +379,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
                 naia_shared::TestClock::install_shared(clock_handle_recv);
 
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    #[cfg(workers_active)]
                     recv_worker_loop(
                         &recv_slot,
                         &recv_tx,
@@ -377,6 +387,16 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
                         &park_recv,
                         recv_readiness,
                         &timing_recv,
+                        #[cfg(any(test, feature = "test_time"))]
+                        &test_panic_recv,
+                    );
+                    #[cfg(not(workers_active))]
+                    recv_worker_loop(
+                        &recv_slot,
+                        &shutdown_recv,
+                        &park_recv,
+                        &recv_tx,
+                        recv_readiness,
                         #[cfg(any(test, feature = "test_time"))]
                         &test_panic_recv,
                     );
@@ -401,6 +421,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
         let shutdown_send = Arc::clone(&self.shutdown);
         let park_send = Arc::clone(&self.park);
         let panic_send = Arc::clone(&self.panic_slot);
+        #[cfg(workers_active)]
         let timing_send = self.timing;
         #[cfg(any(test, feature = "test_time"))]
         let test_panic_send = Arc::clone(&self.test_panic_request);
@@ -415,12 +436,22 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
                 naia_shared::TestClock::install_shared(clock_handle_send);
 
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    #[cfg(workers_active)]
                     send_worker_loop(
                         &send_slot,
                         &snap_rx,
                         &shutdown_send,
                         &park_send,
                         &timing_send,
+                        #[cfg(any(test, feature = "test_time"))]
+                        &test_panic_send,
+                    );
+                    #[cfg(not(workers_active))]
+                    send_worker_loop(
+                        &send_slot,
+                        &snap_rx,
+                        &shutdown_send,
+                        &park_send,
                         #[cfg(any(test, feature = "test_time"))]
                         &test_panic_send,
                     );
@@ -705,6 +736,7 @@ impl WorkerWake {
     /// Sleep at most `bound` while `idle()` is true (one wait; the caller's
     /// loop re-evaluates). For the recv worker on a poll-only transport, which
     /// has to re-poll the socket, and for the degenerate no-handle wait.
+    #[cfg(workers_active)]
     pub(crate) fn wait_while_for(&self, idle: impl FnOnce() -> bool, bound: Duration) {
         let mut g = self.mu.lock();
         if idle() {
@@ -745,13 +777,21 @@ pub(crate) struct HandleLease<'a, H> {
 
 impl<'a, H> HandleLease<'a, H> {
     /// A lease that holds nothing yet; the first checkpoint reclaims.
+    #[cfg(any(test, feature = "test_time"))]
     pub(crate) fn unclaimed(slot: &'a Arc<Mutex<Option<H>>>, park: &'a ParkControl) -> Self {
         Self {
             held: None,
             slot,
-            #[cfg(any(test, feature = "test_time"))]
             park,
         }
+    }
+
+    /// A lease that holds nothing yet; the first checkpoint reclaims. Slot-lock
+    /// accounting exists only in test and `test_time` builds, so no park
+    /// control is kept here.
+    #[cfg(not(any(test, feature = "test_time")))]
+    pub(crate) fn unclaimed(slot: &'a Arc<Mutex<Option<H>>>, _park: &'a ParkControl) -> Self {
+        Self { held: None, slot }
     }
 
     fn count_slot_lock(&self) {
@@ -768,18 +808,22 @@ impl<'a, H> HandleLease<'a, H> {
         }
     }
 
-    /// Take the handle back from the slot. `true` when the lease now holds it.
-    pub(crate) fn reclaim(&mut self) -> bool {
+    /// Take the handle back from the slot and borrow it. `None` when the
+    /// consumer kept the handle across the window (`take_handles` without
+    /// `restore_handles`); the caller then idles bounded and retries.
+    #[cfg(workers_active)]
+    pub(crate) fn reclaim_mut(&mut self) -> Option<&mut H> {
         if self.held.is_none() {
             self.count_slot_lock();
             self.held = self.slot.lock().take();
         }
-        self.held.is_some()
+        self.held.as_mut()
     }
 
-    /// The held handle, if any.
-    pub(crate) fn held_mut(&mut self) -> Option<&mut H> {
-        self.held.as_mut()
+    /// Take the handle back from the slot. `true` when the lease now holds it.
+    #[cfg(workers_active)]
+    pub(crate) fn reclaim(&mut self) -> bool {
+        self.reclaim_mut().is_some()
     }
 }
 
@@ -841,13 +885,48 @@ fn worker_park_checkpoint<H>(park: &ParkControl, lease: &mut HandleLease<'_, H>)
 /// `spawn_workers` moves it into the `'static` worker thread, so no borrow of
 /// the caller can satisfy the lifetime; the lint's `Option<&PacketReadiness>`
 /// suggestion does not compile here. The body only needs shared access.
-#[cfg_attr(
-    workers_active,
-    expect(
-        clippy::expect_used,
-        reason = "held_mut is read only after reclaim returned true, which guarantees the handle"
-    )
-)]
+/// `not(workers_active)` (deterministic) recv worker: a pure parking service.
+/// The consumer drives all `recv.receive()` calls synchronously while workers
+/// are parked; running receive() here concurrently would cause RwLock
+/// contention on time_manager and could deadlock park_workers(). So this worker
+/// only sleeps until the next park.
+///
+/// `_out_tx` and `_readiness` are never read here. They are passed in so the
+/// worker thread keeps them alive for its whole lifetime, as the active worker
+/// does: dropping the output sender or the transport readiness early would
+/// change deterministic-mode behavior.
+#[cfg(not(workers_active))]
+pub(crate) fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
+    recv_slot: &Arc<Mutex<Option<RecvHandle<E>>>>,
+    shutdown: &Arc<AtomicBool>,
+    park: &Arc<ParkControl>,
+    _out_tx: &Sender<ReceiveOutput<E>>,
+    _readiness: Option<PacketReadiness>,
+    #[cfg(any(test, feature = "test_time"))] test_panic: &Arc<AtomicBool>,
+) {
+    let mut lease = HandleLease::unclaimed(recv_slot, park);
+    loop {
+        worker_park_checkpoint(park, &mut lease);
+        if shutdown.load(Ordering::SeqCst) {
+            return;
+        }
+        #[cfg(any(test, feature = "test_time"))]
+        if test_panic.load(Ordering::SeqCst) {
+            panic!("test-requested recv worker panic");
+        }
+        park.wake.wait_while(|| {
+            #[cfg(any(test, feature = "test_time"))]
+            if test_panic.load(Ordering::SeqCst) {
+                return false;
+            }
+            !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst)
+        });
+    }
+}
+
+/// `workers_active` recv worker. Owns its handle through a [`HandleLease`] and
+/// receives from the transport between park windows.
+#[cfg(workers_active)]
 pub(crate) fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
     recv_slot: &Arc<Mutex<Option<RecvHandle<E>>>>,
     out_tx: &Sender<ReceiveOutput<E>>,
@@ -858,7 +937,6 @@ pub(crate) fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
     #[cfg(any(test, feature = "test_time"))] test_panic: &Arc<AtomicBool>,
 ) {
     let mut lease = HandleLease::unclaimed(recv_slot, park);
-    #[cfg(workers_active)]
     let _ = lease.reclaim();
     loop {
         worker_park_checkpoint(park, &mut lease);
@@ -870,22 +948,6 @@ pub(crate) fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
             panic!("test-requested recv worker panic");
         }
 
-        // In not(workers_active) (deterministic) mode the consumer drives all
-        // `recv.receive()` calls synchronously while workers are parked. Running
-        // receive() here concurrently would cause RwLock contention on
-        // time_manager and could deadlock park_workers(). So the parked recv
-        // worker is a pure parking service: sleep until the next park.
-        #[cfg(not(workers_active))]
-        {
-            park.wake.wait_while(|| {
-                !park.park.load(Ordering::SeqCst)
-                    && !shutdown.load(Ordering::SeqCst)
-                    && !test_panic.load(Ordering::SeqCst)
-            });
-            continue;
-        }
-
-        #[cfg(workers_active)]
         {
             // Don't start a receive() if park was requested — loop straight back
             // to the checkpoint (which parks immediately). No sleep: a sleep
@@ -897,14 +959,13 @@ pub(crate) fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
 
             // The consumer kept the handle across the window: wait bounded for
             // the next park (which is when it can come back) and retry.
-            if !lease.reclaim() {
+            let Some(recv) = lease.reclaim_mut() else {
                 park.wake.wait_while_for(
                     || !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst),
                     Duration::from_micros(100),
                 );
                 continue;
-            }
-            let recv = lease.held_mut().expect("reclaim returned true");
+            };
 
             let t_recv = timing.record_recv.map(|_| std::time::Instant::now());
             let output = recv.receive();
@@ -995,16 +1056,46 @@ fn transmit_job<E: Copy + Eq + Hash + Send + Sync + 'static>(
 /// snapshot publish, a park request or shutdown wakes it (nydus-y2e: zero idle
 /// wakeups).
 ///
-/// In `not(workers_active)` (deterministic) mode this worker is a **pure parking
-/// service**: the consumer drives the send synchronously inside its park window,
-/// so `snap_rx` / `send_slot` are unused here.
-#[cfg_attr(
-    workers_active,
-    expect(
-        clippy::expect_used,
-        reason = "held_mut is read only after reclaim returned true, which guarantees the handle"
-    )
-)]
+/// `not(workers_active)` (deterministic) send worker: a **pure parking service**.
+/// The consumer drives the send synchronously inside its park window, so this
+/// worker never reads the snapshot channel or the send handle; it sleeps until
+/// the next park (zero CPU).
+///
+/// `_snap_rx` is never read here. It is passed in so the worker thread keeps
+/// the snapshot receiver alive for its whole lifetime: dropping it early would
+/// change what the publisher observes in deterministic mode.
+#[cfg(not(workers_active))]
+pub(crate) fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
+    send_slot: &Arc<Mutex<Option<SendHandle<E>>>>,
+    _snap_rx: &SnapshotReceiver<E>,
+    shutdown: &Arc<AtomicBool>,
+    park: &Arc<ParkControl>,
+    #[cfg(any(test, feature = "test_time"))] test_panic: &Arc<AtomicBool>,
+) {
+    let mut lease = HandleLease::unclaimed(send_slot, park);
+    loop {
+        worker_park_checkpoint(park, &mut lease);
+        if shutdown.load(Ordering::SeqCst) {
+            return;
+        }
+        #[cfg(any(test, feature = "test_time"))]
+        if test_panic.load(Ordering::SeqCst) {
+            panic!("test-requested send worker panic");
+        }
+        park.wake.wait_while(|| {
+            #[cfg(any(test, feature = "test_time"))]
+            if test_panic.load(Ordering::SeqCst) {
+                return false;
+            }
+            !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst)
+        });
+    }
+}
+
+/// `workers_active` send worker. Symmetric to [`recv_worker_loop`]: the
+/// `SendHandle` is owned through a [`HandleLease`] and transmits the lagged
+/// frozen job between park windows.
+#[cfg(workers_active)]
 pub(crate) fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
     send_slot: &Arc<Mutex<Option<SendHandle<E>>>>,
     snap_rx: &SnapshotReceiver<E>,
@@ -1014,7 +1105,6 @@ pub(crate) fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
     #[cfg(any(test, feature = "test_time"))] test_panic: &Arc<AtomicBool>,
 ) {
     let mut lease = HandleLease::unclaimed(send_slot, park);
-    #[cfg(workers_active)]
     let _ = lease.reclaim();
     // MISSION_TICK_FLOOR Lever 3: one-tick send lag. The job published this
     // cycle is buffered here and transmitted on the NEXT cycle, so the worker
@@ -1032,21 +1122,6 @@ pub(crate) fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
             panic!("test-requested send worker panic");
         }
 
-        // not(workers_active): pure parking service (see fn docs). The consumer
-        // drives the send synchronously inside its park window so handshake +
-        // snapshot delivery land at a deterministic point each tick. Sleep
-        // until the next park (zero CPU); never touch the snapshot or handle.
-        #[cfg(not(workers_active))]
-        {
-            park.wake.wait_while(|| {
-                !park.park.load(Ordering::SeqCst)
-                    && !shutdown.load(Ordering::SeqCst)
-                    && !test_panic.load(Ordering::SeqCst)
-            });
-            continue;
-        }
-
-        #[cfg(workers_active)]
         {
             // FLUSH-PARK barrier (`park_workers_flushing`): drain the one-tick-lag
             // buffer plus every published-but-untransmitted snapshot straight to
@@ -1068,7 +1143,10 @@ pub(crate) fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
                         // The flush is driven from inside the consumer's tick,
                         // so the handle is ours unless it was kept across a
                         // window; wait bounded for it rather than drop the job.
-                        while !lease.reclaim() {
+                        let send = loop {
+                            if let Some(send) = lease.reclaim_mut() {
+                                break send;
+                            }
                             park.wake.wait_while_for(
                                 || !shutdown.load(Ordering::SeqCst),
                                 Duration::from_micros(100),
@@ -1076,8 +1154,8 @@ pub(crate) fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
                             if shutdown.load(Ordering::SeqCst) {
                                 return;
                             }
-                        }
-                        transmit_job(lease.held_mut().expect("reclaim returned true"), job);
+                        };
+                        transmit_job(send, job);
                     }
                     // Drained once the lag buffer AND the publish slot are empty.
                     if held_job.is_none() && !snap_rx.has_pending() {
@@ -1098,13 +1176,13 @@ pub(crate) fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
             // The consumer kept the handle across the window: wait bounded for
             // the next park and retry. The lag buffer is untouched, so no job
             // is dropped.
-            if !lease.reclaim() {
+            let Some(send) = lease.reclaim_mut() else {
                 park.wake.wait_while_for(
                     || !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst),
                     Duration::from_micros(100),
                 );
                 continue;
-            }
+            };
 
             // One-tick lag: buffer this cycle's freshly-published job; transmit
             // the job buffered on the PREVIOUS cycle. `replace` returns the prior
@@ -1117,7 +1195,7 @@ pub(crate) fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
 
             if let Some(job) = job_to_send {
                 let t_send = timing.record_send.map(|_| std::time::Instant::now());
-                transmit_job(lease.held_mut().expect("reclaim returned true"), job);
+                transmit_job(send, job);
                 if let (Some(f), Some(t)) = (timing.record_send, t_send) {
                     f(u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX));
                 }
