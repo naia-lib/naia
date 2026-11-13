@@ -2858,7 +2858,9 @@ fn request_id_uniqueness() {
         test_protocol,
     );
 
-    // Send multiple requests - each gets a unique ID (framework guarantee)
+    // Each Request gets its own Request ID within this sending endpoint. The
+    // wire nonce is not exposed to the harness; the sender's ResponseReceiveKey
+    // carries the observable Request ID.
     let (key1, key2) = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client| {
             let key1 = client
@@ -2871,13 +2873,10 @@ fn request_id_uniqueness() {
         })
     });
 
-    // Framework guarantees distinct IDs
-    // The keys are opaque but framework ensures uniqueness
-    let _ = (key1, key2);
-
-    scenario.expect_msg(
-        "messaging-21.t1: multiple requests have distinct IDs",
-        |ctx| ctx.client(client_a_key, |_c| Some(())),
+    assert_ne!(
+        key1.request_id(),
+        key2.request_id(),
+        "messaging-21.t1: two requests from one endpoint must have distinct Request IDs"
     );
 }
 
@@ -2964,7 +2963,7 @@ fn response_matching_to_request() {
 #[test]
 fn request_timeout_semantics() {
     let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
-    let test_protocol = protocol();
+    let test_protocol = protocol_with_timeout_req();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
@@ -2978,16 +2977,39 @@ fn request_timeout_semantics() {
         test_protocol,
     );
 
-    // Send request
-    scenario.mutate(|ctx| {
+    // Send a request with a 48ms per-type timeout that the server never answers.
+    let response_key = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client| {
-            let _ = client
-                .send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("query"));
-        });
+            client
+                .send_request::<RequestResponseChannel, TestTimeoutRequest>(
+                    &TestTimeoutRequest::new("query"),
+                )
+                .expect("Failed to send request")
+        })
     });
 
-    // Verify request was sent (timeout behavior is framework-handled)
-    scenario.expect(|ctx| ctx.client(client_a_key, |_c| Some(())));
+    // Before the deadline the exchange is still Pending.
+    let early = scenario.mutate(|ctx| ctx.client(client_a_key, |c| c.poll_request(&response_key)));
+    assert!(
+        matches!(early, RequestPoll::Pending),
+        "a request inside its per-type timeout must poll Pending"
+    );
+
+    // Burn 20 ticks (~320ms game time) past the 48ms deadline.
+    let mut burned = 0;
+    scenario.until(60usize.ticks()).expect_msg(
+        "messaging-23.t1: clock burns past the request timeout",
+        |_ctx| {
+            burned += 1;
+            (burned >= 20).then_some(())
+        },
+    );
+
+    let late = scenario.mutate(|ctx| ctx.client(client_a_key, |c| c.poll_request(&response_key)));
+    assert!(
+        matches!(late, RequestPoll::TimedOut),
+        "an unanswered request past its per-type timeout must poll TimedOut"
+    );
 }
 
 // ============================================================================

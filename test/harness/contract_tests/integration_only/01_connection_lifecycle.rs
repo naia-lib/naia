@@ -2288,12 +2288,13 @@ fn protocol_id_verified_before_connect_event() {
         test_protocol,
     );
 
-    // Verify connected (protocol_id matched during handshake before ConnectEvent)
+    // Connected, and the server holds the user: protocol_id matched before ConnectEvent
     scenario.spec_expect(
         "connection-14a.t1: protocol_id verified before connect event",
         |ctx| {
             let connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
-            connected.then_some(())
+            let user_exists = ctx.server(|s| s.user_exists(&client_a_key));
+            (connected && user_exists).then_some(())
         },
     );
 }
