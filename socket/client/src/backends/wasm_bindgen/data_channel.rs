@@ -148,12 +148,13 @@ impl DataChannel {
         }
 
         let ice_server_config = Object::new();
+        // Result discarded, as the base did: a fresh plain object accepts a data property.
         Reflect::set(
             &ice_server_config,
             &JsValue::from("urls"),
             &JsValue::from(&ice_server_config_urls),
         )
-        .expect("fresh ICE server object accepts its urls property");
+        .ok();
 
         let ice_server_config_list = Array::new();
         ice_server_config_list.push(&ice_server_config);

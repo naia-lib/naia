@@ -78,6 +78,10 @@ impl PacketSender {
 // data races are possible. These impls are required by trait bounds in the naia transport
 // abstraction layer but are vacuously safe on this target.
 
+#[expect(
+    dead_code,
+    reason = "compile-time Send and Sync assertion; never called"
+)]
 fn _assert_packet_sender_send_sync() {
     fn require<T: Send + Sync>() {}
     require::<PacketSender>();
