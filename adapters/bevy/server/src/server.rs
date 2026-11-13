@@ -950,14 +950,18 @@ impl<'w> Server<'w> {
     /// Build the per-stage timing hooks for the pipeline runtime. Empty
     /// (zero-overhead) unless the `pipeline_timing` bench feature is on.
     fn pipeline_timing_hooks() -> naia_server::pipeline_actors::RuntimeTimingHooks {
-        let mut timing = naia_server::pipeline_actors::RuntimeTimingHooks::default();
         #[cfg(feature = "pipeline_timing")]
         {
+            let mut timing = naia_server::pipeline_actors::RuntimeTimingHooks::default();
             timing.record_recv = Some(crate::pipeline_timing::record_recv);
             timing.record_send = Some(crate::pipeline_timing::record_send);
             timing.record_barrier = Some(crate::pipeline_timing::record_barrier);
+            timing
         }
-        timing
+        #[cfg(not(feature = "pipeline_timing"))]
+        {
+            naia_server::pipeline_actors::RuntimeTimingHooks::default()
+        }
     }
 
     /// Bind the pipeline's socket (the bind-only startup step). Pair with
