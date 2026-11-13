@@ -541,7 +541,6 @@ impl MainServer {
                                 &mut reader,
                                 self.user_connections.contains_key(&address),
                             ) {
-                                #[cfg(not(feature = "transport_udp"))]
                                 Ok(HandshakeAction::ForwardPacket) => {
                                     if let Some(user_key) = self.user_connections.get(&address) {
                                         self.incoming_events.push_world_packet(
@@ -560,7 +559,6 @@ impl MainServer {
                                     // The Server struct will handle queuing it properly
                                     self.incoming_events.push_queued_disconnect(user_key);
                                 }
-                                #[cfg(not(feature = "transport_udp"))]
                                 Ok(HandshakeAction::RejectUser(user_key, packet)) => {
                                     // Failed identify ([connection-24]): the
                                     // handshake never finalized, so delete
