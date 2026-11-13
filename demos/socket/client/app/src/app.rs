@@ -16,7 +16,7 @@ use naia_socket_demo_shared::{shared_config, DEMO_PROTOCOL_ID, PING_MSG, PONG_MS
 
 pub struct App {
     // IdentityReceiver must not be de-allocated, even if we don't use it in this demo
-    id_receiver: IdentityReceiver,
+    _id_receiver: IdentityReceiver,
 
     packet_sender: PacketSender,
     packet_receiver: PacketReceiver,
@@ -46,7 +46,7 @@ impl App {
         );
 
         Self {
-            id_receiver,
+            _id_receiver: id_receiver,
             packet_sender,
             packet_receiver,
             message_count: 0,
