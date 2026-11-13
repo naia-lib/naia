@@ -287,20 +287,10 @@ mod has_entity_props_tests {
     pub struct PureDataComp {
         pub value: Property<bool>,
     }
-    impl PureDataComp {
-        pub fn new() -> Self {
-            Self::new_complete(false)
-        }
-    }
 
     #[derive(Replicate)]
     pub struct EntityRefComp {
         pub entity: EntityProperty,
-    }
-    impl EntityRefComp {
-        pub fn new() -> Self {
-            Self::new_complete()
-        }
     }
 
     #[test]
