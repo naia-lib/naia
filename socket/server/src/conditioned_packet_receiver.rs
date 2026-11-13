@@ -24,10 +24,6 @@ pub struct ConditionedPacketReceiver {
     // Shared shutdown trigger for the listen that created this handle: the
     // last handle drop ends the background tasks (naia-lib/naia#92).
     // Retained, never read. Set via PacketReceiver::with_shutdown.
-    #[expect(
-        dead_code,
-        reason = "retained so the listen's shutdown trigger outlives this handle; never read"
-    )]
     pub(crate) shutdown: Option<Arc<ShutdownSignal>>,
 }
 
