@@ -10,6 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **`zstd_support` decodes compressed packets again.** `Decoder` sized its
+  output with zstd's `Decompressor::upper_bound`, which is always `None`
+  without zstd's `experimental` feature, so every compressed packet was
+  dropped. It now decodes into at most `MTU_SIZE_BYTES`, the largest packet.
+
 - **Room-join spawn order is now hash-independent on both engines.** When a
   user entered a room that already held entities, the server walked the room's
   entity set in `HashMap`/`HashSet` iteration order, so two fresh servers in the
