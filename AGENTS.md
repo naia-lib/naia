@@ -8,4 +8,4 @@ Lints (nydus-xsw, 2026-11-10): the Kingdom shared Rust lint set (ambry `standard
 
 ## Merge queue
 
-The merge queue alone writes `dev`; `main` moves by Connor's hand only (Connor 10-01). Consumers pin naia by sha on `dev`.
+The merge queue alone writes `dev` for naia. This is the naia exception to the fleet rule that the queue writes `main` (ambry `standards/DEV_MERGE_QUEUE.md`, Connor 11-13 ruling 1). `main` moves by Connor's hand only (Connor 10-01). Consumers pin naia by sha on `dev`.
