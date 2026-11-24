@@ -1,9 +1,11 @@
-# Naia's impact selector, inventoried from the 42 public workspace members.
+# Naia's impact selector, inventoried from the 41 public workspace members.
 # 133 legs (8 lint floor + 125 test-selected checks); a same-name library
-# and binary keep both selectors in the same physical command. Six testless
+# and binary keep both selectors in the same physical command. Five testless
 # demo bins left test selection per Kepler ruling seq 135988 option (b) and
 # live in [[cargo_targets.unchecked]]; their bins still compile under clippy
-# --workspace --all-targets on the static rung.
+# --workspace --all-targets on the static rung. The Bevy client demo left the
+# workspace (nydus-3kf, 2026-11-24): it is not in this policy and builds by its
+# own manifest, so workspace Clippy no longer compiles it.
 # Rung adoption (nydus-kp4-rungs, fleet ladder TESTING.md R0-R3 / ADR 0006):
 # every suite check lands on exactly one [[rung]]; 'clerc impact run' is the
 # native aggregate. docs/IMPACT.md records scope, feature profiles and the
@@ -154,10 +156,6 @@ reason = "Source audit 2026-11-12: no test attributes, test modules or included 
 
 [[cargo_targets.unchecked]]
 check = "test:naia-basic-demo-shared:naia_basic_demo_shared"
-reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
-
-[[cargo_targets.unchecked]]
-check = "test:naia-bevy-client-demo:naia_bevy_client_demo"
 reason = "Source audit 2026-11-12: no test attributes, test modules or included test source in this target; compile coverage remains in workspace all-targets Clippy and native-check. A zero-test execution is not behavioral coverage."
 
 [[cargo_targets.unchecked]]
