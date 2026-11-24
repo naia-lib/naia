@@ -793,11 +793,6 @@ from = "adapters/bevy/client/"
 to = "test:naia-bevy-client:naia_bevy_client"
 
 [[package]]
-name = "naia-bevy-client-demo"
-paths = ["demos/bevy/client/"]
-depends_on = ["naia-bevy-client", "naia-bevy-demo-shared"]
-
-[[package]]
 name = "naia-bevy-demo-shared"
 paths = ["demos/bevy/shared/"]
 depends_on = ["naia-bevy-shared", "naia-shared"]
