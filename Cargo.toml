@@ -35,7 +35,6 @@ members = [
     "demos/basic/client/miniquad",
     "demos/bevy/server",
     "demos/bevy/shared",
-    "demos/bevy/client",
     "demos/macroquad/server",
     "demos/macroquad/shared",
     "demos/macroquad/client",
@@ -53,12 +52,19 @@ members = [
 # `cargo build --manifest-path <crate>/Cargo.toml`. Guarded by
 # `cargo run -p naia-ci-checks --bin check_no_escaping_path_deps` (GitHub
 # Actions is disabled in this repo — run it by hand or from self-hosted CI).
+# The Bevy client demo is excluded because it is the only workspace path to
+# bevy_render (via the `bevy` crate). Every `--workspace` gate built it, so it
+# was compiled on every landing. Build it with
+# `cargo test --manifest-path demos/bevy/client/Cargo.toml`. Connor 10-29:
+# "Why the hell is `bevy_render` being built? We don't use that!"
+# See test/specs/contracts/00_common.spec.md, Removed / not wanted.
 exclude = [
     "bench/wins",
     "bench/suite",
     "test/npa",
     "test/bevy_npa",
     "test/tests",
+    "demos/bevy/client",
 ]
 # Do not put demos in the default-members, since they may use conflicting dependencies / feature flags
 default-members = [

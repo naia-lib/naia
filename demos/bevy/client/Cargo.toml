@@ -2,7 +2,6 @@
 name = "naia-bevy-client-demo"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
-workspace = "../../.."
 edition = "2021"
 license = "MIT OR Apache-2.0"
 publish = false
@@ -28,5 +27,18 @@ cfg-if = { version = "1.0" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { version = "0.2", features = [ "serde-serialize" ] }
-[lints]
-workspace = true
+
+# Copied from the root [workspace.lints]. An excluded crate cannot inherit them
+# (`lints.workspace = true` needs workspace membership). Keep the two in sync.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
+unsafe_code = "deny"
+
+[lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+allow_attributes_without_reason = "deny"
+allow_attributes = "deny"

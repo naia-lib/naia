@@ -426,6 +426,12 @@ The following were deliberately removed from this repo and MUST NOT be reintrodu
 - **Why:** naia must not know anything about controllers, local seats or guests; for naia the server sees a single client connection. Presence is an on-change reliable application message owned by the application protocol and its consumer, not a naia heartbeat payload. Ordinary reliable application messages and connection events suffice.
 - **Ruled by:** Connor, 2026-10-27, via Usher 126729 (supersedes the 126713 on-change close-out).
 
+### bevy_render in the workspace gates
+
+- **What:** `demos/bevy/client` (package `naia-bevy-client-demo`) is excluded from the root workspace, removed from `members` on 2026-11-24 (nydus-3kf). It was the only workspace path to `bevy_render`, through the `bevy` crate, so the root `Cargo.lock` no longer carries `bevy`, `bevy_internal` or `bevy_render`. The demo builds alone with `cargo test --manifest-path demos/bevy/client/Cargo.toml`, against its own tracked `demos/bevy/client/Cargo.lock`. Its `[lints]` tables are copied from the root `[workspace.lints]`, because an excluded crate cannot inherit them.
+- **Why:** every `--workspace` build, clippy and test compiled `bevy_render`. That build took a 5.8 GB rustc on Brock's azp and slowed every landing. The demo is not on any naia library path.
+- **Ruled by:** Connor, 2026-10-29: "Why the hell is `bevy_render` being built? We don't use that!" Restore the member only on a new ruling from Connor.
+
 ---
 
 ## Test obligations
