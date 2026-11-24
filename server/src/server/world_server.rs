@@ -2311,7 +2311,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// Returns the total number of replicated entities currently tracked by the server.
     #[must_use]
     pub fn entity_count(&self) -> usize {
-        self.shared.global_entity_map.read().entity_count()
+        // d4e: forward to the canonical CoordHandle body (same shared Arc).
+        self.sim_handle.entity_count()
     }
 
     /// Returns a `UserScopeRef`, which is used to query whether a given user has
@@ -4799,23 +4800,16 @@ impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E>
         &self,
         global_entity: GlobalEntity,
     ) -> Result<E, EntityDoesNotExistError> {
-        // 4-E.2c: read guard lives only for the call. Returns owned `E`
-        // (Copy) — no borrow escapes the guard.
-        self.shared
-            .global_entity_map
-            .read()
-            .global_entity_to_entity(global_entity)
+        // d4e: forward to the canonical CoordHandle body (same shared Arc).
+        self.sim_handle.global_entity_to_entity(&global_entity)
     }
 
     fn entity_to_global_entity(
         &self,
         world_entity: &E,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
-        // Same shape — returns owned `GlobalEntity`.
-        self.shared
-            .global_entity_map
-            .read()
-            .entity_to_global_entity(world_entity)
+        // d4e: forward to the canonical CoordHandle body (same shared Arc).
+        self.sim_handle.entity_to_global_entity(world_entity)
     }
 }
 
