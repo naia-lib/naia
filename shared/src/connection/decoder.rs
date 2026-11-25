@@ -4,6 +4,7 @@ cfg_if! {
         use zstd::bulk::Decompressor;
 
         use super::compression_config::CompressionMode;
+        use crate::MTU_SIZE_BYTES;
 
         /// Decodes packet bodies using the configured compression mode.
         pub struct Decoder {
@@ -76,9 +77,11 @@ cfg_if! {
                 if is_compressed {
                     if let Some(decoder) = &mut self.decoder {
                         // [115662-2] common-02: corrupt compressed bytes fail
-                        // the read instead of panicking on the expects.
-                        let bound = Decompressor::<'static>::upper_bound(data)?;
-                        self.result = decoder.decompress(data, bound).ok()?;
+                        // the read instead of panicking on the expects. A
+                        // packet is at most MTU_SIZE_BYTES. `upper_bound` is
+                        // always `None` without zstd's `experimental` feature,
+                        // so it cannot size the output.
+                        self.result = decoder.decompress(data, MTU_SIZE_BYTES).ok()?;
                         return Some(&self.result);
                     }
                 }
@@ -155,5 +158,32 @@ mod sync_tests {
     #[test]
     fn decoder_is_sync_for_ecs_resources() {
         assert_sync::<Decoder>();
+    }
+}
+
+// Compressed packets decode back to what the encoder took. `upper_bound`
+// returned `None` for every frame, so every compressed packet was dropped.
+#[cfg(all(test, feature = "zstd_support"))]
+mod round_trip_tests {
+    use super::super::{compression_config::CompressionMode, encoder::Encoder};
+    use super::Decoder;
+
+    fn packet(seed: u8) -> Vec<u8> {
+        (0..400u16).map(|i| (i % 23) as u8 ^ seed).collect()
+    }
+
+    fn assert_round_trip(mode: CompressionMode, packet: &[u8]) {
+        let mut encoder = Encoder::new(mode.clone());
+        let wire = encoder.encode(packet).to_vec();
+        assert_eq!(wire.first(), Some(&1u8), "packet should compress");
+        let mut decoder = Decoder::new(mode);
+        assert_eq!(decoder.decode(&wire), Some(packet));
+    }
+
+    #[test]
+    fn compressed_packets_round_trip() {
+        for level in [-7, 0, 1, 3, 22] {
+            assert_round_trip(CompressionMode::Default(level), &packet(0));
+        }
     }
 }
