@@ -310,7 +310,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .has_component_record(global_entity, &component_kind)
         {
             warn!(
-                "Attempted to add component `{:?}` to entity `{:?}` that already has it, this can happen if a delegated entity's auth is transferred to the Server before the Server Adapter has been able to process the newly inserted Component. Skipping this action.",
+                "Attempted to add component `{:?}` to entity `{:?}` that already has it, \
+                 this can happen if a delegated entity's auth is transferred to the Server \
+                 before the Server Adapter has been able to process the newly inserted \
+                 Component. Skipping this action.",
                 component.name(), global_entity,
             );
             return;
