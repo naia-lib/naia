@@ -314,7 +314,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                  this can happen if a delegated entity's auth is transferred to the Server \
                  before the Server Adapter has been able to process the newly inserted \
                  Component. Skipping this action.",
-                component.name(), global_entity,
+                component.name(),
+                global_entity,
             );
             return;
         }
