@@ -227,7 +227,15 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
         world: &mut World,
         world_entity: &Entity,
     ) -> Option<Box<dyn Replicate>> {
-        let result: Option<R> = world.entity_mut(*world_entity).take::<R>();
+        let result: Option<R> = match world.get_entity_mut(*world_entity) {
+            Ok(mut entity) => entity.take::<R>(),
+            Err(_) => {
+                log::warn!(
+                    "dropping component removal for entity {world_entity:?}, which the app already removed"
+                );
+                None
+            }
+        };
         let casted: Option<Box<dyn Replicate>> = result.map(|inner: R| {
             let boxed_r: Box<R> = Box::new(inner);
             let boxed_dyn: Box<dyn Replicate> = boxed_r;

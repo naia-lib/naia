@@ -288,7 +288,14 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
         let components = self.world.components();
 
-        for component_id in self.world.entity(*entity).archetype().components() {
+        let Ok(entity_ref) = self.world.get_entity(*entity) else {
+            log::warn!(
+                "dropping component kinds for entity {entity:?}, which the app already removed"
+            );
+            return kinds;
+        };
+
+        for component_id in entity_ref.archetype().components() {
             let component_info = components
                 .get_info(*component_id)
                 .expect("Components need info to instantiate");
